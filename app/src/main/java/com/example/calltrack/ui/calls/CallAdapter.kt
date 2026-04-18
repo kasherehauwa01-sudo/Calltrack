@@ -8,20 +8,26 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.calltrack.data.local.CallEntity
 import com.example.calltrack.databinding.ItemCallBinding
 
-class CallAdapter : ListAdapter<CallEntity, CallAdapter.CallViewHolder>(Diff()) {
+class CallAdapter(
+    private val onItemClick: (CallEntity) -> Unit
+) : ListAdapter<CallEntity, CallAdapter.CallViewHolder>(Diff()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CallViewHolder {
         val binding = ItemCallBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return CallViewHolder(binding)
+        return CallViewHolder(binding, onItemClick)
     }
 
     override fun onBindViewHolder(holder: CallViewHolder, position: Int) = holder.bind(getItem(position))
 
-    class CallViewHolder(private val binding: ItemCallBinding) : RecyclerView.ViewHolder(binding.root) {
+    class CallViewHolder(
+        private val binding: ItemCallBinding,
+        private val onItemClick: (CallEntity) -> Unit
+    ) : RecyclerView.ViewHolder(binding.root) {
         fun bind(item: CallEntity) {
             binding.tvPhone.text = item.phone
             binding.tvType.text = "${item.type} • ${item.duration} сек"
             binding.tvNote.text = item.note
+            binding.root.setOnClickListener { onItemClick(item) }
         }
     }
 

@@ -16,6 +16,7 @@ import com.example.calltrack.R
 import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.service.CallTrackingService
 import com.example.calltrack.ui.calls.CallListFragment
+import com.example.calltrack.ui.contacts.ContactsFragment
 import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import kotlinx.coroutines.launch
@@ -41,19 +42,32 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.btnDialPad.setOnClickListener { showDialPad() }
-        binding.btnCallLog.setOnClickListener { showCalls() }
+        setupBottomNav()
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
-                supportFragmentManager.beginTransaction()
-                    .replace(R.id.fragmentContainer, OnboardingFragment.newInstance())
-                    .commit()
+                openFragment(OnboardingFragment.newInstance())
+                binding.bottomNav.visibility = android.view.View.GONE
             } else {
-                showDialPad()
+                binding.bottomNav.visibility = android.view.View.VISIBLE
+                if (savedInstanceState == null) {
+                    binding.bottomNav.selectedItemId = R.id.nav_dial
+                }
                 startTrackingService()
             }
             updateWarningState()
+        }
+    }
+
+    private fun setupBottomNav() {
+        binding.bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_dial -> openFragment(DialPadFragment.newInstance())
+                R.id.nav_recent -> openFragment(CallListFragment.newInstance())
+                R.id.nav_contacts -> openFragment(ContactsFragment.newInstance())
+                else -> return@setOnItemSelectedListener false
+            }
+            true
         }
     }
 
@@ -64,8 +78,7 @@ class MainActivity : AppCompatActivity() {
     fun requestDefaultDialerRole() {
         val roleManager = getSystemService(RoleManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
-            val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
-            roleRequestLauncher.launch(intent)
+            roleRequestLauncher.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER))
         }
     }
 
@@ -88,15 +101,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showDialPad() {
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.fragmentContainer, DialPadFragment.newInstance())
-            .commit()
+    fun setDialNumber(number: String) {
+        viewModel.setDialNumber(number)
+        binding.bottomNav.selectedItemId = R.id.nav_dial
     }
 
-    private fun showCalls() {
+    private fun openFragment(fragment: androidx.fragment.app.Fragment) {
         supportFragmentManager.beginTransaction()
-            .replace(R.id.fragmentContainer, CallListFragment.newInstance())
+            .replace(R.id.fragmentContainer, fragment)
             .commit()
     }
 
@@ -118,9 +130,7 @@ class MainActivity : AppCompatActivity() {
             add(Manifest.permission.READ_CALL_LOG)
             add(Manifest.permission.CALL_PHONE)
             add(Manifest.permission.RECORD_AUDIO)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                add(Manifest.permission.POST_NOTIFICATIONS)
-            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
         }.toTypedArray()
     }
 }

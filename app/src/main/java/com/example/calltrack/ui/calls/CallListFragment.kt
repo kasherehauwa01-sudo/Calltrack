@@ -9,13 +9,21 @@ import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.calltrack.App
 import com.example.calltrack.databinding.FragmentCallListBinding
+import com.example.calltrack.ui.main.MainActivity
 import com.example.calltrack.ui.main.MainViewModel
 
 class CallListFragment : Fragment() {
 
     private var _binding: FragmentCallListBinding? = null
     private val binding get() = _binding!!
-    private val adapter = CallAdapter()
+
+    private val adapter by lazy {
+        CallAdapter { item ->
+            if (item.phone.isNotBlank() && item.phone != "Неизвестно") {
+                (requireActivity() as MainActivity).setDialNumber(item.phone)
+            }
+        }
+    }
 
     private val viewModel: MainViewModel by activityViewModels {
         MainViewModel.Factory((requireActivity().application as App).repository)

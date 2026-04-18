@@ -16,7 +16,7 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"'
+        buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/AKfycbzeZKY0kOvV2gFVfrxvIGlt6jRk2sKGr6IhleWILIb6UCvE9hLXBjjJmskaeK8pDF5U4w/exec"'
     }
 
     buildTypes {
