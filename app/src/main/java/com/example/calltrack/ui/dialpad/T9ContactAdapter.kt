@@ -18,6 +18,8 @@ class T9ContactAdapter(
 
     override fun onBindViewHolder(holder: T9ViewHolder, position: Int) = holder.bind(getItem(position))
 
+    fun getItemAt(position: Int): T9ContactItem = getItem(position)
+
     class T9ViewHolder(
         private val binding: ItemT9ContactBinding,
         private val onClick: (T9ContactItem) -> Unit

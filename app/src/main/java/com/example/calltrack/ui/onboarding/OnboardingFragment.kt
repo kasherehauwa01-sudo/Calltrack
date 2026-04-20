@@ -37,6 +37,17 @@ class OnboardingFragment : Fragment() {
         }
     }
 
+
+    override fun onResume() {
+        super.onResume()
+        val host = activity as? MainActivity ?: return
+        if (step == 2 && host.hasAllPermissions()) {
+            step = 3
+            host.completeOnboarding()
+            updateUi()
+        }
+    }
+
     private fun onPrimaryClick() {
         val host = requireActivity() as MainActivity
         when (step) {

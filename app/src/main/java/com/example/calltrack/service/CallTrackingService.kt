@@ -1,36 +1,37 @@
 package com.example.calltrack.service
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
+import android.provider.CallLog
 import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.data.local.CallEntity
 import com.example.calltrack.telephony.CallStateTracker
-import com.example.calltrack.utils.CallUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class CallTrackingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var tracker: CallStateTracker
-    private var callStart: Long = 0L
-    private var wasRinging = false
+    private var lastStateWasActive = false
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
 
-        // На Android 14+ в некоторых сценариях система запрещает поднимать FGS в текущий момент.
-        // В этом случае не падаем, а корректно останавливаем сервис.
         val started = runCatching {
             startForeground(101, createNotification("Отслеживание звонков активно"))
         }.isSuccess
@@ -41,37 +42,77 @@ class CallTrackingService : Service() {
 
         tracker = CallStateTracker(this) { state, _ ->
             when (state) {
-                TelephonyManager.CALL_STATE_RINGING -> wasRinging = true
-                TelephonyManager.CALL_STATE_OFFHOOK -> callStart = System.currentTimeMillis()
+                TelephonyManager.CALL_STATE_RINGING,
+                TelephonyManager.CALL_STATE_OFFHOOK -> lastStateWasActive = true
+
                 TelephonyManager.CALL_STATE_IDLE -> {
-                    if (callStart > 0L || wasRinging) {
-                        val end = System.currentTimeMillis()
-                        val duration = CallUtils.calculateDurationSec(callStart, end)
-                        val type = CallUtils.defineCallType(startedFromApp = false, wasRinging = wasRinging, durationSec = duration)
-                        val note = when (type.title) {
-                            "Пропущенный" -> "Пропущенный"
-                            "Неотвеченный" -> "Неотвеченный"
-                            else -> "Вне приложения"
-                        }
-                        val entity = CallEntity(
-                            phone = "Неизвестно",
-                            type = type.title,
-                            duration = duration,
-                            note = note,
-                            timestamp = end
-                        )
-                        val repo = (application as App).repository
+                    if (lastStateWasActive) {
+                        lastStateWasActive = false
                         scope.launch {
-                            repo.saveCall(entity)
-                            repo.syncPending()
+                            // Даем системе небольшой буфер, чтобы запись точно появилась в CallLog.
+                            delay(600)
+                            readLatestCallEntity()?.let { entity ->
+                                val repo = (application as App).repository
+                                repo.saveCall(entity)
+                                repo.syncPending()
+                            }
                         }
-                        callStart = 0L
-                        wasRinging = false
                     }
                 }
             }
         }
         tracker.start()
+    }
+
+    private fun readLatestCallEntity(): CallEntity? {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+            return null
+        }
+
+        val projection = arrayOf(
+            CallLog.Calls.NUMBER,
+            CallLog.Calls.TYPE,
+            CallLog.Calls.DURATION,
+            CallLog.Calls.DATE
+        )
+
+        contentResolver.query(
+            CallLog.Calls.CONTENT_URI,
+            projection,
+            null,
+            null,
+            "${CallLog.Calls.DATE} DESC LIMIT 1"
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val number = cursor.getString(cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)).orEmpty()
+                val typeInt = cursor.getInt(cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE))
+                val duration = cursor.getLong(cursor.getColumnIndexOrThrow(CallLog.Calls.DURATION))
+                val timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(CallLog.Calls.DATE))
+
+                val (type, note) = mapCallType(typeInt, duration)
+                return CallEntity(
+                    phone = if (number.isBlank()) "Неизвестно" else number,
+                    type = type,
+                    duration = duration,
+                    note = note,
+                    timestamp = timestamp
+                )
+            }
+        }
+        return null
+    }
+
+    private fun mapCallType(typeInt: Int, duration: Long): Pair<String, String> {
+        return when (typeInt) {
+            CallLog.Calls.INCOMING_TYPE -> "Входящий" to ""
+            CallLog.Calls.OUTGOING_TYPE -> "Исходящий" to ""
+            CallLog.Calls.MISSED_TYPE -> "Пропущенный" to "Пропущенный"
+            CallLog.Calls.REJECTED_TYPE -> "Неотвеченный" to "Неотвеченный"
+            CallLog.Calls.BLOCKED_TYPE -> "Неотвеченный" to "Неотвеченный"
+            else -> {
+                if (duration == 0L) "Пропущенный" to "Пропущенный" else "Исходящий" to ""
+            }
+        }
     }
 
     override fun onDestroy() {

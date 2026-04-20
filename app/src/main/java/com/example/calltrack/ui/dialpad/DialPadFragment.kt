@@ -1,18 +1,29 @@
 package com.example.calltrack.ui.dialpad
 
 import android.content.Intent
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.RelativeSizeSpan
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.example.calltrack.App
+import com.example.calltrack.R
 import com.example.calltrack.databinding.FragmentDialPadBinding
 import com.example.calltrack.ui.main.MainViewModel
 import com.example.calltrack.utils.CallUtils
@@ -47,7 +58,9 @@ class DialPadFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         binding.recyclerT9.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerT9.adapter = t9Adapter
+        attachSwipeToCall()
 
+        setupKeyLabels()
         initKeypad()
         loadContacts()
 
@@ -65,8 +78,7 @@ class DialPadFragment : Fragment() {
                 Toast.makeText(requireContext(), "Введите номер", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            val formatted = CallUtils.formatPhone(raw)
-            startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$formatted")))
+            openDial(raw)
         }
 
         viewModel.dialNumber.observe(viewLifecycleOwner) {
@@ -75,6 +87,30 @@ class DialPadFragment : Fragment() {
                 onNumberChanged()
             }
         }
+    }
+
+    private fun setupKeyLabels() {
+        setKeyLabel(binding.key2, "2", "ABC АБВГ")
+        setKeyLabel(binding.key3, "3", "DEF ДЕЁЖЗ")
+        setKeyLabel(binding.key4, "4", "GHI ИЙКЛ")
+        setKeyLabel(binding.key5, "5", "JKL МНОП")
+        setKeyLabel(binding.key6, "6", "MNO РСТУ")
+        setKeyLabel(binding.key7, "7", "PQRS ФХЦЧ")
+        setKeyLabel(binding.key8, "8", "TUV ШЩЪЫ")
+        setKeyLabel(binding.key9, "9", "WXYZ ЬЭЮЯ")
+        setKeyLabel(binding.key0, "0", "+")
+    }
+
+    private fun setKeyLabel(view: TextView, digit: String, letters: String) {
+        val text = "$digit\n$letters"
+        val spannable = SpannableString(text)
+        spannable.setSpan(
+            RelativeSizeSpan(0.5f),
+            digit.length + 1,
+            text.length,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        view.text = spannable
     }
 
     private fun initKeypad() {
@@ -149,6 +185,62 @@ class DialPadFragment : Fragment() {
             t9Adapter.submitList(filtered)
             binding.tvNoResults.visibility = if (query.isNotBlank() && filtered.isEmpty()) View.VISIBLE else View.GONE
         }
+    }
+
+    private fun attachSwipeToCall() {
+        val callback = object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.RIGHT) {
+            private val bgPaint = Paint().apply { color = Color.parseColor("#24C96B") }
+            private val icon = ContextCompat.getDrawable(requireContext(), R.drawable.ic_phone)
+
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean = false
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                val item = t9Adapter.getItemAt(viewHolder.bindingAdapterPosition)
+                t9Adapter.notifyItemChanged(viewHolder.bindingAdapterPosition)
+                openDial(item.phone)
+            }
+
+            override fun onChildDraw(
+                c: Canvas,
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                dX: Float,
+                dY: Float,
+                actionState: Int,
+                isCurrentlyActive: Boolean
+            ) {
+                if (dX > 0) {
+                    val itemView = viewHolder.itemView
+                    c.drawRect(
+                        itemView.left.toFloat(),
+                        itemView.top.toFloat(),
+                        itemView.left + dX,
+                        itemView.bottom.toFloat(),
+                        bgPaint
+                    )
+                    icon?.let {
+                        val margin = (itemView.height - it.intrinsicHeight) / 2
+                        val top = itemView.top + margin
+                        val left = itemView.left + margin
+                        val right = left + it.intrinsicWidth
+                        val bottom = top + it.intrinsicHeight
+                        it.setBounds(left, top, right, bottom)
+                        it.draw(c)
+                    }
+                }
+                super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
+            }
+        }
+        ItemTouchHelper(callback).attachToRecyclerView(binding.recyclerT9)
+    }
+
+    private fun openDial(raw: String) {
+        val formatted = CallUtils.formatPhone(raw)
+        startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$formatted")))
     }
 
     override fun onDestroyView() {
