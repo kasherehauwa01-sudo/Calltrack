@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.PopupMenu
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -36,6 +38,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         setupBottomNav()
+        setupSettingsButton()
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
@@ -47,6 +50,20 @@ class MainActivity : AppCompatActivity() {
                 startTrackingService()
             }
             updateWarningState()
+        }
+    }
+
+
+    private fun setupSettingsButton() {
+        binding.btnSettings.setOnClickListener { anchor ->
+            PopupMenu(this, anchor).apply {
+                menu.add(getString(R.string.update_app))
+                setOnMenuItemClickListener {
+                    Toast.makeText(this@MainActivity, R.string.update_soon, Toast.LENGTH_SHORT).show()
+                    true
+                }
+                show()
+            }
         }
     }
 

@@ -141,13 +141,14 @@ class CallTrackingService : Service() {
     }
 
     private fun mapCallType(typeInt: Int, duration: Long): Pair<String, String> {
+        val shortCall = duration <= 2L
         return when (typeInt) {
-            CallLog.Calls.INCOMING_TYPE -> "Входящий" to ""
-            CallLog.Calls.OUTGOING_TYPE -> "Исходящий" to ""
+            CallLog.Calls.REJECTED_TYPE -> "Сбросил" to ""
+            CallLog.Calls.INCOMING_TYPE -> if (shortCall) "Пропущенный" to "" else "Входящий" to ""
+            CallLog.Calls.OUTGOING_TYPE -> if (shortCall) "Отклонённый" to "" else "Исходящий" to ""
             CallLog.Calls.MISSED_TYPE -> "Пропущенный" to ""
-            CallLog.Calls.REJECTED_TYPE -> "Неотвеченный" to ""
             CallLog.Calls.BLOCKED_TYPE -> "Неотвеченный" to ""
-            else -> if (duration == 0L) "Пропущенный" to "" else "Исходящий" to ""
+            else -> if (shortCall) "Пропущенный" to "" else "Исходящий" to ""
         }
     }
 
@@ -170,7 +171,7 @@ class CallTrackingService : Service() {
         return NotificationCompat.Builder(this, "calltrack")
             .setContentTitle("Calltrack")
             .setContentText(text)
-            .setSmallIcon(R.drawable.ic_phone)
+            .setSmallIcon(R.drawable.ic_spyglass)
             .build()
     }
 }
