@@ -72,12 +72,15 @@ function doPost(e) {
   var data = JSON.parse(e.postData.contents);
 
   sheet.appendRow([
+    data.date,
+    data.time,
     data.phone,
     data.type,
     data.duration,
-    data.note,
-    data.date,
-    data.time
+    data.manager,
+    data.comment,
+    data.tag,
+    data.reminder
   ]);
 
   return ContentService.createTextOutput("ok");
@@ -103,22 +106,28 @@ buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/A
 POST JSON:
 ```json
 {
+  "date": "20.04.26",
+  "time": "14:35",
   "phone": "+79999999999",
   "type": "Исходящий",
   "duration": 120,
-  "note": "Вне приложения",
-  "date": "20.04.26",
-  "time": "14:35"
+  "manager": "Иванов Иван",
+  "comment": "",
+  "tag": "",
+  "reminder": ""
 }
 ```
 
 Поля:
-- `phone` — номер телефона;
-- `type` — тип звонка (`Входящий`, `Исходящий`, `Пропущенный`, `Неотвеченный`);
-- `duration` — длительность в секундах;
-- `note` — комментарий (`Вне приложения`, `Пропущенный`, `Неотвеченный`).
 - `date` — дата звонка в формате `дд.мм.гг`.
 - `time` — время звонка в формате `чч:мм`.
+- `phone` — номер телефона.
+- `type` — тип звонка (`Входящий`, `Исходящий`, `Пропущенный`, `Неотвеченный`).
+- `duration` — длительность в секундах.
+- `manager` — ФИО менеджера.
+- `comment` — комментарий.
+- `tag` — тег.
+- `reminder` — напоминание.
 
 ---
 

@@ -144,10 +144,10 @@ class CallTrackingService : Service() {
         return when (typeInt) {
             CallLog.Calls.INCOMING_TYPE -> "Входящий" to ""
             CallLog.Calls.OUTGOING_TYPE -> "Исходящий" to ""
-            CallLog.Calls.MISSED_TYPE -> "Пропущенный" to "Пропущенный"
-            CallLog.Calls.REJECTED_TYPE -> "Неотвеченный" to "Неотвеченный"
-            CallLog.Calls.BLOCKED_TYPE -> "Неотвеченный" to "Неотвеченный"
-            else -> if (duration == 0L) "Пропущенный" to "Пропущенный" else "Исходящий" to ""
+            CallLog.Calls.MISSED_TYPE -> "Пропущенный" to ""
+            CallLog.Calls.REJECTED_TYPE -> "Неотвеченный" to ""
+            CallLog.Calls.BLOCKED_TYPE -> "Неотвеченный" to ""
+            else -> if (duration == 0L) "Пропущенный" to "" else "Исходящий" to ""
         }
     }
 

@@ -15,7 +15,7 @@ class OnboardingFragment : Fragment() {
 
     private var _binding: FragmentOnboardingBinding? = null
     private val binding get() = _binding!!
-    private var step = 1
+    private var permissionsRequested = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -27,64 +27,50 @@ class OnboardingFragment : Fragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        updateUi()
-        binding.btnPrimary.setOnClickListener { onPrimaryClick() }
+        val host = requireActivity() as MainActivity
+        updateUi(hasPermissions = host.hasAllPermissions())
+
+        binding.btnPrimary.setOnClickListener {
+            host.requestRequiredPermissions()
+            permissionsRequested = true
+        }
+
         binding.btnSecondary.setOnClickListener {
             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                 data = Uri.fromParts("package", requireContext().packageName, null)
             }
             startActivity(intent)
         }
-    }
 
+        if (!host.hasAllPermissions() && !permissionsRequested) {
+            host.requestRequiredPermissions()
+            permissionsRequested = true
+        }
+    }
 
     override fun onResume() {
         super.onResume()
         val host = activity as? MainActivity ?: return
-        if (step == 2 && host.hasAllPermissions()) {
-            step = 3
+        val granted = host.hasAllPermissions()
+        updateUi(granted)
+        if (granted) {
             host.completeOnboarding()
-            updateUi()
         }
     }
 
-    private fun onPrimaryClick() {
-        val host = requireActivity() as MainActivity
-        when (step) {
-            1 -> step = 2
-            2 -> {
-                host.requestRequiredPermissions()
-                if (host.hasAllPermissions()) {
-                    step = 3
-                    host.completeOnboarding()
-                }
-            }
-            3 -> host.completeOnboarding()
-        }
-        updateUi()
-    }
-
-    private fun updateUi() {
-        when (step) {
-            1 -> {
-                binding.tvTitle.text = "Добро пожаловать"
-                binding.tvDescription.text = "Приложение отслеживает звонки и отправляет аналитику. Для старта выдайте разрешения."
-                binding.btnPrimary.text = "Начать настройку"
-                binding.btnSecondary.visibility = View.GONE
-            }
-            2 -> {
-                binding.tvTitle.text = "Разрешения"
-                binding.tvDescription.text = "Выдайте все разрешения. Если выбрано 'Не спрашивать', откройте настройки приложения."
-                binding.btnPrimary.text = "Запросить разрешения"
-                binding.btnSecondary.visibility = View.VISIBLE
-                binding.btnSecondary.text = "Открыть настройки"
-            }
-            3 -> {
-                binding.tvTitle.text = "Готово"
-                binding.tvDescription.text = "Разрешения получены. Переходим на основной экран с клавиатурой."
-                binding.btnPrimary.text = "Открыть клавиатуру"
-                binding.btnSecondary.visibility = View.GONE
-            }
+    private fun updateUi(hasPermissions: Boolean) {
+        if (hasPermissions) {
+            binding.tvTitle.text = "Готово"
+            binding.tvDescription.text = "Разрешения получены. Переходим на экран набора."
+            binding.btnPrimary.visibility = View.GONE
+            binding.btnSecondary.visibility = View.GONE
+        } else {
+            binding.tvTitle.text = "Нужны разрешения"
+            binding.tvDescription.text = "Для работы приложения выдайте необходимые разрешения."
+            binding.btnPrimary.text = "Повторить запрос"
+            binding.btnPrimary.visibility = View.VISIBLE
+            binding.btnSecondary.text = "Открыть настройки"
+            binding.btnSecondary.visibility = View.VISIBLE
         }
     }
 

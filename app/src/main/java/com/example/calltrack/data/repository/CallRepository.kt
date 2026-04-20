@@ -1,6 +1,7 @@
 package com.example.calltrack.data.repository
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.data.local.CallDao
@@ -21,6 +22,7 @@ class CallRepository(
 
     private val dateFormat = SimpleDateFormat("dd.MM.yy", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val managerName = Build.USER.ifBlank { "Не указан" }
 
     fun observeCalls(): Flow<List<CallEntity>> = callDao.observeAll()
 
@@ -35,12 +37,15 @@ class CallRepository(
                 webhookApi.sendCall(
                     BuildConfig.WEBHOOK_URL,
                     WebhookRequest(
+                        date = dateFormat.format(Date(entity.timestamp)),
+                        time = timeFormat.format(Date(entity.timestamp)),
                         phone = entity.phone,
                         type = entity.type,
                         duration = entity.duration,
-                        note = entity.note,
-                        date = dateFormat.format(Date(entity.timestamp)),
-                        time = timeFormat.format(Date(entity.timestamp))
+                        manager = managerName,
+                        comment = "",
+                        tag = "",
+                        reminder = ""
                     )
                 )
                 callDao.markUploaded(entity.id)
