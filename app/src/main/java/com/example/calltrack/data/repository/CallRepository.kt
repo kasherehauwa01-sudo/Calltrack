@@ -1,6 +1,7 @@
 package com.example.calltrack.data.repository
 
 import android.content.Context
+import android.util.Log
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.data.local.CallDao
 import com.example.calltrack.data.local.CallEntity
@@ -43,6 +44,9 @@ class CallRepository(
                     )
                 )
                 callDao.markUploaded(entity.id)
+                Log.d("CallRepository", "Webhook sent: id=${entity.id}, phone=${entity.phone}")
+            }.onFailure {
+                Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
             }
         }
     }

@@ -6,11 +6,15 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkRequest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import android.provider.CallLog
 import android.telephony.TelephonyManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.calltrack.App
@@ -21,12 +25,23 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class CallTrackingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var tracker: CallStateTracker
     private var lastStateWasActive = false
+    private var lastHandledTimestamp: Long = 0L
+    private lateinit var connectivityManager: ConnectivityManager
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            scope.launch {
+                // Как только интернет появился — пробуем отправить всю локальную очередь.
+                (application as App).repository.syncPending()
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -40,9 +55,24 @@ class CallTrackingService : Service() {
             return
         }
 
+        // Запоминаем текущую последнюю запись, чтобы не дублировать старые звонки после старта сервиса.
+        lastHandledTimestamp = readLatestCallEntity()?.timestamp ?: 0L
+
+        connectivityManager = getSystemService(ConnectivityManager::class.java)
+        connectivityManager.registerNetworkCallback(NetworkRequest.Builder().build(), networkCallback)
+
+        // При старте сервиса сразу пробуем отправить накопленную очередь (если интернет уже есть).
+        scope.launch { (application as App).repository.syncPending() }
+
+        // Polling как страховка: если callback не пришел, свежий звонок все равно будет отправлен.
+        scope.launch {
+            while (isActive) {
+                captureLatestCallIfNew()
+                delay(15_000)
+            }
+        }
+
         tracker = CallStateTracker(this) { state, _ ->
-            // Слушаем системные состояния телефонии, поэтому фиксируем звонки
-            // независимо от того, откуда они начаты: из нашего приложения или из штатной звонилки.
             when (state) {
                 TelephonyManager.CALL_STATE_RINGING,
                 TelephonyManager.CALL_STATE_OFFHOOK -> lastStateWasActive = true
@@ -51,19 +81,25 @@ class CallTrackingService : Service() {
                     if (lastStateWasActive) {
                         lastStateWasActive = false
                         scope.launch {
-                            // Даем системе небольшой буфер, чтобы запись точно появилась в CallLog.
                             delay(600)
-                            readLatestCallEntity()?.let { entity ->
-                                val repo = (application as App).repository
-                                repo.saveCall(entity)
-                                repo.syncPending()
-                            }
+                            captureLatestCallIfNew()
                         }
                     }
                 }
             }
         }
         tracker.start()
+    }
+
+    private suspend fun captureLatestCallIfNew() {
+        val entity = readLatestCallEntity() ?: return
+        if (entity.timestamp <= lastHandledTimestamp) return
+
+        lastHandledTimestamp = entity.timestamp
+        val repo = (application as App).repository
+        repo.saveCall(entity)
+        repo.syncPending()
+        Log.d("CallTrackingService", "Call captured and sync attempted: ${entity.phone}, ${entity.type}, ${entity.timestamp}")
     }
 
     private fun readLatestCallEntity(): CallEntity? {
@@ -83,7 +119,7 @@ class CallTrackingService : Service() {
             projection,
             null,
             null,
-            "${CallLog.Calls.DATE} DESC LIMIT 1"
+            "${CallLog.Calls.DATE} DESC"
         )?.use { cursor ->
             if (cursor.moveToFirst()) {
                 val number = cursor.getString(cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)).orEmpty()
@@ -111,13 +147,12 @@ class CallTrackingService : Service() {
             CallLog.Calls.MISSED_TYPE -> "Пропущенный" to "Пропущенный"
             CallLog.Calls.REJECTED_TYPE -> "Неотвеченный" to "Неотвеченный"
             CallLog.Calls.BLOCKED_TYPE -> "Неотвеченный" to "Неотвеченный"
-            else -> {
-                if (duration == 0L) "Пропущенный" to "Пропущенный" else "Исходящий" to ""
-            }
+            else -> if (duration == 0L) "Пропущенный" to "Пропущенный" else "Исходящий" to ""
         }
     }
 
     override fun onDestroy() {
+        runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
         tracker.stop()
         super.onDestroy()
     }
