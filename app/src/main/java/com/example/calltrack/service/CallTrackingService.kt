@@ -33,7 +33,7 @@ class CallTrackingService : Service() {
         createChannel()
 
         val started = runCatching {
-            startForeground(101, createNotification("Отслеживание звонков активно"))
+            startForeground(101, createNotification("Приложение активно"))
         }.isSuccess
         if (!started) {
             stopSelf()
@@ -41,6 +41,8 @@ class CallTrackingService : Service() {
         }
 
         tracker = CallStateTracker(this) { state, _ ->
+            // Слушаем системные состояния телефонии, поэтому фиксируем звонки
+            // независимо от того, откуда они начаты: из нашего приложения или из штатной звонилки.
             when (state) {
                 TelephonyManager.CALL_STATE_RINGING,
                 TelephonyManager.CALL_STATE_OFFHOOK -> lastStateWasActive = true
