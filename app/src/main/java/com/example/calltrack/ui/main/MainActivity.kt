@@ -76,9 +76,35 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun requestDefaultDialerRole() {
-        val roleManager = getSystemService(RoleManager::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
-            roleRequestLauncher.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER))
+        // На Android 10+ сначала пробуем штатный RoleManager для роли звонилки.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = getSystemService(RoleManager::class.java)
+            if (!roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
+                val roleIntent = roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
+                if (roleIntent.resolveActivity(packageManager) != null) {
+                    roleRequestLauncher.launch(roleIntent)
+                    return
+                }
+            } else {
+                return
+            }
+        }
+
+        // Fallback: открываем системные настройки выбора default apps,
+        // чтобы пользователь вручную назначил основную звонилку.
+        val settingsIntent = Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+        if (settingsIntent.resolveActivity(packageManager) != null) {
+            roleRequestLauncher.launch(settingsIntent)
+            return
+        }
+
+        // Доп. fallback для старых Android (до Q):
+        // системный экран смены dialer через TelecomManager action.
+        val changeDialerIntent = Intent(android.telecom.TelecomManager.ACTION_CHANGE_DEFAULT_DIALER).apply {
+            putExtra(android.telecom.TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
+        }
+        if (changeDialerIntent.resolveActivity(packageManager) != null) {
+            roleRequestLauncher.launch(changeDialerIntent)
         }
     }
 
