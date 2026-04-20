@@ -170,7 +170,7 @@ class CallTrackingService : Service() {
         return NotificationCompat.Builder(this, "calltrack")
             .setContentTitle("Calltrack")
             .setContentText(text)
-            .setSmallIcon(R.drawable.ic_phone)
+            .setSmallIcon(R.drawable.ic_spyglass)
             .build()
     }
 }
