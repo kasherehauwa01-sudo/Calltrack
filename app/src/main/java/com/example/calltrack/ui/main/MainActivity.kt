@@ -15,7 +15,6 @@ import com.example.calltrack.R
 import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.service.CallTrackingService
 import com.example.calltrack.ui.calls.CallListFragment
-import com.example.calltrack.ui.contacts.ContactsFragment
 import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import kotlinx.coroutines.launch
@@ -54,12 +53,23 @@ class MainActivity : AppCompatActivity() {
     private fun setupBottomNav() {
         binding.bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
-                R.id.nav_dial -> openFragment(DialPadFragment.newInstance())
-                R.id.nav_recent -> openFragment(CallListFragment.newInstance())
-                R.id.nav_contacts -> openFragment(ContactsFragment.newInstance())
+                R.id.nav_dial -> {
+                    openFragment(DialPadFragment.newInstance())
+                    true
+                }
+                R.id.nav_recent -> {
+                    openFragment(CallListFragment.newInstance())
+                    true
+                }
+                R.id.nav_contacts -> {
+                    val contactsIntent = Intent(Intent.ACTION_VIEW).apply {
+                        type = android.provider.ContactsContract.Contacts.CONTENT_TYPE
+                    }
+                    runCatching { startActivity(contactsIntent) }
+                    false
+                }
                 else -> return@setOnItemSelectedListener false
             }
-            true
         }
     }
 
@@ -107,7 +117,7 @@ class MainActivity : AppCompatActivity() {
         return buildList {
             add(Manifest.permission.READ_PHONE_STATE)
             add(Manifest.permission.READ_CALL_LOG)
-            add(Manifest.permission.CALL_PHONE)
+            add(Manifest.permission.READ_CONTACTS)
             add(Manifest.permission.RECORD_AUDIO)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
         }.toTypedArray()
