@@ -1,7 +1,6 @@
 package com.example.calltrack.ui.main
 
 import android.Manifest
-import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -28,11 +27,6 @@ class MainActivity : AppCompatActivity() {
         MainViewModel.Factory((application as App).repository)
     }
 
-    private val roleRequestLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            updateWarningState()
-        }
-
     private val permissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { updateWarningState() }
@@ -50,9 +44,7 @@ class MainActivity : AppCompatActivity() {
                 binding.bottomNav.visibility = android.view.View.GONE
             } else {
                 binding.bottomNav.visibility = android.view.View.VISIBLE
-                if (savedInstanceState == null) {
-                    binding.bottomNav.selectedItemId = R.id.nav_dial
-                }
+                if (savedInstanceState == null) binding.bottomNav.selectedItemId = R.id.nav_dial
                 startTrackingService()
             }
             updateWarningState()
@@ -75,56 +67,12 @@ class MainActivity : AppCompatActivity() {
         permissionsLauncher.launch(requiredPermissions())
     }
 
-    fun requestDefaultDialerRole() {
-        // На Android 10+ сначала пробуем штатный RoleManager для роли звонилки.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val roleManager = getSystemService(RoleManager::class.java)
-            if (!roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
-                val roleIntent = roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
-                if (roleIntent.resolveActivity(packageManager) != null) {
-                    roleRequestLauncher.launch(roleIntent)
-                    return
-                }
-            } else {
-                return
-            }
-        }
-
-        // Fallback: открываем системные настройки выбора default apps,
-        // чтобы пользователь вручную назначил основную звонилку.
-        val settingsIntent = Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-        if (settingsIntent.resolveActivity(packageManager) != null) {
-            roleRequestLauncher.launch(settingsIntent)
-            return
-        }
-
-        // Доп. fallback для старых Android (до Q):
-        // системный экран смены dialer через TelecomManager action.
-        val changeDialerIntent = Intent(android.telecom.TelecomManager.ACTION_CHANGE_DEFAULT_DIALER).apply {
-            putExtra(android.telecom.TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
-        }
-        if (changeDialerIntent.resolveActivity(packageManager) != null) {
-            roleRequestLauncher.launch(changeDialerIntent)
-        }
-    }
-
     fun completeOnboarding() {
-        lifecycleScope.launch {
-            viewModel.markOnboardingCompleted()
-        }
+        lifecycleScope.launch { viewModel.markOnboardingCompleted() }
     }
 
     fun hasAllPermissions(): Boolean = requiredPermissions().all {
         ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-    }
-
-    fun isDefaultDialer(): Boolean {
-        val roleManager = getSystemService(RoleManager::class.java)
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
-        } else {
-            true
-        }
     }
 
     fun setDialNumber(number: String) {
@@ -139,10 +87,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateWarningState() {
-        val warning = mutableListOf<String>()
-        if (!hasAllPermissions()) warning += "Не выданы все разрешения"
-        if (!isDefaultDialer()) warning += "Приложение не назначено как звонилка по умолчанию"
-        binding.tvWarning.text = warning.joinToString("\n")
+        binding.tvWarning.text = if (!hasAllPermissions()) {
+            "Не выданы все разрешения"
+        } else {
+            ""
+        }
     }
 
     private fun startTrackingService() {

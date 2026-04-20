@@ -43,20 +43,12 @@ class OnboardingFragment : Fragment() {
             1 -> step = 2
             2 -> {
                 host.requestRequiredPermissions()
-                if (host.hasAllPermissions()) step = 3
-            }
-            3 -> {
-                host.requestDefaultDialerRole()
-                if (host.isDefaultDialer()) step = 4
-            }
-            4 -> {
-                if (host.hasAllPermissions() && host.isDefaultDialer()) {
+                if (host.hasAllPermissions()) {
+                    step = 3
                     host.completeOnboarding()
-                } else {
-                    binding.tvDescription.text = "Не все условия выполнены. Повторите настройку."
-                    step = 2
                 }
             }
+            3 -> host.completeOnboarding()
         }
         updateUi()
     }
@@ -65,7 +57,7 @@ class OnboardingFragment : Fragment() {
         when (step) {
             1 -> {
                 binding.tvTitle.text = "Добро пожаловать"
-                binding.tvDescription.text = "Приложение отслеживает звонки, собирает аналитику и отправляет данные в Google Sheets."
+                binding.tvDescription.text = "Приложение отслеживает звонки и отправляет аналитику. Для старта выдайте разрешения."
                 binding.btnPrimary.text = "Начать настройку"
                 binding.btnSecondary.visibility = View.GONE
             }
@@ -77,15 +69,9 @@ class OnboardingFragment : Fragment() {
                 binding.btnSecondary.text = "Открыть настройки"
             }
             3 -> {
-                binding.tvTitle.text = "Основная звонилка"
-                binding.tvDescription.text = "Сделайте приложение default dialer через RoleManager."
-                binding.btnPrimary.text = "Сделать основным"
-                binding.btnSecondary.visibility = View.GONE
-            }
-            4 -> {
-                binding.tvTitle.text = "Завершение"
-                binding.tvDescription.text = "Проверка завершена. Нажмите кнопку для входа в приложение."
-                binding.btnPrimary.text = "Завершить"
+                binding.tvTitle.text = "Готово"
+                binding.tvDescription.text = "Разрешения получены. Переходим на основной экран с клавиатурой."
+                binding.btnPrimary.text = "Открыть клавиатуру"
                 binding.btnSecondary.visibility = View.GONE
             }
         }
