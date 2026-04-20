@@ -75,7 +75,9 @@ function doPost(e) {
     data.phone,
     data.type,
     data.duration,
-    data.note
+    data.note,
+    data.date,
+    data.time
   ]);
 
   return ContentService.createTextOutput("ok");
@@ -104,7 +106,9 @@ POST JSON:
   "phone": "+79999999999",
   "type": "Исходящий",
   "duration": 120,
-  "note": "Вне приложения"
+  "note": "Вне приложения",
+  "date": "20.04.26",
+  "time": "14:35"
 }
 ```
 
@@ -113,6 +117,8 @@ POST JSON:
 - `type` — тип звонка (`Входящий`, `Исходящий`, `Пропущенный`, `Неотвеченный`);
 - `duration` — длительность в секундах;
 - `note` — комментарий (`Вне приложения`, `Пропущенный`, `Неотвеченный`).
+- `date` — дата звонка в формате `дд.мм.гг`.
+- `time` — время звонка в формате `чч:мм`.
 
 ---
 
