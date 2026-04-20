@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:paddingHorizontal="20dp"
+    android:paddingTop="12dp">
+
+    <TextView
+        android:id="@+id/tvNumber"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center"
+        android:textColor="@android:color/white"
+        android:textSize="34sp" />
+
+    <ImageButton
+        android:id="@+id/btnBackspace"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="end"
+        android:background="@android:color/transparent"
+        android:contentDescription="Удалить"
+        android:src="@android:drawable/ic_input_delete"
+        android:tint="@android:color/white" />
+
+    <GridLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:columnCount="3"
+        android:rowCount="4">
+
+        <Button android:id="@+id/key1" style="@style/KeyStyle" android:text="1\n" />
+        <Button android:id="@+id/key2" style="@style/KeyStyle" android:text="2\nABC АБВГ" />
+        <Button android:id="@+id/key3" style="@style/KeyStyle" android:text="3\nDEF ДЕЁЖЗ" />
+
+        <Button android:id="@+id/key4" style="@style/KeyStyle" android:text="4\nGHI ИЙКЛ" />
+        <Button android:id="@+id/key5" style="@style/KeyStyle" android:text="5\nJKL МНОП" />
+        <Button android:id="@+id/key6" style="@style/KeyStyle" android:text="6\nMNO РСТУ" />
+
+        <Button android:id="@+id/key7" style="@style/KeyStyle" android:text="7\nPQRS ФХЦЧ" />
+        <Button android:id="@+id/key8" style="@style/KeyStyle" android:text="8\nTUV ШЩЪЫ" />
+        <Button android:id="@+id/key9" style="@style/KeyStyle" android:text="9\nWXYZ ЬЭЮЯ" />
+
+        <Button android:id="@+id/keyStar" style="@style/KeyStyle" android:text="*" />
+        <Button android:id="@+id/key0" style="@style/KeyStyle" android:text="0\n+" />
+        <Button android:id="@+id/keyHash" style="@style/KeyStyle" android:text="#" />
+
+    </GridLayout>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btnCall"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="12dp"
+        android:contentDescription="Открыть набор"
+        android:src="@drawable/ic_phone"
+        app:backgroundTint="#24C96B" />
+
+    <TextView
+        android:id="@+id/tvNoResults"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="Контакты не найдены"
+        android:textColor="#AAAAAA"
+        android:visibility="gone" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerT9"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="6dp"
+        android:layout_weight="1" />
+
+</LinearLayout>
