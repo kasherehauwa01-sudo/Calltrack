@@ -77,8 +77,11 @@ class MainActivity : AppCompatActivity() {
         permissionsLauncher.launch(requiredPermissions())
     }
 
-    fun completeOnboarding() {
-        lifecycleScope.launch { viewModel.markOnboardingCompleted() }
+    fun completeOnboarding(managerName: String? = null) {
+        lifecycleScope.launch {
+            managerName?.let { viewModel.setManagerName(it) }
+            viewModel.markOnboardingCompleted()
+        }
     }
 
     fun hasAllPermissions(): Boolean = requiredPermissions().all {

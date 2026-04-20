@@ -19,6 +19,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     }
 
     suspend fun markOnboardingCompleted() = repository.prefs.setOnboardingCompleted(true)
+    suspend fun setManagerName(name: String) = repository.prefs.setManagerName(name)
     suspend fun sync() = repository.syncPending()
 
     class Factory(private val repository: CallRepository) : ViewModelProvider.Factory {

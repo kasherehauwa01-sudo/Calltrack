@@ -21,6 +21,15 @@
         android:gravity="center"
         android:textSize="16sp" />
 
+    <EditText
+        android:id="@+id/etManager"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:hint="ФИО"
+        android:inputType="textPersonName"
+        android:visibility="gone" />
+
     <Button
         android:id="@+id/btnPrimary"
         android:layout_width="match_parent"

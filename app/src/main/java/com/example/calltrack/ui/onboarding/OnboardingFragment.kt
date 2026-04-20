@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import com.example.calltrack.databinding.FragmentOnboardingBinding
 import com.example.calltrack.ui.main.MainActivity
@@ -15,6 +16,7 @@ class OnboardingFragment : Fragment() {
 
     private var _binding: FragmentOnboardingBinding? = null
     private val binding get() = _binding!!
+    private var stage: Stage = Stage.PERMISSIONS
     private var permissionsRequested = false
 
     override fun onCreateView(
@@ -28,11 +30,17 @@ class OnboardingFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val host = requireActivity() as MainActivity
-        updateUi(hasPermissions = host.hasAllPermissions())
+        stage = if (host.hasAllPermissions()) Stage.AUTH else Stage.PERMISSIONS
+        updateUi()
 
         binding.btnPrimary.setOnClickListener {
-            host.requestRequiredPermissions()
-            permissionsRequested = true
+            when (stage) {
+                Stage.PERMISSIONS -> {
+                    host.requestRequiredPermissions()
+                    permissionsRequested = true
+                }
+                Stage.AUTH -> submitManagerName()
+            }
         }
 
         binding.btnSecondary.setOnClickListener {
@@ -42,7 +50,7 @@ class OnboardingFragment : Fragment() {
             startActivity(intent)
         }
 
-        if (!host.hasAllPermissions() && !permissionsRequested) {
+        if (stage == Stage.PERMISSIONS && !permissionsRequested) {
             host.requestRequiredPermissions()
             permissionsRequested = true
         }
@@ -51,26 +59,41 @@ class OnboardingFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         val host = activity as? MainActivity ?: return
-        val granted = host.hasAllPermissions()
-        updateUi(granted)
-        if (granted) {
-            host.completeOnboarding()
+        if (stage == Stage.PERMISSIONS && host.hasAllPermissions()) {
+            stage = Stage.AUTH
+            updateUi()
         }
     }
 
-    private fun updateUi(hasPermissions: Boolean) {
-        if (hasPermissions) {
-            binding.tvTitle.text = "Готово"
-            binding.tvDescription.text = "Разрешения получены. Переходим на экран набора."
-            binding.btnPrimary.visibility = View.GONE
-            binding.btnSecondary.visibility = View.GONE
-        } else {
-            binding.tvTitle.text = "Нужны разрешения"
-            binding.tvDescription.text = "Для работы приложения выдайте необходимые разрешения."
-            binding.btnPrimary.text = "Повторить запрос"
-            binding.btnPrimary.visibility = View.VISIBLE
-            binding.btnSecondary.text = "Открыть настройки"
-            binding.btnSecondary.visibility = View.VISIBLE
+    private fun submitManagerName() {
+        val host = requireActivity() as MainActivity
+        val fullName = binding.etManager.text.toString().trim()
+        if (fullName.isBlank()) {
+            Toast.makeText(requireContext(), "Поле ФИО обязательно", Toast.LENGTH_SHORT).show()
+            return
+        }
+        host.completeOnboarding(fullName)
+    }
+
+    private fun updateUi() {
+        when (stage) {
+            Stage.PERMISSIONS -> {
+                binding.tvTitle.text = "Нужны разрешения"
+                binding.tvDescription.text = "Для работы приложения выдайте необходимые разрешения."
+                binding.etManager.visibility = View.GONE
+                binding.btnPrimary.text = "Повторить запрос"
+                binding.btnPrimary.visibility = View.VISIBLE
+                binding.btnSecondary.text = "Открыть настройки"
+                binding.btnSecondary.visibility = View.VISIBLE
+            }
+            Stage.AUTH -> {
+                binding.tvTitle.text = "Авторизация"
+                binding.tvDescription.text = "Введите ФИО. Поле обязательно для заполнения."
+                binding.etManager.visibility = View.VISIBLE
+                binding.btnPrimary.text = "Ок"
+                binding.btnPrimary.visibility = View.VISIBLE
+                binding.btnSecondary.visibility = View.GONE
+            }
         }
     }
 
@@ -81,5 +104,10 @@ class OnboardingFragment : Fragment() {
 
     companion object {
         fun newInstance() = OnboardingFragment()
+    }
+
+    private enum class Stage {
+        PERMISSIONS,
+        AUTH
     }
 }
