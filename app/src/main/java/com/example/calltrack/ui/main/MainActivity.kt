@@ -95,7 +95,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startTrackingService() {
-        ContextCompat.startForegroundService(this, Intent(this, CallTrackingService::class.java))
+        // На Android 14+ запуск FGS может быть отклонён системой, если момент запуска невалидный.
+        // Чтобы не уронить приложение, оборачиваем запуск в runCatching.
+        runCatching {
+            ContextCompat.startForegroundService(this, Intent(this, CallTrackingService::class.java))
+        }
         lifecycleScope.launch { viewModel.sync() }
     }
 

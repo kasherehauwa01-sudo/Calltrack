@@ -28,7 +28,17 @@ class CallTrackingService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        startForeground(101, createNotification("Отслеживание звонков активно"))
+
+        // На Android 14+ в некоторых сценариях система запрещает поднимать FGS в текущий момент.
+        // В этом случае не падаем, а корректно останавливаем сервис.
+        val started = runCatching {
+            startForeground(101, createNotification("Отслеживание звонков активно"))
+        }.isSuccess
+        if (!started) {
+            stopSelf()
+            return
+        }
+
         tracker = CallStateTracker(this) { state, _ ->
             when (state) {
                 TelephonyManager.CALL_STATE_RINGING -> wasRinging = true
