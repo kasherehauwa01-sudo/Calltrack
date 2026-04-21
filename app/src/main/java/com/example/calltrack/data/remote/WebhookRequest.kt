@@ -9,5 +9,6 @@ data class WebhookRequest(
     val manager: String,
     val comment: String,
     val tag: String,
-    val reminder: String
+    val reminder: String,
+    val client: String
 )
