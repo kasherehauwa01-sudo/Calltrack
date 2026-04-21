@@ -11,6 +11,12 @@
         android:orientation="vertical">
 
         <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Имя контакта"
+            android:textColor="#BBBBBB" />
+
+        <TextView
             android:id="@+id/tvContactName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -25,6 +31,66 @@
             android:layout_marginTop="4dp"
             android:textColor="#BBBBBB"
             android:textSize="16sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Напоминание"
+            android:textColor="@android:color/white"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/etReminderText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Текст напоминания (до 100 символов)"
+            android:inputType="text"
+            android:maxLines="2" />
+
+        <TextView
+            android:id="@+id/tvReminderDraft"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="#CCCCCC" />
+
+        <Button
+            android:id="@+id/btnPickReminderDate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Выбрать дату и время" />
+
+        <Button
+            android:id="@+id/btnSaveReminder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Сохранить напоминание" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Комментарий"
+            android:textColor="@android:color/white"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/etComment"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Комментарий (до 500 символов)"
+            android:inputType="textMultiLine"
+            android:maxLines="4" />
+
+        <Button
+            android:id="@+id/btnSaveComment"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Сохранить комментарий" />
 
         <TextView
             android:layout_width="match_parent"

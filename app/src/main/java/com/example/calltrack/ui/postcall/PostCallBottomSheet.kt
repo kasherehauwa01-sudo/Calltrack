@@ -65,7 +65,7 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
 
             lifecycleScope.launch {
                 viewModel.saveCallOutcome(callId, phone, contactName, tag, reminderAtMillis, note)
-                reminderAtMillis?.let { ReminderScheduler.schedule(requireContext(), phone, contactName, it) }
+                reminderAtMillis?.let { ReminderScheduler.schedule(requireContext(), phone, contactName, it, "Перезвонить клиенту") }
                 viewModel.sync()
                 dismissAllowingStateLoss()
             }

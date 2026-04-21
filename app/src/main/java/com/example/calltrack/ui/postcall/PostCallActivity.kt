@@ -61,7 +61,7 @@ class PostCallActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 val repository = (application as App).repository
                 repository.saveCallOutcome(callId, phone, contactName, tag, reminderAtMillis, note)
-                reminderAtMillis?.let { ReminderScheduler.schedule(this@PostCallActivity, phone, contactName, it) }
+                reminderAtMillis?.let { ReminderScheduler.schedule(this@PostCallActivity, phone, contactName, it, "Перезвонить клиенту") }
                 repository.syncPending()
                 finish()
             }

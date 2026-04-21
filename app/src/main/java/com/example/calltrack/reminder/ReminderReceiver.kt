@@ -17,6 +17,7 @@ class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val phone = intent.getStringExtra(ReminderScheduler.EXTRA_PHONE).orEmpty()
         val name = intent.getStringExtra(ReminderScheduler.EXTRA_NAME).orEmpty().ifBlank { phone }
+        val message = intent.getStringExtra(ReminderScheduler.EXTRA_MESSAGE).orEmpty()
 
         when (intent.action) {
             ACTION_CALL -> {
@@ -25,11 +26,11 @@ class ReminderReceiver : BroadcastReceiver() {
                 }
                 context.startActivity(dialIntent)
             }
-            else -> showNotification(context, phone, name)
+            else -> showNotification(context, phone, name, message)
         }
     }
 
-    private fun showNotification(context: Context, phone: String, name: String) {
+    private fun showNotification(context: Context, phone: String, name: String, message: String) {
         val manager = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
@@ -62,7 +63,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_spyglass)
             .setContentTitle("Напоминание")
-            .setContentText("Позвонить клиенту \"$name\"")
+            .setContentText(if (message.isBlank()) "Позвонить клиенту \"$name\"" else message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .addAction(0, "Открыть карточку клиента", openCardPending)

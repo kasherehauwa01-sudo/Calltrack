@@ -63,11 +63,33 @@ class CallRepository(
                 ReminderEntity(
                     phone = phone,
                     contactName = contactName,
+                    message = "Перезвонить",
                     remindAt = reminderMillis,
                     status = "Активно"
                 )
             )
         }
+    }
+
+
+    suspend fun addComment(phone: String, text: String) {
+        if (phone.isBlank() || text.isBlank()) return
+        ensureContact(phone)
+        commentDao.insert(CommentEntity(phone = phone, text = text))
+    }
+
+    suspend fun addReminder(phone: String, contactName: String, text: String, remindAt: Long) {
+        if (phone.isBlank() || text.isBlank()) return
+        ensureContact(phone, contactName)
+        reminderDao.insert(
+            ReminderEntity(
+                phone = phone,
+                contactName = contactName,
+                message = text,
+                remindAt = remindAt,
+                status = "Активно"
+            )
+        )
     }
 
     suspend fun syncPending() {

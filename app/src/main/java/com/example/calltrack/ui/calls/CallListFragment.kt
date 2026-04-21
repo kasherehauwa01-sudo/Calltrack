@@ -76,15 +76,19 @@ class CallListFragment : Fragment() {
                 val phone = normalizePhone(cursor.getString(phoneIdx).orEmpty())
                 if (phone.isNotBlank() && name.isNotBlank()) {
                     nameByPhone.putIfAbsent(phone, name)
+                    if (phone.length > 10) {
+                        nameByPhone.putIfAbsent(phone.takeLast(10), name)
+                    }
                 }
             }
         }
 
         calls.map { call ->
             val normalized = normalizePhone(call.phone)
+            val short = normalized.takeLast(10)
             RecentCallItem(
                 call = call,
-                contactName = nameByPhone[normalized] ?: call.phone
+                contactName = nameByPhone[normalized] ?: nameByPhone[short] ?: call.phone
             )
         }
     }

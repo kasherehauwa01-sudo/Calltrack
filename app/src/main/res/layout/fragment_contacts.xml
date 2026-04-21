@@ -5,10 +5,21 @@
     android:orientation="vertical"
     android:padding="12dp">
 
+    <EditText
+        android:id="@+id/etSearch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Поиск контакта"
+        android:inputType="text"
+        android:maxLines="1"
+        android:textColor="@android:color/white"
+        android:textColorHint="#888888" />
+
     <TextView
         android:id="@+id/tvEmpty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
         android:gravity="center"
         android:text="Контакты не найдены"
         android:textColor="#AAAAAA"
@@ -18,6 +29,7 @@
         android:id="@+id/recyclerContacts"
         android:layout_width="match_parent"
         android:layout_height="0dp"
+        android:layout_marginTop="8dp"
         android:layout_weight="1" />
 
 </LinearLayout>

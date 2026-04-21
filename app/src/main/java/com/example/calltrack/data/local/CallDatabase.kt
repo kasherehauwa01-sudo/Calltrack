@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ReminderEntity::class,
         CommentEntity::class
     ],
-    version = 2
+    version = 3
 )
 abstract class CallDatabase : RoomDatabase() {
     abstract fun callDao(): CallDao
@@ -46,6 +46,7 @@ abstract class CallDatabase : RoomDatabase() {
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                         phone TEXT NOT NULL,
                         contactName TEXT NOT NULL,
+                        message TEXT NOT NULL DEFAULT '',
                         remindAt INTEGER NOT NULL,
                         status TEXT NOT NULL,
                         createdAt INTEGER NOT NULL
@@ -65,13 +66,19 @@ abstract class CallDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE reminders ADD COLUMN message TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getInstance(context: Context): CallDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     CallDatabase::class.java,
                     "calltrack.db"
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build().also { INSTANCE = it }
             }
         }
