@@ -27,6 +27,11 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+
+        <receiver
+            android:name=".reminder.ReminderReceiver"
+            android:exported="false" />
+
         <activity
             android:name=".ui.main.MainActivity"
             android:exported="true">

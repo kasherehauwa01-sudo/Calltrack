@@ -97,8 +97,9 @@ class CallTrackingService : Service() {
 
         lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
-        repo.saveCall(entity)
+        val callId = repo.saveCall(entity)
         repo.syncPending()
+        CallUiEventBus.emit(CallCompletedUiEvent(callId = callId, phone = entity.phone, type = entity.type))
         Log.d("CallTrackingService", "Call captured and sync attempted: ${entity.phone}, ${entity.type}, ${entity.timestamp}")
     }
 

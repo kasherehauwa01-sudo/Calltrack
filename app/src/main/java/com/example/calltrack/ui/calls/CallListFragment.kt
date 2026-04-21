@@ -20,7 +20,7 @@ class CallListFragment : Fragment() {
     private val adapter by lazy {
         CallAdapter { item ->
             if (item.phone.isNotBlank() && item.phone != "Неизвестно") {
-                (requireActivity() as MainActivity).setDialNumber(item.phone)
+                (requireActivity() as MainActivity).openContactCard(item.phone)
             }
         }
     }
