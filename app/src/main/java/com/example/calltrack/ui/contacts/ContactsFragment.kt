@@ -85,13 +85,11 @@ class ContactsFragment : Fragment() {
         val phone = rawPhone.trim()
         if (phone.isBlank()) return
 
-        val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$phone"))
-        val fallbackDialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
+        val callIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
         runCatching {
             startActivity(callIntent)
         }.onFailure {
-            Toast.makeText(requireContext(), "Нет разрешения на прямой вызов, открываю набор", Toast.LENGTH_SHORT).show()
-            runCatching { startActivity(fallbackDialIntent) }
+            Toast.makeText(requireContext(), "Не удалось открыть дозвон", Toast.LENGTH_SHORT).show()
         }
     }
 
