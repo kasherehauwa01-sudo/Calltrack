@@ -21,6 +21,7 @@ import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.service.CallTrackingService
 import com.example.calltrack.service.CallUiEventBus
 import com.example.calltrack.ui.calls.CallListFragment
+import com.example.calltrack.ui.contacts.ContactsFragment
 import com.example.calltrack.ui.contactcard.ContactCardFragment
 import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
@@ -106,11 +107,8 @@ class MainActivity : AppCompatActivity() {
                     true
                 }
                 R.id.nav_contacts -> {
-                    val contactsIntent = Intent(Intent.ACTION_VIEW).apply {
-                        type = android.provider.ContactsContract.Contacts.CONTENT_TYPE
-                    }
-                    runCatching { startActivity(contactsIntent) }
-                    false
+                    openFragment(ContactsFragment.newInstance())
+                    true
                 }
                 else -> return@setOnItemSelectedListener false
             }
@@ -168,6 +166,7 @@ class MainActivity : AppCompatActivity() {
             add(Manifest.permission.READ_CALL_LOG)
             add(Manifest.permission.READ_CONTACTS)
             add(Manifest.permission.RECORD_AUDIO)
+            add(Manifest.permission.CALL_PHONE)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
         }.toTypedArray()
     }
