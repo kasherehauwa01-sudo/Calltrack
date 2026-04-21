@@ -108,6 +108,7 @@ class CallRepository(
                         duration = entity.duration,
                         manager = managerName,
                         comment = entity.note,
+                        note = entity.note,
                         tag = entity.tag,
                         reminder = entity.reminder,
                         client = clientDirectory.findClientName(entity.phone)
