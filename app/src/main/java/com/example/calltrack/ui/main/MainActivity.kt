@@ -136,7 +136,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun openContactCard(phone: String) {
-        openFragment(ContactCardFragment.newInstance(phone))
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragmentContainer, ContactCardFragment.newInstance(phone))
+            .addToBackStack(null)
+            .commit()
     }
 
     private fun openFragment(fragment: androidx.fragment.app.Fragment) {

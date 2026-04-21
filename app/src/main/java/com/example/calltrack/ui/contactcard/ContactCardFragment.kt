@@ -1,6 +1,8 @@
 package com.example.calltrack.ui.contactcard
 
 import android.app.DatePickerDialog
+import android.content.Intent
+import android.net.Uri
 import android.app.TimePickerDialog
 import android.os.Bundle
 import android.text.InputFilter
@@ -35,6 +37,7 @@ class ContactCardFragment : Fragment() {
 
     private val dateTimeFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
     private var draftReminderAt: Long? = null
+    private var currentPhone: String = ""
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentContactCardBinding.inflate(inflater, container, false)
@@ -43,12 +46,21 @@ class ContactCardFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val phone = requireArguments().getString(ARG_PHONE).orEmpty()
+        currentPhone = phone
         binding.tvContactPhone.text = phone
         binding.tvContactName.text = phone
         binding.tvClient1c.text = "—"
         binding.etReminderText.filters = arrayOf(InputFilter.LengthFilter(100))
         binding.etComment.filters = arrayOf(InputFilter.LengthFilter(500))
 
+        binding.btnBack.setOnClickListener {
+            requireActivity().onBackPressedDispatcher.onBackPressed()
+        }
+        binding.btnCall.setOnClickListener {
+            if (currentPhone.isNotBlank()) {
+                startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$currentPhone")))
+            }
+        }
         binding.btnPickReminderDate.setOnClickListener { pickReminderDateTime() }
         binding.btnSaveReminder.setOnClickListener { saveReminder(phone) }
         binding.btnSaveComment.setOnClickListener { saveComment(phone) }
