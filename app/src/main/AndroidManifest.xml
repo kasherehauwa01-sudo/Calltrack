@@ -32,6 +32,12 @@
             android:name=".reminder.ReminderReceiver"
             android:exported="false" />
 
+
+        <activity
+            android:name=".ui.postcall.PostCallActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Calltrack" />
+
         <activity
             android:name=".ui.main.MainActivity"
             android:exported="true">

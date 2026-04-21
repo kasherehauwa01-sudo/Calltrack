@@ -21,6 +21,7 @@ import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.data.local.CallEntity
 import com.example.calltrack.telephony.CallStateTracker
+import com.example.calltrack.ui.postcall.PostCallActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -99,7 +100,15 @@ class CallTrackingService : Service() {
         val repo = (application as App).repository
         val callId = repo.saveCall(entity)
         repo.syncPending()
-        CallUiEventBus.emit(CallCompletedUiEvent(callId = callId, phone = entity.phone, type = entity.type))
+        runCatching {
+            val postCallIntent = Intent(this, PostCallActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(PostCallActivity.EXTRA_CALL_ID, callId)
+                putExtra(PostCallActivity.EXTRA_PHONE, entity.phone)
+                putExtra(PostCallActivity.EXTRA_NAME, entity.phone)
+            }
+            startActivity(postCallIntent)
+        }
         Log.d("CallTrackingService", "Call captured and sync attempted: ${entity.phone}, ${entity.type}, ${entity.timestamp}")
     }
 

@@ -46,7 +46,6 @@ class MainActivity : AppCompatActivity() {
         applyWindowInsets()
         setupBottomNav()
         setupSettingsButton()
-        observeCallCompletedEvents()
         handleExternalNavigation(intent)
 
         viewModel.onboardingCompleted.observe(this) { completed ->
@@ -72,21 +71,6 @@ class MainActivity : AppCompatActivity() {
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
-        }
-    }
-
-    private fun observeCallCompletedEvents() {
-        lifecycleScope.launch {
-            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
-                CallUiEventBus.events.collect { event ->
-                    if (supportFragmentManager.findFragmentByTag("post_call") == null) {
-                        PostCallBottomSheet.newInstance(
-                            callId = event.callId,
-                            phone = event.phone
-                        ).show(supportFragmentManager, "post_call")
-                    }
-                }
-            }
         }
     }
 
