@@ -150,15 +150,19 @@ class CallTrackingService : Service() {
     }
 
     private fun mapCallType(typeInt: Int, duration: Long): Pair<String, String> {
-        val shortCall = duration <= 2L
-        return when (typeInt) {
-            CallLog.Calls.REJECTED_TYPE -> "Сбросил" to ""
-            CallLog.Calls.INCOMING_TYPE -> if (shortCall) "Пропущенный" to "" else "Входящий" to ""
-            CallLog.Calls.OUTGOING_TYPE -> if (shortCall) "Отклонённый" to "" else "Исходящий" to ""
-            CallLog.Calls.MISSED_TYPE -> "Пропущенный" to ""
-            CallLog.Calls.BLOCKED_TYPE -> "Неотвеченный" to ""
-            else -> if (shortCall) "Пропущенный" to "" else "Исходящий" to ""
+        val callTypeString = when (typeInt) {
+            CallLog.Calls.INCOMING_TYPE -> {
+                if (duration < 2L) "пропущенный" else "входящий"
+            }
+            CallLog.Calls.OUTGOING_TYPE -> {
+                if (duration < 2L) "неотвеченный" else "исходящий"
+            }
+            CallLog.Calls.MISSED_TYPE -> "пропущенный"
+            CallLog.Calls.REJECTED_TYPE -> "сброшенный"
+            else -> "неотвеченный"
         }
+        Log.d("CALL_TYPE", "Тип: $callTypeString, duration: $duration")
+        return callTypeString to ""
     }
 
     override fun onDestroy() {
