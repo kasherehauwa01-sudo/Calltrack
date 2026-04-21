@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Результат звонка"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Температура клиента" />
+
+        <RadioGroup
+            android:id="@+id/groupTemp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <RadioButton android:id="@+id/rbHot" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Горячий" />
+            <RadioButton android:id="@+id/rbWarm" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Тёплый" />
+            <RadioButton android:id="@+id/rbCold" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Холодный" />
+        </RadioGroup>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Итог разговора" />
+
+        <RadioGroup
+            android:id="@+id/groupOutcome"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <RadioButton android:id="@+id/rbDeal" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Договорились" />
+            <RadioButton android:id="@+id/rbDecline" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Отказ" />
+            <RadioButton android:id="@+id/rbRecall" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Перезвонить" />
+        </RadioGroup>
+
+        <Button
+            android:id="@+id/btnPickReminder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Выбрать дату и время перезвона"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvReminderValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp" />
+
+        <EditText
+            android:id="@+id/etComment"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:hint="Комментарий (до 500 символов)"
+            android:inputType="textMultiLine"
+            android:maxLines="4" />
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Сохранить" />
+    </LinearLayout>
+
+</ScrollView>
