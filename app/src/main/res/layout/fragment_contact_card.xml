@@ -139,11 +139,14 @@
             android:text="Сохранить комментарий" />
 
         <TextView
+            android:id="@+id/tvCallsHeader"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
+            android:clickable="true"
+            android:focusable="true"
             android:text="История звонков"
-            android:textColor="@android:color/white"
+            android:textColor="#8AB4FF"
             android:textStyle="bold" />
 
         <TextView
@@ -154,11 +157,14 @@
             android:textColor="#DDDDDD" />
 
         <TextView
+            android:id="@+id/tvRemindersHeader"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
+            android:clickable="true"
+            android:focusable="true"
             android:text="История напоминаний"
-            android:textColor="@android:color/white"
+            android:textColor="#8AB4FF"
             android:textStyle="bold" />
 
         <TextView
@@ -169,11 +175,14 @@
             android:textColor="#DDDDDD" />
 
         <TextView
+            android:id="@+id/tvCommentsHeader"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
+            android:clickable="true"
+            android:focusable="true"
             android:text="История комментариев"
-            android:textColor="@android:color/white"
+            android:textColor="#8AB4FF"
             android:textStyle="bold" />
 
         <TextView

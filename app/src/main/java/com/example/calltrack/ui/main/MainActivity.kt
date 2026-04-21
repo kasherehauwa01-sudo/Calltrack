@@ -23,6 +23,7 @@ import com.example.calltrack.service.CallUiEventBus
 import com.example.calltrack.ui.calls.CallListFragment
 import com.example.calltrack.ui.contacts.ContactsFragment
 import com.example.calltrack.ui.contactcard.ContactCardFragment
+import com.example.calltrack.ui.contactcard.ContactHistoryFragment
 import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import com.example.calltrack.ui.postcall.PostCallBottomSheet
@@ -138,6 +139,13 @@ class MainActivity : AppCompatActivity() {
     fun openContactCard(phone: String) {
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragmentContainer, ContactCardFragment.newInstance(phone))
+            .addToBackStack(null)
+            .commit()
+    }
+
+    fun openContactHistory(phone: String, type: String) {
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragmentContainer, ContactHistoryFragment.newInstance(phone, type))
             .addToBackStack(null)
             .commit()
     }

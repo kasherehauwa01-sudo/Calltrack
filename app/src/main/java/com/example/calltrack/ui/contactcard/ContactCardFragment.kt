@@ -67,6 +67,18 @@ class ContactCardFragment : Fragment() {
         binding.btnPickReminderDate.setOnClickListener { pickReminderDateTime() }
         binding.btnSaveReminder.setOnClickListener { saveReminder(phone) }
         binding.btnSaveComment.setOnClickListener { saveComment(phone) }
+        binding.tvCallsHeader.setOnClickListener {
+            (requireActivity() as com.example.calltrack.ui.main.MainActivity)
+                .openContactHistory(phone, ContactHistoryFragment.TYPE_CALLS)
+        }
+        binding.tvRemindersHeader.setOnClickListener {
+            (requireActivity() as com.example.calltrack.ui.main.MainActivity)
+                .openContactHistory(phone, ContactHistoryFragment.TYPE_REMINDERS)
+        }
+        binding.tvCommentsHeader.setOnClickListener {
+            (requireActivity() as com.example.calltrack.ui.main.MainActivity)
+                .openContactHistory(phone, ContactHistoryFragment.TYPE_COMMENTS)
+        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             val fallbackName = findContactNameInPhoneBook(phone)
