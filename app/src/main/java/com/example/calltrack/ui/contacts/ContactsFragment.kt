@@ -1,28 +1,27 @@
 package com.example.calltrack.ui.contacts
 
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.calltrack.databinding.FragmentContactsBinding
 import com.example.calltrack.ui.main.MainActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ContactsFragment : Fragment() {
 
     private var _binding: FragmentContactsBinding? = null
     private val binding get() = _binding!!
 
-    private val pickContactLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val dataUri = result.data?.data ?: return@registerForActivityResult
-        val selected = getPhoneFromUri(dataUri)
-        if (!selected.isNullOrBlank()) {
-            binding.tvSelected.text = selected
-            (requireActivity() as MainActivity).setDialNumber(selected)
+    private val adapter = ContactsAdapter { contact ->
+        if (contact.phone.isNotBlank()) {
+            (requireActivity() as MainActivity).openContactCard(contact.phone)
         }
     }
 
@@ -32,26 +31,41 @@ class ContactsFragment : Fragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        binding.btnOpenContacts.setOnClickListener {
-            val intent = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
-            pickContactLauncher.launch(intent)
+        binding.recyclerContacts.layoutManager = LinearLayoutManager(requireContext())
+        binding.recyclerContacts.adapter = adapter
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            val contacts = loadContacts()
+            adapter.submitList(contacts)
+            binding.tvEmpty.visibility = if (contacts.isEmpty()) View.VISIBLE else View.GONE
         }
     }
 
-    private fun getPhoneFromUri(uri: Uri): String? {
+    private suspend fun loadContacts(): List<ContactListItem> = withContext(Dispatchers.IO) {
+        val list = mutableListOf<ContactListItem>()
         requireContext().contentResolver.query(
-            uri,
-            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(
+                ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+            ),
             null,
             null,
-            null
+            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
         )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val idx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                return cursor.getString(idx)
+            val idIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
+            val nameIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+            val phoneIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+            while (cursor.moveToNext()) {
+                list += ContactListItem(
+                    contactId = cursor.getLong(idIdx),
+                    name = cursor.getString(nameIdx).orEmpty().ifBlank { "Без имени" },
+                    phone = cursor.getString(phoneIdx).orEmpty()
+                )
             }
         }
-        return null
+        list
     }
 
     override fun onDestroyView() {
