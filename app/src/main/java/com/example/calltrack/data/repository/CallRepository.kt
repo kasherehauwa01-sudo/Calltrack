@@ -37,6 +37,7 @@ class CallRepository(
     fun observeContact(phone: String): Flow<ContactEntity?> = contactDao.observeByPhone(phone)
     fun observeReminders(phone: String): Flow<List<ReminderEntity>> = reminderDao.observeByPhone(phone)
     fun observeComments(phone: String): Flow<List<CommentEntity>> = commentDao.observeByPhone(phone)
+    fun findClientName(phone: String): String = clientDirectory.findClientName(phone)
 
     suspend fun saveCall(call: CallEntity): Long {
         ensureContact(call.phone)

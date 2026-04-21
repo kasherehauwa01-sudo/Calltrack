@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.app.TimePickerDialog
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.text.InputFilter
 import android.view.LayoutInflater
 import android.view.View
@@ -20,7 +21,9 @@ import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.databinding.FragmentContactCardBinding
 import com.example.calltrack.reminder.ReminderScheduler
 import com.example.calltrack.ui.main.MainViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -49,7 +52,7 @@ class ContactCardFragment : Fragment() {
         currentPhone = phone
         binding.tvContactPhone.text = phone
         binding.tvContactName.text = phone
-        binding.tvClient1c.text = "—"
+        binding.tvClient1c.text = viewModel.findClientName(phone).ifBlank { "—" }
         binding.etReminderText.filters = arrayOf(InputFilter.LengthFilter(100))
         binding.etComment.filters = arrayOf(InputFilter.LengthFilter(500))
 
@@ -65,9 +68,22 @@ class ContactCardFragment : Fragment() {
         binding.btnSaveReminder.setOnClickListener { saveReminder(phone) }
         binding.btnSaveComment.setOnClickListener { saveComment(phone) }
 
+        viewLifecycleOwner.lifecycleScope.launch {
+            val fallbackName = findContactNameInPhoneBook(phone)
+            if (binding.tvContactName.text.toString() == phone && !fallbackName.isNullOrBlank()) {
+                binding.tvContactName.text = fallbackName
+            }
+            if (binding.tvClient1c.text.toString() == "—") {
+                val client = viewModel.findClientName(phone)
+                if (client.isNotBlank()) binding.tvClient1c.text = client
+            }
+        }
+
         viewModel.observeContact(phone).observe(viewLifecycleOwner) { contact ->
-            binding.tvContactName.text = contact?.name?.ifBlank { phone } ?: phone
-            binding.tvClient1c.text = contact?.client1c?.ifBlank { "—" } ?: "—"
+            val currentName = binding.tvContactName.text.toString()
+            binding.tvContactName.text = contact?.name?.ifBlank { currentName } ?: currentName
+            val fallbackClient = viewModel.findClientName(phone).ifBlank { "—" }
+            binding.tvClient1c.text = contact?.client1c?.ifBlank { fallbackClient } ?: fallbackClient
         }
         viewModel.observeCallsByPhone(phone).observe(viewLifecycleOwner) { calls ->
             binding.tvCallsHistory.text = formatCalls(calls)
@@ -145,6 +161,35 @@ class ContactCardFragment : Fragment() {
             now.get(Calendar.DAY_OF_MONTH)
         ).show()
     }
+
+
+    private suspend fun findContactNameInPhoneBook(phone: String): String? = withContext(Dispatchers.IO) {
+        val target = normalizePhone(phone).takeLast(10)
+        if (target.isBlank()) return@withContext null
+
+        requireContext().contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+            ),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            val nameIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+            val phoneIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+            while (cursor.moveToNext()) {
+                val candidate = normalizePhone(cursor.getString(phoneIdx).orEmpty()).takeLast(10)
+                if (candidate == target) {
+                    return@withContext cursor.getString(nameIdx).orEmpty().ifBlank { null }
+                }
+            }
+        }
+        null
+    }
+
+    private fun normalizePhone(value: String): String = value.filter { it.isDigit() }
 
     private fun formatCalls(calls: List<CallEntity>): String {
         if (calls.isEmpty()) return "Нет звонков"

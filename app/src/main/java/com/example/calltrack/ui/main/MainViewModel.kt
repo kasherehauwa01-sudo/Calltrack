@@ -26,6 +26,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     fun observeCallsByPhone(phone: String): LiveData<List<CallEntity>> = repository.observeCallsByPhone(phone).asLiveData()
     fun observeReminders(phone: String): LiveData<List<ReminderEntity>> = repository.observeReminders(phone).asLiveData()
     fun observeComments(phone: String): LiveData<List<CommentEntity>> = repository.observeComments(phone).asLiveData()
+    fun findClientName(phone: String): String = repository.findClientName(phone)
 
     suspend fun saveCallOutcome(
         callId: Long,
