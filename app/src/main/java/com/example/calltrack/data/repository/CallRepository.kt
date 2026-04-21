@@ -94,6 +94,30 @@ class CallRepository(
         )
     }
 
+
+    suspend fun saveCommentForCall(callId: Long, phone: String, text: String) {
+        if (text.isBlank()) return
+        val call = callDao.getById(callId) ?: return
+        callDao.updateOutcome(callId, text, call.tag, call.reminder)
+        commentDao.insert(CommentEntity(phone = phone, text = text))
+    }
+
+    suspend fun saveReminderForCall(callId: Long, phone: String, contactName: String, text: String, remindAt: Long) {
+        if (text.isBlank()) return
+        val call = callDao.getById(callId) ?: return
+        val reminderText = "${dateFormat.format(Date(remindAt))} ${timeFormat.format(Date(remindAt))} | $text"
+        callDao.updateOutcome(callId, call.note, call.tag, reminderText)
+        reminderDao.insert(
+            ReminderEntity(
+                phone = phone,
+                contactName = contactName,
+                message = text,
+                remindAt = remindAt,
+                status = "Активно"
+            )
+        )
+    }
+
     suspend fun syncPending() {
         val managerName = prefs.getManagerName().ifBlank { "Не указан" }
         val pending = callDao.getPending()

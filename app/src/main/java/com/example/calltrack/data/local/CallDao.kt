@@ -20,6 +20,9 @@ interface CallDao {
     @Query("SELECT * FROM calls WHERE uploaded = 0")
     suspend fun getPending(): List<CallEntity>
 
+    @Query("SELECT * FROM calls WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): CallEntity?
+
     @Query("UPDATE calls SET uploaded = 1 WHERE id = :id")
     suspend fun markUploaded(id: Long)
 

@@ -38,6 +38,13 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     ) = repository.saveCallOutcome(callId, phone, contactName, tag, reminderMillis, note)
 
 
+
+    suspend fun saveCommentForCall(callId: Long, phone: String, text: String) =
+        repository.saveCommentForCall(callId, phone, text)
+
+    suspend fun saveReminderForCall(callId: Long, phone: String, contactName: String, text: String, remindAt: Long) =
+        repository.saveReminderForCall(callId, phone, contactName, text, remindAt)
+
     suspend fun addComment(phone: String, text: String) = repository.addComment(phone, text)
     suspend fun addReminder(phone: String, contactName: String, text: String, remindAt: Long) =
         repository.addReminder(phone, contactName, text, remindAt)
