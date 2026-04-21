@@ -99,7 +99,6 @@ class CallTrackingService : Service() {
         lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
         val callId = repo.saveCall(entity)
-        repo.syncPending()
         runCatching {
             val postCallIntent = Intent(this, PostCallActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
