@@ -27,6 +27,7 @@ class CallRepository(
     context: Context
 ) {
     val prefs = PrefsManager(context)
+    private val clientDirectory = ClientDirectory(context)
 
     private val dateFormat = SimpleDateFormat("dd.MM.yy", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -108,7 +109,8 @@ class CallRepository(
                         manager = managerName,
                         comment = entity.note,
                         tag = entity.tag,
-                        reminder = entity.reminder
+                        reminder = entity.reminder,
+                        client = clientDirectory.findClientName(entity.phone)
                     )
                 )
                 callDao.markUploaded(entity.id)
@@ -121,9 +123,21 @@ class CallRepository(
 
     private suspend fun ensureContact(phone: String, name: String = "") {
         if (phone.isBlank() || phone == "Неизвестно") return
+        val client1c = clientDirectory.findClientName(phone)
         val exists = contactDao.findByPhone(phone)
         if (exists == null) {
-            contactDao.insert(ContactEntity(phone = phone, name = name.ifBlank { phone }))
+            contactDao.insert(
+                ContactEntity(
+                    phone = phone,
+                    name = name.ifBlank { phone },
+                    client1c = client1c
+                )
+            )
+            return
+        }
+
+        if (exists.client1c.isBlank() && client1c.isNotBlank()) {
+            contactDao.updateClient1c(exists.id, client1c)
         }
     }
 }

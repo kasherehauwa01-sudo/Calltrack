@@ -8,5 +8,6 @@ data class ContactEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val phone: String,
     val name: String,
+    val client1c: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )

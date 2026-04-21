@@ -16,4 +16,7 @@ interface ContactDao {
 
     @Query("SELECT * FROM contacts WHERE phone = :phone ORDER BY id DESC LIMIT 1")
     fun observeByPhone(phone: String): Flow<ContactEntity?>
+
+    @Query("UPDATE contacts SET client1c = :client1c WHERE id = :id")
+    suspend fun updateClient1c(id: Long, client1c: String)
 }

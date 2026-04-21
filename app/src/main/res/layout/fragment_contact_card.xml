@@ -24,6 +24,19 @@
             android:textSize="22sp"
             android:textStyle="bold" />
 
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Наименование клиента в 1с"
+            android:textColor="#BBBBBB" />
+
+        <TextView
+            android:id="@+id/tvClient1c"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white" />
         <TextView
             android:id="@+id/tvContactPhone"
             android:layout_width="match_parent"

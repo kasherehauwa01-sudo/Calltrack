@@ -45,6 +45,7 @@ class ContactCardFragment : Fragment() {
         val phone = requireArguments().getString(ARG_PHONE).orEmpty()
         binding.tvContactPhone.text = phone
         binding.tvContactName.text = phone
+        binding.tvClient1c.text = "—"
         binding.etReminderText.filters = arrayOf(InputFilter.LengthFilter(100))
         binding.etComment.filters = arrayOf(InputFilter.LengthFilter(500))
 
@@ -54,6 +55,7 @@ class ContactCardFragment : Fragment() {
 
         viewModel.observeContact(phone).observe(viewLifecycleOwner) { contact ->
             binding.tvContactName.text = contact?.name?.ifBlank { phone } ?: phone
+            binding.tvClient1c.text = contact?.client1c?.ifBlank { "—" } ?: "—"
         }
         viewModel.observeCallsByPhone(phone).observe(viewLifecycleOwner) { calls ->
             binding.tvCallsHistory.text = formatCalls(calls)
