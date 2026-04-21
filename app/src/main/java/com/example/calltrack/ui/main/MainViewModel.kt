@@ -5,6 +5,10 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.asLiveData
+import com.example.calltrack.data.local.CallEntity
+import com.example.calltrack.data.local.CommentEntity
+import com.example.calltrack.data.local.ContactEntity
+import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.data.repository.CallRepository
 
 class MainViewModel(private val repository: CallRepository) : ViewModel() {
@@ -17,6 +21,26 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     fun setDialNumber(number: String) {
         _dialNumber.value = number
     }
+
+    fun observeContact(phone: String): LiveData<ContactEntity?> = repository.observeContact(phone).asLiveData()
+    fun observeCallsByPhone(phone: String): LiveData<List<CallEntity>> = repository.observeCallsByPhone(phone).asLiveData()
+    fun observeReminders(phone: String): LiveData<List<ReminderEntity>> = repository.observeReminders(phone).asLiveData()
+    fun observeComments(phone: String): LiveData<List<CommentEntity>> = repository.observeComments(phone).asLiveData()
+    fun findClientName(phone: String): String = repository.findClientName(phone)
+
+    suspend fun saveCallOutcome(
+        callId: Long,
+        phone: String,
+        contactName: String,
+        tag: String,
+        reminderMillis: Long?,
+        note: String
+    ) = repository.saveCallOutcome(callId, phone, contactName, tag, reminderMillis, note)
+
+
+    suspend fun addComment(phone: String, text: String) = repository.addComment(phone, text)
+    suspend fun addReminder(phone: String, contactName: String, text: String, remindAt: Long) =
+        repository.addReminder(phone, contactName, text, remindAt)
 
     suspend fun markOnboardingCompleted() = repository.prefs.setOnboardingCompleted(true)
     suspend fun setManagerName(name: String) = repository.prefs.setManagerName(name)

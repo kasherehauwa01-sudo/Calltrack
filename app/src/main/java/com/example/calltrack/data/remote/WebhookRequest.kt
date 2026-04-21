@@ -8,6 +8,8 @@ data class WebhookRequest(
     val duration: Long,
     val manager: String,
     val comment: String,
+    val note: String,
     val tag: String,
-    val reminder: String
+    val reminder: String,
+    val client: String
 )
