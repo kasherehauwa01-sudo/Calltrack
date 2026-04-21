@@ -33,16 +33,16 @@
         android:rowCount="4">
 
         <Button android:id="@+id/key1" style="@style/KeyStyle" android:text="1\n" />
-        <Button android:id="@+id/key2" style="@style/KeyStyle" android:text="2\nABC АБВГ" />
-        <Button android:id="@+id/key3" style="@style/KeyStyle" android:text="3\nDEF ДЕЁЖЗ" />
+        <Button android:id="@+id/key2" style="@style/KeyStyle" android:text="2\nАБВГ\nABC" />
+        <Button android:id="@+id/key3" style="@style/KeyStyle" android:text="3\nДЕЁЖЗ\nDEF" />
 
-        <Button android:id="@+id/key4" style="@style/KeyStyle" android:text="4\nGHI ИЙКЛ" />
-        <Button android:id="@+id/key5" style="@style/KeyStyle" android:text="5\nJKL МНОП" />
-        <Button android:id="@+id/key6" style="@style/KeyStyle" android:text="6\nMNO РСТУ" />
+        <Button android:id="@+id/key4" style="@style/KeyStyle" android:text="4\nИЙКЛ\nGHI" />
+        <Button android:id="@+id/key5" style="@style/KeyStyle" android:text="5\nМНОП\nJKL" />
+        <Button android:id="@+id/key6" style="@style/KeyStyle" android:text="6\nРСТУ\nMNO" />
 
-        <Button android:id="@+id/key7" style="@style/KeyStyle" android:text="7\nPQRS ФХЦЧ" />
-        <Button android:id="@+id/key8" style="@style/KeyStyle" android:text="8\nTUV ШЩЪЫ" />
-        <Button android:id="@+id/key9" style="@style/KeyStyle" android:text="9\nWXYZ ЬЭЮЯ" />
+        <Button android:id="@+id/key7" style="@style/KeyStyle" android:text="7\nФХЦЧ\nPQRS" />
+        <Button android:id="@+id/key8" style="@style/KeyStyle" android:text="8\nШЩЪЫ\nTUV" />
+        <Button android:id="@+id/key9" style="@style/KeyStyle" android:text="9\nЬЭЮЯ\nWXYZ" />
 
         <Button android:id="@+id/keyStar" style="@style/KeyStyle" android:text="*" />
         <Button android:id="@+id/key0" style="@style/KeyStyle" android:text="0\n+" />

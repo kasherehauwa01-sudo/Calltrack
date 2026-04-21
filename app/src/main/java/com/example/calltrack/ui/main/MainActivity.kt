@@ -5,18 +5,26 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.PopupMenu
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.service.CallTrackingService
+import com.example.calltrack.service.CallUiEventBus
 import com.example.calltrack.ui.calls.CallListFragment
+import com.example.calltrack.ui.contactcard.ContactCardFragment
 import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
+import com.example.calltrack.ui.postcall.PostCallBottomSheet
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -35,7 +43,11 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        applyWindowInsets()
         setupBottomNav()
+        setupSettingsButton()
+        observeCallCompletedEvents()
+        handleExternalNavigation(intent)
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
@@ -47,6 +59,54 @@ class MainActivity : AppCompatActivity() {
                 startTrackingService()
             }
             updateWarningState()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleExternalNavigation(intent)
+    }
+
+    private fun applyWindowInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            insets
+        }
+    }
+
+    private fun observeCallCompletedEvents() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                CallUiEventBus.events.collect { event ->
+                    if (supportFragmentManager.findFragmentByTag("post_call") == null) {
+                        PostCallBottomSheet.newInstance(
+                            callId = event.callId,
+                            phone = event.phone
+                        ).show(supportFragmentManager, "post_call")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleExternalNavigation(intent: Intent?) {
+        val phone = intent?.getStringExtra(EXTRA_OPEN_CONTACT_PHONE).orEmpty()
+        if (phone.isNotBlank()) {
+            openContactCard(phone)
+        }
+    }
+
+    private fun setupSettingsButton() {
+        binding.btnSettings.setOnClickListener { anchor ->
+            PopupMenu(this, anchor).apply {
+                menu.add(getString(R.string.update_app))
+                setOnMenuItemClickListener {
+                    Toast.makeText(this@MainActivity, R.string.update_soon, Toast.LENGTH_SHORT).show()
+                    true
+                }
+                show()
+            }
         }
     }
 
@@ -93,6 +153,10 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNav.selectedItemId = R.id.nav_dial
     }
 
+    fun openContactCard(phone: String) {
+        openFragment(ContactCardFragment.newInstance(phone))
+    }
+
     private fun openFragment(fragment: androidx.fragment.app.Fragment) {
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragmentContainer, fragment)
@@ -108,8 +172,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startTrackingService() {
-        // На Android 14+ запуск FGS может быть отклонён системой, если момент запуска невалидный.
-        // Чтобы не уронить приложение, оборачиваем запуск в runCatching.
         runCatching {
             ContextCompat.startForegroundService(this, Intent(this, CallTrackingService::class.java))
         }
@@ -124,5 +186,9 @@ class MainActivity : AppCompatActivity() {
             add(Manifest.permission.RECORD_AUDIO)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
         }.toTypedArray()
+    }
+
+    companion object {
+        const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
     }
 }
