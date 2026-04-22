@@ -95,14 +95,14 @@ class MainActivity : AppCompatActivity() {
         val nightMode = when (mode) {
             PrefsManager.THEME_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
             PrefsManager.THEME_DARK -> AppCompatDelegate.MODE_NIGHT_YES
-            else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            else -> AppCompatDelegate.MODE_NIGHT_NO
         }
         AppCompatDelegate.setDefaultNightMode(nightMode)
     }
 
     private fun openThemeDialog() {
-        val labels = arrayOf("Системная", "Светлая", "Тёмная")
-        val values = arrayOf(PrefsManager.THEME_SYSTEM, PrefsManager.THEME_LIGHT, PrefsManager.THEME_DARK)
+        val labels = arrayOf("Светлая", "Тёмная")
+        val values = arrayOf(PrefsManager.THEME_LIGHT, PrefsManager.THEME_DARK)
         val current = runBlocking { prefsManager.getThemeMode() }
         val checked = values.indexOf(current).takeIf { it >= 0 } ?: 0
 
@@ -116,7 +116,7 @@ class MainActivity : AppCompatActivity() {
                 val nightMode = when (selected) {
                     PrefsManager.THEME_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
                     PrefsManager.THEME_DARK -> AppCompatDelegate.MODE_NIGHT_YES
-                    else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+                    else -> AppCompatDelegate.MODE_NIGHT_NO
                 }
                 AppCompatDelegate.setDefaultNightMode(nightMode)
                 dialog.dismiss()
