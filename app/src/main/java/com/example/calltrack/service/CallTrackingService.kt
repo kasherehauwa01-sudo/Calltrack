@@ -177,14 +177,14 @@ class CallTrackingService : Service() {
     private fun mapCallType(typeInt: Int, duration: Long): Pair<String, String> {
         val callTypeString = when (typeInt) {
             CallLog.Calls.INCOMING_TYPE -> {
-                if (duration < 2L) "пропущенный" else "входящий"
+                if (duration < 2L) "Пропущенный" else "Входящий"
             }
             CallLog.Calls.OUTGOING_TYPE -> {
-                if (duration < 2L) "неотвеченный" else "исходящий"
+                if (duration < 2L) "Неотвеченный" else "Исходящий"
             }
-            CallLog.Calls.MISSED_TYPE -> "пропущенный"
-            CallLog.Calls.REJECTED_TYPE -> "сброшенный"
-            else -> "неотвеченный"
+            CallLog.Calls.MISSED_TYPE -> "Пропущенный"
+            CallLog.Calls.REJECTED_TYPE -> "Сброшенный"
+            else -> "Неотвеченный"
         }
         Log.d("CALL_TYPE", "Тип: $callTypeString, duration: $duration")
         return callTypeString to ""
