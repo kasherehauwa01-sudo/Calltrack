@@ -1,58 +1,143 @@
 package com.example.calltrack.data.repository
 
 import android.content.Context
-import org.jsoup.Jsoup
+import android.os.Looper
+import com.example.calltrack.BuildConfig
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
-class ClientDirectory(private val context: Context) {
+class ClientDirectory(context: Context) {
 
-    // Файлы читаются и парсятся только один раз, затем поиск идёт по in-memory map.
-    private val phoneToClient: Map<String, String> by lazy { loadPhoneToClientMap() }
+    private val appContext = context.applicationContext
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val httpClient = OkHttpClient()
+    private val lock = Any()
+
+    @Volatile
+    private var loaded = false
+
+    @Volatile
+    private var phoneToClient: Map<String, String> = emptyMap()
+
+    init {
+        // Прогреваем кэш в фоне, чтобы UI не блокировался сетью.
+        ioScope.launch { ensureLoaded() }
+    }
 
     fun findClientName(rawPhone: String): String {
         val normalized = normalizePhone(rawPhone)
         if (normalized.isBlank()) return ""
+
+        // На main-потоке сеть не трогаем, возвращаем текущий кэш.
+        if (!isMainThread()) {
+            ensureLoaded()
+        }
         return phoneToClient[normalized].orEmpty()
     }
 
-    private fun loadPhoneToClientMap(): Map<String, String> {
+    private fun ensureLoaded() {
+        if (loaded) return
+        synchronized(lock) {
+            if (loaded) return
+            phoneToClient = loadFromGoogleSheets()
+            loaded = true
+        }
+    }
+
+    private fun loadFromGoogleSheets(): Map<String, String> {
         val result = linkedMapOf<String, String>()
+        val spreadsheetId = BuildConfig.CLIENT_DIRECTORY_SPREADSHEET_ID.trim()
+        if (spreadsheetId.isBlank()) return result
 
-        // Приоритет: сначала Contacts_kor.htm, потом Contacts_opt.htm.
-        val fileNames = listOf("Contacts_kor.htm", "Contacts_opt.htm")
-        fileNames.forEach { fileName ->
-            val html = runCatching {
-                context.assets.open(fileName).bufferedReader().use { it.readText() }
-            }.getOrNull() ?: return@forEach
+        val gids = BuildConfig.CLIENT_DIRECTORY_SHEET_GIDS
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
 
-            val doc = Jsoup.parse(html)
-            val rows = doc.select("tr")
-            if (rows.size < 2) return@forEach
-
-            // По условию заголовки находятся во второй строке.
-            val headerCells = rows[1].select("th,td").map { it.text().trim() }
-            val phoneIndex = headerCells.indexOfFirst { it.equals("Телефон", ignoreCase = true) }
-            val clientIndex = headerCells.indexOfFirst { it.equals("Клиент", ignoreCase = true) }
-            if (phoneIndex < 0 || clientIndex < 0) return@forEach
-
-            // Данные начинаются после строки с заголовками.
-            rows.drop(2).forEach { row ->
-                val cells = row.select("td")
-                if (cells.isEmpty()) return@forEach
-                if (phoneIndex >= cells.size || clientIndex >= cells.size) return@forEach
-
-                val phone = normalizePhone(cells[phoneIndex].text())
-                val client = cells[clientIndex].text().trim()
-                if (phone.isBlank() || client.isBlank()) return@forEach
-
-                // Сохраняем первое совпадение (kor имеет приоритет, т.к. обрабатывается первым).
-                result.putIfAbsent(phone, client)
-            }
+        gids.forEach { gid ->
+            val url = "https://docs.google.com/spreadsheets/d/$spreadsheetId/export?format=csv&gid=$gid"
+            val csv = downloadCsv(url) ?: return@forEach
+            parseCsvToMap(csv, result)
         }
 
         return result
     }
 
+    private fun downloadCsv(url: String): String? {
+        val request = Request.Builder().url(url).build()
+        return runCatching {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                response.body?.string()
+            }
+        }.getOrNull()
+    }
+
+    private fun parseCsvToMap(csv: String, target: MutableMap<String, String>) {
+        val lines = csv.lineSequence()
+            .map { it.trimEnd('\r') }
+            .filter { it.isNotBlank() }
+            .toList()
+
+        if (lines.isEmpty()) return
+
+        val header = parseCsvLine(lines.first())
+        val phoneIndex = header.indexOfFirst { it.equals("Телефон", ignoreCase = true) }
+        val clientIndex = header.indexOfFirst { it.equals("Клиент", ignoreCase = true) }
+        if (phoneIndex < 0 || clientIndex < 0) return
+
+        lines.drop(1).forEach { line ->
+            val cols = parseCsvLine(line)
+            if (phoneIndex >= cols.size || clientIndex >= cols.size) return@forEach
+
+            val phone = normalizePhone(cols[phoneIndex])
+            val client = cols[clientIndex].trim()
+            if (phone.isBlank() || client.isBlank()) return@forEach
+
+            // Первое совпадение оставляем (приоритет — порядок gid в конфиге).
+            target.putIfAbsent(phone, client)
+        }
+    }
+
+    private fun parseCsvLine(line: String): List<String> {
+        val out = mutableListOf<String>()
+        val sb = StringBuilder()
+        var inQuotes = false
+        var i = 0
+
+        while (i < line.length) {
+            val ch = line[i]
+            when {
+                ch == '"' -> {
+                    if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+                        sb.append('"')
+                        i++
+                    } else {
+                        inQuotes = !inQuotes
+                    }
+                }
+
+                ch == ',' && !inQuotes -> {
+                    out += sb.toString().trim()
+                    sb.setLength(0)
+                }
+
+                else -> sb.append(ch)
+            }
+            i++
+        }
+
+        out += sb.toString().trim()
+        return out
+    }
+
     private fun normalizePhone(phone: String): String {
         return phone.replace(Regex("[^0-9]"), "").takeLast(10)
     }
+
+    private fun isMainThread(): Boolean = Looper.getMainLooper() == Looper.myLooper()
 }
