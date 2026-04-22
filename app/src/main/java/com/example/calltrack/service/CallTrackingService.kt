@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.net.ConnectivityManager
@@ -98,22 +99,41 @@ class CallTrackingService : Service() {
         lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
         val callId = repo.saveCall(entity)
-        runCatching {
-            val postCallIntent = Intent(this, PostCallActivity::class.java).apply {
-                addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                        Intent.FLAG_ACTIVITY_NO_USER_ACTION
-                )
-                putExtra(PostCallActivity.EXTRA_CALL_ID, callId)
-                putExtra(PostCallActivity.EXTRA_PHONE, entity.phone)
-                putExtra(PostCallActivity.EXTRA_NAME, entity.phone)
-            }
-            startActivity(postCallIntent)
-        }
+        showPostCallNow(callId, entity.phone)
         Log.d("CallTrackingService", "Call captured and sync attempted: ${entity.phone}, ${entity.type}, ${entity.timestamp}")
         return true
+    }
+
+    private fun showPostCallNow(callId: Long, phone: String) {
+        val postCallIntent = Intent(this, PostCallActivity::class.java).apply {
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_NO_USER_ACTION
+            )
+            putExtra(PostCallActivity.EXTRA_CALL_ID, callId)
+            putExtra(PostCallActivity.EXTRA_PHONE, phone)
+            putExtra(PostCallActivity.EXTRA_NAME, phone)
+        }
+
+        val pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val fullScreenIntent = PendingIntent.getActivity(this, callId.toInt(), postCallIntent, pendingIntentFlags)
+
+        val manager = getSystemService(NotificationManager::class.java)
+        val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_spyglass)
+            .setContentTitle("Звонок завершён")
+            .setContentText("Заполните результат звонка")
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setAutoCancel(true)
+            .setContentIntent(fullScreenIntent)
+            .setFullScreenIntent(fullScreenIntent, true)
+            .build()
+
+        manager.notify(POST_CALL_NOTIFICATION_ID, notification)
+        runCatching { startActivity(postCallIntent) }
     }
 
     private fun readLatestCallEntity(): CallEntity? {
@@ -180,8 +200,18 @@ class CallTrackingService : Service() {
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel("calltrack", "Call Tracking", NotificationManager.IMPORTANCE_LOW)
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            val serviceChannel = NotificationChannel("calltrack", "Call Tracking", NotificationManager.IMPORTANCE_LOW)
+            val postCallChannel = NotificationChannel(
+                POST_CALL_CHANNEL_ID,
+                "Post-call",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+            getSystemService(NotificationManager::class.java).apply {
+                createNotificationChannel(serviceChannel)
+                createNotificationChannel(postCallChannel)
+            }
         }
     }
 
@@ -191,5 +221,10 @@ class CallTrackingService : Service() {
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_spyglass)
             .build()
+    }
+
+    companion object {
+        private const val POST_CALL_CHANNEL_ID = "postcall"
+        private const val POST_CALL_NOTIFICATION_ID = 102
     }
 }
