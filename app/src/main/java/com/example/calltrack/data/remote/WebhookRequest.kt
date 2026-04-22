@@ -9,11 +9,10 @@ data class WebhookRequest(
     val type: String,
     val duration: Long,
     val manager: String,
-    val comment: String,
     val note: String,
     val tag: String,
     val reminder: String,
-    val client: String,
     @SerializedName("reminder_text")
-    val reminderText: String
+    val reminderText: String,
+    val client: String
 )

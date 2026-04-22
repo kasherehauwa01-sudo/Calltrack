@@ -74,13 +74,15 @@ function doPost(e) {
   sheet.appendRow([
     data.date,
     data.time,
-    data.phone,
-    data.type,
-    data.duration,
-    data.manager,
-    data.comment,
-    data.tag,
-    data.reminder
+    data.phone || "",
+    data.type || "",
+    data.duration || "",
+    data.manager || "",
+    data.note || "",
+    data.tag || "",
+    data.reminder || "",
+    data.reminder_text || "",
+    data.client || ""
   ]);
 
   return ContentService.createTextOutput("ok");
