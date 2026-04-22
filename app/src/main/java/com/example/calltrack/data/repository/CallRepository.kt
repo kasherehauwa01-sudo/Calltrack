@@ -14,6 +14,8 @@ import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.data.remote.WebhookApi
 import com.example.calltrack.data.remote.WebhookRequest
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -31,6 +33,7 @@ class CallRepository(
 
     private val dateFormat = SimpleDateFormat("dd.MM.yy", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val syncMutex = Mutex()
 
     fun observeCalls(): Flow<List<CallEntity>> = callDao.observeAll()
     fun observeCallsByPhone(phone: String): Flow<List<CallEntity>> = callDao.observeByPhone(phone)
@@ -123,33 +126,35 @@ class CallRepository(
     }
 
     suspend fun syncPending() {
-        val managerName = prefs.getManagerName().ifBlank { "Не указан" }
-        val pending = callDao.getPending()
-        pending.forEach { entity ->
-            runCatching {
-                val clientName = findClientName(entity.phone)
-                val reminderText = extractReminderText(entity.reminder)
-                webhookApi.sendCall(
-                    BuildConfig.WEBHOOK_URL,
-                    WebhookRequest(
-                        date = dateFormat.format(Date(entity.timestamp)),
-                        time = timeFormat.format(Date(entity.timestamp)),
-                        phone = entity.phone,
-                        type = entity.type,
-                        duration = entity.duration,
-                        manager = managerName,
-                        comment = entity.note,
-                        note = entity.note,
-                        tag = entity.tag,
-                        reminder = entity.reminder,
-                        client = clientName,
-                        reminderText = reminderText
+        syncMutex.withLock {
+            val managerName = prefs.getManagerName().ifBlank { "Не указан" }
+            val pending = callDao.getPending()
+            pending.forEach { entity ->
+                runCatching {
+                    val clientName = findClientName(entity.phone)
+                    val reminderText = extractReminderText(entity.reminder)
+                    webhookApi.sendCall(
+                        BuildConfig.WEBHOOK_URL,
+                        WebhookRequest(
+                            date = dateFormat.format(Date(entity.timestamp)),
+                            time = timeFormat.format(Date(entity.timestamp)),
+                            phone = entity.phone,
+                            type = entity.type,
+                            duration = entity.duration,
+                            manager = managerName,
+                            comment = entity.note,
+                            note = entity.note,
+                            tag = entity.tag,
+                            reminder = entity.reminder,
+                            client = clientName,
+                            reminderText = reminderText
+                        )
                     )
-                )
-                callDao.markUploaded(entity.id)
-                Log.d("CallRepository", "Webhook sent: id=${entity.id}, phone=${entity.phone}")
-            }.onFailure {
-                Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
+                    callDao.markUploaded(entity.id)
+                    Log.d("CallRepository", "Webhook sent: id=${entity.id}, phone=${entity.phone}")
+                }.onFailure {
+                    Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
+                }
             }
         }
     }
