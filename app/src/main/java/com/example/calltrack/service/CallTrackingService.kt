@@ -26,7 +26,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class CallTrackingService : Service() {
@@ -65,14 +64,6 @@ class CallTrackingService : Service() {
         // При старте сервиса сразу пробуем отправить накопленную очередь (если интернет уже есть).
         scope.launch { (application as App).repository.syncPending() }
 
-        // Polling как страховка: если callback не пришел, свежий звонок все равно будет отправлен.
-        scope.launch {
-            while (isActive) {
-                captureLatestCallIfNew()
-                delay(15_000)
-            }
-        }
-
         tracker = CallStateTracker(this) { state, _ ->
             when (state) {
                 TelephonyManager.CALL_STATE_RINGING,
@@ -82,8 +73,7 @@ class CallTrackingService : Service() {
                     if (lastStateWasActive) {
                         lastStateWasActive = false
                         scope.launch {
-                            delay(600)
-                            captureLatestCallIfNew()
+                            captureLatestCallWithRetry()
                         }
                     }
                 }
@@ -92,16 +82,30 @@ class CallTrackingService : Service() {
         tracker.start()
     }
 
-    private suspend fun captureLatestCallIfNew() {
-        val entity = readLatestCallEntity() ?: return
-        if (entity.timestamp <= lastHandledTimestamp) return
+    private suspend fun captureLatestCallWithRetry() {
+        // Стараемся показать post-call максимально быстро после завершения звонка.
+        repeat(10) { attempt ->
+            val captured = captureLatestCallIfNew()
+            if (captured) return
+            if (attempt < 9) delay(200)
+        }
+    }
+
+    private suspend fun captureLatestCallIfNew(): Boolean {
+        val entity = readLatestCallEntity() ?: return false
+        if (entity.timestamp <= lastHandledTimestamp) return false
 
         lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
         val callId = repo.saveCall(entity)
         runCatching {
             val postCallIntent = Intent(this, PostCallActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_NO_USER_ACTION
+                )
                 putExtra(PostCallActivity.EXTRA_CALL_ID, callId)
                 putExtra(PostCallActivity.EXTRA_PHONE, entity.phone)
                 putExtra(PostCallActivity.EXTRA_NAME, entity.phone)
@@ -109,6 +113,7 @@ class CallTrackingService : Service() {
             startActivity(postCallIntent)
         }
         Log.d("CallTrackingService", "Call captured and sync attempted: ${entity.phone}, ${entity.type}, ${entity.timestamp}")
+        return true
     }
 
     private fun readLatestCallEntity(): CallEntity? {
