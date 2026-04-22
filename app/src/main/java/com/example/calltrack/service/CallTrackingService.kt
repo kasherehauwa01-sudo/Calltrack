@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.net.ConnectivityManager
@@ -21,11 +22,11 @@ import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.data.local.CallEntity
 import com.example.calltrack.telephony.CallStateTracker
+import com.example.calltrack.ui.postcall.PostCallActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class CallTrackingService : Service() {
@@ -64,14 +65,6 @@ class CallTrackingService : Service() {
         // При старте сервиса сразу пробуем отправить накопленную очередь (если интернет уже есть).
         scope.launch { (application as App).repository.syncPending() }
 
-        // Polling как страховка: если callback не пришел, свежий звонок все равно будет отправлен.
-        scope.launch {
-            while (isActive) {
-                captureLatestCallIfNew()
-                delay(15_000)
-            }
-        }
-
         tracker = CallStateTracker(this) { state, _ ->
             when (state) {
                 TelephonyManager.CALL_STATE_RINGING,
@@ -81,8 +74,7 @@ class CallTrackingService : Service() {
                     if (lastStateWasActive) {
                         lastStateWasActive = false
                         scope.launch {
-                            delay(600)
-                            captureLatestCallIfNew()
+                            captureLatestCallWithRetry()
                         }
                     }
                 }
@@ -91,15 +83,57 @@ class CallTrackingService : Service() {
         tracker.start()
     }
 
-    private suspend fun captureLatestCallIfNew() {
-        val entity = readLatestCallEntity() ?: return
-        if (entity.timestamp <= lastHandledTimestamp) return
+    private suspend fun captureLatestCallWithRetry() {
+        // Стараемся показать post-call максимально быстро после завершения звонка.
+        repeat(10) { attempt ->
+            val captured = captureLatestCallIfNew()
+            if (captured) return
+            if (attempt < 9) delay(200)
+        }
+    }
+
+    private suspend fun captureLatestCallIfNew(): Boolean {
+        val entity = readLatestCallEntity() ?: return false
+        if (entity.timestamp <= lastHandledTimestamp) return false
 
         lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
-        repo.saveCall(entity)
-        repo.syncPending()
+        val callId = repo.saveCall(entity)
+        showPostCallNow(callId, entity.phone)
         Log.d("CallTrackingService", "Call captured and sync attempted: ${entity.phone}, ${entity.type}, ${entity.timestamp}")
+        return true
+    }
+
+    private fun showPostCallNow(callId: Long, phone: String) {
+        val postCallIntent = Intent(this, PostCallActivity::class.java).apply {
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_NO_USER_ACTION
+            )
+            putExtra(PostCallActivity.EXTRA_CALL_ID, callId)
+            putExtra(PostCallActivity.EXTRA_PHONE, phone)
+            putExtra(PostCallActivity.EXTRA_NAME, phone)
+        }
+
+        val pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val fullScreenIntent = PendingIntent.getActivity(this, callId.toInt(), postCallIntent, pendingIntentFlags)
+
+        val manager = getSystemService(NotificationManager::class.java)
+        val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_spyglass)
+            .setContentTitle("Звонок завершён")
+            .setContentText("Заполните результат звонка")
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setAutoCancel(true)
+            .setContentIntent(fullScreenIntent)
+            .setFullScreenIntent(fullScreenIntent, true)
+            .build()
+
+        manager.notify(POST_CALL_NOTIFICATION_ID, notification)
+        runCatching { startActivity(postCallIntent) }
     }
 
     private fun readLatestCallEntity(): CallEntity? {
@@ -141,14 +175,19 @@ class CallTrackingService : Service() {
     }
 
     private fun mapCallType(typeInt: Int, duration: Long): Pair<String, String> {
-        return when (typeInt) {
-            CallLog.Calls.INCOMING_TYPE -> "Входящий" to ""
-            CallLog.Calls.OUTGOING_TYPE -> "Исходящий" to ""
-            CallLog.Calls.MISSED_TYPE -> "Пропущенный" to ""
-            CallLog.Calls.REJECTED_TYPE -> "Неотвеченный" to ""
-            CallLog.Calls.BLOCKED_TYPE -> "Неотвеченный" to ""
-            else -> if (duration == 0L) "Пропущенный" to "" else "Исходящий" to ""
+        val callTypeString = when (typeInt) {
+            CallLog.Calls.INCOMING_TYPE -> {
+                if (duration < 2L) "пропущенный" else "входящий"
+            }
+            CallLog.Calls.OUTGOING_TYPE -> {
+                if (duration < 2L) "неотвеченный" else "исходящий"
+            }
+            CallLog.Calls.MISSED_TYPE -> "пропущенный"
+            CallLog.Calls.REJECTED_TYPE -> "сброшенный"
+            else -> "неотвеченный"
         }
+        Log.d("CALL_TYPE", "Тип: $callTypeString, duration: $duration")
+        return callTypeString to ""
     }
 
     override fun onDestroy() {
@@ -161,8 +200,18 @@ class CallTrackingService : Service() {
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel("calltrack", "Call Tracking", NotificationManager.IMPORTANCE_LOW)
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            val serviceChannel = NotificationChannel("calltrack", "Call Tracking", NotificationManager.IMPORTANCE_LOW)
+            val postCallChannel = NotificationChannel(
+                POST_CALL_CHANNEL_ID,
+                "Post-call",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+            getSystemService(NotificationManager::class.java).apply {
+                createNotificationChannel(serviceChannel)
+                createNotificationChannel(postCallChannel)
+            }
         }
     }
 
@@ -170,7 +219,12 @@ class CallTrackingService : Service() {
         return NotificationCompat.Builder(this, "calltrack")
             .setContentTitle("Calltrack")
             .setContentText(text)
-            .setSmallIcon(R.drawable.ic_phone)
+            .setSmallIcon(R.drawable.ic_spyglass)
             .build()
+    }
+
+    companion object {
+        private const val POST_CALL_CHANNEL_ID = "postcall"
+        private const val POST_CALL_NOTIFICATION_ID = 102
     }
 }
