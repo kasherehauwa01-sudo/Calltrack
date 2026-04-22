@@ -1,10 +1,16 @@
 package com.example.calltrack.ui.main
 
 import android.Manifest
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,6 +42,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var prefsManager: PrefsManager
+    private var apkDownloadId: Long = -1L
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
@@ -43,6 +50,15 @@ class MainActivity : AppCompatActivity() {
     private val permissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { updateWarningState() }
+    private val downloadCompleteReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
+            val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+            if (completedId == apkDownloadId) {
+                installDownloadedApk(completedId)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         prefsManager = PrefsManager(this)
@@ -54,6 +70,7 @@ class MainActivity : AppCompatActivity() {
         applyWindowInsets()
         setupBottomNav()
         setupSettingsButton()
+        registerDownloadReceiver()
         handleExternalNavigation(intent)
 
         viewModel.onboardingCompleted.observe(this) { completed ->
@@ -133,12 +150,65 @@ class MainActivity : AppCompatActivity() {
                 setOnMenuItemClickListener { menuItem ->
                     when (menuItem.title) {
                         getString(R.string.theme_app) -> openThemeDialog()
-                        else -> Toast.makeText(this@MainActivity, R.string.update_soon, Toast.LENGTH_SHORT).show()
+                        else -> startApkUpdateDownload()
                     }
                     true
                 }
                 show()
             }
+        }
+    }
+
+    private fun startApkUpdateDownload() {
+        val manager = getSystemService(DownloadManager::class.java)
+        val request = DownloadManager.Request(Uri.parse(APK_UPDATE_URL))
+            .setTitle("Обновление Calltrack")
+            .setDescription("Загрузка новой версии приложения")
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(true)
+            .setMimeType("application/vnd.android.package-archive")
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, APK_FILE_NAME)
+
+        apkDownloadId = manager.enqueue(request)
+        Toast.makeText(this, "Началась загрузка обновления", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun installDownloadedApk(downloadId: Long) {
+        val manager = getSystemService(DownloadManager::class.java)
+        val query = DownloadManager.Query().setFilterById(downloadId)
+        manager.query(query)?.use { cursor ->
+            if (!cursor.moveToFirst()) return
+            val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+            if (status != DownloadManager.STATUS_SUCCESSFUL) {
+                Toast.makeText(this, "Не удалось загрузить обновление", Toast.LENGTH_SHORT).show()
+                return
+            }
+        }
+
+        val apkUri = manager.getUriForDownloadedFile(downloadId) ?: run {
+            Toast.makeText(this, "Файл обновления не найден", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkUri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivity(installIntent) }
+            .onFailure {
+                Toast.makeText(this, "Не удалось открыть установщик APK", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    private fun registerDownloadReceiver() {
+        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(downloadCompleteReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(downloadCompleteReceiver, filter)
         }
     }
 
@@ -217,6 +287,11 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch { viewModel.sync() }
     }
 
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(downloadCompleteReceiver) }
+        super.onDestroy()
+    }
+
     private fun requiredPermissions(): Array<String> {
         return buildList {
             add(Manifest.permission.READ_PHONE_STATE)
@@ -229,5 +304,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
+        private const val APK_UPDATE_URL = "https://volgorost.ru/apk_op/app-debug.apk"
+        private const val APK_FILE_NAME = "calltrack-update.apk"
     }
 }
