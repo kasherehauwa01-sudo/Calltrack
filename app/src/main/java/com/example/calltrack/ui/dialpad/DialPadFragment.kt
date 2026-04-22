@@ -25,6 +25,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.databinding.FragmentDialPadBinding
+import com.example.calltrack.ui.main.MainActivity
 import com.example.calltrack.ui.main.MainViewModel
 import com.example.calltrack.utils.CallUtils
 import com.example.calltrack.utils.T9Mapper
@@ -43,8 +44,7 @@ class DialPadFragment : Fragment() {
     }
 
     private val t9Adapter = T9ContactAdapter { item ->
-        binding.tvNumber.text = item.phone
-        viewModel.setDialNumber(item.phone)
+        (requireActivity() as MainActivity).openContactCard(item.phone)
     }
 
     private var allContacts: List<T9ContactItem> = emptyList()
