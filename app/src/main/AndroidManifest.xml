@@ -36,6 +36,8 @@
         <activity
             android:name=".ui.postcall.PostCallActivity"
             android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
             android:theme="@style/Theme.Calltrack" />
 
         <activity

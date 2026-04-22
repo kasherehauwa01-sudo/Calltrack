@@ -2,9 +2,11 @@ package com.example.calltrack.ui.postcall
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.os.Build
 import android.os.Bundle
 import android.text.InputFilter
 import android.view.View
+import android.view.WindowManager
 import android.widget.RadioGroup
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -24,6 +26,18 @@ class PostCallActivity : AppCompatActivity() {
     private val formatter = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
         super.onCreate(savedInstanceState)
         binding = DialogPostCallBinding.inflate(layoutInflater)
         setContentView(binding.root)
