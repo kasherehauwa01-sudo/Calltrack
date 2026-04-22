@@ -151,10 +151,12 @@ class MainActivity : AppCompatActivity() {
         binding.btnSettings.setOnClickListener { anchor ->
             PopupMenu(this, anchor).apply {
                 menu.add(getString(R.string.theme_app))
+                menu.add(getString(R.string.about_app))
                 menu.add(getString(R.string.update_app))
                 setOnMenuItemClickListener { menuItem ->
                     when (menuItem.title) {
                         getString(R.string.theme_app) -> openThemeDialog()
+                        getString(R.string.about_app) -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
                         else -> startApkUpdateDownload()
                     }
                     true
