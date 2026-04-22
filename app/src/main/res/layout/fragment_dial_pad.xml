@@ -3,6 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/background"
     android:orientation="vertical"
     android:paddingHorizontal="20dp"
     android:paddingTop="12dp">
@@ -12,7 +13,7 @@
         android:layout_width="match_parent"
         android:layout_height="56dp"
         android:gravity="center"
-        android:textColor="@android:color/white"
+        android:textColor="@color/textPrimary"
         android:textSize="34sp" />
 
     <ImageButton
@@ -23,7 +24,7 @@
         android:background="@android:color/transparent"
         android:contentDescription="Удалить"
         android:src="@android:drawable/ic_input_delete"
-        android:tint="@android:color/white" />
+        android:tint="@color/textPrimary" />
 
     <GridLayout
         android:layout_width="match_parent"
@@ -58,7 +59,7 @@
         android:layout_marginTop="12dp"
         android:contentDescription="Открыть набор"
         android:src="@drawable/ic_phone"
-        app:backgroundTint="#24C96B" />
+        app:backgroundTint="@color/buttonColor" />
 
     <TextView
         android:id="@+id/tvNoResults"
@@ -67,7 +68,7 @@
         android:layout_marginTop="8dp"
         android:gravity="center"
         android:text="Контакты не найдены"
-        android:textColor="#AAAAAA"
+        android:textColor="@color/textSecondary"
         android:visibility="gone" />
 
     <androidx.recyclerview.widget.RecyclerView

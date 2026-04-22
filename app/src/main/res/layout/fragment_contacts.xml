@@ -2,6 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/background"
     android:orientation="vertical"
     android:padding="12dp">
 
@@ -12,8 +13,8 @@
         android:hint="Поиск контакта"
         android:inputType="text"
         android:maxLines="1"
-        android:textColor="@android:color/white"
-        android:textColorHint="#888888" />
+        android:textColor="@color/textPrimary"
+        android:textColorHint="@color/hintColor" />
 
     <TextView
         android:id="@+id/tvEmpty"
@@ -22,7 +23,7 @@
         android:layout_marginTop="8dp"
         android:gravity="center"
         android:text="Контакты не найдены"
-        android:textColor="#AAAAAA"
+        android:textColor="@color/textSecondary"
         android:visibility="gone" />
 
     <androidx.recyclerview.widget.RecyclerView

@@ -4,6 +4,12 @@
     <color name="surface">#1E1E1E</color>
     <color name="on_background">#F2F2F2</color>
     <color name="on_surface">#E6E6E6</color>
+    <color name="textPrimary">#F2F2F2</color>
+    <color name="textSecondary">#BDBDBD</color>
+    <color name="buttonColor">#60A5FA</color>
+    <color name="buttonTextColor">#0E1116</color>
+    <color name="hintColor">#9E9E9E</color>
+    <color name="successColor">#24C96B</color>
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
 </resources>
