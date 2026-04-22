@@ -21,6 +21,7 @@ import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.data.local.CallEntity
 import com.example.calltrack.telephony.CallStateTracker
+import com.example.calltrack.ui.postcall.PostCallActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -97,8 +98,16 @@ class CallTrackingService : Service() {
 
         lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
-        repo.saveCall(entity)
-        repo.syncPending()
+        val callId = repo.saveCall(entity)
+        runCatching {
+            val postCallIntent = Intent(this, PostCallActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(PostCallActivity.EXTRA_CALL_ID, callId)
+                putExtra(PostCallActivity.EXTRA_PHONE, entity.phone)
+                putExtra(PostCallActivity.EXTRA_NAME, entity.phone)
+            }
+            startActivity(postCallIntent)
+        }
         Log.d("CallTrackingService", "Call captured and sync attempted: ${entity.phone}, ${entity.type}, ${entity.timestamp}")
     }
 
@@ -141,14 +150,19 @@ class CallTrackingService : Service() {
     }
 
     private fun mapCallType(typeInt: Int, duration: Long): Pair<String, String> {
-        return when (typeInt) {
-            CallLog.Calls.INCOMING_TYPE -> "Входящий" to ""
-            CallLog.Calls.OUTGOING_TYPE -> "Исходящий" to ""
-            CallLog.Calls.MISSED_TYPE -> "Пропущенный" to ""
-            CallLog.Calls.REJECTED_TYPE -> "Неотвеченный" to ""
-            CallLog.Calls.BLOCKED_TYPE -> "Неотвеченный" to ""
-            else -> if (duration == 0L) "Пропущенный" to "" else "Исходящий" to ""
+        val callTypeString = when (typeInt) {
+            CallLog.Calls.INCOMING_TYPE -> {
+                if (duration < 2L) "пропущенный" else "входящий"
+            }
+            CallLog.Calls.OUTGOING_TYPE -> {
+                if (duration < 2L) "неотвеченный" else "исходящий"
+            }
+            CallLog.Calls.MISSED_TYPE -> "пропущенный"
+            CallLog.Calls.REJECTED_TYPE -> "сброшенный"
+            else -> "неотвеченный"
         }
+        Log.d("CALL_TYPE", "Тип: $callTypeString, duration: $duration")
+        return callTypeString to ""
     }
 
     override fun onDestroy() {
@@ -170,7 +184,7 @@ class CallTrackingService : Service() {
         return NotificationCompat.Builder(this, "calltrack")
             .setContentTitle("Calltrack")
             .setContentText(text)
-            .setSmallIcon(R.drawable.ic_phone)
+            .setSmallIcon(R.drawable.ic_spyglass)
             .build()
     }
 }

@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Calltrack</string>
+    <string name="settings">Настройки</string>
+    <string name="theme_app">Тема приложения</string>
+    <string name="update_app">Обновить приложение</string>
+    <string name="update_soon">Скоро здесь появится ссылка на обновление</string>
 </resources>
