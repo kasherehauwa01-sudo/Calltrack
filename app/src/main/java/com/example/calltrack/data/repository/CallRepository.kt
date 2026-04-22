@@ -132,6 +132,7 @@ class CallRepository(
             pending.forEach { entity ->
                 runCatching {
                     val clientName = findClientName(entity.phone)
+                    val clientForSheet = clientName.ifBlank { "-" }
                     val reminderText = extractReminderText(entity.reminder)
                     webhookApi.sendCall(
                         BuildConfig.WEBHOOK_URL,
@@ -146,7 +147,7 @@ class CallRepository(
                             note = entity.note,
                             tag = entity.tag,
                             reminder = entity.reminder,
-                            client = clientName,
+                            client = clientForSheet,
                             reminderText = reminderText
                         )
                     )
