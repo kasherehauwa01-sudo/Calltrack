@@ -7,6 +7,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.net.Uri
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkRequest
@@ -14,6 +15,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import android.provider.CallLog
+import android.provider.ContactsContract
 import android.telephony.TelephonyManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -99,12 +101,14 @@ class CallTrackingService : Service() {
         lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
         val callId = repo.saveCall(entity)
-        showPostCallNow(callId, entity.phone)
+        runCatching { repo.syncPending() }
+        val contactName = resolveContactName(entity.phone)
+        showPostCallNow(callId, entity.phone, contactName)
         Log.d("CallTrackingService", "Call captured and sync attempted: ${entity.phone}, ${entity.type}, ${entity.timestamp}")
         return true
     }
 
-    private fun showPostCallNow(callId: Long, phone: String) {
+    private fun showPostCallNow(callId: Long, phone: String, contactName: String) {
         val postCallIntent = Intent(this, PostCallActivity::class.java).apply {
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -114,7 +118,7 @@ class CallTrackingService : Service() {
             )
             putExtra(PostCallActivity.EXTRA_CALL_ID, callId)
             putExtra(PostCallActivity.EXTRA_PHONE, phone)
-            putExtra(PostCallActivity.EXTRA_NAME, phone)
+            putExtra(PostCallActivity.EXTRA_NAME, contactName)
         }
 
         val pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -124,7 +128,7 @@ class CallTrackingService : Service() {
         val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_spyglass)
             .setContentTitle("Звонок завершён")
-            .setContentText("Заполните результат звонка")
+            .setContentText("Заполните результат звонка: $contactName")
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setAutoCancel(true)
@@ -134,6 +138,19 @@ class CallTrackingService : Service() {
 
         manager.notify(POST_CALL_NOTIFICATION_ID, notification)
         runCatching { startActivity(postCallIntent) }
+    }
+
+    private fun resolveContactName(phone: String): String {
+        if (phone.isBlank() || phone == "Неизвестно") return phone
+        val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phone))
+        val projection = arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME)
+        contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val name = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.DISPLAY_NAME))
+                if (!name.isNullOrBlank()) return name
+            }
+        }
+        return phone
     }
 
     private fun readLatestCallEntity(): CallEntity? {

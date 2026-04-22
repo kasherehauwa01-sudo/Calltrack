@@ -10,10 +10,12 @@ import android.view.WindowManager
 import android.widget.RadioGroup
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.App
 import com.example.calltrack.databinding.DialogPostCallBinding
 import com.example.calltrack.reminder.ReminderScheduler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -24,6 +26,7 @@ class PostCallActivity : AppCompatActivity() {
     private lateinit var binding: DialogPostCallBinding
     private var reminderAtMillis: Long? = null
     private val formatter = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+    private val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -41,6 +44,11 @@ class PostCallActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = DialogPostCallBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        val subscriberName = intent.getStringExtra(EXTRA_NAME).orEmpty().ifBlank {
+            intent.getStringExtra(EXTRA_PHONE).orEmpty()
+        }
+        binding.tvSubscriberName.text = subscriberName
 
         binding.etComment.filters = arrayOf(InputFilter.LengthFilter(500))
 
@@ -72,14 +80,16 @@ class PostCallActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            lifecycleScope.launch {
+            finish()
+            saveScope.launch {
                 val repository = (application as App).repository
                 repository.saveCallOutcome(callId, phone, contactName, tag, reminderAtMillis, note)
                 reminderAtMillis?.let { ReminderScheduler.schedule(this@PostCallActivity, phone, contactName, it, "Перезвонить клиенту") }
                 repository.syncPending()
-                finish()
             }
         }
+
+        binding.btnCancel.setOnClickListener { finish() }
     }
 
     private fun buildTag(): String {

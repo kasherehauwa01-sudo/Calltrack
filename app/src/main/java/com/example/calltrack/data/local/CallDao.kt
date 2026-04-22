@@ -26,6 +26,6 @@ interface CallDao {
     @Query("UPDATE calls SET uploaded = 1 WHERE id = :id")
     suspend fun markUploaded(id: Long)
 
-    @Query("UPDATE calls SET note = :note, tag = :tag, reminder = :reminder WHERE id = :id")
+    @Query("UPDATE calls SET note = :note, tag = :tag, reminder = :reminder, uploaded = 0 WHERE id = :id")
     suspend fun updateOutcome(id: Long, note: String, tag: String, reminder: String)
 }
