@@ -37,7 +37,11 @@ class CallRepository(
     fun observeContact(phone: String): Flow<ContactEntity?> = contactDao.observeByPhone(phone)
     fun observeReminders(phone: String): Flow<List<ReminderEntity>> = reminderDao.observeByPhone(phone)
     fun observeComments(phone: String): Flow<List<CommentEntity>> = commentDao.observeByPhone(phone)
-    fun findClientName(phone: String): String = clientDirectory.findClientName(phone)
+    fun findClientName(phone: String): String {
+        val clientName = clientDirectory.findClientName(phone)
+        Log.d("CLIENT_SEARCH", "Phone: $phone → Client: $clientName")
+        return clientName
+    }
 
     suspend fun saveCall(call: CallEntity): Long {
         ensureContact(call.phone)
@@ -123,6 +127,7 @@ class CallRepository(
         val pending = callDao.getPending()
         pending.forEach { entity ->
             runCatching {
+                val clientName = findClientName(entity.phone)
                 webhookApi.sendCall(
                     BuildConfig.WEBHOOK_URL,
                     WebhookRequest(
@@ -136,7 +141,7 @@ class CallRepository(
                         note = entity.note,
                         tag = entity.tag,
                         reminder = entity.reminder,
-                        client = clientDirectory.findClientName(entity.phone)
+                        client = clientName
                     )
                 )
                 callDao.markUploaded(entity.id)
