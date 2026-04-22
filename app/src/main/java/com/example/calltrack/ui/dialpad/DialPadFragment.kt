@@ -90,19 +90,20 @@ class DialPadFragment : Fragment() {
     }
 
     private fun setupKeyLabels() {
-        setKeyLabel(binding.key2, "2", "ABC АБВГ")
-        setKeyLabel(binding.key3, "3", "DEF ДЕЁЖЗ")
-        setKeyLabel(binding.key4, "4", "GHI ИЙКЛ")
-        setKeyLabel(binding.key5, "5", "JKL МНОП")
-        setKeyLabel(binding.key6, "6", "MNO РСТУ")
-        setKeyLabel(binding.key7, "7", "PQRS ФХЦЧ")
-        setKeyLabel(binding.key8, "8", "TUV ШЩЪЫ")
-        setKeyLabel(binding.key9, "9", "WXYZ ЬЭЮЯ")
-        setKeyLabel(binding.key0, "0", "+")
+        setKeyLabel(binding.key2, "2", "АБВГ", "ABC")
+        setKeyLabel(binding.key3, "3", "ДЕЁЖЗ", "DEF")
+        setKeyLabel(binding.key4, "4", "ИЙКЛ", "GHI")
+        setKeyLabel(binding.key5, "5", "МНОП", "JKL")
+        setKeyLabel(binding.key6, "6", "РСТУ", "MNO")
+        setKeyLabel(binding.key7, "7", "ФХЦЧ", "PQRS")
+        setKeyLabel(binding.key8, "8", "ШЩЪЫ", "TUV")
+        setKeyLabel(binding.key9, "9", "ЬЭЮЯ", "WXYZ")
+        setKeyLabel(binding.key0, "0", "+", "")
     }
 
-    private fun setKeyLabel(view: TextView, digit: String, letters: String) {
-        val text = "$digit\n$letters"
+    private fun setKeyLabel(view: TextView, digit: String, ruLetters: String, enLetters: String) {
+        val letters = listOf(ruLetters, enLetters).filter { it.isNotBlank() }.joinToString("\n")
+        val text = if (letters.isBlank()) digit else "$digit\n$letters"
         val spannable = SpannableString(text)
         spannable.setSpan(
             RelativeSizeSpan(0.5f),
