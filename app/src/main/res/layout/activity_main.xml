@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:background="@color/background">
 
     <TextView
         android:id="@+id/tvWarning"
@@ -12,8 +12,23 @@
         android:padding="12dp"
         android:textColor="@android:color/holo_red_light"
         android:textSize="13sp"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="@+id/btnSettings"
+        app:layout_constraintEnd_toStartOf="@+id/btnSettings"
         app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ImageButton
+        android:id="@+id/btnSettings"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:background="@android:color/transparent"
+        android:contentDescription="@string/settings"
+        android:padding="8dp"
+        android:src="@drawable/ic_more_vert"
+        android:tint="@color/textPrimary"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
     <FrameLayout
@@ -29,9 +44,9 @@
         android:id="@+id/bottomNav"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:background="#000000"
-        app:itemIconTint="@android:color/white"
-        app:itemTextColor="@android:color/white"
+        android:background="@color/background"
+        app:itemIconTint="@color/textPrimary"
+        app:itemTextColor="@color/textPrimary"
         app:labelVisibilityMode="labeled"
         app:menu="@menu/menu_bottom_nav"
         app:layout_constraintBottom_toBottomOf="parent"
