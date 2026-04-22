@@ -128,6 +128,7 @@ class CallRepository(
         pending.forEach { entity ->
             runCatching {
                 val clientName = findClientName(entity.phone)
+                val reminderText = extractReminderText(entity.reminder)
                 webhookApi.sendCall(
                     BuildConfig.WEBHOOK_URL,
                     WebhookRequest(
@@ -141,7 +142,8 @@ class CallRepository(
                         note = entity.note,
                         tag = entity.tag,
                         reminder = entity.reminder,
-                        client = clientName
+                        client = clientName,
+                        reminderText = reminderText
                     )
                 )
                 callDao.markUploaded(entity.id)
@@ -170,5 +172,10 @@ class CallRepository(
         if (exists.client1c.isBlank() && client1c.isNotBlank()) {
             contactDao.updateClient1c(exists.id, client1c)
         }
+    }
+
+    private fun extractReminderText(reminderValue: String): String {
+        if (reminderValue.isBlank()) return ""
+        return reminderValue.substringAfter("|", reminderValue).trim()
     }
 }
