@@ -11,8 +11,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 class ClientDirectory(context: Context) {
-
-    private val appContext = context.applicationContext
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val httpClient = OkHttpClient()
     private val lock = Any()
