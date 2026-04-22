@@ -14,6 +14,7 @@ private val Context.dataStore by preferencesDataStore("settings")
 class PrefsManager(private val context: Context) {
     private val onboardingKey = booleanPreferencesKey("onboarding_completed")
     private val managerKey = stringPreferencesKey("manager_name")
+    private val themeKey = stringPreferencesKey(PREF_THEME)
 
     val onboardingCompleted: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[onboardingKey] ?: false
@@ -21,6 +22,10 @@ class PrefsManager(private val context: Context) {
 
     val managerName: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[managerKey].orEmpty()
+    }
+
+    val themeMode: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[themeKey] ?: THEME_LIGHT
     }
 
     suspend fun setOnboardingCompleted(value: Boolean) {
@@ -31,7 +36,18 @@ class PrefsManager(private val context: Context) {
         context.dataStore.edit { it[managerKey] = value }
     }
 
-    suspend fun getManagerName(): String {
-        return managerName.first()
+    suspend fun setThemeMode(value: String) {
+        context.dataStore.edit { it[themeKey] = value }
+    }
+
+    suspend fun getManagerName(): String = managerName.first()
+
+    suspend fun getThemeMode(): String = themeMode.first()
+
+    companion object {
+        const val PREF_THEME = "app_theme"
+        const val THEME_LIGHT = "light"
+        const val THEME_DARK = "dark"
+        const val THEME_SYSTEM = "system"
     }
 }
