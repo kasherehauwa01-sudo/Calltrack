@@ -70,17 +70,21 @@ Android-приложение для корпоративных устройст�
 function doPost(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = JSON.parse(e.postData.contents);
+  var comment = data.comment || data.note || "";
+  var reminderText = data.reminder_text || data.reminderText || "";
 
   sheet.appendRow([
-    data.date,
-    data.time,
-    data.phone,
-    data.type,
-    data.duration,
-    data.manager,
-    data.comment,
-    data.tag,
-    data.reminder
+    data.date || "",
+    data.time || "",
+    data.phone || "",
+    data.type || "",
+    data.duration || "",
+    data.manager || "",
+    comment,
+    data.tag || "",
+    data.reminder || "",
+    reminderText,
+    data.client || ""
   ]);
 
   return ContentService.createTextOutput("ok");
@@ -99,6 +103,30 @@ function doPost(e) {
 buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/AKfycbzeZKY0kOvV2gFVfrxvIGlt6jRk2sKGr6IhleWILIb6UCvE9hLXBjjJmskaeK8pDF5U4w/exec"'
 ```
 на ваш реальный URL.
+
+### Шаг 5. Связать 2 таблицы-справочника клиентов (поиск Телефон → Клиент)
+Приложение читает справочник клиентов напрямую из Google Sheets (CSV export) и ищет номер в колонке **Телефон**.
+Если номер найден — берёт значение из колонки **Клиент** и отправляет его в основной CallTrack webhook.
+
+1. Откройте таблицу-справочник:
+   `https://docs.google.com/spreadsheets/d/1Wl4UXI_x0a7A0iPYuW_ZRlrf3xEdVKMnOALi9p6J_Mc/edit`
+2. Убедитесь, что у вас есть **2 листа** (или больше), где есть колонки с точными заголовками:
+   - `Телефон`
+   - `Клиент`
+3. Для каждого листа возьмите `gid`:
+   - откройте нужный лист;
+   - в URL будет параметр `gid=...` (например `gid=0`).
+4. В `app/build.gradle` укажите ID таблицы и список gid через запятую:
+```gradle
+buildConfigField "String", "CLIENT_DIRECTORY_SPREADSHEET_ID", '"1Wl4UXI_x0a7A0iPYuW_ZRlrf3xEdVKMnOALi9p6J_Mc"'
+buildConfigField "String", "CLIENT_DIRECTORY_SHEET_GIDS", '"0,123456789"'
+```
+5. Пересоберите приложение.
+
+Важно:
+- порядок gid задаёт приоритет поиска (сначала первый gid, потом второй);
+- сравнение номеров делается после нормализации (только цифры, последние 10);
+- если клиент не найден, в webhook уходит `"-"` в поле `client`.
 
 ---
 
