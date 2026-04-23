@@ -4,6 +4,8 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.util.Log
 
 object ReminderScheduler {
     const val EXTRA_PHONE = "extra_phone"
@@ -25,6 +27,15 @@ object ReminderScheduler {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                // Без exact-прав на Android 12+ ставим максимально близкий fallback.
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
+            }
+        }.onFailure {
+            Log.e("ReminderScheduler", "Не удалось запланировать напоминание на $triggerAtMillis", it)
+        }
     }
 }
