@@ -133,11 +133,9 @@ class CallTrackingService : Service() {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setAutoCancel(true)
             .setContentIntent(fullScreenIntent)
-            .setFullScreenIntent(fullScreenIntent, true)
             .build()
 
         manager.notify(POST_CALL_NOTIFICATION_ID, notification)
-        runCatching { startActivity(postCallIntent) }
     }
 
     private fun resolveContactName(phone: String): String {
