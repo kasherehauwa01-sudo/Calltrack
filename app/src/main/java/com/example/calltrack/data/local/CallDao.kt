@@ -14,9 +14,21 @@ interface CallDao {
     @Query("SELECT * FROM calls ORDER BY timestamp DESC")
     fun observeAll(): Flow<List<CallEntity>>
 
+    @Query("SELECT * FROM calls WHERE phone = :phone ORDER BY timestamp DESC")
+    fun observeByPhone(phone: String): Flow<List<CallEntity>>
+
     @Query("SELECT * FROM calls WHERE uploaded = 0")
     suspend fun getPending(): List<CallEntity>
 
+    @Query("SELECT * FROM calls WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): CallEntity?
+
     @Query("UPDATE calls SET uploaded = 1 WHERE id = :id")
     suspend fun markUploaded(id: Long)
+
+    @Query("UPDATE calls SET uploaded = 1 WHERE id IN (:ids)")
+    suspend fun markUploaded(ids: List<Long>)
+
+    @Query("UPDATE calls SET note = :note, tag = :tag, reminder = :reminder, uploaded = 0 WHERE id = :id")
+    suspend fun updateOutcome(id: Long, note: String, tag: String, reminder: String)
 }
