@@ -125,7 +125,6 @@ class CallTrackingService : Service() {
         val fullScreenIntent = PendingIntent.getActivity(this, callId.toInt(), postCallIntent, pendingIntentFlags)
 
         val manager = getSystemService(NotificationManager::class.java)
-        val notificationId = buildPostCallNotificationId(callId)
         val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_clover)
             .setContentTitle("Звонок завершён")
@@ -133,17 +132,11 @@ class CallTrackingService : Service() {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOnlyAlertOnce(true)
-            // Уведомление остаётся в шторке, пока пользователь сам не нажмёт или не смахнёт его.
             .setAutoCancel(true)
             .setContentIntent(fullScreenIntent)
             .build()
 
-        manager.notify(notificationId, notification)
-    }
-
-    private fun buildPostCallNotificationId(callId: Long): Int {
-        val stablePart = (callId and 0x7FFFFFFF).toInt()
-        return POST_CALL_NOTIFICATION_ID_BASE + (stablePart % 100000)
+        manager.notify(POST_CALL_NOTIFICATION_ID, notification)
     }
 
     private fun resolveContactName(phone: String): String {
@@ -248,6 +241,6 @@ class CallTrackingService : Service() {
 
     companion object {
         private const val POST_CALL_CHANNEL_ID = "postcall"
-        private const val POST_CALL_NOTIFICATION_ID_BASE = 1000
+        private const val POST_CALL_NOTIFICATION_ID = 102
     }
 }
