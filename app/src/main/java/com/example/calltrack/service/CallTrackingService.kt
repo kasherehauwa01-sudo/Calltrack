@@ -126,7 +126,7 @@ class CallTrackingService : Service() {
 
         val manager = getSystemService(NotificationManager::class.java)
         val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_spyglass)
+            .setSmallIcon(R.drawable.ic_clover)
             .setContentTitle("Звонок завершён")
             .setContentText("Заполните результат звонка: $contactName")
             .setCategory(NotificationCompat.CATEGORY_CALL)
@@ -236,7 +236,7 @@ class CallTrackingService : Service() {
         return NotificationCompat.Builder(this, "calltrack")
             .setContentTitle("Calltrack")
             .setContentText(text)
-            .setSmallIcon(R.drawable.ic_spyglass)
+            .setSmallIcon(R.drawable.ic_clover)
             .build()
     }
 

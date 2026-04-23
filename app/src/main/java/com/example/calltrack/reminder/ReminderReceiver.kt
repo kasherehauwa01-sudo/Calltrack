@@ -61,7 +61,7 @@ class ReminderReceiver : BroadcastReceiver() {
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_spyglass)
+            .setSmallIcon(R.drawable.ic_clover)
             .setContentTitle("Напоминание")
             .setContentText(if (message.isBlank()) "Позвонить клиенту \"$name\"" else message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

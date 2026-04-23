@@ -27,7 +27,7 @@
             android:background="@android:color/transparent"
             android:contentDescription="Комментарий"
             android:padding="6dp"
-            android:src="@android:drawable/ic_menu_edit"
+            android:src="@drawable/ic_item_edit"
             android:tint="@color/primary" />
 
         <ImageButton
@@ -37,7 +37,7 @@
             android:background="@android:color/transparent"
             android:contentDescription="Напоминание"
             android:padding="6dp"
-            android:src="@android:drawable/ic_lock_idle_alarm"
+            android:src="@drawable/ic_item_alarm"
             android:tint="@color/primary" />
     </LinearLayout>
 

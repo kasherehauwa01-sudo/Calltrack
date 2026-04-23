@@ -122,40 +122,13 @@ class MainActivity : AppCompatActivity() {
         AppCompatDelegate.setDefaultNightMode(nightMode)
     }
 
-    private fun openThemeDialog() {
-        val labels = arrayOf("Светлая", "Тёмная")
-        val values = arrayOf(PrefsManager.THEME_LIGHT, PrefsManager.THEME_DARK)
-        val current = runBlocking { prefsManager.getThemeMode() }
-        val checked = values.indexOf(current).takeIf { it >= 0 } ?: 0
-
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Тема приложения")
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
-                val selected = values[which]
-                lifecycleScope.launch {
-                    prefsManager.setThemeMode(selected)
-                }
-                val nightMode = when (selected) {
-                    PrefsManager.THEME_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
-                    PrefsManager.THEME_DARK -> AppCompatDelegate.MODE_NIGHT_YES
-                    else -> AppCompatDelegate.MODE_NIGHT_NO
-                }
-                AppCompatDelegate.setDefaultNightMode(nightMode)
-                dialog.dismiss()
-            }
-            .setNegativeButton("Отмена", null)
-            .show()
-    }
-
     private fun setupSettingsButton() {
         binding.btnSettings.setOnClickListener { anchor ->
             PopupMenu(this, anchor).apply {
-                menu.add(getString(R.string.theme_app))
                 menu.add(getString(R.string.about_app))
                 menu.add(getString(R.string.update_app))
                 setOnMenuItemClickListener { menuItem ->
                     when (menuItem.title) {
-                        getString(R.string.theme_app) -> openThemeDialog()
                         getString(R.string.about_app) -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
                         else -> startApkUpdateDownload()
                     }
