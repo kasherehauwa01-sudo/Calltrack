@@ -133,7 +133,6 @@ class CallTrackingService : Service() {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setAutoCancel(true)
             .setContentIntent(fullScreenIntent)
-            .setFullScreenIntent(fullScreenIntent, false)
             .build()
 
         manager.notify(POST_CALL_NOTIFICATION_ID, notification)
