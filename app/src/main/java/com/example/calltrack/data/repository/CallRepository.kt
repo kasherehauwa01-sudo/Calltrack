@@ -129,7 +129,22 @@ class CallRepository(
         syncMutex.withLock {
             val managerName = prefs.getManagerName().ifBlank { "Не указан" }
             val pending = callDao.getPending()
-            pending.forEach { entity ->
+            val groupedPending = pending.groupBy { entity ->
+                // Антидубль: на некоторых устройствах один завершённый звонок может попасть в БД несколько раз
+                // с очень близким timestamp. Группируем такие записи в 5-секундное окно и отправляем один webhook.
+                SyncFingerprint(
+                    phone = entity.phone,
+                    type = entity.type,
+                    duration = entity.duration,
+                    note = entity.note.trim(),
+                    tag = entity.tag.trim(),
+                    reminder = entity.reminder.trim(),
+                    timestampBucket = entity.timestamp / 5_000L
+                )
+            }
+
+            groupedPending.values.forEach { duplicates ->
+                val entity = duplicates.first()
                 runCatching {
                     val clientName = findClientName(entity.phone)
                     val reminderText = extractReminderText(entity.reminder)
@@ -149,8 +164,11 @@ class CallRepository(
                             client = clientName
                         )
                     )
-                    callDao.markUploaded(entity.id)
-                    Log.d("CallRepository", "Webhook sent: id=${entity.id}, phone=${entity.phone}")
+                    callDao.markUploaded(duplicates.map { it.id })
+                    Log.d(
+                        "CallRepository",
+                        "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
+                    )
                 }.onFailure {
                     Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
                 }
@@ -182,4 +200,14 @@ class CallRepository(
         if (reminderValue.isBlank()) return ""
         return reminderValue.substringAfter("|", reminderValue).trim()
     }
+
+    private data class SyncFingerprint(
+        val phone: String,
+        val type: String,
+        val duration: Long,
+        val note: String,
+        val tag: String,
+        val reminder: String,
+        val timestampBucket: Long
+    )
 }
