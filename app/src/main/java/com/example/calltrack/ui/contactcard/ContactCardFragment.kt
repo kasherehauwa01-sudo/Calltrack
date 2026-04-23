@@ -11,13 +11,13 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.App
-import com.example.calltrack.data.local.CallEntity
-import com.example.calltrack.data.local.CommentEntity
-import com.example.calltrack.data.local.ReminderEntity
+import com.example.calltrack.databinding.DialogAddCommentBinding
+import com.example.calltrack.databinding.DialogAddReminderBinding
 import com.example.calltrack.databinding.FragmentContactCardBinding
 import com.example.calltrack.reminder.ReminderScheduler
 import com.example.calltrack.ui.main.MainViewModel
@@ -39,7 +39,6 @@ class ContactCardFragment : Fragment() {
     }
 
     private val dateTimeFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
-    private var draftReminderAt: Long? = null
     private var currentPhone: String = ""
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -53,8 +52,6 @@ class ContactCardFragment : Fragment() {
         binding.tvContactPhone.text = phone
         binding.tvContactName.text = phone
         binding.tvClient1c.text = viewModel.findClientName(phone).ifBlank { "—" }
-        binding.etReminderText.filters = arrayOf(InputFilter.LengthFilter(100))
-        binding.etComment.filters = arrayOf(InputFilter.LengthFilter(500))
 
         binding.btnBack.setOnClickListener {
             requireActivity().onBackPressedDispatcher.onBackPressed()
@@ -64,18 +61,17 @@ class ContactCardFragment : Fragment() {
                 startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$currentPhone")))
             }
         }
-        binding.btnPickReminderDate.setOnClickListener { pickReminderDateTime() }
-        binding.btnSaveReminder.setOnClickListener { saveReminder(phone) }
-        binding.btnSaveComment.setOnClickListener { saveComment(phone) }
-        binding.tvCallsHeader.setOnClickListener {
+        binding.btnAddComment.setOnClickListener { showAddCommentDialog(phone) }
+        binding.btnAddReminder.setOnClickListener { showAddReminderDialog(phone) }
+        binding.rowCallsHistory.setOnClickListener {
             (requireActivity() as com.example.calltrack.ui.main.MainActivity)
                 .openContactHistory(phone, ContactHistoryFragment.TYPE_CALLS)
         }
-        binding.tvRemindersHeader.setOnClickListener {
+        binding.rowRemindersHistory.setOnClickListener {
             (requireActivity() as com.example.calltrack.ui.main.MainActivity)
                 .openContactHistory(phone, ContactHistoryFragment.TYPE_REMINDERS)
         }
-        binding.tvCommentsHeader.setOnClickListener {
+        binding.rowCommentsHistory.setOnClickListener {
             (requireActivity() as com.example.calltrack.ui.main.MainActivity)
                 .openContactHistory(phone, ContactHistoryFragment.TYPE_COMMENTS)
         }
@@ -97,20 +93,55 @@ class ContactCardFragment : Fragment() {
             val fallbackClient = viewModel.findClientName(phone).ifBlank { "—" }
             binding.tvClient1c.text = contact?.client1c?.ifBlank { fallbackClient } ?: fallbackClient
         }
-        viewModel.observeCallsByPhone(phone).observe(viewLifecycleOwner) { calls ->
-            binding.tvCallsHistory.text = formatCalls(calls)
-        }
-        viewModel.observeReminders(phone).observe(viewLifecycleOwner) { reminders ->
-            binding.tvRemindersHistory.text = formatReminders(reminders)
-        }
-        viewModel.observeComments(phone).observe(viewLifecycleOwner) { comments ->
-            binding.tvCommentsHistory.text = formatComments(comments)
-        }
     }
 
-    private fun saveReminder(phone: String) {
-        val reminderText = binding.etReminderText.text?.toString().orEmpty().trim()
-        val remindAt = draftReminderAt
+    private fun showAddCommentDialog(phone: String) {
+        val dialogBinding = DialogAddCommentBinding.inflate(layoutInflater)
+        dialogBinding.etComment.filters = arrayOf(InputFilter.LengthFilter(500))
+
+        AlertDialog.Builder(requireContext())
+            .setTitle("Добавить комментарий")
+            .setView(dialogBinding.root)
+            .setNegativeButton("Отменить", null)
+            .setPositiveButton("Сохранить") { _, _ ->
+                val text = dialogBinding.etComment.text?.toString().orEmpty().trim()
+                if (text.isBlank()) {
+                    Toast.makeText(requireContext(), "Комментарий пустой", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                viewLifecycleOwner.lifecycleScope.launch {
+                    viewModel.addComment(phone, text)
+                    Toast.makeText(requireContext(), "Комментарий сохранён", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .show()
+    }
+
+    private fun showAddReminderDialog(phone: String) {
+        val dialogBinding = DialogAddReminderBinding.inflate(layoutInflater)
+        dialogBinding.etReminderText.filters = arrayOf(InputFilter.LengthFilter(100))
+        var reminderAt: Long? = null
+
+        dialogBinding.btnPickDate.setOnClickListener {
+            pickReminderDateTime { selectedAt ->
+                reminderAt = selectedAt
+                dialogBinding.tvReminderDate.text = dateTimeFormat.format(Date(selectedAt))
+            }
+        }
+
+        AlertDialog.Builder(requireContext())
+            .setTitle("Добавить напоминание")
+            .setView(dialogBinding.root)
+            .setNegativeButton("Отменить", null)
+            .setPositiveButton("Сохранить") { _, _ ->
+                val reminderText = dialogBinding.etReminderText.text?.toString().orEmpty().trim()
+                val remindAt = reminderAt
+                saveReminder(phone, reminderText, remindAt)
+            }
+            .show()
+    }
+
+    private fun saveReminder(phone: String, reminderText: String, remindAt: Long?) {
         if (reminderText.isBlank()) {
             Toast.makeText(requireContext(), "Введите текст напоминания", Toast.LENGTH_SHORT).show()
             return
@@ -124,27 +155,11 @@ class ContactCardFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.addReminder(phone, contactName, reminderText, remindAt)
             ReminderScheduler.schedule(requireContext(), phone, contactName, remindAt, reminderText)
-            binding.etReminderText.text?.clear()
-            draftReminderAt = null
-            binding.tvReminderDraft.text = ""
             Toast.makeText(requireContext(), "Напоминание сохранено", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun saveComment(phone: String) {
-        val text = binding.etComment.text?.toString().orEmpty().trim()
-        if (text.isBlank()) {
-            Toast.makeText(requireContext(), "Комментарий пустой", Toast.LENGTH_SHORT).show()
-            return
-        }
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.addComment(phone, text)
-            binding.etComment.text?.clear()
-            Toast.makeText(requireContext(), "Комментарий сохранён", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun pickReminderDateTime() {
+    private fun pickReminderDateTime(onSelected: (Long) -> Unit) {
         val now = Calendar.getInstance()
         DatePickerDialog(
             requireContext(),
@@ -160,8 +175,7 @@ class ContactCardFragment : Fragment() {
                             set(Calendar.MINUTE, minute)
                             set(Calendar.SECOND, 0)
                         }
-                        draftReminderAt = selected.timeInMillis
-                        binding.tvReminderDraft.text = dateTimeFormat.format(selected.time)
+                        onSelected(selected.timeInMillis)
                     },
                     now.get(Calendar.HOUR_OF_DAY),
                     now.get(Calendar.MINUTE),
@@ -202,28 +216,6 @@ class ContactCardFragment : Fragment() {
     }
 
     private fun normalizePhone(value: String): String = value.filter { it.isDigit() }
-
-    private fun formatCalls(calls: List<CallEntity>): String {
-        if (calls.isEmpty()) return "Нет звонков"
-        return calls.joinToString("\n") {
-            "• ${it.type} | ${dateTimeFormat.format(Date(it.timestamp))} | ${it.duration} сек"
-        }
-    }
-
-    private fun formatReminders(reminders: List<ReminderEntity>): String {
-        if (reminders.isEmpty()) return "Нет напоминаний"
-        return reminders.joinToString("\n") {
-            val message = it.message.takeIf { text -> text.isNotBlank() } ?: "Без текста"
-            "• ${dateTimeFormat.format(Date(it.remindAt))} | ${it.status} | $message"
-        }
-    }
-
-    private fun formatComments(comments: List<CommentEntity>): String {
-        if (comments.isEmpty()) return "Нет комментариев"
-        return comments.joinToString("\n") {
-            "• ${it.text} (${dateTimeFormat.format(Date(it.createdAt))})"
-        }
-    }
 
     override fun onDestroyView() {
         _binding = null
