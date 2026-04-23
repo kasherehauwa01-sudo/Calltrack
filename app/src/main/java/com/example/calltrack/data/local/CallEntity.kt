@@ -10,6 +10,8 @@ data class CallEntity(
     val type: String,
     val duration: Long,
     val note: String,
+    val tag: String = "",
+    val reminder: String = "",
     val timestamp: Long,
     val uploaded: Boolean = false
 )
