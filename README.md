@@ -70,18 +70,20 @@ Android-приложение для корпоративных устройст�
 function doPost(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = JSON.parse(e.postData.contents);
+  var comment = data.comment || data.note || "";
+  var reminderText = data.reminder_text || data.reminderText || "";
 
   sheet.appendRow([
-    data.date,
-    data.time,
+    data.date || "",
+    data.time || "",
     data.phone || "",
     data.type || "",
     data.duration || "",
     data.manager || "",
-    data.note || "",
+    comment,
     data.tag || "",
     data.reminder || "",
-    data.reminder_text || "",
+    reminderText,
     data.client || ""
   ]);
 
