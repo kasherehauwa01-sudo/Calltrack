@@ -72,8 +72,24 @@ function doPost(e) {
   var data = JSON.parse(e.postData.contents);
   var comment = data.comment || data.note || "";
   var reminderText = data.reminder_text || data.reminderText || "";
+  var callId = String(data.call_id || "");
 
-  sheet.appendRow([
+  // Ищем уже существующую строку по call_id в колонке L (12-я колонка).
+  // Это позволяет обновлять ту же строку после заполнения "Результат звонка",
+  // а не добавлять новую.
+  var lastRow = sheet.getLastRow();
+  var targetRow = 0;
+  if (callId && lastRow > 1) {
+    var ids = sheet.getRange(2, 12, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === callId) {
+        targetRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  var rowValues = [
     data.date || "",
     data.time || "",
     data.phone || "",
@@ -84,8 +100,15 @@ function doPost(e) {
     data.tag || "",
     data.reminder || "",
     reminderText,
-    data.client || ""
-  ]);
+    data.client || "",
+    callId
+  ];
+
+  if (targetRow > 0) {
+    sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
+  } else {
+    sheet.appendRow(rowValues);
+  }
 
   return ContentService.createTextOutput("ok");
 }
@@ -134,28 +157,34 @@ buildConfigField "String", "CLIENT_DIRECTORY_SHEET_GIDS", '"0,123456789"'
 POST JSON:
 ```json
 {
+  "call_id": 12345,
   "date": "20.04.26",
   "time": "14:35",
   "phone": "+79999999999",
   "type": "Исходящий",
   "duration": 120,
   "manager": "Иванов Иван",
-  "comment": "",
+  "note": "",
   "tag": "",
-  "reminder": ""
+  "reminder": "",
+  "reminder_text": "",
+  "client": "ООО Ромашка"
 }
 ```
 
 Поля:
+- `call_id` — внутренний id звонка в локальной БД. Используется скриптом для обновления **той же строки** вместо добавления новой.
 - `date` — дата звонка в формате `дд.мм.гг`.
 - `time` — время звонка в формате `чч:мм`.
 - `phone` — номер телефона.
 - `type` — тип звонка (`Входящий`, `Исходящий`, `Пропущенный`, `Неотвеченный`).
 - `duration` — длительность в секундах.
 - `manager` — ФИО менеджера (сохраняется при первом запуске на экране «Авторизация»).
-- `comment` — комментарий.
+- `note` — комментарий.
 - `tag` — тег.
 - `reminder` — напоминание.
+- `reminder_text` — текст напоминания.
+- `client` — клиент из справочника.
 
 ---
 

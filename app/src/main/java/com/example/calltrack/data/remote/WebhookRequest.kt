@@ -3,6 +3,8 @@ package com.example.calltrack.data.remote
 import com.google.gson.annotations.SerializedName
 
 data class WebhookRequest(
+    @SerializedName("call_id")
+    val callId: Long,
     @SerializedName("date")
     val date: String,
     @SerializedName("time")
