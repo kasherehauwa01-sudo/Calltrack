@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.text.InputFilter
 import android.view.View
 import android.view.WindowManager
-import android.widget.RadioGroup
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.example.calltrack.App
@@ -51,16 +51,26 @@ class PostCallActivity : AppCompatActivity() {
         binding.tvSubscriberName.text = subscriberName
 
         binding.etComment.filters = arrayOf(InputFilter.LengthFilter(500))
+        binding.btnSave.isEnabled = false
 
-        binding.groupOutcome.setOnCheckedChangeListener { _: RadioGroup, checkedId: Int ->
-            binding.btnPickReminder.visibility = if (checkedId == binding.rbRecall.id) View.VISIBLE else View.GONE
-            if (checkedId != binding.rbRecall.id) {
+        binding.groupOutcome.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            animateSelection(checkedId)
+            val isRecall = checkedId == binding.btnOutcomeRecall.id
+            binding.cardReminder.visibility = if (isRecall) View.VISIBLE else View.GONE
+            if (!isRecall) {
                 reminderAtMillis = null
                 binding.tvReminderValue.text = ""
             }
+            updateSaveState()
         }
 
         binding.btnPickReminder.setOnClickListener { pickDateTime() }
+        binding.groupTemp.setOnCheckedStateChangeListener { _, checkedIds ->
+            checkedIds.firstOrNull()?.let { animateSelection(it) }
+        }
+        binding.rootContent.setOnClickListener { hideKeyboard() }
+        binding.etComment.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) hideKeyboard() }
 
         binding.btnSave.setOnClickListener {
             val callId = intent.getLongExtra(EXTRA_CALL_ID, 0L)
@@ -75,7 +85,7 @@ class PostCallActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            if (binding.groupOutcome.checkedRadioButtonId == binding.rbRecall.id && reminderAtMillis == null) {
+            if (binding.groupOutcome.checkedButtonId == binding.btnOutcomeRecall.id && reminderAtMillis == null) {
                 Toast.makeText(this, "Для тега 'перезвонить' выберите дату и время", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
@@ -93,16 +103,16 @@ class PostCallActivity : AppCompatActivity() {
     }
 
     private fun buildTag(): String {
-        val temp = when (binding.groupTemp.checkedRadioButtonId) {
-            binding.rbHot.id -> "горячий"
-            binding.rbWarm.id -> "тёплый"
-            binding.rbCold.id -> "холодный"
+        val temp = when (binding.groupTemp.checkedChipId) {
+            binding.chipHot.id -> "горячий"
+            binding.chipWarm.id -> "тёплый"
+            binding.chipCold.id -> "холодный"
             else -> ""
         }
-        val outcome = when (binding.groupOutcome.checkedRadioButtonId) {
-            binding.rbDeal.id -> "договорились"
-            binding.rbDecline.id -> "отказ"
-            binding.rbRecall.id -> "перезвонить"
+        val outcome = when (binding.groupOutcome.checkedButtonId) {
+            binding.btnOutcomeDeal.id -> "договорились"
+            binding.btnOutcomeDecline.id -> "отказ"
+            binding.btnOutcomeRecall.id -> "перезвонить"
             else -> ""
         }
         return listOf(
@@ -139,6 +149,22 @@ class PostCallActivity : AppCompatActivity() {
             now.get(Calendar.MONTH),
             now.get(Calendar.DAY_OF_MONTH)
         ).show()
+    }
+
+    private fun updateSaveState() {
+        binding.btnSave.isEnabled = binding.groupOutcome.checkedButtonId != View.NO_ID
+    }
+
+    private fun animateSelection(viewId: Int) {
+        findViewById<View>(viewId)?.animate()?.scaleX(1.03f)?.scaleY(1.03f)?.setDuration(100)?.withEndAction {
+            findViewById<View>(viewId)?.animate()?.scaleX(1f)?.scaleY(1f)?.setDuration(100)?.start()
+        }?.start()
+    }
+
+    private fun hideKeyboard() {
+        val imm = getSystemService(InputMethodManager::class.java)
+        imm?.hideSoftInputFromWindow(currentFocus?.windowToken, 0)
+        currentFocus?.clearFocus()
     }
 
     companion object {
