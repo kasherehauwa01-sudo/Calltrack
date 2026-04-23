@@ -9,6 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.App
@@ -61,8 +62,10 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
 
         binding.groupTemp.setOnCheckedStateChangeListener { _, checkedIds ->
             checkedIds.firstOrNull()?.let { animateSelection(it) }
+            updateSaveState()
         }
         binding.btnPickReminder.setOnClickListener { pickDateTime() }
+        binding.etComment.doAfterTextChanged { updateSaveState() }
         binding.rootContent.setOnClickListener { hideKeyboard() }
         binding.etComment.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) hideKeyboard() }
 
@@ -124,6 +127,7 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
                         }
                         reminderAtMillis = selected.timeInMillis
                         binding.tvReminderValue.text = formatter.format(selected.time)
+                        updateSaveState()
                     },
                     now.get(Calendar.HOUR_OF_DAY),
                     now.get(Calendar.MINUTE),
@@ -137,7 +141,12 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun updateSaveState() {
-        binding.btnSave.isEnabled = binding.groupOutcome.checkedChipId != View.NO_ID
+        val hasAnyChange =
+            binding.groupTemp.checkedChipId != View.NO_ID ||
+                binding.groupOutcome.checkedChipId != View.NO_ID ||
+                reminderAtMillis != null ||
+                !binding.etComment.text.isNullOrBlank()
+        binding.btnSave.isEnabled = hasAnyChange
     }
 
     private fun animateSelection(viewId: Int) {

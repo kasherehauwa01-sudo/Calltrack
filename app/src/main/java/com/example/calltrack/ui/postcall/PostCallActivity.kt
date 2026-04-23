@@ -9,6 +9,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
+import androidx.core.widget.doAfterTextChanged
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -76,7 +77,9 @@ class PostCallActivity : AppCompatActivity() {
         binding.btnPickReminder.setOnClickListener { pickDateTime() }
         binding.groupTemp.setOnCheckedStateChangeListener { _, checkedIds ->
             checkedIds.firstOrNull()?.let { animateSelection(it) }
+            updateSaveState()
         }
+        binding.etComment.doAfterTextChanged { updateSaveState() }
         binding.rootContent.setOnClickListener { hideKeyboard() }
         binding.etComment.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) hideKeyboard() }
 
@@ -147,6 +150,7 @@ class PostCallActivity : AppCompatActivity() {
                         }
                         reminderAtMillis = selected.timeInMillis
                         binding.tvReminderValue.text = formatter.format(selected.time)
+                        updateSaveState()
                     },
                     now.get(Calendar.HOUR_OF_DAY),
                     now.get(Calendar.MINUTE),
@@ -160,7 +164,12 @@ class PostCallActivity : AppCompatActivity() {
     }
 
     private fun updateSaveState() {
-        binding.btnSave.isEnabled = binding.groupOutcome.checkedChipId != View.NO_ID
+        val hasAnyChange =
+            binding.groupTemp.checkedChipId != View.NO_ID ||
+                binding.groupOutcome.checkedChipId != View.NO_ID ||
+                reminderAtMillis != null ||
+                !binding.etComment.text.isNullOrBlank()
+        binding.btnSave.isEnabled = hasAnyChange
     }
 
     private fun animateSelection(viewId: Int) {
