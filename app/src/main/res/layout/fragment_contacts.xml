@@ -10,9 +10,11 @@
         android:id="@+id/etSearch"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@drawable/bg_input"
         android:hint="Поиск контакта"
         android:inputType="text"
         android:maxLines="1"
+        android:padding="16dp"
         android:textColor="@color/textPrimary"
         android:textColorHint="@color/hintColor" />
 
@@ -30,7 +32,9 @@
         android:id="@+id/recyclerContacts"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="8dp"
-        android:layout_weight="1" />
+        android:layout_marginTop="12dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="8dp" />
 
 </LinearLayout>

@@ -12,7 +12,9 @@
         android:id="@+id/tvNumber"
         android:layout_width="match_parent"
         android:layout_height="56dp"
+        android:background="@drawable/bg_input"
         android:gravity="center"
+        android:paddingHorizontal="16dp"
         android:textColor="@color/textPrimary"
         android:textSize="34sp" />
 
@@ -29,7 +31,7 @@
     <GridLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="12dp"
         android:columnCount="3"
         android:rowCount="4">
 
@@ -75,7 +77,9 @@
         android:id="@+id/recyclerT9"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="6dp"
-        android:layout_weight="1" />
+        android:layout_marginTop="12dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="8dp" />
 
 </LinearLayout>
