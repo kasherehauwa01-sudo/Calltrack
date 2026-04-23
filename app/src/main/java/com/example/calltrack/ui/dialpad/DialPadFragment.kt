@@ -1,6 +1,8 @@
 package com.example.calltrack.ui.dialpad
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -241,7 +243,17 @@ class DialPadFragment : Fragment() {
 
     private fun openDial(raw: String) {
         val formatted = CallUtils.formatPhone(raw)
-        startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$formatted")))
+        val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$formatted"))
+        val canCall = ContextCompat.checkSelfPermission(
+            requireContext(),
+            Manifest.permission.CALL_PHONE
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (canCall) {
+            startActivity(callIntent)
+        } else {
+            startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$formatted")))
+        }
     }
 
     override fun onDestroyView() {

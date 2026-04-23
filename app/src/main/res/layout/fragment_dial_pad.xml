@@ -58,14 +58,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:contentDescription="Открыть набор"
-        android:text="Позвонить"
-        android:textSize="18sp"
+        android:contentDescription="Позвонить"
+        android:text=""
         app:backgroundTint="@color/buttonColor"
         app:cornerRadius="14dp"
         app:icon="@drawable/ic_phone"
-        app:iconPadding="8dp"
-        app:iconTint="@color/buttonTextColor" />
+        app:iconTint="@color/buttonTextColor"
+        app:iconGravity="textStart" />
 
     <TextView
         android:id="@+id/tvNoResults"
