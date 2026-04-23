@@ -2,6 +2,7 @@ package com.example.calltrack.data.repository
 
 import android.content.Context
 import android.os.Looper
+import android.util.Log
 import com.example.calltrack.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,13 +84,18 @@ class ClientDirectory(context: Context) {
 
         if (lines.isEmpty()) return
 
-        val header = parseCsvLine(lines.first())
-        val phoneIndex = header.indexOfFirst { it.equals("Телефон", ignoreCase = true) }
-        val clientIndex = header.indexOfFirst { it.equals("Клиент", ignoreCase = true) }
-        if (phoneIndex < 0 || clientIndex < 0) return
+        val delimiter = resolveDelimiter(lines.first())
+        val header = parseCsvLine(lines.first(), delimiter)
+        val normalizedHeader = header.map { normalizeHeader(it) }
+        val phoneIndex = normalizedHeader.indexOfFirst { it.contains("телефон") || it.contains("phone") }
+        val clientIndex = normalizedHeader.indexOfFirst { it.contains("клиент") || it.contains("client") }
+        if (phoneIndex < 0 || clientIndex < 0) {
+            Log.w("ClientDirectory", "Не найдены колонки 'Телефон/Клиент'. Header=$header")
+            return
+        }
 
         lines.drop(1).forEach { line ->
-            val cols = parseCsvLine(line)
+            val cols = parseCsvLine(line, delimiter)
             if (phoneIndex >= cols.size || clientIndex >= cols.size) return@forEach
 
             val phone = normalizePhone(cols[phoneIndex])
@@ -99,9 +105,11 @@ class ClientDirectory(context: Context) {
             // Первое совпадение оставляем (приоритет — порядок gid в конфиге).
             target.putIfAbsent(phone, client)
         }
+
+        Log.d("ClientDirectory", "Загружено клиентов: ${target.size}")
     }
 
-    private fun parseCsvLine(line: String): List<String> {
+    private fun parseCsvLine(line: String, delimiter: Char): List<String> {
         val out = mutableListOf<String>()
         val sb = StringBuilder()
         var inQuotes = false
@@ -119,7 +127,7 @@ class ClientDirectory(context: Context) {
                     }
                 }
 
-                ch == ',' && !inQuotes -> {
+                ch == delimiter && !inQuotes -> {
                     out += sb.toString().trim()
                     sb.setLength(0)
                 }
@@ -131,6 +139,19 @@ class ClientDirectory(context: Context) {
 
         out += sb.toString().trim()
         return out
+    }
+
+    private fun resolveDelimiter(headerLine: String): Char {
+        val commaCount = headerLine.count { it == ',' }
+        val semicolonCount = headerLine.count { it == ';' }
+        return if (semicolonCount > commaCount) ';' else ','
+    }
+
+    private fun normalizeHeader(value: String): String {
+        return value
+            .replace("\uFEFF", "")
+            .trim()
+            .lowercase()
     }
 
     private fun normalizePhone(phone: String): String {
