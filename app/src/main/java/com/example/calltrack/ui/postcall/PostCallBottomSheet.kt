@@ -42,10 +42,15 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
         binding.etComment.filters = arrayOf(InputFilter.LengthFilter(500))
         binding.btnSave.isEnabled = false
 
-        binding.groupOutcome.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (!isChecked) return@addOnButtonCheckedListener
+        binding.groupOutcome.setOnCheckedStateChangeListener { _, checkedIds ->
+            val checkedId = checkedIds.firstOrNull() ?: View.NO_ID
+            if (checkedId == View.NO_ID) {
+                binding.cardReminder.visibility = View.GONE
+                updateSaveState()
+                return@setOnCheckedStateChangeListener
+            }
             animateSelection(checkedId)
-            val isRecall = checkedId == binding.btnOutcomeRecall.id
+            val isRecall = checkedId == binding.chipOutcomeRecall.id
             binding.cardReminder.visibility = if (isRecall) View.VISIBLE else View.GONE
             if (!isRecall) {
                 reminderAtMillis = null
@@ -68,7 +73,7 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
             val tag = buildTag()
             val note = binding.etComment.text?.toString().orEmpty().trim()
 
-            if (binding.groupOutcome.checkedButtonId == binding.btnOutcomeRecall.id && reminderAtMillis == null) {
+            if (binding.groupOutcome.checkedChipId == binding.chipOutcomeRecall.id && reminderAtMillis == null) {
                 Toast.makeText(requireContext(), "Для тега 'перезвонить' выберите дату и время", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
@@ -89,10 +94,10 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
             binding.chipCold.id -> "холодный"
             else -> ""
         }
-        val outcome = when (binding.groupOutcome.checkedButtonId) {
-            binding.btnOutcomeDeal.id -> "договорились"
-            binding.btnOutcomeDecline.id -> "отказ"
-            binding.btnOutcomeRecall.id -> "перезвонить"
+        val outcome = when (binding.groupOutcome.checkedChipId) {
+            binding.chipOutcomeDeal.id -> "договорились"
+            binding.chipOutcomeDecline.id -> "отказ"
+            binding.chipOutcomeRecall.id -> "перезвонить"
             else -> ""
         }
         return listOf(
@@ -132,7 +137,7 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
     }
 
     private fun updateSaveState() {
-        binding.btnSave.isEnabled = binding.groupOutcome.checkedButtonId != View.NO_ID
+        binding.btnSave.isEnabled = binding.groupOutcome.checkedChipId != View.NO_ID
     }
 
     private fun animateSelection(viewId: Int) {

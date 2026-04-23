@@ -124,36 +124,38 @@
                     android:textSize="17sp"
                     android:textStyle="bold" />
 
-                <com.google.android.material.button.MaterialButtonToggleGroup
+                <com.google.android.material.chip.ChipGroup
                     android:id="@+id/groupOutcome"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
-                    android:orientation="vertical"
                     app:singleSelection="true"
-                    app:selectionRequired="false">
+                    app:singleLine="false">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnOutcomeDeal"
-                        android:layout_width="match_parent"
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipOutcomeDeal"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Договорились"
                         android:textSize="16sp" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnOutcomeDecline"
-                        android:layout_width="match_parent"
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipOutcomeDecline"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Отказ"
                         android:textSize="16sp" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnOutcomeRecall"
-                        android:layout_width="match_parent"
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipOutcomeRecall"
+                        style="@style/Widget.Material3.Chip.Filter"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Перезвонить"
                         android:textSize="16sp" />
-                </com.google.android.material.button.MaterialButtonToggleGroup>
+                </com.google.android.material.chip.ChipGroup>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

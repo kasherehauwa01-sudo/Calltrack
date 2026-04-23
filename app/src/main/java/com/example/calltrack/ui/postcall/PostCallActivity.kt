@@ -10,6 +10,8 @@ import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.example.calltrack.App
 import com.example.calltrack.databinding.DialogPostCallBinding
 import com.example.calltrack.reminder.ReminderScheduler
@@ -52,11 +54,17 @@ class PostCallActivity : AppCompatActivity() {
 
         binding.etComment.filters = arrayOf(InputFilter.LengthFilter(500))
         binding.btnSave.isEnabled = false
+        applySystemInsets()
 
-        binding.groupOutcome.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (!isChecked) return@addOnButtonCheckedListener
+        binding.groupOutcome.setOnCheckedStateChangeListener { _, checkedIds ->
+            val checkedId = checkedIds.firstOrNull() ?: View.NO_ID
+            if (checkedId == View.NO_ID) {
+                binding.cardReminder.visibility = View.GONE
+                updateSaveState()
+                return@setOnCheckedStateChangeListener
+            }
             animateSelection(checkedId)
-            val isRecall = checkedId == binding.btnOutcomeRecall.id
+            val isRecall = checkedId == binding.chipOutcomeRecall.id
             binding.cardReminder.visibility = if (isRecall) View.VISIBLE else View.GONE
             if (!isRecall) {
                 reminderAtMillis = null
@@ -85,7 +93,7 @@ class PostCallActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            if (binding.groupOutcome.checkedButtonId == binding.btnOutcomeRecall.id && reminderAtMillis == null) {
+            if (binding.groupOutcome.checkedChipId == binding.chipOutcomeRecall.id && reminderAtMillis == null) {
                 Toast.makeText(this, "Для тега 'перезвонить' выберите дату и время", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
@@ -109,10 +117,10 @@ class PostCallActivity : AppCompatActivity() {
             binding.chipCold.id -> "холодный"
             else -> ""
         }
-        val outcome = when (binding.groupOutcome.checkedButtonId) {
-            binding.btnOutcomeDeal.id -> "договорились"
-            binding.btnOutcomeDecline.id -> "отказ"
-            binding.btnOutcomeRecall.id -> "перезвонить"
+        val outcome = when (binding.groupOutcome.checkedChipId) {
+            binding.chipOutcomeDeal.id -> "договорились"
+            binding.chipOutcomeDecline.id -> "отказ"
+            binding.chipOutcomeRecall.id -> "перезвонить"
             else -> ""
         }
         return listOf(
@@ -152,7 +160,7 @@ class PostCallActivity : AppCompatActivity() {
     }
 
     private fun updateSaveState() {
-        binding.btnSave.isEnabled = binding.groupOutcome.checkedButtonId != View.NO_ID
+        binding.btnSave.isEnabled = binding.groupOutcome.checkedChipId != View.NO_ID
     }
 
     private fun animateSelection(viewId: Int) {
@@ -165,6 +173,22 @@ class PostCallActivity : AppCompatActivity() {
         val imm = getSystemService(InputMethodManager::class.java)
         imm?.hideSoftInputFromWindow(currentFocus?.windowToken, 0)
         currentFocus?.clearFocus()
+    }
+
+    private fun applySystemInsets() {
+        val initialTop = binding.rootContent.paddingTop
+        val initialBottom = binding.rootContent.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            binding.rootContent.setPadding(
+                binding.rootContent.paddingLeft,
+                initialTop + systemBars.top,
+                binding.rootContent.paddingRight,
+                initialBottom + systemBars.bottom
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(binding.root)
     }
 
     companion object {
