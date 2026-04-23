@@ -53,15 +53,19 @@
 
     </GridLayout>
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btnCall"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
         android:layout_marginTop="12dp"
         android:contentDescription="Открыть набор"
-        android:src="@drawable/ic_phone"
-        app:backgroundTint="@color/buttonColor" />
+        android:text="Позвонить"
+        android:textSize="18sp"
+        app:backgroundTint="@color/buttonColor"
+        app:cornerRadius="14dp"
+        app:icon="@drawable/ic_phone"
+        app:iconPadding="8dp"
+        app:iconTint="@color/buttonTextColor" />
 
     <TextView
         android:id="@+id/tvNoResults"
