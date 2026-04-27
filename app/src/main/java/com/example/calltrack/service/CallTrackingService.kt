@@ -103,7 +103,11 @@ class CallTrackingService : Service() {
         val callId = repo.saveCall(entity)
         runCatching { repo.syncPending() }
         val contactName = resolveContactName(entity.phone)
-        showPostCallNow(callId, entity.phone, contactName)
+        if (entity.duration >= 2L) {
+            showPostCallNow(callId, entity.phone, contactName)
+        } else {
+            Log.d("CallTrackingService", "Post-call notification skipped for short call: ${entity.duration}s, ${entity.phone}")
+        }
         Log.d("CallTrackingService", "Call captured and sync attempted: ${entity.phone}, ${entity.type}, ${entity.timestamp}")
         return true
     }
