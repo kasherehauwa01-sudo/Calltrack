@@ -23,6 +23,20 @@ interface CallDao {
     @Query("SELECT * FROM calls WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): CallEntity?
 
+    @Query(
+        "SELECT * FROM calls " +
+            "WHERE phone = :phone AND type = :type AND duration = :duration " +
+            "AND ABS(timestamp - :timestamp) <= :windowMs " +
+            "ORDER BY id DESC LIMIT 1"
+    )
+    suspend fun findRecentDuplicate(
+        phone: String,
+        type: String,
+        duration: Long,
+        timestamp: Long,
+        windowMs: Long = 5_000L
+    ): CallEntity?
+
     @Query("UPDATE calls SET uploaded = 1 WHERE id = :id")
     suspend fun markUploaded(id: Long)
 
