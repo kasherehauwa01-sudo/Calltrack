@@ -53,6 +53,14 @@ class ClientDirectory(context: Context) {
             .split(',')
             .map { it.trim() }
             .filter { it.isNotBlank() }
+            .toMutableList()
+
+        // Гарантированно проверяем оба рабочих справочника, даже если один из ID забыли в конфиге сборки.
+        REQUIRED_SPREADSHEET_IDS.forEach { requiredId ->
+            if (!spreadsheetIds.contains(requiredId)) {
+                spreadsheetIds += requiredId
+            }
+        }
         if (spreadsheetIds.isEmpty()) return result
 
         val gids = BuildConfig.CLIENT_DIRECTORY_SHEET_GIDS
@@ -165,4 +173,11 @@ class ClientDirectory(context: Context) {
     }
 
     private fun isMainThread(): Boolean = Looper.getMainLooper() == Looper.myLooper()
+
+    companion object {
+        private val REQUIRED_SPREADSHEET_IDS = setOf(
+            "1Wl4UXI_x0a7A0iPYuW_ZRlrf3xEdVKMnOALi9p6J_Mc",
+            "1ysEVeWSw96UgrQ1_4dEO5cSyv-18DSdr_VWPj3rUlhM"
+        )
+    }
 }
