@@ -139,8 +139,7 @@ class CallTrackingService : Service() {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOnlyAlertOnce(true)
-            // Показываем HUN (верхнее уведомление) максимально агрессивно, чтобы пользователь увидел его сразу.
-            .setFullScreenIntent(fullScreenIntent, true)
+            // Не открываем full-screen поверх приложения, показываем только обычное уведомление.
             // Уведомление остаётся в шторке, пока пользователь сам не нажмёт или не смахнёт его.
             .setAutoCancel(true)
             .setContentIntent(fullScreenIntent)
