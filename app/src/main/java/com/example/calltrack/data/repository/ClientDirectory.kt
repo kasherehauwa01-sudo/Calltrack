@@ -49,18 +49,24 @@ class ClientDirectory(context: Context) {
 
     private fun loadFromGoogleSheets(): Map<String, String> {
         val result = linkedMapOf<String, String>()
-        val spreadsheetId = BuildConfig.CLIENT_DIRECTORY_SPREADSHEET_ID.trim()
-        if (spreadsheetId.isBlank()) return result
+        val spreadsheetIds = BuildConfig.CLIENT_DIRECTORY_SPREADSHEET_ID
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+        if (spreadsheetIds.isEmpty()) return result
 
         val gids = BuildConfig.CLIENT_DIRECTORY_SHEET_GIDS
             .split(',')
             .map { it.trim() }
             .filter { it.isNotBlank() }
+            .ifEmpty { listOf("0") }
 
-        gids.forEach { gid ->
-            val url = "https://docs.google.com/spreadsheets/d/$spreadsheetId/export?format=csv&gid=$gid"
-            val csv = downloadCsv(url) ?: return@forEach
-            parseCsvToMap(csv, result)
+        spreadsheetIds.forEach { spreadsheetId ->
+            gids.forEach { gid ->
+                val url = "https://docs.google.com/spreadsheets/d/$spreadsheetId/export?format=csv&gid=$gid"
+                val csv = downloadCsv(url) ?: return@forEach
+                parseCsvToMap(csv, result)
+            }
         }
 
         return result
