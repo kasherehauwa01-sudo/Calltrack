@@ -22,13 +22,6 @@ android {
         buildConfigField "String", "APP_RELEASE_DATE", '"2026-04-22"'
     }
 
-    applicationVariants.all { variant ->
-        variant.outputs.all { output ->
-            def versionName = variant.versionName
-            outputFileName = "CallTrack-${versionName}.apk"
-        }
-    }
-
     buildTypes {
         release {
             minifyEnabled false
