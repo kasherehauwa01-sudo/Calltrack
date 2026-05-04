@@ -74,13 +74,42 @@ function doPost(e) {
   var reminderText = data.reminder_text || data.reminderText || "";
   var callId = String(data.call_id || "");
 
+  // Сопоставляем данные по названиям колонок, а не по фиксированному порядку.
+  // Это защищает от "съезда" значений по колонкам.
+  var header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var headerIndex = {};
+  for (var h = 0; h < header.length; h++) {
+    headerIndex[String(header[h]).trim()] = h;
+  }
+
+  var rowValues = new Array(header.length).fill("");
+  function put(colName, value) {
+    var idx = headerIndex[colName];
+    if (idx === undefined) return;
+    rowValues[idx] = value;
+  }
+
+  put("Дата", data.date || "");
+  put("Время", data.time || "");
+  put("Номер телефона", data.phone || "");
+  put("Тип звонка", data.type || "");
+  put("Длительность", data.duration || "");
+  put("Менеджер", data.manager || "");
+  put("Комментарий", comment);
+  put("Тег", data.tag || "");
+  put("Напоминание", data.reminder || "");
+  put("Текст напоминания", reminderText);
+  put("Клиент", data.client || "");
+  put("ID", callId);
+
   // Ищем уже существующую строку по call_id в колонке L (12-я колонка).
   // Это позволяет обновлять ту же строку после заполнения "Результат звонка",
   // а не добавлять новую.
   var lastRow = sheet.getLastRow();
   var targetRow = 0;
+  var idColumn = (headerIndex["ID"] || 11) + 1;
   if (callId && lastRow > 1) {
-    var ids = sheet.getRange(2, 12, lastRow - 1, 1).getValues();
+    var ids = sheet.getRange(2, idColumn, lastRow - 1, 1).getValues();
     for (var i = 0; i < ids.length; i++) {
       if (String(ids[i][0]) === callId) {
         targetRow = i + 2;
@@ -88,21 +117,6 @@ function doPost(e) {
       }
     }
   }
-
-  var rowValues = [
-    data.date || "",
-    data.time || "",
-    data.phone || "",
-    data.type || "",
-    data.duration || "",
-    data.manager || "",
-    comment,
-    data.tag || "",
-    data.reminder || "",
-    reminderText,
-    data.client || "",
-    callId
-  ];
 
   if (targetRow > 0) {
     sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
