@@ -69,7 +69,7 @@ class CallRepository(
         reminderMillis: Long?,
         note: String
     ) {
-        ensureContact(phone, contactName)
+        ensureContact(phone)
         val reminderText = reminderMillis?.let { "${dateFormat.format(Date(it))} ${timeFormat.format(Date(it))}" }.orEmpty()
         callDao.updateOutcome(callId, note, tag, reminderText)
 
@@ -99,7 +99,7 @@ class CallRepository(
 
     suspend fun addReminder(phone: String, contactName: String, text: String, remindAt: Long) {
         if (phone.isBlank() || text.isBlank()) return
-        ensureContact(phone, contactName)
+        ensureContact(phone)
         reminderDao.insert(
             ReminderEntity(
                 phone = phone,
@@ -216,6 +216,38 @@ class CallRepository(
                     Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
                 }
             }
+
+            groupedPending.values.forEach { duplicates ->
+                val entity = duplicates.first()
+                runCatching {
+                    val clientName = findClientName(entity.phone)
+                    val reminderText = extractReminderText(entity.reminder)
+                    webhookApi.sendCall(
+                        BuildConfig.WEBHOOK_URL,
+                        WebhookRequest(
+                            callId = entity.id,
+                            date = dateFormat.format(Date(entity.timestamp)),
+                            time = timeFormat.format(Date(entity.timestamp)),
+                            phone = entity.phone,
+                            type = entity.type,
+                            duration = entity.duration,
+                            manager = managerName,
+                            note = entity.note,
+                            tag = entity.tag,
+                            reminder = entity.reminder,
+                            reminderText = reminderText,
+                            client = clientName
+                        )
+                    )
+                    callDao.markUploaded(duplicates.map { it.id })
+                    Log.d(
+                        "CallRepository",
+                        "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
+                    )
+                }.onFailure {
+                    Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
+                }
+            }
         }
     }
 
@@ -239,7 +271,7 @@ class CallRepository(
         }
     }
 
-    private suspend fun ensureContact(phone: String, name: String = "") {
+    private suspend fun ensureContact(phone: String) {
         if (phone.isBlank() || phone == "Неизвестно") return
         val client1c = clientDirectory.findClientName(phone)
         val exists = contactDao.findByPhone(phone)
@@ -247,7 +279,7 @@ class CallRepository(
             contactDao.insert(
                 ContactEntity(
                     phone = phone,
-                    name = name.ifBlank { phone },
+                    name = phone,
                     client1c = client1c
                 )
             )
