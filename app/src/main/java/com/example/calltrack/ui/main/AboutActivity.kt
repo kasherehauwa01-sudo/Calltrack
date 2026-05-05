@@ -1,11 +1,11 @@
 package com.example.calltrack.ui.main
 
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.databinding.ActivityAboutBinding
+import com.example.calltrack.ui.base.BaseActivity
 
-class AboutActivity : AppCompatActivity() {
+class AboutActivity : BaseActivity() {
 
     private lateinit var binding: ActivityAboutBinding
 
@@ -13,6 +13,7 @@ class AboutActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityAboutBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        applyInsets(binding.root, binding.statusBarOverlay)
 
         binding.tvVersionValue.text = BuildConfig.VERSION_NAME
         binding.tvReleaseDateValue.text = BuildConfig.APP_RELEASE_DATE

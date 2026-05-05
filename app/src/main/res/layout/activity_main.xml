@@ -3,7 +3,16 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background">
+    android:background="@drawable/bg_app_gradient">
+
+    <View
+        android:id="@+id/statusBarOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#2ECC71"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
         android:id="@+id/tvWarning"
@@ -15,6 +24,20 @@
         app:layout_constraintBottom_toBottomOf="@+id/btnSettings"
         app:layout_constraintEnd_toStartOf="@+id/btnSettings"
         app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/statusBarOverlay" />
+
+    <ImageButton
+        android:id="@+id/btnSettings"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/bg_input"
+        android:contentDescription="@string/settings"
+        android:padding="8dp"
+        android:src="@drawable/ic_more_vert"
+        android:tint="@color/textPrimary"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
     <ImageButton

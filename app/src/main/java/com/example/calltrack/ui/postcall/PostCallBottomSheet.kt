@@ -24,6 +24,8 @@ import java.util.Locale
 
 class PostCallBottomSheet : BottomSheetDialogFragment() {
 
+    override fun getTheme(): Int = com.example.calltrack.R.style.AppDialogTheme
+
     private var _binding: DialogPostCallBinding? = null
     private val binding get() = _binding!!
 

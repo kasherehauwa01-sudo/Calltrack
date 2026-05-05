@@ -15,7 +15,6 @@ import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -29,6 +28,7 @@ import com.example.calltrack.data.repository.PrefsManager
 import com.example.calltrack.service.CallTrackingService
 import com.example.calltrack.service.CallUiEventBus
 import com.example.calltrack.ui.calls.CallListFragment
+import com.example.calltrack.ui.base.BaseActivity
 import com.example.calltrack.ui.contacts.ContactsFragment
 import com.example.calltrack.ui.contactcard.ContactCardFragment
 import com.example.calltrack.ui.contactcard.ContactHistoryFragment
@@ -42,7 +42,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : BaseActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var prefsManager: PrefsManager
@@ -96,13 +96,7 @@ class MainActivity : AppCompatActivity() {
         handleExternalNavigation(intent)
     }
 
-    private fun applyWindowInsets() {
-        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
-    }
+    private fun applyWindowInsets() = applyInsets(binding.root, binding.statusBarOverlay)
 
     private fun handleExternalNavigation(intent: Intent?) {
         val phone = intent?.getStringExtra(EXTRA_OPEN_CONTACT_PHONE).orEmpty()

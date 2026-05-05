@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/background"
+    android:background="@drawable/bg_app_gradient"
     android:fillViewport="true">
 
     <LinearLayout
@@ -12,6 +12,12 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:padding="16dp">
+
+        <View
+            android:id="@+id/statusBarOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:background="#2ECC71" />
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"

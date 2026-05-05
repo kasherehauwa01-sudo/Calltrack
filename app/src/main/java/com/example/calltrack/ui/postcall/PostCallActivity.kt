@@ -8,12 +8,10 @@ import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.core.widget.doAfterTextChanged
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import com.example.calltrack.App
 import com.example.calltrack.databinding.DialogPostCallBinding
 import com.example.calltrack.reminder.ReminderScheduler
+import com.example.calltrack.ui.base.BaseActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,7 +20,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-class PostCallActivity : AppCompatActivity() {
+class PostCallActivity : BaseActivity() {
 
     private lateinit var binding: DialogPostCallBinding
     private var reminderAtMillis: Long? = null
@@ -41,7 +39,7 @@ class PostCallActivity : AppCompatActivity() {
 
         binding.etComment.filters = arrayOf(InputFilter.LengthFilter(500))
         binding.btnSave.isEnabled = false
-        applySystemInsets()
+        applyInsets(binding.root, binding.statusBarOverlay)
 
         binding.groupOutcome.setOnCheckedStateChangeListener { _, checkedIds ->
             val checkedId = checkedIds.firstOrNull() ?: View.NO_ID
@@ -168,22 +166,6 @@ class PostCallActivity : AppCompatActivity() {
         val imm = getSystemService(InputMethodManager::class.java)
         imm?.hideSoftInputFromWindow(currentFocus?.windowToken, 0)
         currentFocus?.clearFocus()
-    }
-
-    private fun applySystemInsets() {
-        val initialTop = binding.rootContent.paddingTop
-        val initialBottom = binding.rootContent.paddingBottom
-        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            binding.rootContent.setPadding(
-                binding.rootContent.paddingLeft,
-                initialTop + systemBars.top,
-                binding.rootContent.paddingRight,
-                initialBottom + systemBars.bottom
-            )
-            insets
-        }
-        ViewCompat.requestApplyInsets(binding.root)
     }
 
     companion object {
