@@ -52,11 +52,11 @@ class ContactHistoryFragment : Fragment() {
             }
             TYPE_REMINDERS -> {
                 binding.tvTitle.text = "История напоминаний"
-                viewModel.observeReminders(phone).observe(viewLifecycleOwner) { binding.tvHistory.text = formatReminders(it) }
+                loadRemoteReminders(phone)
             }
             else -> {
                 binding.tvTitle.text = "История комментариев"
-                viewModel.observeComments(phone).observe(viewLifecycleOwner) { binding.tvHistory.text = formatComments(it) }
+                loadRemoteComments(phone)
             }
         }
     }
@@ -76,13 +76,44 @@ class ContactHistoryFragment : Fragment() {
     }
 
     private fun loadRemoteCalls(phone: String) {
+        loadRemoteHistory(
+            phone = phone,
+            onSuccess = { formatRemoteCalls(it) }
+        )
+    }
+
+    private fun loadRemoteReminders(phone: String) {
+        loadRemoteHistory(
+            phone = phone,
+            onSuccess = { items ->
+                val reminders = items.filter { it.reminder.isNotBlank() || it.reminderText.isNotBlank() }
+                if (reminders.isEmpty()) "Нет истории" else reminders.joinToString("\n") {
+                    "• ${it.date} ${it.time} | ${it.reminder.ifBlank { it.reminderText }}"
+                }
+            }
+        )
+    }
+
+    private fun loadRemoteComments(phone: String) {
+        loadRemoteHistory(
+            phone = phone,
+            onSuccess = { items ->
+                val comments = items.filter { it.note.isNotBlank() || it.tag.isNotBlank() }
+                if (comments.isEmpty()) "Нет истории" else comments.joinToString("\n") {
+                    "• ${it.date} ${it.time} | ${it.note.ifBlank { it.tag }}"
+                }
+            }
+        )
+    }
+
+    private fun loadRemoteHistory(phone: String, onSuccess: (List<CallHistoryItem>) -> String) {
         binding.tvHistory.text = "Загрузка..."
         lifecycleScope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) { viewModel.loadHistoryFromRemote(phone) }
             }
             binding.tvHistory.text = result.fold(
-                onSuccess = { formatRemoteCalls(it) },
+                onSuccess = onSuccess,
                 onFailure = { "Нет интернета или ошибка загрузки" }
             )
         }
