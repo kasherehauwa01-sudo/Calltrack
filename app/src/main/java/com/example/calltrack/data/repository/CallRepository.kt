@@ -12,6 +12,7 @@ import com.example.calltrack.data.local.ContactEntity
 import com.example.calltrack.data.local.ReminderDao
 import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.data.remote.WebhookApi
+import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.data.remote.WebhookRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -44,6 +45,16 @@ class CallRepository(
         val clientName = clientDirectory.findClientName(phone)
         Log.d("CLIENT_SEARCH", "Phone: $phone → Client: $clientName")
         return clientName
+    }
+
+    suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return emptyList()
+        val separator = if (BuildConfig.WEBHOOK_URL.contains("?")) "&" else "?"
+        val url = "${BuildConfig.WEBHOOK_URL}${separator}phone=$normalizedPhone"
+        return runCatching { webhookApi.loadHistory(url) }
+            .onFailure { Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it) }
+            .getOrElse { emptyList() }
     }
 
     suspend fun saveCall(call: CallEntity): Long {
@@ -211,6 +222,8 @@ class CallRepository(
         if (reminderValue.isBlank()) return ""
         return reminderValue.substringAfter("|", reminderValue).trim()
     }
+
+    fun normalizePhone(phone: String): String = phone.filter { it.isDigit() }.takeLast(10)
 
     private data class SyncFingerprint(
         val phone: String,

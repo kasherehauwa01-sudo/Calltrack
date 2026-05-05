@@ -9,6 +9,7 @@ import com.example.calltrack.data.local.CallEntity
 import com.example.calltrack.data.local.CommentEntity
 import com.example.calltrack.data.local.ContactEntity
 import com.example.calltrack.data.local.ReminderEntity
+import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.data.repository.CallRepository
 
 class MainViewModel(private val repository: CallRepository) : ViewModel() {
@@ -52,6 +53,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     suspend fun markOnboardingCompleted() = repository.prefs.setOnboardingCompleted(true)
     suspend fun setManagerName(name: String) = repository.prefs.setManagerName(name)
     suspend fun sync() = repository.syncPending()
+    suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> = repository.loadHistoryFromRemote(phone)
 
     class Factory(private val repository: CallRepository) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
