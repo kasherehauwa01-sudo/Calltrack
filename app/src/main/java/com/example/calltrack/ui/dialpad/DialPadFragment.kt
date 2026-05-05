@@ -158,11 +158,15 @@ class DialPadFragment : Fragment() {
                         val id = cursor.getLong(idIdx)
                         val name = cursor.getString(nameIdx).orEmpty()
                         val phone = cursor.getString(phoneIdx).orEmpty()
+                        val wordDigits = name.split(Regex("\\s+"))
+                            .map { T9Mapper.nameToDigits(it) }
+                            .filter { it.isNotBlank() }
                         list += T9ContactItem(
                             contactId = id,
                             name = name,
                             phone = phone,
-                            t9Digits = T9Mapper.nameToDigits(name)
+                            t9Digits = T9Mapper.nameToDigits(name),
+                            wordDigits = wordDigits
                         )
                     }
                 }
@@ -181,7 +185,9 @@ class DialPadFragment : Fragment() {
                     emptyList()
                 } else {
                     allContacts.filter {
-                        it.t9Digits.startsWith(query) || it.phone.filter { ch -> ch.isDigit() }.startsWith(query)
+                        it.t9Digits.startsWith(query) ||
+                            it.wordDigits.any { digits -> digits.startsWith(query) } ||
+                            it.phone.filter { ch -> ch.isDigit() }.startsWith(query)
                     }.take(30)
                 }
             }
