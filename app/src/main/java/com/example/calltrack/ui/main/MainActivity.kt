@@ -1,27 +1,44 @@
 package com.example.calltrack.ui.main
 
 import android.Manifest
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.widget.PopupMenu
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.databinding.ActivityMainBinding
+import com.example.calltrack.data.repository.PrefsManager
 import com.example.calltrack.service.CallTrackingService
 import com.example.calltrack.ui.calls.CallListFragment
+import com.example.calltrack.ui.base.BaseActivity
+import com.example.calltrack.ui.contacts.ContactsFragment
+import com.example.calltrack.ui.contactcard.ContactCardFragment
+import com.example.calltrack.ui.contactcard.ContactHistoryFragment
 import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import kotlinx.coroutines.launch
+import java.io.File
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : BaseActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var prefsManager: PrefsManager
+    private var apkDownloadId: Long = -1L
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
@@ -29,13 +46,28 @@ class MainActivity : AppCompatActivity() {
     private val permissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { updateWarningState() }
+    private val downloadCompleteReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
+            val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+            if (completedId == apkDownloadId) {
+                installDownloadedApk(completedId)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        prefsManager = PrefsManager(this)
+        applySavedTheme()
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        applyWindowInsets()
         setupBottomNav()
+        setupSettingsButton()
+        registerDownloadReceiver()
+        handleExternalNavigation(intent)
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
@@ -47,6 +79,107 @@ class MainActivity : AppCompatActivity() {
                 startTrackingService()
             }
             updateWarningState()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleExternalNavigation(intent)
+    }
+
+    private fun applyWindowInsets() = applyInsets(binding.root, binding.statusBarOverlay)
+
+    private fun handleExternalNavigation(intent: Intent?) {
+        val phone = intent?.getStringExtra(EXTRA_OPEN_CONTACT_PHONE).orEmpty()
+        if (phone.isNotBlank()) {
+            openContactCard(phone)
+        }
+    }
+
+
+    private fun applySavedTheme() {
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+    }
+
+    private fun setupSettingsButton() {
+        binding.btnSettings.setOnClickListener { anchor ->
+            PopupMenu(this, anchor).apply {
+                menu.add(getString(R.string.about_app))
+                menu.add(getString(R.string.update_app))
+                setOnMenuItemClickListener { menuItem ->
+                    when (menuItem.title) {
+                        getString(R.string.about_app) -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
+                        else -> startApkUpdateDownload()
+                    }
+                    true
+                }
+                show()
+            }
+        }
+    }
+
+    private fun startApkUpdateDownload() {
+        lifecycleScope.launch {
+            Toast.makeText(this@MainActivity, "Проверяем наличие новой версии…", Toast.LENGTH_SHORT).show()
+            val manager = getSystemService(DownloadManager::class.java)
+            val request = DownloadManager.Request(Uri.parse(RELEASE_APK_URL))
+                .setTitle("Обновление Calltrack")
+                .setDescription("Загрузка новой версии приложения")
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setAllowedOverMetered(true)
+                .setAllowedOverRoaming(true)
+                .setMimeType("application/vnd.android.package-archive")
+                .addRequestHeader("Accept", "application/vnd.android.package-archive")
+                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, APK_FILE_NAME)
+
+            apkDownloadId = manager.enqueue(request)
+            Toast.makeText(this@MainActivity, "Началась загрузка обновления", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun installDownloadedApk(downloadId: Long) {
+        val manager = getSystemService(DownloadManager::class.java)
+        val query = DownloadManager.Query().setFilterById(downloadId)
+        var localUri: String? = null
+        manager.query(query)?.use { cursor ->
+            if (!cursor.moveToFirst()) return
+            val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+            if (status != DownloadManager.STATUS_SUCCESSFUL) {
+                Toast.makeText(this, "Не удалось загрузить обновление", Toast.LENGTH_SHORT).show()
+                return
+            }
+            localUri = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+        }
+
+        val apkFile = localUri?.let { Uri.parse(it).path }?.let { File(it) }
+        if (apkFile == null || !apkFile.exists()) {
+            Toast.makeText(this, "Файл обновления не найден", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val apkUri = FileProvider.getUriForFile(
+            this,
+            "$packageName.fileprovider",
+            apkFile
+        )
+
+        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkUri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivity(installIntent) }
+            .onFailure {
+                Toast.makeText(this, "Не удалось открыть установщик APK", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    private fun registerDownloadReceiver() {
+        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(downloadCompleteReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(downloadCompleteReceiver, filter)
         }
     }
 
@@ -62,11 +195,8 @@ class MainActivity : AppCompatActivity() {
                     true
                 }
                 R.id.nav_contacts -> {
-                    val contactsIntent = Intent(Intent.ACTION_VIEW).apply {
-                        type = android.provider.ContactsContract.Contacts.CONTENT_TYPE
-                    }
-                    runCatching { startActivity(contactsIntent) }
-                    false
+                    openFragment(ContactsFragment.newInstance())
+                    true
                 }
                 else -> return@setOnItemSelectedListener false
             }
@@ -93,6 +223,20 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNav.selectedItemId = R.id.nav_dial
     }
 
+    fun openContactCard(phone: String) {
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragmentContainer, ContactCardFragment.newInstance(phone))
+            .addToBackStack(null)
+            .commit()
+    }
+
+    fun openContactHistory(phone: String, type: String) {
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragmentContainer, ContactHistoryFragment.newInstance(phone, type))
+            .addToBackStack(null)
+            .commit()
+    }
+
     private fun openFragment(fragment: androidx.fragment.app.Fragment) {
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragmentContainer, fragment)
@@ -108,12 +252,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startTrackingService() {
-        // На Android 14+ запуск FGS может быть отклонён системой, если момент запуска невалидный.
-        // Чтобы не уронить приложение, оборачиваем запуск в runCatching.
         runCatching {
             ContextCompat.startForegroundService(this, Intent(this, CallTrackingService::class.java))
         }
         lifecycleScope.launch { viewModel.sync() }
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(downloadCompleteReceiver) }
+        super.onDestroy()
     }
 
     private fun requiredPermissions(): Array<String> {
@@ -121,8 +268,15 @@ class MainActivity : AppCompatActivity() {
             add(Manifest.permission.READ_PHONE_STATE)
             add(Manifest.permission.READ_CALL_LOG)
             add(Manifest.permission.READ_CONTACTS)
-            add(Manifest.permission.RECORD_AUDIO)
+            add(Manifest.permission.CALL_PHONE)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
         }.toTypedArray()
+    }
+
+    companion object {
+        const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
+        private const val RELEASE_APK_URL =
+            "https://github.com/kasherehauwa01-sudo/Calltrack/releases/download/v05-05-26-01/CallTrack-1.0.apk"
+        private const val APK_FILE_NAME = "update.apk"
     }
 }

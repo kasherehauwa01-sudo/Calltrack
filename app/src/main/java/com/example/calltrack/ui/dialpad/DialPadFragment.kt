@@ -1,6 +1,8 @@
 package com.example.calltrack.ui.dialpad
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -25,6 +27,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.databinding.FragmentDialPadBinding
+import com.example.calltrack.ui.main.MainActivity
 import com.example.calltrack.ui.main.MainViewModel
 import com.example.calltrack.utils.CallUtils
 import com.example.calltrack.utils.T9Mapper
@@ -43,8 +46,7 @@ class DialPadFragment : Fragment() {
     }
 
     private val t9Adapter = T9ContactAdapter { item ->
-        binding.tvNumber.text = item.phone
-        viewModel.setDialNumber(item.phone)
+        (requireActivity() as MainActivity).openContactCard(item.phone)
     }
 
     private var allContacts: List<T9ContactItem> = emptyList()
@@ -90,19 +92,20 @@ class DialPadFragment : Fragment() {
     }
 
     private fun setupKeyLabels() {
-        setKeyLabel(binding.key2, "2", "ABC АБВГ")
-        setKeyLabel(binding.key3, "3", "DEF ДЕЁЖЗ")
-        setKeyLabel(binding.key4, "4", "GHI ИЙКЛ")
-        setKeyLabel(binding.key5, "5", "JKL МНОП")
-        setKeyLabel(binding.key6, "6", "MNO РСТУ")
-        setKeyLabel(binding.key7, "7", "PQRS ФХЦЧ")
-        setKeyLabel(binding.key8, "8", "TUV ШЩЪЫ")
-        setKeyLabel(binding.key9, "9", "WXYZ ЬЭЮЯ")
-        setKeyLabel(binding.key0, "0", "+")
+        setKeyLabel(binding.key2, "2", "АБВГ", "ABC")
+        setKeyLabel(binding.key3, "3", "ДЕЁЖЗ", "DEF")
+        setKeyLabel(binding.key4, "4", "ИЙКЛ", "GHI")
+        setKeyLabel(binding.key5, "5", "МНОП", "JKL")
+        setKeyLabel(binding.key6, "6", "РСТУ", "MNO")
+        setKeyLabel(binding.key7, "7", "ФХЦЧ", "PQRS")
+        setKeyLabel(binding.key8, "8", "ШЩЪЫ", "TUV")
+        setKeyLabel(binding.key9, "9", "ЬЭЮЯ", "WXYZ")
+        setKeyLabel(binding.key0, "0", "+", "")
     }
 
-    private fun setKeyLabel(view: TextView, digit: String, letters: String) {
-        val text = "$digit\n$letters"
+    private fun setKeyLabel(view: TextView, digit: String, ruLetters: String, enLetters: String) {
+        val letters = listOf(ruLetters, enLetters).filter { it.isNotBlank() }.joinToString("\n")
+        val text = if (letters.isBlank()) digit else "$digit\n$letters"
         val spannable = SpannableString(text)
         spannable.setSpan(
             RelativeSizeSpan(0.5f),
@@ -240,7 +243,17 @@ class DialPadFragment : Fragment() {
 
     private fun openDial(raw: String) {
         val formatted = CallUtils.formatPhone(raw)
-        startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$formatted")))
+        val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$formatted"))
+        val canCall = ContextCompat.checkSelfPermission(
+            requireContext(),
+            Manifest.permission.CALL_PHONE
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (canCall) {
+            startActivity(callIntent)
+        } else {
+            startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$formatted")))
+        }
     }
 
     override fun onDestroyView() {
