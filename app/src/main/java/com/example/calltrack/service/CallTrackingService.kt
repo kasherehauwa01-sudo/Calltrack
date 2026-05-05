@@ -243,7 +243,7 @@ class CallTrackingService : Service() {
             ).apply {
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 enableVibration(true)
-                vibrationPattern = longArrayOf(0, 250, 180, 250)
+                setVibrationPattern(longArrayOf(0, 250, 180, 250))
                 setSound(
                     resolveSoundUri(),
                     AudioAttributes.Builder()

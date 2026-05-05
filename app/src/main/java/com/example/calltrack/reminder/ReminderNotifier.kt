@@ -24,7 +24,7 @@ object ReminderNotifier {
             manager.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, "Напоминания", NotificationManager.IMPORTANCE_HIGH).apply {
                     enableVibration(true)
-                    vibrationPattern = vibrationPattern
+                    setVibrationPattern(vibrationPattern)
                     setSound(
                         soundUri,
                         AudioAttributes.Builder()
