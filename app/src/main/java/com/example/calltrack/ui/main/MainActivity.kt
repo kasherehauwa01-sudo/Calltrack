@@ -107,13 +107,7 @@ class MainActivity : BaseActivity() {
 
 
     private fun applySavedTheme() {
-        val mode = runBlocking { prefsManager.getThemeMode() }
-        val nightMode = when (mode) {
-            PrefsManager.THEME_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
-            PrefsManager.THEME_DARK -> AppCompatDelegate.MODE_NIGHT_YES
-            else -> AppCompatDelegate.MODE_NIGHT_NO
-        }
-        AppCompatDelegate.setDefaultNightMode(nightMode)
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
     }
 
     private fun setupSettingsButton() {
