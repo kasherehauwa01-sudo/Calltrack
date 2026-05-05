@@ -5,6 +5,8 @@ import android.util.Log
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.data.local.CallDao
 import com.example.calltrack.data.local.CallEntity
+import com.example.calltrack.data.local.CallHistoryDao
+import com.example.calltrack.data.local.CallHistoryEntity
 import com.example.calltrack.data.local.CommentDao
 import com.example.calltrack.data.local.CommentEntity
 import com.example.calltrack.data.local.ContactDao
@@ -26,6 +28,7 @@ class CallRepository(
     private val contactDao: ContactDao,
     private val reminderDao: ReminderDao,
     private val commentDao: CommentDao,
+    private val callHistoryDao: CallHistoryDao,
     private val webhookApi: WebhookApi,
     context: Context
 ) {
@@ -55,6 +58,23 @@ class CallRepository(
         return runCatching { webhookApi.loadHistory(url) }
             .onFailure { Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it) }
             .getOrElse { emptyList() }
+    }
+
+    suspend fun getHistory(phone: String): List<CallHistoryEntity> {
+        val normalized = normalizePhone(phone)
+        val cached = callHistoryDao.getByPhone(normalized)
+        if (cached.isNotEmpty()) return cached
+
+        val remote = loadHistoryFromRemote(normalized)
+        callHistoryDao.insertAll(remote.map { it.toEntity(normalized) })
+        return callHistoryDao.getByPhone(normalized)
+    }
+
+    suspend fun refreshHistory(phone: String) {
+        val normalized = normalizePhone(phone)
+        val remote = loadHistoryFromRemote(normalized)
+        callHistoryDao.deleteByPhone(normalized)
+        callHistoryDao.insertAll(remote.map { it.toEntity(normalized) })
     }
 
     suspend fun saveCall(call: CallEntity): Long {
@@ -224,6 +244,23 @@ class CallRepository(
     }
 
     fun normalizePhone(phone: String): String = phone.filter { it.isDigit() }.takeLast(10)
+
+    private fun CallHistoryItem.toEntity(phone: String): CallHistoryEntity {
+        return CallHistoryEntity(
+            phone = phone,
+            date = date,
+            time = time,
+            type = type,
+            duration = duration,
+            manager = manager,
+            note = note,
+            tag = tag,
+            reminder = reminder,
+            reminderText = reminderText,
+            client = client,
+            updatedAt = System.currentTimeMillis()
+        )
+    }
 
     private data class SyncFingerprint(
         val phone: String,
