@@ -17,6 +17,9 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/AKfycbzeZKY0kOvV2gFVfrxvIGlt6jRk2sKGr6IhleWILIb6UCvE9hLXBjjJmskaeK8pDF5U4w/exec"'
+        buildConfigField "String", "CLIENT_DIRECTORY_SPREADSHEET_ID", '"1Wl4UXI_x0a7A0iPYuW_ZRlrf3xEdVKMnOALi9p6J_Mc,1ysEVeWSw96UgrQ1_4dEO5cSyv-18DSdr_VWPj3rUlhM"'
+        buildConfigField "String", "CLIENT_DIRECTORY_SHEET_GIDS", '"0"'
+        buildConfigField "String", "APP_RELEASE_DATE", '"2026-04-22"'
     }
 
     buildTypes {
@@ -61,6 +64,7 @@ dependencies {
     implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
 
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+    implementation 'androidx.work:work-runtime-ktx:2.9.1'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
