@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.provider.Settings
 import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -49,6 +50,9 @@ class MainActivity : BaseActivity() {
     private val permissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { updateWarningState() }
+    private val unknownAppsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { updateWarningState() }
     private val downloadCompleteReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
@@ -74,6 +78,7 @@ class MainActivity : BaseActivity() {
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
+                requestUnknownAppsPermissionIfNeeded()
                 openFragment(OnboardingFragment.newInstance())
                 binding.bottomNav.visibility = android.view.View.GONE
             } else {
@@ -247,11 +252,23 @@ class MainActivity : BaseActivity() {
     }
 
     private fun updateWarningState() {
-        binding.tvWarning.text = if (!hasAllPermissions()) {
-            "Не выданы все разрешения"
-        } else {
-            ""
+        val messages = buildList {
+            if (!hasAllPermissions()) add("Не выданы все разрешения")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+                add("Разрешите установку из неизвестных источников")
+            }
         }
+        binding.tvWarning.text = messages.joinToString("\n")
+    }
+
+    private fun requestUnknownAppsPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (packageManager.canRequestPackageInstalls()) return
+        val intent = Intent(
+            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+            Uri.parse("package:$packageName")
+        )
+        unknownAppsLauncher.launch(intent)
     }
 
     private fun startTrackingService() {
