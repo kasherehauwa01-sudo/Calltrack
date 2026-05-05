@@ -12,6 +12,8 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkRequest
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import android.os.IBinder
 import android.provider.CallLog
@@ -132,6 +134,7 @@ class CallTrackingService : Service() {
 
         val manager = getSystemService(NotificationManager::class.java)
         val notificationId = buildPostCallNotificationId(callId)
+        val vibrationPattern = longArrayOf(0, 250, 180, 250)
         val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_clover)
             .setContentTitle("Звонок завершён")
@@ -142,6 +145,8 @@ class CallTrackingService : Service() {
             // Не открываем full-screen поверх приложения, показываем только обычное уведомление.
             // Уведомление остаётся в шторке, пока пользователь сам не нажмёт или не смахнёт его.
             .setAutoCancel(true)
+            .setSound(resolveSoundUri())
+            .setVibrate(vibrationPattern)
             .setContentIntent(fullScreenIntent)
             .build()
 
@@ -237,6 +242,15 @@ class CallTrackingService : Service() {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 250, 180, 250)
+                setSound(
+                    resolveSoundUri(),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
             }
             getSystemService(NotificationManager::class.java).apply {
                 createNotificationChannel(serviceChannel)
@@ -251,6 +265,12 @@ class CallTrackingService : Service() {
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_clover)
             .build()
+    }
+
+    private fun resolveSoundUri(): Uri {
+        val resId = resources.getIdentifier("voice", "raw", packageName)
+        if (resId != 0) return Uri.parse("android.resource://$packageName/$resId")
+        return RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
     }
 
     companion object {
