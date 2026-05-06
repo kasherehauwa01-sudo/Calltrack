@@ -31,6 +31,7 @@ class ContactHistoryFragment : Fragment() {
     }
 
     private val dateTimeFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+    private val historySortFormat = SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentContactHistoryBinding.inflate(inflater, container, false)
@@ -80,6 +81,7 @@ class ContactHistoryFragment : Fragment() {
             phone = phone,
             onSuccess = { items ->
                 val reminders = items
+                    .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
                     .filter { it.reminder.isNotBlank() || it.reminderText.isNotBlank() }
                     .take(20)
                 if (reminders.isEmpty()) "Нет истории" else reminders.joinToString("\n") {
@@ -94,6 +96,7 @@ class ContactHistoryFragment : Fragment() {
             phone = phone,
             onSuccess = { items ->
                 val comments = items
+                    .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
                     .filter { it.note.isNotBlank() || it.tag.isNotBlank() }
                     .take(20)
                 if (comments.isEmpty()) "Нет истории" else comments.joinToString("\n") {
@@ -122,7 +125,9 @@ class ContactHistoryFragment : Fragment() {
     }
 
     private fun formatRemoteCallsFromCache(items: List<CallHistoryEntity>): String {
-        val latestCalls = items.take(20)
+        val latestCalls = items
+            .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
+            .take(20)
         if (latestCalls.isEmpty()) return "Нет истории"
         return latestCalls.joinToString("\n") {
             "• ${it.type} | ${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.duration} сек"
@@ -144,6 +149,11 @@ class ContactHistoryFragment : Fragment() {
             3 -> time
             else -> time
         }
+    }
+
+    private fun parseHistoryDateTime(date: String, time: String): Long {
+        val normalized = "${normalizeDate(date)} ${normalizeTime(time)}"
+        return runCatching { historySortFormat.parse(normalized)?.time ?: 0L }.getOrDefault(0L)
     }
 
     private fun formatReminders(reminders: List<ReminderEntity>): String {
