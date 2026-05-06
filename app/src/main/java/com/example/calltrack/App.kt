@@ -17,7 +17,6 @@ class App : Application() {
             contactDao = db.contactDao(),
             reminderDao = db.reminderDao(),
             commentDao = db.commentDao(),
-            callHistoryDao = db.callHistoryDao(),
             webhookApi = ApiFactory.createWebhookApi(),
             context = this
         )

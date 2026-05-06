@@ -8,8 +8,8 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.App
+import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.data.local.CallEntity
-import com.example.calltrack.data.local.CallHistoryEntity
 import com.example.calltrack.data.local.CommentEntity
 import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.databinding.FragmentContactHistoryBinding
@@ -52,11 +52,11 @@ class ContactHistoryFragment : Fragment() {
             }
             TYPE_REMINDERS -> {
                 binding.tvTitle.text = "История напоминаний"
-                loadRemoteReminders(phone)
+                viewModel.observeReminders(phone).observe(viewLifecycleOwner) { binding.tvHistory.text = formatReminders(it) }
             }
             else -> {
                 binding.tvTitle.text = "История комментариев"
-                loadRemoteComments(phone)
+                viewModel.observeComments(phone).observe(viewLifecycleOwner) { binding.tvHistory.text = formatComments(it) }
             }
         }
     }
@@ -68,59 +68,23 @@ class ContactHistoryFragment : Fragment() {
         }
     }
 
-    private fun loadRemoteCalls(phone: String) {
-        loadCachedThenRefresh(
-            phone = phone,
-            onSuccess = { formatRemoteCallsFromCache(it) }
-        )
-    }
-
-    private fun loadRemoteReminders(phone: String) {
-        loadCachedThenRefresh(
-            phone = phone,
-            onSuccess = { items ->
-                val reminders = items.filter { it.reminder.isNotBlank() || it.reminderText.isNotBlank() }
-                if (reminders.isEmpty()) "Нет истории" else reminders.joinToString("\n") {
-                    "• ${it.date} ${it.time} | ${it.reminder.ifBlank { it.reminderText }}"
-                }
-            }
-        )
-    }
-
-    private fun loadRemoteComments(phone: String) {
-        loadCachedThenRefresh(
-            phone = phone,
-            onSuccess = { items ->
-                val comments = items.filter { it.note.isNotBlank() || it.tag.isNotBlank() }
-                if (comments.isEmpty()) "Нет истории" else comments.joinToString("\n") {
-                    "• ${it.date} ${it.time} | ${it.note.ifBlank { it.tag }}"
-                }
-            }
-        )
-    }
-
-    private fun loadCachedThenRefresh(phone: String, onSuccess: (List<CallHistoryEntity>) -> String) {
-        binding.tvHistory.text = "Загрузка..."
-        lifecycleScope.launch {
-            val cached = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-            binding.tvHistory.text = onSuccess(cached)
-
-            launch {
-                val result = runCatching { withContext(Dispatchers.IO) { viewModel.refreshHistory(phone) } }
-                if (result.isSuccess) {
-                    val updated = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-                    binding.tvHistory.text = onSuccess(updated)
-                } else if (cached.isEmpty()) {
-                    binding.tvHistory.text = "Нет интернета или ошибка загрузки"
-                }
-            }
-        }
-    }
-
-    private fun formatRemoteCallsFromCache(items: List<CallHistoryEntity>): String {
+    private fun formatRemoteCalls(items: List<CallHistoryItem>): String {
         if (items.isEmpty()) return "Нет истории"
         return items.joinToString("\n") {
             "• ${it.type} | ${it.date} ${it.time} | ${it.duration} сек"
+        }
+    }
+
+    private fun loadRemoteCalls(phone: String) {
+        binding.tvHistory.text = "Загрузка..."
+        lifecycleScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.IO) { viewModel.loadHistoryFromRemote(phone) }
+            }
+            binding.tvHistory.text = result.fold(
+                onSuccess = { formatRemoteCalls(it) },
+                onFailure = { "Нет интернета или ошибка загрузки" }
+            )
         }
     }
 

@@ -12,17 +12,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CallEntity::class,
         ContactEntity::class,
         ReminderEntity::class,
-        CommentEntity::class,
-        CallHistoryEntity::class
+        CommentEntity::class
     ],
-    version = 5
+    version = 4
 )
 abstract class CallDatabase : RoomDatabase() {
     abstract fun callDao(): CallDao
     abstract fun contactDao(): ContactDao
     abstract fun reminderDao(): ReminderDao
     abstract fun commentDao(): CommentDao
-    abstract fun callHistoryDao(): CallHistoryDao
 
     companion object {
         @Volatile
@@ -82,37 +80,13 @@ abstract class CallDatabase : RoomDatabase() {
             }
         }
 
-        private val MIGRATION_4_5 = object : Migration(4, 5) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS call_history (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        phone TEXT NOT NULL,
-                        date TEXT NOT NULL,
-                        time TEXT NOT NULL,
-                        type TEXT NOT NULL,
-                        duration TEXT NOT NULL,
-                        manager TEXT NOT NULL,
-                        note TEXT NOT NULL,
-                        tag TEXT NOT NULL,
-                        reminder TEXT NOT NULL,
-                        reminderText TEXT NOT NULL,
-                        client TEXT NOT NULL,
-                        updatedAt INTEGER NOT NULL
-                    )
-                    """.trimIndent()
-                )
-            }
-        }
-
         fun getInstance(context: Context): CallDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     CallDatabase::class.java,
                     "calltrack.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build().also { INSTANCE = it }
             }
         }
