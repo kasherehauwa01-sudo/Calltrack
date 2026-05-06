@@ -47,16 +47,6 @@ class CallRepository(
         return clientName
     }
 
-    suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> {
-        val normalizedPhone = normalizePhone(phone)
-        if (normalizedPhone.isBlank()) return emptyList()
-        val separator = if (BuildConfig.WEBHOOK_URL.contains("?")) "&" else "?"
-        val url = "${BuildConfig.WEBHOOK_URL}${separator}phone=$normalizedPhone"
-        return runCatching { webhookApi.loadHistory(url) }
-            .onFailure { Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it) }
-            .getOrElse { emptyList() }
-    }
-
     suspend fun saveCall(call: CallEntity): Long {
         ensureContact(call.phone)
         val duplicate = callDao.findRecentDuplicate(
@@ -195,6 +185,58 @@ class CallRepository(
                     Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
                 }
             }
+
+            groupedPending.values.forEach { duplicates ->
+                val entity = duplicates.first()
+                runCatching {
+                    val clientName = findClientName(entity.phone)
+                    val reminderText = extractReminderText(entity.reminder)
+                    webhookApi.sendCall(
+                        BuildConfig.WEBHOOK_URL,
+                        WebhookRequest(
+                            callId = entity.id,
+                            date = dateFormat.format(Date(entity.timestamp)),
+                            time = timeFormat.format(Date(entity.timestamp)),
+                            phone = entity.phone,
+                            type = entity.type,
+                            duration = entity.duration,
+                            manager = managerName,
+                            note = entity.note,
+                            tag = entity.tag,
+                            reminder = entity.reminder,
+                            reminderText = reminderText,
+                            client = clientName
+                        )
+                    )
+                    callDao.markUploaded(duplicates.map { it.id })
+                    Log.d(
+                        "CallRepository",
+                        "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
+                    )
+                }.onFailure {
+                    Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
+                }
+            }
+        }
+    }
+
+    private suspend fun ensureContact(phone: String) {
+        if (phone.isBlank() || phone == "Неизвестно") return
+        val client1c = clientDirectory.findClientName(phone)
+        val exists = contactDao.findByPhone(phone)
+        if (exists == null) {
+            contactDao.insert(
+                ContactEntity(
+                    phone = phone,
+                    name = phone,
+                    client1c = client1c
+                )
+            )
+            return
+        }
+
+        if (exists.client1c.isBlank() && client1c.isNotBlank()) {
+            contactDao.updateClient1c(exists.id, client1c)
         }
     }
 
@@ -222,8 +264,6 @@ class CallRepository(
         if (reminderValue.isBlank()) return ""
         return reminderValue.substringAfter("|", reminderValue).trim()
     }
-
-    fun normalizePhone(phone: String): String = phone.filter { it.isDigit() }.takeLast(10)
 
     private data class SyncFingerprint(
         val phone: String,

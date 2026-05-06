@@ -9,7 +9,6 @@ import com.example.calltrack.data.local.CallEntity
 import com.example.calltrack.data.local.CommentEntity
 import com.example.calltrack.data.local.ContactEntity
 import com.example.calltrack.data.local.ReminderEntity
-import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.data.repository.CallRepository
 
 class MainViewModel(private val repository: CallRepository) : ViewModel() {

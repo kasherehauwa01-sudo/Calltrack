@@ -6,17 +6,12 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
-import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.App
-import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.data.local.CallEntity
 import com.example.calltrack.data.local.CommentEntity
 import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.databinding.FragmentContactHistoryBinding
 import com.example.calltrack.ui.main.MainViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -48,7 +43,7 @@ class ContactHistoryFragment : Fragment() {
         when (type) {
             TYPE_CALLS -> {
                 binding.tvTitle.text = "История звонков"
-                loadRemoteCalls(phone)
+                viewModel.observeCallsByPhone(phone).observe(viewLifecycleOwner) { binding.tvHistory.text = formatCalls(it) }
             }
             TYPE_REMINDERS -> {
                 binding.tvTitle.text = "История напоминаний"
@@ -65,26 +60,6 @@ class ContactHistoryFragment : Fragment() {
         if (calls.isEmpty()) return "Нет данных"
         return calls.joinToString("\n") {
             "• ${it.type} | ${dateTimeFormat.format(Date(it.timestamp))} | ${it.duration} сек"
-        }
-    }
-
-    private fun formatRemoteCalls(items: List<CallHistoryItem>): String {
-        if (items.isEmpty()) return "Нет истории"
-        return items.joinToString("\n") {
-            "• ${it.type} | ${it.date} ${it.time} | ${it.duration} сек"
-        }
-    }
-
-    private fun loadRemoteCalls(phone: String) {
-        binding.tvHistory.text = "Загрузка..."
-        lifecycleScope.launch {
-            val result = runCatching {
-                withContext(Dispatchers.IO) { viewModel.loadHistoryFromRemote(phone) }
-            }
-            binding.tvHistory.text = result.fold(
-                onSuccess = { formatRemoteCalls(it) },
-                onFailure = { "Нет интернета или ошибка загрузки" }
-            )
         }
     }
 
