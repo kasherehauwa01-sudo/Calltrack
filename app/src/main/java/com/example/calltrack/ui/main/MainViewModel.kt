@@ -54,7 +54,8 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
 
     suspend fun markOnboardingCompleted() = repository.prefs.setOnboardingCompleted(true)
     suspend fun setManagerName(name: String) = repository.prefs.setManagerName(name)
-    suspend fun sync() = repository.syncPending()
+    // Синхронизацию выполняем только после сохранения результата звонка (saveCallOutcome).
+    suspend fun sync() = Unit
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> = repository.loadHistoryFromRemote(phone)
     suspend fun getHistory(phone: String): List<CallHistoryEntity> = repository.getHistory(phone)
     suspend fun refreshHistory(phone: String) = repository.refreshHistory(phone)

@@ -123,6 +123,7 @@ class CallRepository(
                 )
             )
         }
+        syncPending()
     }
 
 
@@ -199,7 +200,7 @@ class CallRepository(
                             callId = entity.id,
                             date = dateFormat.format(Date(entity.timestamp)),
                             time = timeFormat.format(Date(entity.timestamp)),
-                            phone = entity.phone,
+                            phone = normalizePhone(entity.phone),
                             type = entity.type,
                             duration = entity.duration,
                             manager = managerName,
@@ -215,7 +216,10 @@ class CallRepository(
                         "CallRepository",
                         "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
                     )
+                }.onSuccess {
+                    Log.d("WEBHOOK", "Отправлено: phone=${entity.phone}, id=${entity.id}")
                 }.onFailure {
+                    Log.e("WEBHOOK", "Ошибка отправки: id=${entity.id}", it)
                     Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
                 }
             }

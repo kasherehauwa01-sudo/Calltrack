@@ -84,7 +84,6 @@ class PostCallActivity : BaseActivity() {
                         reminderText.ifBlank { "Перезвонить клиенту" }
                     )
                 }
-                repository.syncPending()
             }
         }
 

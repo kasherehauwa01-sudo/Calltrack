@@ -79,7 +79,6 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
                         reminderText.ifBlank { "Перезвонить клиенту" }
                     )
                 }
-                viewModel.sync()
                 dismissAllowingStateLoss()
             }
         }
