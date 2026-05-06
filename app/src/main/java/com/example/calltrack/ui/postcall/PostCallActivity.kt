@@ -1,14 +1,21 @@
 package com.example.calltrack.ui.postcall
 
+import android.Manifest
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.Intent
+import android.net.Uri
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.text.InputFilter
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.core.widget.doAfterTextChanged
 import com.example.calltrack.App
+import com.example.calltrack.databinding.DialogAddReminderBinding
 import com.example.calltrack.databinding.DialogPostCallBinding
 import com.example.calltrack.reminder.ReminderScheduler
 import com.example.calltrack.ui.base.BaseActivity
@@ -24,6 +31,7 @@ class PostCallActivity : BaseActivity() {
 
     private lateinit var binding: DialogPostCallBinding
     private var reminderAtMillis: Long? = null
+    private var reminderText: String = ""
     private val formatter = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
     private val saveScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -42,27 +50,10 @@ class PostCallActivity : BaseActivity() {
         applyInsets(binding.root, binding.statusBarOverlay)
 
         binding.groupOutcome.setOnCheckedStateChangeListener { _, checkedIds ->
-            val checkedId = checkedIds.firstOrNull() ?: View.NO_ID
-            if (checkedId == View.NO_ID) {
-                binding.cardReminder.visibility = View.GONE
-                updateSaveState()
-                return@setOnCheckedStateChangeListener
-            }
-            animateSelection(checkedId)
-            val isRecall = checkedId == binding.chipOutcomeRecall.id
-            binding.cardReminder.visibility = if (isRecall) View.VISIBLE else View.GONE
-            if (!isRecall) {
-                reminderAtMillis = null
-                binding.tvReminderValue.text = ""
-            }
-            updateSaveState()
-        }
-
-        binding.btnPickReminder.setOnClickListener { pickDateTime() }
-        binding.groupTemp.setOnCheckedStateChangeListener { _, checkedIds ->
             checkedIds.firstOrNull()?.let { animateSelection(it) }
             updateSaveState()
         }
+        binding.btnAddReminder.setOnClickListener { showReminderDialog() }
         binding.etComment.doAfterTextChanged { updateSaveState() }
         binding.rootContent.setOnClickListener { hideKeyboard() }
         binding.etComment.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) hideKeyboard() }
@@ -80,43 +71,57 @@ class PostCallActivity : BaseActivity() {
                 return@setOnClickListener
             }
 
-            if (binding.groupOutcome.checkedChipId == binding.chipOutcomeRecall.id && reminderAtMillis == null) {
-                Toast.makeText(this, "Для тега 'перезвонить' выберите дату и время", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
             finish()
             saveScope.launch {
                 val repository = (application as App).repository
-                repository.saveCallOutcome(callId, phone, contactName, tag, reminderAtMillis, note)
-                reminderAtMillis?.let { ReminderScheduler.schedule(this@PostCallActivity, phone, contactName, it, "Перезвонить клиенту") }
+                repository.saveCallOutcome(callId, phone, contactName, tag, reminderAtMillis, note, reminderText)
+                reminderAtMillis?.let {
+                    ReminderScheduler.schedule(
+                        this@PostCallActivity,
+                        phone,
+                        contactName,
+                        it,
+                        reminderText.ifBlank { "Перезвонить клиенту" }
+                    )
+                }
                 repository.syncPending()
             }
         }
 
         binding.btnCancel.setOnClickListener { finish() }
+        binding.btnCallNow.setOnClickListener { callSubscriberNow() }
     }
 
     private fun buildTag(): String {
-        val temp = when (binding.groupTemp.checkedChipId) {
-            binding.chipHot.id -> "горячий"
-            binding.chipWarm.id -> "тёплый"
-            binding.chipCold.id -> "холодный"
-            else -> ""
-        }
         val outcome = when (binding.groupOutcome.checkedChipId) {
             binding.chipOutcomeDeal.id -> "договорились"
             binding.chipOutcomeDecline.id -> "отказ"
             binding.chipOutcomeRecall.id -> "перезвонить"
             else -> ""
         }
-        return listOf(
-            temp.takeIf { it.isNotBlank() }?.let { "Температура: $it" },
-            outcome.takeIf { it.isNotBlank() }?.let { "Итог: $it" }
-        ).filterNotNull().joinToString("; ")
+        return outcome.takeIf { it.isNotBlank() }?.let { "Итог: $it" }.orEmpty()
     }
 
-    private fun pickDateTime() {
+    private fun showReminderDialog() {
+        val dialogBinding = DialogAddReminderBinding.inflate(layoutInflater)
+        dialogBinding.etReminderText.filters = arrayOf(InputFilter.LengthFilter(100))
+        dialogBinding.etReminderText.setText(reminderText)
+        dialogBinding.tvReminderDate.text = reminderAtMillis?.let { formatter.format(java.util.Date(it)) } ?: "Дата и время не выбраны"
+        dialogBinding.btnPickDate.setOnClickListener { pickDateTime(dialogBinding) }
+
+        AlertDialog.Builder(this)
+            .setTitle("Добавить напоминание")
+            .setView(dialogBinding.root)
+            .setNegativeButton("Отмена", null)
+            .setPositiveButton("Сохранить") { _, _ ->
+                reminderText = dialogBinding.etReminderText.text?.toString().orEmpty().trim()
+                updateReminderPreview()
+                updateSaveState()
+            }
+            .show()
+    }
+
+    private fun pickDateTime(dialogBinding: DialogAddReminderBinding) {
         val now = Calendar.getInstance()
         DatePickerDialog(
             this,
@@ -133,8 +138,7 @@ class PostCallActivity : BaseActivity() {
                             set(Calendar.SECOND, 0)
                         }
                         reminderAtMillis = selected.timeInMillis
-                        binding.tvReminderValue.text = formatter.format(selected.time)
-                        updateSaveState()
+                        dialogBinding.tvReminderDate.text = formatter.format(selected.time)
                     },
                     now.get(Calendar.HOUR_OF_DAY),
                     now.get(Calendar.MINUTE),
@@ -149,11 +153,19 @@ class PostCallActivity : BaseActivity() {
 
     private fun updateSaveState() {
         val hasAnyChange =
-            binding.groupTemp.checkedChipId != View.NO_ID ||
-                binding.groupOutcome.checkedChipId != View.NO_ID ||
+            binding.groupOutcome.checkedChipId != View.NO_ID ||
                 reminderAtMillis != null ||
+                reminderText.isNotBlank() ||
                 !binding.etComment.text.isNullOrBlank()
         binding.btnSave.isEnabled = hasAnyChange
+    }
+
+    private fun updateReminderPreview() {
+        binding.tvReminderValue.text = if (reminderAtMillis == null && reminderText.isBlank()) {
+            ""
+        } else {
+            "Напоминание: ${reminderText.ifBlank { "Без текста" }}\n${formatter.format(java.util.Date(reminderAtMillis ?: System.currentTimeMillis()))}"
+        }
     }
 
     private fun animateSelection(viewId: Int) {
@@ -166,6 +178,19 @@ class PostCallActivity : BaseActivity() {
         val imm = getSystemService(InputMethodManager::class.java)
         imm?.hideSoftInputFromWindow(currentFocus?.windowToken, 0)
         currentFocus?.clearFocus()
+    }
+
+    private fun callSubscriberNow() {
+        val phone = intent.getStringExtra(EXTRA_PHONE).orEmpty().trim()
+        if (phone.isBlank()) {
+            Toast.makeText(this, "Номер телефона не найден", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Нет разрешения на звонок", Toast.LENGTH_SHORT).show()
+            return
+        }
+        startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$phone")))
     }
 
     companion object {

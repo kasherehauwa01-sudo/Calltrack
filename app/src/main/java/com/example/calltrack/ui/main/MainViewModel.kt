@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.asLiveData
 import com.example.calltrack.data.local.CallEntity
+import com.example.calltrack.data.local.CallHistoryEntity
 import com.example.calltrack.data.local.CommentEntity
 import com.example.calltrack.data.local.ContactEntity
 import com.example.calltrack.data.local.ReminderEntity
@@ -35,8 +36,9 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
         contactName: String,
         tag: String,
         reminderMillis: Long?,
-        note: String
-    ) = repository.saveCallOutcome(callId, phone, contactName, tag, reminderMillis, note)
+        note: String,
+        reminderMessage: String = "Перезвонить"
+    ) = repository.saveCallOutcome(callId, phone, contactName, tag, reminderMillis, note, reminderMessage)
 
 
 
@@ -54,6 +56,8 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     suspend fun setManagerName(name: String) = repository.prefs.setManagerName(name)
     suspend fun sync() = repository.syncPending()
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> = repository.loadHistoryFromRemote(phone)
+    suspend fun getHistory(phone: String): List<CallHistoryEntity> = repository.getHistory(phone)
+    suspend fun refreshHistory(phone: String) = repository.refreshHistory(phone)
 
     class Factory(private val repository: CallRepository) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {

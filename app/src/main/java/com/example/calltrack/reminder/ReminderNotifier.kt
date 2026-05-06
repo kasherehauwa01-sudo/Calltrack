@@ -3,8 +3,11 @@ package com.example.calltrack.reminder
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.example.calltrack.R
@@ -15,9 +18,21 @@ object ReminderNotifier {
 
     fun show(context: Context, phone: String, name: String, message: String) {
         val manager = context.getSystemService(NotificationManager::class.java)
+        val soundUri = resolveSoundUri(context)
+        val vibrationPattern = longArrayOf(0, 250, 180, 250)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Напоминания", NotificationManager.IMPORTANCE_HIGH)
+                NotificationChannel(CHANNEL_ID, "Напоминания", NotificationManager.IMPORTANCE_HIGH).apply {
+                    enableVibration(true)
+                    setVibrationPattern(vibrationPattern)
+                    setSound(
+                        soundUri,
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    )
+                }
             )
         }
 
@@ -49,11 +64,19 @@ object ReminderNotifier {
             .setContentText(if (message.isBlank()) name.ifBlank { phone } else message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setSound(soundUri)
+            .setVibrate(vibrationPattern)
             .addAction(0, "Открыть карточку клиента", openCardPending)
             .addAction(0, "Позвонить", callPending)
             .setContentIntent(openCardPending)
             .build()
 
         manager.notify(("reminder" + phone).hashCode(), notification)
+    }
+
+    private fun resolveSoundUri(context: Context): Uri {
+        val resId = context.resources.getIdentifier("voice", "raw", context.packageName)
+        if (resId != 0) return Uri.parse("android.resource://${context.packageName}/$resId")
+        return RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
     }
 }

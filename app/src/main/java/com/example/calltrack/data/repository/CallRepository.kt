@@ -5,6 +5,8 @@ import android.util.Log
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.data.local.CallDao
 import com.example.calltrack.data.local.CallEntity
+import com.example.calltrack.data.local.CallHistoryDao
+import com.example.calltrack.data.local.CallHistoryEntity
 import com.example.calltrack.data.local.CommentDao
 import com.example.calltrack.data.local.CommentEntity
 import com.example.calltrack.data.local.ContactDao
@@ -26,6 +28,7 @@ class CallRepository(
     private val contactDao: ContactDao,
     private val reminderDao: ReminderDao,
     private val commentDao: CommentDao,
+    private val callHistoryDao: CallHistoryDao,
     private val webhookApi: WebhookApi,
     context: Context
 ) {
@@ -48,7 +51,30 @@ class CallRepository(
     }
 
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> {
-        return emptyList()
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return emptyList()
+        val separator = if (BuildConfig.WEBHOOK_URL.contains("?")) "&" else "?"
+        val url = "${BuildConfig.WEBHOOK_URL}${separator}phone=$normalizedPhone"
+        return runCatching { webhookApi.loadHistory(url) }
+            .onFailure { Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it) }
+            .getOrElse { emptyList() }
+    }
+
+    suspend fun getHistory(phone: String): List<CallHistoryEntity> {
+        val normalized = normalizePhone(phone)
+        val cached = callHistoryDao.getByPhone(normalized)
+        if (cached.isNotEmpty()) return cached
+
+        val remote = loadHistoryFromRemote(normalized)
+        callHistoryDao.insertAll(remote.map { it.toEntity(normalized) })
+        return callHistoryDao.getByPhone(normalized)
+    }
+
+    suspend fun refreshHistory(phone: String) {
+        val normalized = normalizePhone(phone)
+        val remote = loadHistoryFromRemote(normalized)
+        callHistoryDao.deleteByPhone(normalized)
+        callHistoryDao.insertAll(remote.map { it.toEntity(normalized) })
     }
 
     suspend fun saveCall(call: CallEntity): Long {
@@ -72,11 +98,15 @@ class CallRepository(
         contactName: String,
         tag: String,
         reminderMillis: Long?,
-        note: String
+        note: String,
+        reminderMessage: String = "Перезвонить"
     ) {
         ensureContact(phone)
-        val reminderText = reminderMillis?.let { "${dateFormat.format(Date(it))} ${timeFormat.format(Date(it))}" }.orEmpty()
-        callDao.updateOutcome(callId, note, tag, reminderText)
+        val reminderValue = reminderMillis?.let {
+            val dateTime = "${dateFormat.format(Date(it))} ${timeFormat.format(Date(it))}"
+            if (reminderMessage.isBlank()) dateTime else "$dateTime | $reminderMessage"
+        }.orEmpty()
+        callDao.updateOutcome(callId, note, tag, reminderValue)
 
         if (note.isNotBlank()) {
             commentDao.insert(CommentEntity(phone = phone, text = note))
@@ -87,7 +117,7 @@ class CallRepository(
                 ReminderEntity(
                     phone = phone,
                     contactName = contactName,
-                    message = "Перезвонить",
+                    message = reminderMessage.ifBlank { "Перезвонить" },
                     remindAt = reminderMillis,
                     status = "Активно"
                 )
@@ -189,38 +219,6 @@ class CallRepository(
                     Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
                 }
             }
-
-            groupedPending.values.forEach { duplicates ->
-                val entity = duplicates.first()
-                runCatching {
-                    val clientName = findClientName(entity.phone)
-                    val reminderText = extractReminderText(entity.reminder)
-                    webhookApi.sendCall(
-                        BuildConfig.WEBHOOK_URL,
-                        WebhookRequest(
-                            callId = entity.id,
-                            date = dateFormat.format(Date(entity.timestamp)),
-                            time = timeFormat.format(Date(entity.timestamp)),
-                            phone = entity.phone,
-                            type = entity.type,
-                            duration = entity.duration,
-                            manager = managerName,
-                            note = entity.note,
-                            tag = entity.tag,
-                            reminder = entity.reminder,
-                            reminderText = reminderText,
-                            client = clientName
-                        )
-                    )
-                    callDao.markUploaded(duplicates.map { it.id })
-                    Log.d(
-                        "CallRepository",
-                        "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
-                    )
-                }.onFailure {
-                    Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
-                }
-            }
         }
     }
 
@@ -247,6 +245,25 @@ class CallRepository(
     private fun extractReminderText(reminderValue: String): String {
         if (reminderValue.isBlank()) return ""
         return reminderValue.substringAfter("|", reminderValue).trim()
+    }
+
+    fun normalizePhone(phone: String): String = phone.filter { it.isDigit() }.takeLast(10)
+
+    private fun CallHistoryItem.toEntity(phone: String): CallHistoryEntity {
+        return CallHistoryEntity(
+            phone = phone,
+            date = date,
+            time = time,
+            type = type,
+            duration = duration,
+            manager = manager,
+            note = note,
+            tag = tag,
+            reminder = reminder,
+            reminderText = reminderText,
+            client = client,
+            updatedAt = System.currentTimeMillis()
+        )
     }
 
     private data class SyncFingerprint(

@@ -36,18 +36,13 @@ import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
+import java.io.File
 
 class MainActivity : BaseActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var prefsManager: PrefsManager
     private var apkDownloadId: Long = -1L
-    private val httpClient = OkHttpClient()
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
@@ -55,10 +50,9 @@ class MainActivity : BaseActivity() {
     private val permissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { updateWarningState() }
-    private val unknownAppsLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            // callback можно оставить пустым
-        }
+    private val unknownAppsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { updateWarningState() }
     private val downloadCompleteReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
@@ -135,24 +129,15 @@ class MainActivity : BaseActivity() {
     private fun startApkUpdateDownload() {
         lifecycleScope.launch {
             Toast.makeText(this@MainActivity, "Проверяем наличие новой версии…", Toast.LENGTH_SHORT).show()
-            val latestApkUrl = resolveLatestApkUrl()
-            if (latestApkUrl.isNullOrBlank()) {
-                Toast.makeText(
-                    this@MainActivity,
-                    "Не удалось найти свежий APK в облаке",
-                    Toast.LENGTH_LONG
-                ).show()
-                return@launch
-            }
-
             val manager = getSystemService(DownloadManager::class.java)
-            val request = DownloadManager.Request(Uri.parse(latestApkUrl))
+            val request = DownloadManager.Request(Uri.parse(RELEASE_APK_URL))
                 .setTitle("Обновление Calltrack")
                 .setDescription("Загрузка новой версии приложения")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setAllowedOverMetered(true)
                 .setAllowedOverRoaming(true)
                 .setMimeType("application/vnd.android.package-archive")
+                .addRequestHeader("Accept", "application/vnd.android.package-archive")
                 .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, APK_FILE_NAME)
 
             apkDownloadId = manager.enqueue(request)
@@ -160,73 +145,10 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    private suspend fun resolveLatestApkUrl(): String? = withContext(Dispatchers.IO) {
-        // 1) Пытаемся получить список файлов через API папки Mail.ru.
-        val apiUrl = "https://cloud.mail.ru/api/v2/folder?weblink=$MAIL_PUBLIC_WEBLINK"
-        val apiBody = httpGet(apiUrl)
-        val fromApi = runCatching { parseLatestApkUrlFromApi(apiBody) }.getOrNull()
-        if (!fromApi.isNullOrBlank()) return@withContext fromApi
-
-        // 2) Fallback: парсим HTML страницы и ищем apk-ссылки.
-        val html = httpGet(MAIL_PUBLIC_URL)
-        parseLatestApkUrlFromHtml(html)
-    }
-
-    private fun parseLatestApkUrlFromApi(body: String?): String? {
-        if (body.isNullOrBlank()) return null
-        val root = JSONObject(body)
-        val list = root.optJSONObject("body")?.optJSONArray("list") ?: return null
-
-        var bestUrl: String? = null
-        var bestMtime = Long.MIN_VALUE
-        var bestName = ""
-
-        for (i in 0 until list.length()) {
-            val item = list.optJSONObject(i) ?: continue
-            val itemType = item.optString("type")
-            if (itemType != "file") continue
-
-            val name = item.optString("name")
-            if (!name.endsWith(".apk", ignoreCase = true)) continue
-
-            val mtime = item.optLong("mtime", 0L)
-            val direct = item.optString("url").takeIf { it.startsWith("http") }
-            val weblink = item.optString("weblink").trim('/')
-            val fallbackUrl = if (weblink.isNotBlank()) "https://cloud.mail.ru/public/$weblink?download=1" else null
-            val candidateUrl = direct ?: fallbackUrl ?: continue
-
-            if (mtime > bestMtime || (mtime == bestMtime && name > bestName)) {
-                bestMtime = mtime
-                bestName = name
-                bestUrl = candidateUrl
-            }
-        }
-        return bestUrl
-    }
-
-    private fun parseLatestApkUrlFromHtml(html: String?): String? {
-        if (html.isNullOrBlank()) return null
-        val regex = Regex("""https:\\/\\/[^"\\]+\.apk[^"\\]*""")
-        val matches = regex.findAll(html).map { it.value.replace("\\/", "/") }.toList()
-        return matches.lastOrNull()
-    }
-
-    private fun httpGet(url: String): String? {
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", "Mozilla/5.0")
-            .build()
-        return runCatching {
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                response.body?.string()
-            }
-        }.getOrNull()
-    }
-
     private fun installDownloadedApk(downloadId: Long) {
         val manager = getSystemService(DownloadManager::class.java)
         val query = DownloadManager.Query().setFilterById(downloadId)
+        var localUri: String? = null
         manager.query(query)?.use { cursor ->
             if (!cursor.moveToFirst()) return
             val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
@@ -234,12 +156,19 @@ class MainActivity : BaseActivity() {
                 Toast.makeText(this, "Не удалось загрузить обновление", Toast.LENGTH_SHORT).show()
                 return
             }
+            localUri = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
         }
 
-        val apkUri = manager.getUriForDownloadedFile(downloadId) ?: run {
+        val apkFile = localUri?.let { Uri.parse(it).path }?.let { File(it) }
+        if (apkFile == null || !apkFile.exists()) {
             Toast.makeText(this, "Файл обновления не найден", Toast.LENGTH_SHORT).show()
             return
         }
+        val apkUri = FileProvider.getUriForFile(
+            this,
+            "$packageName.fileprovider",
+            apkFile
+        )
 
         val installIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(apkUri, "application/vnd.android.package-archive")
@@ -366,8 +295,8 @@ class MainActivity : BaseActivity() {
 
     companion object {
         const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
-        private const val MAIL_PUBLIC_URL = "https://cloud.mail.ru/public/tY9v/KjTZ37U7u"
-        private const val MAIL_PUBLIC_WEBLINK = "tY9v/KjTZ37U7u"
-        private const val APK_FILE_NAME = "calltrack-update.apk"
+        private const val RELEASE_APK_URL =
+            "https://github.com/kasherehauwa01-sudo/Calltrack/releases/download/v05-05-26-01/CallTrack-1.0.apk"
+        private const val APK_FILE_NAME = "update.apk"
     }
 }
