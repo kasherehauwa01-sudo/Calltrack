@@ -23,7 +23,11 @@ abstract class BaseActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(v.paddingLeft, bars.top, v.paddingRight, bars.bottom)
-            statusBarOverlay?.layoutParams = statusBarOverlay.layoutParams.apply { height = bars.top }
+            statusBarOverlay?.let { overlay ->
+                overlay.layoutParams = overlay.layoutParams.apply {
+                    height = bars.top
+                }
+            }
             insets
         }
     }
