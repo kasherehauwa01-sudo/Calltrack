@@ -240,26 +240,6 @@ class CallRepository(
         }
     }
 
-    private suspend fun ensureContact(phone: String) {
-        if (phone.isBlank() || phone == "Неизвестно") return
-        val client1c = clientDirectory.findClientName(phone)
-        val exists = contactDao.findByPhone(phone)
-        if (exists == null) {
-            contactDao.insert(
-                ContactEntity(
-                    phone = phone,
-                    name = phone,
-                    client1c = client1c
-                )
-            )
-            return
-        }
-
-        if (exists.client1c.isBlank() && client1c.isNotBlank()) {
-            contactDao.updateClient1c(exists.id, client1c)
-        }
-    }
-
     private fun extractReminderText(reminderValue: String): String {
         if (reminderValue.isBlank()) return ""
         return reminderValue.substringAfter("|", reminderValue).trim()
