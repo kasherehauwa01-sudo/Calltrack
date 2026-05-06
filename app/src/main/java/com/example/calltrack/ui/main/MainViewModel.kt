@@ -36,8 +36,9 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
         contactName: String,
         tag: String,
         reminderMillis: Long?,
-        note: String
-    ) = repository.saveCallOutcome(callId, phone, contactName, tag, reminderMillis, note)
+        note: String,
+        reminderMessage: String = "Перезвонить"
+    ) = repository.saveCallOutcome(callId, phone, contactName, tag, reminderMillis, note, reminderMessage)
 
 
 
