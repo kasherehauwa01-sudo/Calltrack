@@ -9,7 +9,7 @@ data class CallHistoryItem(
     @SerializedName("type") val type: String = "",
     @SerializedName("duration") val duration: String = "",
     @SerializedName("manager") val manager: String = "",
-    @SerializedName("note") val note: String = "",
+    @SerializedName("note") val comment: String = "",
     @SerializedName("tag") val tag: String = "",
     @SerializedName("reminder") val reminder: String = "",
     @SerializedName("reminder_text") val reminderText: String = "",
