@@ -4,7 +4,7 @@ import com.google.gson.annotations.SerializedName
 
 data class WebhookRequest(
     @SerializedName("call_id")
-    val callId: Long,
+    val callId: String,
     @SerializedName("date")
     val date: String,
     @SerializedName("time")

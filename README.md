@@ -108,7 +108,7 @@ function doPost(e) {
   var lastRow = sheet.getLastRow();
   var targetRow = 0;
   var idColumn = (headerIndex["ID"] || 11) + 1;
-  if (callId && lastRow > 1) {
+  if (callId && callId !== "" && lastRow > 1) {
     var ids = sheet.getRange(2, idColumn, lastRow - 1, 1).getValues();
     for (var i = 0; i < ids.length; i++) {
       if (String(ids[i][0]) === callId) {
@@ -118,7 +118,9 @@ function doPost(e) {
     }
   }
 
-  if (targetRow > 0) {
+  Logger.log("callId=" + callId + ", targetRow=" + targetRow);
+
+  if (targetRow > 0 && callId !== "") {
     sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
   } else {
     sheet.appendRow(rowValues);
@@ -171,7 +173,7 @@ buildConfigField "String", "CLIENT_DIRECTORY_SHEET_GIDS", '"0,123456789"'
 POST JSON:
 ```json
 {
-  "call_id": 12345,
+  "call_id": "12345_1714300000000",
   "date": "20.04.26",
   "time": "14:35",
   "phone": "+79999999999",
@@ -187,7 +189,7 @@ POST JSON:
 ```
 
 Поля:
-- `call_id` — внутренний id звонка в локальной БД. Используется скриптом для обновления **той же строки** вместо добавления новой.
+- `call_id` — уникальный идентификатор звонка в формате `<id>_<timestamp>`. Используется скриптом для обновления **той же строки** вместо добавления новой.
 - `date` — дата звонка в формате `дд.мм.гг`.
 - `time` — время звонка в формате `чч:мм`.
 - `phone` — номер телефона.

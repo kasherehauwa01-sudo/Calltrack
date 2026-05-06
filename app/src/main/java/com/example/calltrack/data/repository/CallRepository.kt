@@ -197,7 +197,7 @@ class CallRepository(
                     webhookApi.sendCall(
                         BuildConfig.WEBHOOK_URL,
                         WebhookRequest(
-                            callId = entity.id,
+                            callId = "${entity.id}_${entity.timestamp}",
                             date = dateFormat.format(Date(entity.timestamp)),
                             time = timeFormat.format(Date(entity.timestamp)),
                             phone = normalizePhone(entity.phone),
