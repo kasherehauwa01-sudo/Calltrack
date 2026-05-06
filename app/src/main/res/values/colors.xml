@@ -1,7 +1,15 @@
 <resources>
-    <color name="purple_500">#6200EE</color>
-    <color name="purple_700">#3700B3</color>
-    <color name="teal_200">#03DAC5</color>
-    <color name="black">#000000</color>
+    <color name="primary">#22C55E</color>
+    <color name="background">#F5F6F8</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="on_background">#111111</color>
+    <color name="on_surface">#222222</color>
+    <color name="textPrimary">#111111</color>
+    <color name="textSecondary">#8E8E93</color>
+    <color name="buttonColor">#22C55E</color>
+    <color name="buttonTextColor">#FFFFFF</color>
+    <color name="hintColor">#777777</color>
+    <color name="successColor">#16A34A</color>
     <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
 </resources>
