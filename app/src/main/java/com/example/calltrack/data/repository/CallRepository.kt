@@ -47,6 +47,10 @@ class CallRepository(
         return clientName
     }
 
+    suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> {
+        return emptyList()
+    }
+
     suspend fun saveCall(call: CallEntity): Long {
         ensureContact(call.phone)
         val duplicate = callDao.findRecentDuplicate(
