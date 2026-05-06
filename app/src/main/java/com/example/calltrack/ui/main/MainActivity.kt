@@ -17,12 +17,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.data.repository.PrefsManager
 import com.example.calltrack.service.CallTrackingService
+import com.example.calltrack.service.CallUiEventBus
 import com.example.calltrack.ui.calls.CallListFragment
 import com.example.calltrack.ui.base.BaseActivity
 import com.example.calltrack.ui.contacts.ContactsFragment
@@ -76,6 +79,7 @@ class MainActivity : BaseActivity() {
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
+                requestUnknownAppsPermissionIfNeeded()
                 openFragment(OnboardingFragment.newInstance())
                 binding.bottomNav.visibility = android.view.View.GONE
             } else {
@@ -314,11 +318,23 @@ class MainActivity : BaseActivity() {
     }
 
     private fun updateWarningState() {
-        binding.tvWarning.text = if (!hasAllPermissions()) {
-            "Не выданы все разрешения"
-        } else {
-            ""
+        val messages = buildList {
+            if (!hasAllPermissions()) add("Не выданы все разрешения")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+                add("Разрешите установку из неизвестных источников")
+            }
         }
+        binding.tvWarning.text = messages.joinToString("\n")
+    }
+
+    private fun requestUnknownAppsPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (packageManager.canRequestPackageInstalls()) return
+        val intent = Intent(
+            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+            Uri.parse("package:$packageName")
+        )
+        unknownAppsLauncher.launch(intent)
     }
 
     private fun startTrackingService() {
