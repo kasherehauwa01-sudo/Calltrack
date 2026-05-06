@@ -120,24 +120,7 @@ class ContactHistoryFragment : Fragment() {
     private fun formatRemoteCallsFromCache(items: List<CallHistoryEntity>): String {
         if (items.isEmpty()) return "Нет истории"
         return items.joinToString("\n") {
-            "• ${it.type} | ${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.duration} сек"
-        }
-    }
-
-    private fun normalizeDate(date: String): String {
-        val parts = date.split(".")
-        if (parts.size == 3 && parts[2].length == 2) {
-            return "${parts[0]}.${parts[1]}.20${parts[2]}"
-        }
-        return date
-    }
-
-    private fun normalizeTime(time: String): String {
-        val parts = time.split(":")
-        return when (parts.size) {
-            2 -> "${parts[0]}:${parts[1]}:00"
-            3 -> time
-            else -> time
+            "• ${it.type} | ${it.date} ${it.time} | ${it.duration} сек"
         }
     }
 

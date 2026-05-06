@@ -98,15 +98,11 @@ class CallRepository(
         contactName: String,
         tag: String,
         reminderMillis: Long?,
-        note: String,
-        reminderMessage: String = "Перезвонить"
+        note: String
     ) {
         ensureContact(phone)
-        val reminderValue = reminderMillis?.let {
-            val dateTime = "${dateFormat.format(Date(it))} ${timeFormat.format(Date(it))}"
-            if (reminderMessage.isBlank()) dateTime else "$dateTime | $reminderMessage"
-        }.orEmpty()
-        callDao.updateOutcome(callId, note, tag, reminderValue)
+        val reminderText = reminderMillis?.let { "${dateFormat.format(Date(it))} ${timeFormat.format(Date(it))}" }.orEmpty()
+        callDao.updateOutcome(callId, note, tag, reminderText)
 
         if (note.isNotBlank()) {
             commentDao.insert(CommentEntity(phone = phone, text = note))
@@ -117,7 +113,7 @@ class CallRepository(
                 ReminderEntity(
                     phone = phone,
                     contactName = contactName,
-                    message = reminderMessage.ifBlank { "Перезвонить" },
+                    message = "Перезвонить",
                     remindAt = reminderMillis,
                     status = "Активно"
                 )
