@@ -86,6 +86,8 @@ class CallTrackingService : Service() {
         lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
         val callId = repo.saveCall(entity)
+        runCatching { repo.syncPending() }
+            .onFailure { Log.e("CallTrackingService", "Ошибка syncPending после saveCall id=$callId", it) }
         if (shouldShowPostCallPrompt(entity.type)) {
             val contactName = resolveContactName(entity.phone)
             showPostCallNow(callId, entity.phone, contactName)
