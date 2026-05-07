@@ -25,8 +25,6 @@
   <div class="wrap">
     <h1>📞 Дашборд звонков</h1>
     <div class="toolbar card">
-      <label>API URL (Google Apps Script):</label>
-      <input id="apiUrl" style="flex:1;min-width:260px" placeholder="https://script.google.com/macros/s/.../exec" readonly />
       <button id="loadBtn">Загрузить</button>
     </div>
 
@@ -45,11 +43,8 @@
 const API_URL='https://script.google.com/macros/s/AKfycbwEP9pkD2KaQ4UhtekoamYzwYXwlc_Ld0ReEI42U2I5ScB6AGtPhXTHx9FhIWjt6U2BEw/exec';
 const state={charts:{}};
 const kpiEl=document.getElementById('kpi');
-const apiInput=document.getElementById('apiUrl');
 const loadBtn=document.getElementById('loadBtn');
 const statusMessage=document.getElementById('statusMessage');
-
-apiInput.value=API_URL;
 
 function parseDurationSec(v){
   if(v==null) return 0;
@@ -105,7 +100,7 @@ function renderCharts(a){
 }
 
 async function loadData(){
-  const url=apiInput.value.trim();
+  const url=API_URL;
   statusMessage.style.display='block';
   statusMessage.textContent='Загрузка данных...';
 
