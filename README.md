@@ -70,18 +70,61 @@ Android-приложение для корпоративных устройст�
 function doPost(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = JSON.parse(e.postData.contents);
+  var comment = data.comment || data.note || "";
+  var reminderText = data.reminder_text || data.reminderText || "";
+  var callId = String(data.call_id || "");
 
-  sheet.appendRow([
-    data.date,
-    data.time,
-    data.phone,
-    data.type,
-    data.duration,
-    data.manager,
-    data.comment,
-    data.tag,
-    data.reminder
-  ]);
+  // Сопоставляем данные по названиям колонок, а не по фиксированному порядку.
+  // Это защищает от "съезда" значений по колонкам.
+  var header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var headerIndex = {};
+  for (var h = 0; h < header.length; h++) {
+    headerIndex[String(header[h]).trim()] = h;
+  }
+
+  var rowValues = new Array(header.length).fill("");
+  function put(colName, value) {
+    var idx = headerIndex[colName];
+    if (idx === undefined) return;
+    rowValues[idx] = value;
+  }
+
+  put("Дата", data.date || "");
+  put("Время", data.time || "");
+  put("Номер телефона", data.phone || "");
+  put("Тип звонка", data.type || "");
+  put("Длительность", data.duration || "");
+  put("Менеджер", data.manager || "");
+  put("Комментарий", comment);
+  put("Тег", data.tag || "");
+  put("Напоминание", data.reminder || "");
+  put("Текст напоминания", reminderText);
+  put("Клиент", data.client || "");
+  put("ID", callId);
+
+  // Ищем уже существующую строку по call_id в колонке L (12-я колонка).
+  // Это позволяет обновлять ту же строку после заполнения "Результат звонка",
+  // а не добавлять новую.
+  var lastRow = sheet.getLastRow();
+  var targetRow = 0;
+  var idColumn = (headerIndex["ID"] || 11) + 1;
+  if (callId && callId !== "" && lastRow > 1) {
+    var ids = sheet.getRange(2, idColumn, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === callId) {
+        targetRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  Logger.log("callId=" + callId + ", targetRow=" + targetRow);
+
+  if (targetRow > 0 && callId !== "") {
+    sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
+  } else {
+    sheet.appendRow(rowValues);
+  }
 
   return ContentService.createTextOutput("ok");
 }
@@ -100,34 +143,64 @@ buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/A
 ```
 на ваш реальный URL.
 
+### Шаг 5. Связать 2 таблицы-справочника клиентов (поиск Телефон → Клиент)
+Приложение читает справочник клиентов напрямую из Google Sheets (CSV export) и ищет номер в колонке **Телефон**.
+Если номер найден — берёт значение из колонки **Клиент** и отправляет его в основной CallTrack webhook.
+
+1. Откройте таблицу-справочник:
+   `https://docs.google.com/spreadsheets/d/1Wl4UXI_x0a7A0iPYuW_ZRlrf3xEdVKMnOALi9p6J_Mc/edit`
+2. Убедитесь, что у вас есть **2 листа** (или больше), где есть колонки с точными заголовками:
+   - `Телефон`
+   - `Клиент`
+3. Для каждого листа возьмите `gid`:
+   - откройте нужный лист;
+   - в URL будет параметр `gid=...` (например `gid=0`).
+4. В `app/build.gradle` укажите ID таблицы и список gid через запятую:
+```gradle
+buildConfigField "String", "CLIENT_DIRECTORY_SPREADSHEET_ID", '"1Wl4UXI_x0a7A0iPYuW_ZRlrf3xEdVKMnOALi9p6J_Mc"'
+buildConfigField "String", "CLIENT_DIRECTORY_SHEET_GIDS", '"0,123456789"'
+```
+5. Пересоберите приложение.
+
+Важно:
+- порядок gid задаёт приоритет поиска (сначала первый gid, потом второй);
+- сравнение номеров делается после нормализации (только цифры, последние 10);
+- если клиент не найден, в webhook уходит `"-"` в поле `client`.
+
 ---
 
 ## 5. Формат данных
 POST JSON:
 ```json
 {
+  "call_id": "12345_1714300000000",
   "date": "20.04.26",
   "time": "14:35",
   "phone": "+79999999999",
   "type": "Исходящий",
   "duration": 120,
   "manager": "Иванов Иван",
-  "comment": "",
+  "note": "",
   "tag": "",
-  "reminder": ""
+  "reminder": "",
+  "reminder_text": "",
+  "client": "ООО Ромашка"
 }
 ```
 
 Поля:
+- `call_id` — уникальный идентификатор звонка в формате `<id>_<timestamp>`. Используется скриптом для обновления **той же строки** вместо добавления новой.
 - `date` — дата звонка в формате `дд.мм.гг`.
 - `time` — время звонка в формате `чч:мм`.
 - `phone` — номер телефона.
 - `type` — тип звонка (`Входящий`, `Исходящий`, `Пропущенный`, `Неотвеченный`).
 - `duration` — длительность в секундах.
 - `manager` — ФИО менеджера (сохраняется при первом запуске на экране «Авторизация»).
-- `comment` — комментарий.
+- `note` — комментарий.
 - `tag` — тег.
 - `reminder` — напоминание.
+- `reminder_text` — текст напоминания.
+- `client` — клиент из справочника.
 
 ---
 
