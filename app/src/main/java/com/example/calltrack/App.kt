@@ -14,6 +14,10 @@ class App : Application() {
         val db = CallDatabase.getInstance(this)
         repository = CallRepository(
             callDao = db.callDao(),
+            contactDao = db.contactDao(),
+            reminderDao = db.reminderDao(),
+            commentDao = db.commentDao(),
+            callHistoryDao = db.callHistoryDao(),
             webhookApi = ApiFactory.createWebhookApi(),
             context = this
         )
