@@ -130,7 +130,7 @@ class ContactHistoryFragment : Fragment() {
             .take(20)
         if (latestCalls.isEmpty()) return "Нет истории"
         return latestCalls.joinToString("\n") {
-            "• ${it.type} | ${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.duration} сек"
+            "• ${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.type} | ${formatDuration(it.duration)}"
         }
     }
 
@@ -154,6 +154,13 @@ class ContactHistoryFragment : Fragment() {
     private fun parseHistoryDateTime(date: String, time: String): Long {
         val normalized = "${normalizeDate(date)} ${normalizeTime(time)}"
         return runCatching { historySortFormat.parse(normalized)?.time ?: 0L }.getOrDefault(0L)
+    }
+
+    private fun formatDuration(duration: String): String {
+        val totalSeconds = duration.toLongOrNull() ?: return duration
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return "%d.%02d".format(minutes, seconds)
     }
 
     private fun formatReminders(reminders: List<ReminderEntity>): String {
