@@ -1,10 +1,6 @@
 package com.example.calltrack.ui.contactcard
 
 import android.os.Bundle
-import android.text.SpannableStringBuilder
-import android.text.Spanned
-import android.text.style.ForegroundColorSpan
-import android.text.style.StyleSpan
 import android.widget.TextView
 import android.view.LayoutInflater
 import android.view.View
@@ -25,8 +21,6 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.TimeUnit
-import android.graphics.Typeface
 import com.google.android.material.card.MaterialCardView
 
 class ContactHistoryFragment : Fragment() {
@@ -40,8 +34,6 @@ class ContactHistoryFragment : Fragment() {
 
     private val dateTimeFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
     private val historySortFormat = SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
-    private val dayFormat = SimpleDateFormat("dd MMMM", Locale("ru"))
-    private val timeShortFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentContactHistoryBinding.inflate(inflater, container, false)
@@ -59,7 +51,7 @@ class ContactHistoryFragment : Fragment() {
         when (type) {
             TYPE_CALLS -> {
                 binding.tvTitle.text = "История звонков"
-                loadStyledCallHistory(phone)
+                loadRemoteCalls(phone)
             }
             TYPE_REMINDERS -> {
                 binding.tvTitle.text = "История напоминаний"
@@ -79,21 +71,11 @@ class ContactHistoryFragment : Fragment() {
         }
     }
 
-    private fun loadStyledCallHistory(phone: String) {
-        renderHistoryCards(listOf("Загрузка..."))
-        lifecycleScope.launch {
-            val cached = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-            renderCallCards(cached)
-            launch {
-                val result = runCatching { withContext(Dispatchers.IO) { viewModel.refreshHistory(phone) } }
-                if (result.isSuccess) {
-                    val updated = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-                    renderCallCards(updated)
-                } else if (cached.isEmpty()) {
-                    renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
-                }
-            }
-        }
+    private fun loadRemoteCalls(phone: String) {
+        loadCachedThenRefresh(
+            phone = phone,
+            onSuccess = { formatRemoteCallsFromCache(it) }
+        )
     }
 
     private fun loadRemoteReminders(phone: String) {
@@ -144,65 +126,13 @@ class ContactHistoryFragment : Fragment() {
         }
     }
 
-    private fun renderCallCards(items: List<CallHistoryEntity>) {
+    private fun formatRemoteCallsFromCache(items: List<CallHistoryEntity>): List<String> {
         val latestCalls = items
             .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
             .take(20)
-        if (latestCalls.isEmpty()) {
-            renderHistoryCards(listOf("Нет истории"))
-            return
-        }
-        binding.historyContainer.removeAllViews()
-
-        var currentDay = ""
-        latestCalls.forEachIndexed { index, call ->
-            val callTime = parseHistoryDateTime(call.date, call.time)
-            val dayLabel = dayLabel(callTime)
-            if (dayLabel != currentDay) {
-                currentDay = dayLabel
-                val dayView = TextView(requireContext()).apply {
-                    text = dayLabel
-                    textSize = 15f
-                    setTextColor(resources.getColor(com.example.calltrack.R.color.textSecondary, null))
-                    setPadding(6, if (index == 0) 2 else 12, 6, 8)
-                }
-                binding.historyContainer.addView(dayView)
-            }
-
-            val card = MaterialCardView(requireContext()).apply {
-                radius = 14f
-                cardElevation = 2f
-                setCardBackgroundColor(resources.getColor(android.R.color.white, null))
-                val lp = ViewGroup.MarginLayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-                if (index > 0) lp.topMargin = 10
-                layoutParams = lp
-            }
-            val content = TextView(requireContext()).apply {
-                val (icon, color) = typeStyle(call.type)
-                val title = "$icon ${call.type}"
-                val duration = formatDurationVerbose(call.duration)
-                val dateTime = "${humanDate(callTime)}, ${timeShortFormat.format(Date(callTime))}"
-                val topLine = "$title    ⏱ $duration"
-                val value = SpannableStringBuilder("$topLine\n$dateTime")
-                value.setSpan(StyleSpan(Typeface.BOLD), 0, topLine.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                value.setSpan(ForegroundColorSpan(resources.getColor(color, null)), 0, title.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                value.setSpan(
-                    ForegroundColorSpan(resources.getColor(com.example.calltrack.R.color.textSecondary, null)),
-                    topLine.length + 1,
-                    value.length,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
-                text = value
-                textSize = 15f
-                setTextColor(resources.getColor(com.example.calltrack.R.color.textPrimary, null))
-                setPadding(28, 22, 28, 22)
-                setLineSpacing(8f, 1f)
-            }
-            card.addView(content)
-            binding.historyContainer.addView(card)
+        if (latestCalls.isEmpty()) return listOf("Нет истории")
+        return latestCalls.map {
+            "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.type} | ${formatDuration(it.duration)}"
         }
     }
 
@@ -239,36 +169,6 @@ class ContactHistoryFragment : Fragment() {
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
         return "%d.%02d".format(minutes, seconds)
-    }
-
-    private fun formatDurationVerbose(duration: String): String {
-        val totalSeconds = duration.toLongOrNull() ?: return duration
-        val minutes = totalSeconds / 60
-        val seconds = totalSeconds % 60
-        return if (minutes > 0) "${minutes} мин ${seconds} сек" else "${seconds} сек"
-    }
-
-    private fun dayLabel(timestamp: Long): String {
-        val nowDays = TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis())
-        val itemDays = TimeUnit.MILLISECONDS.toDays(timestamp)
-        return when (nowDays - itemDays) {
-            0L -> "Сегодня"
-            1L -> "Вчера"
-            else -> dayFormat.format(Date(timestamp))
-        }
-    }
-
-    private fun humanDate(timestamp: Long): String {
-        return SimpleDateFormat("dd MMMM", Locale("ru")).format(Date(timestamp))
-    }
-
-    private fun typeStyle(type: String): Pair<String, Int> {
-        return when (type.lowercase(Locale.getDefault())) {
-            "входящий" -> "📥" to com.example.calltrack.R.color.buttonColor
-            "исходящий" -> "📤" to android.R.color.holo_blue_dark
-            "пропущенный", "неотвеченный", "сброшенный" -> "📵" to android.R.color.holo_red_dark
-            else -> "📞" to com.example.calltrack.R.color.textPrimary
-        }
     }
 
     private fun renderHistoryCards(lines: List<String>) {
