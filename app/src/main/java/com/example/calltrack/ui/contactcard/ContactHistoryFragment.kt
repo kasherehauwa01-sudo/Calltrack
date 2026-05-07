@@ -1,6 +1,7 @@
 package com.example.calltrack.ui.contactcard
 
 import android.os.Bundle
+import android.widget.TextView
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -20,6 +21,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.google.android.material.card.MaterialCardView
 
 class ContactHistoryFragment : Fragment() {
 
@@ -84,8 +86,8 @@ class ContactHistoryFragment : Fragment() {
                     .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
                     .filter { it.reminder.isNotBlank() || it.reminderText.isNotBlank() }
                     .take(20)
-                if (reminders.isEmpty()) "Нет истории" else reminders.joinToString("\n") {
-                    "• ${it.date} ${it.time} | ${it.reminder.ifBlank { it.reminderText }}"
+                if (reminders.isEmpty()) listOf("Нет истории") else reminders.map {
+                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.reminder.ifBlank { it.reminderText }}"
                 }
             }
         )
@@ -99,42 +101,46 @@ class ContactHistoryFragment : Fragment() {
                     .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
                     .filter { it.note.isNotBlank() || it.tag.isNotBlank() }
                     .take(20)
-                if (comments.isEmpty()) "Нет истории" else comments.joinToString("\n") {
-                    "• ${it.date} ${it.time} | ${it.note.ifBlank { it.tag }}"
+                if (comments.isEmpty()) listOf("Нет истории") else comments.map {
+                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.note.ifBlank { it.tag }}"
                 }
             }
         )
     }
 
-    private fun loadCachedThenRefresh(phone: String, onSuccess: (List<CallHistoryEntity>) -> String) {
-        binding.tvHistory.text = "Загрузка..."
+    private fun loadCachedThenRefresh(phone: String, onSuccess: (List<CallHistoryEntity>) -> List<String>) {
+        renderHistoryCards(listOf("Загрузка..."))
         lifecycleScope.launch {
             val cached = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-            binding.tvHistory.text = onSuccess(cached)
+            renderHistoryCards(onSuccess(cached))
 
             launch {
                 val result = runCatching { withContext(Dispatchers.IO) { viewModel.refreshHistory(phone) } }
                 if (result.isSuccess) {
                     val updated = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-                    binding.tvHistory.text = onSuccess(updated)
+                    renderHistoryCards(onSuccess(updated))
                 } else if (cached.isEmpty()) {
-                    binding.tvHistory.text = "Нет интернета или ошибка загрузки"
+                    renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
                 }
             }
         }
     }
 
-    private fun formatRemoteCallsFromCache(items: List<CallHistoryEntity>): String {
+    private fun formatRemoteCallsFromCache(items: List<CallHistoryEntity>): List<String> {
         val latestCalls = items
             .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
             .take(20)
-        if (latestCalls.isEmpty()) return "Нет истории"
-        return latestCalls.joinToString("\n") {
-            "• ${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.type} | ${formatDuration(it.duration)}"
+        if (latestCalls.isEmpty()) return listOf("Нет истории")
+        return latestCalls.map {
+            "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.type} | ${formatDuration(it.duration)}"
         }
     }
 
     private fun normalizeDate(date: String): String {
+        val iso = Regex("""(\d{4})-(\d{2})-(\d{2})""").find(date)?.groupValues
+        if (iso != null) {
+            return "${iso[3]}.${iso[2]}.${iso[1]}"
+        }
         val parts = date.split(".")
         if (parts.size == 3 && parts[2].length == 2) {
             return "${parts[0]}.${parts[1]}.20${parts[2]}"
@@ -143,6 +149,8 @@ class ContactHistoryFragment : Fragment() {
     }
 
     private fun normalizeTime(time: String): String {
+        val hhmmss = Regex("""(\d{2}):(\d{2}):(\d{2})""").find(time)?.value
+        if (hhmmss != null) return hhmmss
         val parts = time.split(":")
         return when (parts.size) {
             2 -> "${parts[0]}:${parts[1]}:00"
@@ -161,6 +169,31 @@ class ContactHistoryFragment : Fragment() {
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
         return "%d.%02d".format(minutes, seconds)
+    }
+
+    private fun renderHistoryCards(lines: List<String>) {
+        binding.historyContainer.removeAllViews()
+        lines.forEachIndexed { index, line ->
+            val card = MaterialCardView(requireContext()).apply {
+                radius = 14f
+                cardElevation = 1f
+                setCardBackgroundColor(resources.getColor(com.example.calltrack.R.color.background, null))
+                val lp = ViewGroup.MarginLayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+                if (index > 0) lp.topMargin = 10
+                layoutParams = lp
+            }
+            val text = TextView(requireContext()).apply {
+                textSize = 18f
+                setTextColor(resources.getColor(com.example.calltrack.R.color.textPrimary, null))
+                setPadding(24, 18, 24, 18)
+                text = line
+            }
+            card.addView(text)
+            binding.historyContainer.addView(card)
+        }
     }
 
     private fun formatReminders(reminders: List<ReminderEntity>): String {

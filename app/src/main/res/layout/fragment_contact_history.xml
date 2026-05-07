@@ -47,13 +47,11 @@
             android:layout_height="match_parent"
             android:padding="16dp">
 
-            <TextView
-                android:id="@+id/tvHistory"
+            <LinearLayout
+                android:id="@+id/historyContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:lineSpacingExtra="4dp"
-                android:textColor="@color/textPrimary"
-                android:textSize="19sp" />
+                android:orientation="vertical" />
         </ScrollView>
     </com.google.android.material.card.MaterialCardView>
 
