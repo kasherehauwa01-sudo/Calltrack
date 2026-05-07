@@ -153,6 +153,7 @@ class CallRepository(
         val call = callDao.getById(callId) ?: return
         callDao.updateOutcome(callId, text, call.tag, call.reminder)
         commentDao.insert(CommentEntity(phone = phone, text = text))
+        syncPending()
     }
 
     suspend fun saveReminderForCall(callId: Long, phone: String, contactName: String, text: String, remindAt: Long) {
@@ -169,6 +170,7 @@ class CallRepository(
                 status = "Активно"
             )
         )
+        syncPending()
     }
 
     suspend fun syncPending() {
