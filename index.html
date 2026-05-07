@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Дашборд звонков</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{--bg:#f5f7fb;--card:#fff;--text:#1f2937;--muted:#6b7280;--in:#22c55e;--out:#3b82f6;--miss:#ef4444;--shadow:0 6px 20px rgba(15,23,42,.08)}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:1200px;margin:0 auto;padding:16px}
+    h1{margin:0 0 12px}
+    .grid{display:grid;gap:12px}
+    .kpi{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:14px}
+    .card{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:14px}
+    .kpi .val{font-size:28px;font-weight:700}.label{color:var(--muted);font-size:13px}
+    .charts{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+    .chartBox{height:330px}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+    input{padding:8px 10px;border:1px solid #d1d5db;border-radius:10px}
+    button{padding:8px 12px;border:0;border-radius:10px;background:#111827;color:#fff;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>📞 Дашборд звонков</h1>
+    <div class="toolbar card">
+      <label>API URL (Google Apps Script):</label>
+      <input id="apiUrl" style="flex:1;min-width:260px" placeholder="https://script.google.com/macros/s/.../exec" />
+      <button id="loadBtn">Загрузить</button>
+    </div>
+
+    <section class="grid kpi" id="kpi"></section>
+
+    <section class="grid charts">
+      <div class="card"><h3>Звонки по дням</h3><div class="chartBox"><canvas id="callsByDay"></canvas></div></div>
+      <div class="card"><h3>Типы звонков</h3><div class="chartBox"><canvas id="typesPie"></canvas></div></div>
+      <div class="card"><h3>Звонки по менеджерам</h3><div class="chartBox"><canvas id="managersBar"></canvas></div></div>
+    </section>
+  </div>
+
+<script>
+const state={charts:{}};
+const kpiEl=document.getElementById('kpi');
+const apiInput=document.getElementById('apiUrl');
+const loadBtn=document.getElementById('loadBtn');
+
+function parseDurationSec(v){
+  if(v==null) return 0;
+  if(typeof v==='number') return v;
+  const s=String(v).trim();
+  if(/^\d+$/.test(s)) return Number(s);
+  const mmss=s.split(/[.:]/); if(mmss.length===2) return Number(mmss[0])*60+Number(mmss[1]);
+  return 0;
+}
+function fmtSec(sec){const m=Math.floor(sec/60),s=sec%60; return `${m}:${String(s).padStart(2,'0')}`;}
+
+function renderKpi(k){
+  const items=[
+    ['📞',k.total,'Всего звонков'],['📥',k.incoming,'Входящие'],['📤',k.outgoing,'Исходящие'],['❌',k.missed,'Пропущенные'],
+    ['⏱',fmtSec(k.avgDuration),'Средняя длительность'],['🔥',`${k.recallRate}%`,'Перезвонить']
+  ];
+  kpiEl.innerHTML=items.map(([i,v,l])=>`<div class='card'><div class='val'>${i} ${v}</div><div class='label'>${l}</div></div>`).join('');
+}
+
+function upsertChart(id,config){ if(state.charts[id]) state.charts[id].destroy(); state.charts[id]=new Chart(document.getElementById(id),config); }
+
+function aggregate(rows){
+  const byDay={}, byType={'Входящий':0,'Исходящий':0,'Пропущенный':0}, byManager={};
+  let total=0,incoming=0,outgoing=0,missed=0,sumSec=0,recall=0,decline=0;
+  rows.forEach(r=>{
+    const date=(r.date||r['Дата']||'').slice(0,10);
+    const type=(r.type||r['Тип звонка']||'').trim();
+    const manager=(r.manager||r['Менеджер']||'Не указан').trim()||'Не указан';
+    const tag=(r.tag||r['Тег']||'').toLowerCase();
+    const sec=parseDurationSec(r.duration||r['Длительность']);
+    total++; sumSec+=sec;
+    byDay[date]=(byDay[date]||0)+1;
+    byManager[manager]=(byManager[manager]||0)+1;
+    if(type==='Входящий'){incoming++;byType['Входящий']++;}
+    else if(type==='Исходящий'){outgoing++;byType['Исходящий']++;}
+    else {missed++;byType['Пропущенный']++;}
+    if(tag.includes('перезвонить')) recall++;
+    if(tag.includes('отказ')) decline++;
+  });
+  return {
+    kpi:{total,incoming,outgoing,missed,avgDuration:total?Math.round(sumSec/total):0,recallRate:total?Math.round((recall/total)*100):0},
+    byDay,byType,byManager
+  };
+}
+
+function renderCharts(a){
+  const dayLabels=Object.keys(a.byDay).sort();
+  upsertChart('callsByDay',{type:'line',data:{labels:dayLabels,datasets:[{label:'Звонки',data:dayLabels.map(d=>a.byDay[d]),borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.2)',tension:.3,fill:true}]},options:{responsive:true,maintainAspectRatio:false}});
+  const tLabels=Object.keys(a.byType);
+  upsertChart('typesPie',{type:'pie',data:{labels:tLabels,datasets:[{data:tLabels.map(k=>a.byType[k]),backgroundColor:['#22c55e','#3b82f6','#ef4444']}]},options:{responsive:true,maintainAspectRatio:false}});
+  const managers=Object.entries(a.byManager).sort((x,y)=>y[1]-x[1]);
+  upsertChart('managersBar',{type:'bar',data:{labels:managers.map(x=>x[0]),datasets:[{label:'Звонки',data:managers.map(x=>x[1]),backgroundColor:'#6366f1'}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y'}});
+}
+
+async function loadData(){
+  const url=apiInput.value.trim(); if(!url){alert('Укажите API URL');return;}
+  const res=await fetch(url); const data=await res.json();
+  const rows=Array.isArray(data)?data:(data.items||[]);
+  const agg=aggregate(rows); renderKpi(agg.kpi); renderCharts(agg);
+}
+loadBtn.addEventListener('click',()=>loadData().catch(e=>alert('Ошибка загрузки: '+e.message)));
+</script>
+</body>
+</html>
