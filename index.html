@@ -26,9 +26,11 @@
     <h1>📞 Дашборд звонков</h1>
     <div class="toolbar card">
       <label>API URL (Google Apps Script):</label>
-      <input id="apiUrl" style="flex:1;min-width:260px" placeholder="https://script.google.com/macros/s/.../exec" />
+      <input id="apiUrl" style="flex:1;min-width:260px" placeholder="https://script.google.com/macros/s/.../exec" readonly />
       <button id="loadBtn">Загрузить</button>
     </div>
+
+    <div id="statusMessage" class="card" style="display:none;margin-bottom:12px"></div>
 
     <section class="grid kpi" id="kpi"></section>
 
@@ -40,10 +42,14 @@
   </div>
 
 <script>
+const API_URL='https://script.google.com/macros/s/AKfycbwEP9pkD2KaQ4UhtekoamYzwYXwlc_Ld0ReEI42U2I5ScB6AGtPhXTHx9FhIWjt6U2BEw/exec';
 const state={charts:{}};
 const kpiEl=document.getElementById('kpi');
 const apiInput=document.getElementById('apiUrl');
 const loadBtn=document.getElementById('loadBtn');
+const statusMessage=document.getElementById('statusMessage');
+
+apiInput.value=API_URL;
 
 function parseDurationSec(v){
   if(v==null) return 0;
@@ -99,12 +105,34 @@ function renderCharts(a){
 }
 
 async function loadData(){
-  const url=apiInput.value.trim(); if(!url){alert('Укажите API URL');return;}
-  const res=await fetch(url); const data=await res.json();
-  const rows=Array.isArray(data)?data:(data.items||[]);
-  const agg=aggregate(rows); renderKpi(agg.kpi); renderCharts(agg);
+  const url=apiInput.value.trim();
+  statusMessage.style.display='block';
+  statusMessage.textContent='Загрузка данных...';
+
+  try{
+    const res=await fetch(url);
+    if(!res.ok) throw new Error('HTTP error');
+    const data=await res.json();
+    const rows=Array.isArray(data)?data:(data.items||[]);
+
+    if(!Array.isArray(rows) || rows.length===0){
+      kpiEl.innerHTML='';
+      statusMessage.textContent='Нет данных для отображения';
+      return;
+    }
+
+    const agg=aggregate(rows);
+    renderKpi(agg.kpi);
+    renderCharts(agg);
+    statusMessage.style.display='none';
+  }catch(e){
+    statusMessage.style.display='none';
+    alert('Ошибка загрузки данных');
+  }
 }
-loadBtn.addEventListener('click',()=>loadData().catch(e=>alert('Ошибка загрузки: '+e.message)));
+
+loadBtn.addEventListener('click',()=>loadData());
+window.onload=()=>loadData();
 </script>
 </body>
 </html>
