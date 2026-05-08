@@ -7,7 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root{--bg:#f5f7fb;--card:#fff;--text:#1f2937;--muted:#6b7280;--in:#22c55e;--out:#3b82f6;--miss:#ef4444;--shadow:0 6px 20px rgba(15,23,42,.08)}
-    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#eef2ff 0%,#f8fafc 35%,#f5f7fb 100%);color:var(--text)}
     .wrap{max-width:1200px;margin:0 auto;padding:16px}
     h1{margin:0 0 12px}
     .grid{display:grid;gap:12px}
@@ -25,10 +25,10 @@
   <div class="wrap">
     <h1>📞 Дашборд звонков</h1>
     <div class="toolbar card">
-      <label>API URL (Google Apps Script):</label>
-      <input id="apiUrl" style="flex:1;min-width:260px" placeholder="https://script.google.com/macros/s/.../exec" />
       <button id="loadBtn">Загрузить</button>
     </div>
+
+    <div id="statusMessage" class="card" style="display:none;margin-bottom:12px"></div>
 
     <section class="grid kpi" id="kpi"></section>
 
@@ -40,10 +40,11 @@
   </div>
 
 <script>
+const API_URL='https://script.google.com/macros/s/AKfycbwEP9pkD2KaQ4UhtekoamYzwYXwlc_Ld0ReEI42U2I5ScB6AGtPhXTHx9FhIWjt6U2BEw/exec';
 const state={charts:{}};
 const kpiEl=document.getElementById('kpi');
-const apiInput=document.getElementById('apiUrl');
 const loadBtn=document.getElementById('loadBtn');
+const statusMessage=document.getElementById('statusMessage');
 
 function parseDurationSec(v){
   if(v==null) return 0;
@@ -99,12 +100,34 @@ function renderCharts(a){
 }
 
 async function loadData(){
-  const url=apiInput.value.trim(); if(!url){alert('Укажите API URL');return;}
-  const res=await fetch(url); const data=await res.json();
-  const rows=Array.isArray(data)?data:(data.items||[]);
-  const agg=aggregate(rows); renderKpi(agg.kpi); renderCharts(agg);
+  const url=API_URL;
+  statusMessage.style.display='block';
+  statusMessage.textContent='Загрузка данных...';
+
+  try{
+    const res=await fetch(url);
+    if(!res.ok) throw new Error('HTTP error');
+    const data=await res.json();
+    const rows=Array.isArray(data)?data:(data.items||[]);
+
+    if(!Array.isArray(rows) || rows.length===0){
+      kpiEl.innerHTML='';
+      statusMessage.textContent='Нет данных для отображения';
+      return;
+    }
+
+    const agg=aggregate(rows);
+    renderKpi(agg.kpi);
+    renderCharts(agg);
+    statusMessage.style.display='none';
+  }catch(e){
+    statusMessage.style.display='none';
+    alert('Ошибка загрузки данных');
+  }
 }
-loadBtn.addEventListener('click',()=>loadData().catch(e=>alert('Ошибка загрузки: '+e.message)));
+
+loadBtn.addEventListener('click',()=>loadData());
+window.onload=()=>loadData();
 </script>
 </body>
 </html>
