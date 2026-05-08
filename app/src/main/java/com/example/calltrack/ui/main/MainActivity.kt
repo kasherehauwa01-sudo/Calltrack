@@ -20,11 +20,13 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.data.repository.PrefsManager
 import com.example.calltrack.service.CallTrackingService
+import com.example.calltrack.service.CallUiEventBus
 import com.example.calltrack.ui.calls.CallListFragment
 import com.example.calltrack.ui.base.BaseActivity
 import com.example.calltrack.ui.contacts.ContactsFragment
@@ -32,6 +34,7 @@ import com.example.calltrack.ui.contactcard.ContactCardFragment
 import com.example.calltrack.ui.contactcard.ContactHistoryFragment
 import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 
