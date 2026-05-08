@@ -86,8 +86,11 @@ class CallTrackingService : Service() {
         lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
         val callId = repo.saveCall(entity)
+        Log.d("WEBHOOK", "Пытаемся отправить данные в Google Sheets")
         runCatching { repo.syncPending() }
-            .onFailure { Log.e("CallTrackingService", "Ошибка syncPending после saveCall id=$callId", it) }
+            .onFailure {
+                Log.e("WEBHOOK", "Ошибка отправки webhook", it)
+            }
         if (shouldShowPostCallPrompt(entity.type)) {
             val contactName = resolveContactName(entity.phone)
             showPostCallNow(callId, entity.phone, contactName)
