@@ -7,6 +7,9 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.example.calltrack.databinding.ItemCallBinding
 import com.example.calltrack.databinding.ItemCallDateHeaderBinding
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class CallAdapter(
     private val onItemClick: (RecentCallListItem.CallRow) -> Unit,
@@ -52,10 +55,13 @@ class CallAdapter(
         private val onCommentClick: (RecentCallListItem.CallRow) -> Unit,
         private val onReminderClick: (RecentCallListItem.CallRow) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
+        private val timeFormat = SimpleDateFormat("HH.mm.ss", Locale.getDefault())
+
         fun bind(item: RecentCallListItem.CallRow) {
             binding.tvName.text = item.contactName
             binding.tvPhone.text = item.call.phone
-            binding.tvType.text = "${item.call.type} • ${item.call.duration} сек"
+            val callTime = timeFormat.format(Date(item.call.timestamp))
+            binding.tvType.text = "${item.call.type} • ${item.call.duration} сек • $callTime"
             binding.tvNote.text = item.call.note
             binding.root.setOnClickListener { onItemClick(item) }
             binding.btnComment.setOnClickListener { onCommentClick(item) }
