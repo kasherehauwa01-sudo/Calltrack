@@ -43,7 +43,6 @@
 document.addEventListener('DOMContentLoaded', () => {
 const state={charts:{}};
 const kpiEl=document.getElementById('kpi');
-const apiInput=document.getElementById('apiUrl');
 const loadBtn=document.getElementById('loadBtn');
 
 function parseDurationSec(v){
@@ -137,14 +136,13 @@ function renderCharts(a){
 }
 
 async function loadData(){
-  const url=apiInput.value.trim(); if(!url){alert('Укажите API URL');return;}
+  const url = "https://script.google.com/macros/s/AKfycbxTZ0CxeU2C9VLBnJeBH-0E_5bQqSes4ffekvQGR5J55iTXbBiCXeDA787bFDmu6xtEow/exec";
   const res=await fetch(url); const data=await res.json();
   const rows=Array.isArray(data)?data:(data.items||[]);
   const agg=aggregate(rows); renderKpi(agg.kpi); renderCharts(agg);
 }
 loadBtn.addEventListener('click',()=>loadData().catch(e=>alert('Ошибка загрузки: '+e.message)));
 
-apiInput.value = "https://script.google.com/macros/s/AKfycbxTZ0CxeU2C9VLBnJeBH-0E_5bQqSes4ffekvQGR5J55iTXbBiCXeDA787bFDmu6xtEow/exec";
 
 loadData().catch(e => console.error("Ошибка загрузки:", e));
 });
