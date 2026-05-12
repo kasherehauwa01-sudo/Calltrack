@@ -6,29 +6,53 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.example.calltrack.databinding.ItemCallBinding
+import com.example.calltrack.databinding.ItemCallDateHeaderBinding
 
 class CallAdapter(
-    private val onItemClick: (RecentCallItem) -> Unit,
-    private val onCommentClick: (RecentCallItem) -> Unit,
-    private val onReminderClick: (RecentCallItem) -> Unit
-) : ListAdapter<RecentCallItem, CallAdapter.CallViewHolder>(Diff()) {
+    private val onItemClick: (RecentCallListItem.CallRow) -> Unit,
+    private val onCommentClick: (RecentCallListItem.CallRow) -> Unit,
+    private val onReminderClick: (RecentCallListItem.CallRow) -> Unit
+) : ListAdapter<RecentCallListItem, RecyclerView.ViewHolder>(Diff()) {
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CallViewHolder {
-        val binding = ItemCallBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return CallViewHolder(binding, onItemClick, onCommentClick, onReminderClick)
+    override fun getItemViewType(position: Int): Int {
+        return when (getItem(position)) {
+            is RecentCallListItem.Header -> VIEW_TYPE_HEADER
+            is RecentCallListItem.CallRow -> VIEW_TYPE_CALL
+        }
     }
 
-    override fun onBindViewHolder(holder: CallViewHolder, position: Int) = holder.bind(getItem(position))
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        return if (viewType == VIEW_TYPE_HEADER) {
+            val binding = ItemCallDateHeaderBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+            HeaderViewHolder(binding)
+        } else {
+            val binding = ItemCallBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+            CallViewHolder(binding, onItemClick, onCommentClick, onReminderClick)
+        }
+    }
 
-    fun getItemAt(position: Int): RecentCallItem = getItem(position)
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        when (val item = getItem(position)) {
+            is RecentCallListItem.Header -> (holder as HeaderViewHolder).bind(item)
+            is RecentCallListItem.CallRow -> (holder as CallViewHolder).bind(item)
+        }
+    }
+
+    fun getItemAt(position: Int): RecentCallListItem = getItem(position)
+
+    class HeaderViewHolder(private val binding: ItemCallDateHeaderBinding) : RecyclerView.ViewHolder(binding.root) {
+        fun bind(item: RecentCallListItem.Header) {
+            binding.tvHeader.text = item.title
+        }
+    }
 
     class CallViewHolder(
         private val binding: ItemCallBinding,
-        private val onItemClick: (RecentCallItem) -> Unit,
-        private val onCommentClick: (RecentCallItem) -> Unit,
-        private val onReminderClick: (RecentCallItem) -> Unit
+        private val onItemClick: (RecentCallListItem.CallRow) -> Unit,
+        private val onCommentClick: (RecentCallListItem.CallRow) -> Unit,
+        private val onReminderClick: (RecentCallListItem.CallRow) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
-        fun bind(item: RecentCallItem) {
+        fun bind(item: RecentCallListItem.CallRow) {
             binding.tvName.text = item.contactName
             binding.tvPhone.text = item.call.phone
             binding.tvType.text = "${item.call.type} • ${item.call.duration} сек"
@@ -39,8 +63,20 @@ class CallAdapter(
         }
     }
 
-    class Diff : DiffUtil.ItemCallback<RecentCallItem>() {
-        override fun areItemsTheSame(oldItem: RecentCallItem, newItem: RecentCallItem) = oldItem.call.id == newItem.call.id
-        override fun areContentsTheSame(oldItem: RecentCallItem, newItem: RecentCallItem) = oldItem == newItem
+    class Diff : DiffUtil.ItemCallback<RecentCallListItem>() {
+        override fun areItemsTheSame(oldItem: RecentCallListItem, newItem: RecentCallListItem): Boolean {
+            return when {
+                oldItem is RecentCallListItem.Header && newItem is RecentCallListItem.Header -> oldItem.title == newItem.title
+                oldItem is RecentCallListItem.CallRow && newItem is RecentCallListItem.CallRow -> oldItem.call.id == newItem.call.id
+                else -> false
+            }
+        }
+
+        override fun areContentsTheSame(oldItem: RecentCallListItem, newItem: RecentCallListItem) = oldItem == newItem
+    }
+
+    companion object {
+        private const val VIEW_TYPE_HEADER = 0
+        private const val VIEW_TYPE_CALL = 1
     }
 }
