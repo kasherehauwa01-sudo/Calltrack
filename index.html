@@ -137,7 +137,15 @@ function renderCharts(a){
 
 async function loadData(){
   const url = "https://script.google.com/macros/s/AKfycbxTZ0CxeU2C9VLBnJeBH-0E_5bQqSes4ffekvQGR5J55iTXbBiCXeDA787bFDmu6xtEow/exec";
-  const res=await fetch(url); const data=await res.json();
+  const res=await fetch(url);
+  if(!res.ok){
+    const errText = await res.text();
+    throw new Error(`API вернул ${res.status}: ${errText}`);
+  }
+  const data=await res.json();
+  if(data && data.detail === 'Not Found'){
+    throw new Error('API URL недоступен (Not Found). Проверьте deploy Google Apps Script и ссылку /exec.');
+  }
   const rows=Array.isArray(data)?data:(data.items||[]);
   const agg=aggregate(rows); renderKpi(agg.kpi); renderCharts(agg);
 }
