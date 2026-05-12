@@ -86,8 +86,15 @@ class CallTrackingService : Service() {
         lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
         val callId = repo.saveCall(entity)
+        val clientName = repo.findClientName(entity.phone)
+        Log.d("WEBHOOK", "Пытаемся отправить данные в Google Sheets")
         runCatching { repo.syncPending() }
-            .onFailure { Log.e("CallTrackingService", "Ошибка syncPending после saveCall id=$callId", it) }
+            .onFailure {
+                Log.e("WEBHOOK", "Ошибка отправки webhook", it)
+            }
+        if (clientName.isBlank()) {
+            showMissingClientNotification()
+        }
         if (shouldShowPostCallPrompt(entity.type)) {
             val contactName = resolveContactName(entity.phone)
             showPostCallNow(callId, entity.phone, contactName)
@@ -135,6 +142,20 @@ class CallTrackingService : Service() {
             .build()
 
         manager.notify(notificationId, notification)
+    }
+
+    private fun showMissingClientNotification() {
+        val manager = getSystemService(NotificationManager::class.java)
+        val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_clover)
+            .setContentTitle("Клиент не найден")
+            .setContentText("Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(MISSING_CLIENT_NOTIFICATION_ID, notification)
     }
 
     private fun buildPostCallNotificationId(callId: Long): Int {
@@ -260,5 +281,6 @@ class CallTrackingService : Service() {
     companion object {
         private const val POST_CALL_CHANNEL_ID = "postcall"
         private const val POST_CALL_NOTIFICATION_ID_BASE = 1000
+        private const val MISSING_CLIENT_NOTIFICATION_ID = 2001
     }
 }
