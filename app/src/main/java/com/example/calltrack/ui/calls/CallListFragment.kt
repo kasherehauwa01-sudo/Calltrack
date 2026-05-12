@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 class CallListFragment : Fragment() {
@@ -71,7 +72,7 @@ class CallListFragment : Fragment() {
         }
     }
 
-    private fun showCommentDialog(item: RecentCallItem) {
+    private fun showCommentDialog(item: RecentCallListItem.CallRow) {
         val input = EditText(requireContext()).apply {
             hint = "Комментарий"
             filters = arrayOf(InputFilter.LengthFilter(500))
@@ -92,7 +93,7 @@ class CallListFragment : Fragment() {
             .show()
     }
 
-    private fun showReminderDialog(item: RecentCallItem) {
+    private fun showReminderDialog(item: RecentCallListItem.CallRow) {
         val container = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(40, 20, 40, 0)
@@ -162,7 +163,7 @@ class CallListFragment : Fragment() {
             .show()
     }
 
-    private suspend fun resolveCallItems(calls: List<CallEntity>): List<RecentCallItem> = withContext(Dispatchers.IO) {
+    private suspend fun resolveCallItems(calls: List<CallEntity>): List<RecentCallListItem> = withContext(Dispatchers.IO) {
         val nameByPhone = mutableMapOf<String, String>()
         requireContext().contentResolver.query(
             ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
@@ -188,13 +189,48 @@ class CallListFragment : Fragment() {
             }
         }
 
-        calls.map { call ->
+        val rows = calls.map { call ->
             val normalized = normalizePhone(call.phone)
             val short = normalized.takeLast(10)
-            RecentCallItem(
+            RecentCallListItem.CallRow(
                 call = call,
                 contactName = nameByPhone[normalized] ?: nameByPhone[short] ?: call.phone
             )
+        }
+
+        val output = mutableListOf<RecentCallListItem>()
+        var lastHeader: String? = null
+        rows.forEach { item ->
+            val header = buildDateHeader(item.call.timestamp)
+            if (header != lastHeader) {
+                output += RecentCallListItem.Header(header)
+                lastHeader = header
+            }
+            output += item
+        }
+        output
+    }
+
+    private fun buildDateHeader(timestamp: Long): String {
+        val callDate = Calendar.getInstance().apply {
+            timeInMillis = timestamp
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val today = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        val yesterday = (today.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -1) }
+        return when (callDate.timeInMillis) {
+            today.timeInMillis -> "Сегодня"
+            yesterday.timeInMillis -> "Вчера"
+            else -> SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(timestamp))
         }
     }
 
@@ -209,7 +245,14 @@ class CallListFragment : Fragment() {
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
                 val item = adapter.getItemAt(viewHolder.bindingAdapterPosition)
                 adapter.notifyItemChanged(viewHolder.bindingAdapterPosition)
-                makeDirectCall(item.call.phone)
+                if (item is RecentCallListItem.CallRow) {
+                    makeDirectCall(item.call.phone)
+                }
+            }
+
+            override fun getSwipeDirs(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
+                val item = adapter.getItemAt(viewHolder.bindingAdapterPosition)
+                return if (item is RecentCallListItem.Header) 0 else super.getSwipeDirs(recyclerView, viewHolder)
             }
         }
         ItemTouchHelper(callback).attachToRecyclerView(binding.recyclerView)
