@@ -40,6 +40,7 @@
   </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', () => {
 const state={charts:{}};
 const kpiEl=document.getElementById('kpi');
 const apiInput=document.getElementById('apiUrl');
@@ -142,6 +143,11 @@ async function loadData(){
   const agg=aggregate(rows); renderKpi(agg.kpi); renderCharts(agg);
 }
 loadBtn.addEventListener('click',()=>loadData().catch(e=>alert('Ошибка загрузки: '+e.message)));
+
+apiInput.value = "https://script.google.com/macros/s/AKfycbxTZ0CxeU2C9VLBnJeBH-0E_5bQqSes4ffekvQGR5J55iTXbBiCXeDA787bFDmu6xtEow/exec";
+
+loadData().catch(e => console.error("Ошибка загрузки:", e));
+});
 </script>
 </body>
 </html>
