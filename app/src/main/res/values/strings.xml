@@ -8,4 +8,6 @@
     <string name="back">Назад</string>
     <string name="update_app">Обновить приложение</string>
     <string name="update_soon">Скоро здесь появится ссылка на обновление</string>
+    <string name="switch_user">Сменить пользователя</string>
+    <string name="user">Пользователь</string>
 </resources>
