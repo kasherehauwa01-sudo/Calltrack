@@ -16,6 +16,7 @@ import com.example.calltrack.data.repository.CallRepository
 class MainViewModel(private val repository: CallRepository) : ViewModel() {
     val calls = repository.observeCalls().asLiveData()
     val onboardingCompleted = repository.prefs.onboardingCompleted.asLiveData()
+    val managerName = repository.prefs.managerName.asLiveData()
 
     private val _dialNumber = MutableLiveData("")
     val dialNumber: LiveData<String> = _dialNumber

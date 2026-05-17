@@ -27,7 +27,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.databinding.ActivityMainBinding
-import com.example.calltrack.data.repository.PrefsManager
 import com.example.calltrack.service.CallTrackingService
 import com.example.calltrack.service.CallUiEventBus
 import com.example.calltrack.ui.calls.CallListFragment
@@ -44,7 +43,6 @@ import java.io.File
 class MainActivity : BaseActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var prefsManager: PrefsManager
     private var apkDownloadId: Long = -1L
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
@@ -67,7 +65,6 @@ class MainActivity : BaseActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        prefsManager = PrefsManager(this)
         applySavedTheme()
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -117,11 +114,11 @@ class MainActivity : BaseActivity() {
             PopupMenu(this, anchor).apply {
                 menu.add(getString(R.string.about_app))
                 menu.add(getString(R.string.update_app))
-                menu.add(getString(R.string.switch_user))
+                menu.add(getString(R.string.user))
                 setOnMenuItemClickListener { menuItem ->
                     when (menuItem.title) {
                         getString(R.string.about_app) -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
-                        getString(R.string.switch_user) -> showSwitchUserDialog()
+                        getString(R.string.user) -> openFragment(UserFragment.newInstance())
                         else -> startApkUpdateDownload()
                     }
                     true
