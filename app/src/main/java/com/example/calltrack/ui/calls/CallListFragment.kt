@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.text.InputFilter
+import android.util.Log
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
@@ -64,6 +65,13 @@ class CallListFragment : Fragment() {
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = adapter
         attachSwipeToCall()
+
+        // При открытии экрана "Последние" запускаем фоновую синхронизацию звонков с Google Sheets.
+        // syncPending помечает успешно отправленные записи как uploaded во внутреннем кэше (Room).
+        viewLifecycleOwner.lifecycleScope.launch {
+            runCatching { viewModel.sync() }
+                .onFailure { Log.e("WEBHOOK", "Ошибка фоновой синхронизации на экране Последние", it) }
+        }
 
         viewModel.calls.observe(viewLifecycleOwner) { calls ->
             viewLifecycleOwner.lifecycleScope.launch {
