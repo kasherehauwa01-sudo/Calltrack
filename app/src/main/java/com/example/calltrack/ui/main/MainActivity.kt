@@ -12,8 +12,11 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.text.InputFilter
+import android.widget.EditText
 import android.widget.PopupMenu
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatDelegate
@@ -114,15 +117,47 @@ class MainActivity : BaseActivity() {
             PopupMenu(this, anchor).apply {
                 menu.add(getString(R.string.about_app))
                 menu.add(getString(R.string.update_app))
+                menu.add(getString(R.string.switch_user))
                 setOnMenuItemClickListener { menuItem ->
                     when (menuItem.title) {
                         getString(R.string.about_app) -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
+                        getString(R.string.switch_user) -> showSwitchUserDialog()
                         else -> startApkUpdateDownload()
                     }
                     true
                 }
                 show()
             }
+        }
+    }
+
+    private fun showSwitchUserDialog() {
+        lifecycleScope.launch {
+            val currentManager = runCatching { prefsManager.getManagerName() }.getOrDefault("")
+            val input = EditText(this@MainActivity).apply {
+                hint = "Введите ФИО"
+                filters = arrayOf(InputFilter.LengthFilter(120))
+                setText(currentManager)
+                setSelection(text?.length ?: 0)
+            }
+
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle(getString(R.string.switch_user))
+                .setView(input)
+                .setPositiveButton("Сохранить") { dialog, _ ->
+                    val fullName = input.text?.toString()?.trim().orEmpty()
+                    if (fullName.isBlank()) {
+                        Toast.makeText(this@MainActivity, "Поле ФИО обязательно", Toast.LENGTH_SHORT).show()
+                    } else {
+                        lifecycleScope.launch {
+                            viewModel.setManagerName(fullName)
+                            Toast.makeText(this@MainActivity, "Пользователь обновлён", Toast.LENGTH_SHORT).show()
+                        }
+                        dialog.dismiss()
+                    }
+                }
+                .setNegativeButton("Отмена", null)
+                .show()
         }
     }
 
