@@ -30,6 +30,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 class CallTrackingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -49,8 +50,12 @@ class CallTrackingService : Service() {
             return
         }
 
-        // Запоминаем текущую последнюю запись, чтобы не дублировать старые звонки после старта сервиса.
-        lastHandledTimestamp = readLatestCallEntity()?.timestamp ?: 0L
+        // Берём метку последнего УЖЕ сохранённого звонка из локальной БД.
+        // Так мы не пропускаем звонки за сегодня, которые были в CallLog, но ещё не попали в кэш приложения.
+        val repo = (application as App).repository
+        lastHandledTimestamp = runBlocking(Dispatchers.IO) {
+            repo.getLatestSavedCallTimestamp()
+        }
 
         tracker = CallStateTracker(this) { state, _ ->
             when (state) {

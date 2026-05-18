@@ -92,6 +92,8 @@ class CallRepository(
         return callDao.insert(call)
     }
 
+    suspend fun getLatestSavedCallTimestamp(): Long = callDao.getLatestTimestamp() ?: 0L
+
     suspend fun saveCallOutcome(
         callId: Long,
         phone: String,
