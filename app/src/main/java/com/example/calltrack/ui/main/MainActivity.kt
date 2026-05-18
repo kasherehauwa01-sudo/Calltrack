@@ -118,14 +118,15 @@ class MainActivity : BaseActivity() {
     private fun setupSettingsButton() {
         binding.btnSettings.setOnClickListener { anchor ->
             PopupMenu(this, anchor).apply {
-                menu.add(getString(R.string.about_app))
-                menu.add(getString(R.string.update_app))
-                menu.add(getString(R.string.user))
+                menu.add(0, MENU_ABOUT_ID, 0, getString(R.string.about_app))
+                menu.add(0, MENU_UPDATE_ID, 1, getString(R.string.update_app))
+                menu.add(0, MENU_USER_ID, 2, getString(R.string.user))
                 setOnMenuItemClickListener { menuItem ->
-                    when (menuItem.title) {
-                        getString(R.string.about_app) -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
-                        getString(R.string.user) -> openFragment(UserFragment.newInstance())
-                        else -> checkForUpdatesAndPrompt()
+                    when (menuItem.itemId) {
+                        MENU_ABOUT_ID -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
+                        MENU_USER_ID -> openFragment(UserFragment.newInstance())
+                        MENU_UPDATE_ID -> checkForUpdatesAndPrompt()
+                        else -> false
                     }
                     true
                 }
@@ -374,6 +375,9 @@ class MainActivity : BaseActivity() {
 
     companion object {
         const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
+        private const val MENU_ABOUT_ID = 1001
+        private const val MENU_UPDATE_ID = 1002
+        private const val MENU_USER_ID = 1003
         private const val LATEST_RELEASE_API =
             "https://api.github.com/repos/kasherehauwa01-sudo/Calltrack/releases/latest"
         private const val FALLBACK_RELEASE_TAG = "v05-05-26-01"
