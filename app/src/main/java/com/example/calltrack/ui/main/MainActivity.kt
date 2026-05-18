@@ -19,6 +19,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -39,6 +40,9 @@ import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
 
 class MainActivity : BaseActivity() {
@@ -48,6 +52,7 @@ class MainActivity : BaseActivity() {
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
+    private val updateHttpClient = OkHttpClient()
 
     private val permissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -120,7 +125,7 @@ class MainActivity : BaseActivity() {
                     when (menuItem.title) {
                         getString(R.string.about_app) -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
                         getString(R.string.user) -> openFragment(UserFragment.newInstance())
-                        else -> startApkUpdateDownload()
+                        else -> checkForUpdatesAndPrompt()
                     }
                     true
                 }
@@ -129,41 +134,42 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    private fun showSwitchUserDialog() {
+    private fun checkForUpdatesAndPrompt() {
         lifecycleScope.launch {
-            val currentManager = runCatching { prefsManager.getManagerName() }.getOrDefault("")
-            val input = EditText(this@MainActivity).apply {
-                hint = "Введите ФИО"
-                filters = arrayOf(InputFilter.LengthFilter(120))
-                setText(currentManager)
-                setSelection(text?.length ?: 0)
+            Toast.makeText(this@MainActivity, "Проверяем наличие новой версии…", Toast.LENGTH_SHORT).show()
+
+            val latestFromApi = withContext(Dispatchers.IO) { fetchLatestReleaseInfo() }
+            val latest = latestFromApi ?: ReleaseInfo(
+                tag = FALLBACK_RELEASE_TAG,
+                apkUrl = FALLBACK_RELEASE_APK_URL
+            )
+
+            if (latestFromApi == null) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "GitHub API временно недоступен, используем резервный источник",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
+            if (!isRemoteVersionNewer(BuildConfig.VERSION_NAME, latest.tag)) {
+                Toast.makeText(this@MainActivity, "У вас уже актуальная версия", Toast.LENGTH_SHORT).show()
+                return@launch
             }
 
             AlertDialog.Builder(this@MainActivity)
-                .setTitle(getString(R.string.switch_user))
-                .setView(input)
-                .setPositiveButton("Сохранить") { dialog, _ ->
-                    val fullName = input.text?.toString()?.trim().orEmpty()
-                    if (fullName.isBlank()) {
-                        Toast.makeText(this@MainActivity, "Поле ФИО обязательно", Toast.LENGTH_SHORT).show()
-                    } else {
-                        lifecycleScope.launch {
-                            viewModel.setManagerName(fullName)
-                            Toast.makeText(this@MainActivity, "Пользователь обновлён", Toast.LENGTH_SHORT).show()
-                        }
-                        dialog.dismiss()
-                    }
-                }
-                .setNegativeButton("Отмена", null)
+                .setTitle("Найдено обновление")
+                .setMessage("Установить?")
+                .setPositiveButton("Да") { _, _ -> startApkUpdateDownload(latest.apkUrl) }
+                .setNegativeButton("Нет") { _, _ -> binding.bottomNav.selectedItemId = R.id.nav_dial }
                 .show()
         }
     }
 
-    private fun startApkUpdateDownload() {
+    private fun startApkUpdateDownload(apkUrl: String) {
         lifecycleScope.launch {
-            Toast.makeText(this@MainActivity, "Проверяем наличие новой версии…", Toast.LENGTH_SHORT).show()
             val manager = getSystemService(DownloadManager::class.java)
-            val request = DownloadManager.Request(Uri.parse(RELEASE_APK_URL))
+            val request = DownloadManager.Request(Uri.parse(apkUrl))
                 .setTitle("Обновление Calltrack")
                 .setDescription("Загрузка новой версии приложения")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -176,6 +182,46 @@ class MainActivity : BaseActivity() {
             apkDownloadId = manager.enqueue(request)
             Toast.makeText(this@MainActivity, "Началась загрузка обновления", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun fetchLatestReleaseInfo(): ReleaseInfo? {
+        val request = Request.Builder()
+            .url(LATEST_RELEASE_API)
+            .addHeader("Accept", "application/vnd.github+json")
+            .build()
+
+        return runCatching {
+            updateHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val body = response.body?.string().orEmpty()
+                val tag = Regex("\"tag_name\"\s*:\s*\"([^\"]+)\"")
+                    .find(body)
+                    ?.groupValues
+                    ?.get(1)
+                    .orEmpty()
+                val apkUrl = Regex("\"browser_download_url\"\s*:\s*\"([^\"]+\\.apk)\"")
+                    .find(body)
+                    ?.groupValues
+                    ?.get(1)
+                    ?.replace("\\/", "/")
+                    .orEmpty()
+                if (tag.isBlank() || apkUrl.isBlank()) return null
+                ReleaseInfo(tag = tag, apkUrl = apkUrl)
+            }
+        }.getOrNull()
+    }
+
+    private fun isRemoteVersionNewer(current: String, remoteTag: String): Boolean {
+        val currentNums = Regex("\\d+").findAll(current).map { it.value.toInt() }.toList()
+        val remoteNums = Regex("\\d+").findAll(remoteTag).map { it.value.toInt() }.toList()
+        val max = maxOf(currentNums.size, remoteNums.size)
+        for (i in 0 until max) {
+            val c = currentNums.getOrElse(i) { 0 }
+            val r = remoteNums.getOrElse(i) { 0 }
+            if (r > c) return true
+            if (r < c) return false
+        }
+        return false
     }
 
     private fun installDownloadedApk(downloadId: Long) {
@@ -328,8 +374,16 @@ class MainActivity : BaseActivity() {
 
     companion object {
         const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
-        private const val RELEASE_APK_URL =
+        private const val LATEST_RELEASE_API =
+            "https://api.github.com/repos/kasherehauwa01-sudo/Calltrack/releases/latest"
+        private const val FALLBACK_RELEASE_TAG = "v05-05-26-01"
+        private const val FALLBACK_RELEASE_APK_URL =
             "https://github.com/kasherehauwa01-sudo/Calltrack/releases/download/v05-05-26-01/CallTrack-1.0.apk"
         private const val APK_FILE_NAME = "update.apk"
     }
+
+    private data class ReleaseInfo(
+        val tag: String,
+        val apkUrl: String
+    )
 }
