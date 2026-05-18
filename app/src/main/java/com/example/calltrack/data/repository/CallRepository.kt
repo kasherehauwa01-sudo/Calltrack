@@ -92,6 +92,8 @@ class CallRepository(
         return callDao.insert(call)
     }
 
+    suspend fun getLatestSavedCallTimestamp(): Long = callDao.getLatestTimestamp() ?: 0L
+
     suspend fun saveCallOutcome(
         callId: Long,
         phone: String,
@@ -193,6 +195,7 @@ class CallRepository(
 
             groupedPending.values.forEach { duplicates ->
                 val entity = duplicates.first()
+                Log.d("WEBHOOK", "Отправка webhook: $entity")
                 runCatching {
                     val clientName = findClientName(entity.phone)
                     val reminderText = extractReminderText(entity.reminder)
@@ -221,6 +224,7 @@ class CallRepository(
                 }.onSuccess {
                     Log.d("WEBHOOK", "Отправлено: phone=${entity.phone}, id=${entity.id}")
                 }.onFailure {
+                    Log.e("WEBHOOK", "Ошибка при вызове webhookApi.sendCall", it)
                     Log.e("WEBHOOK", "Ошибка отправки: id=${entity.id}", it)
                     Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
                 }
