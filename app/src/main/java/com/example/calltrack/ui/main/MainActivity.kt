@@ -29,6 +29,7 @@ import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.data.repository.PrefsManager
 import com.example.calltrack.databinding.ActivityMainBinding
+import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.service.CallTrackingService
 import com.example.calltrack.service.CallUiEventBus
 import com.example.calltrack.ui.calls.CallListFragment
@@ -121,11 +122,13 @@ class MainActivity : BaseActivity() {
                 menu.add(0, MENU_ABOUT_ID, 0, getString(R.string.about_app))
                 menu.add(0, MENU_UPDATE_ID, 1, getString(R.string.update_app))
                 menu.add(0, MENU_USER_ID, 2, getString(R.string.user))
+                menu.add(0, MENU_LOGS_ID, 3, getString(R.string.logs))
                 setOnMenuItemClickListener { menuItem ->
                     when (menuItem.itemId) {
                         MENU_ABOUT_ID -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
                         MENU_USER_ID -> openFragment(UserFragment.newInstance())
                         MENU_UPDATE_ID -> checkForUpdatesAndPrompt()
+                        MENU_LOGS_ID -> startActivity(Intent(this@MainActivity, LogsActivity::class.java))
                         else -> false
                     }
                     true
@@ -137,6 +140,7 @@ class MainActivity : BaseActivity() {
 
     private fun checkForUpdatesAndPrompt() {
         lifecycleScope.launch {
+            AppLogger.log(this@MainActivity, "INFO", "Пользователь запустил проверку обновления")
             Toast.makeText(this@MainActivity, "Проверяем наличие новой версии…", Toast.LENGTH_SHORT).show()
 
             val latestFromApi = withContext(Dispatchers.IO) { fetchLatestReleaseInfo() }
@@ -146,6 +150,7 @@ class MainActivity : BaseActivity() {
             )
 
             if (latestFromApi == null) {
+                AppLogger.log(this@MainActivity, "WARN", "GitHub API недоступен, используем fallback-обновление")
                 Toast.makeText(
                     this@MainActivity,
                     "GitHub API временно недоступен, используем резервный источник",
@@ -154,6 +159,7 @@ class MainActivity : BaseActivity() {
             }
 
             if (!isRemoteVersionNewer(BuildConfig.VERSION_NAME, latest.tag)) {
+                AppLogger.log(this@MainActivity, "INFO", "Обновление не требуется. Текущая версия актуальна")
                 Toast.makeText(this@MainActivity, "У вас уже актуальная версия", Toast.LENGTH_SHORT).show()
                 return@launch
             }
@@ -181,6 +187,7 @@ class MainActivity : BaseActivity() {
                 .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, APK_FILE_NAME)
 
             apkDownloadId = manager.enqueue(request)
+            AppLogger.log(this@MainActivity, "INFO", "Начата загрузка обновления. downloadId=$apkDownloadId, url=$apkUrl")
             Toast.makeText(this@MainActivity, "Началась загрузка обновления", Toast.LENGTH_SHORT).show()
         }
     }
@@ -378,6 +385,7 @@ class MainActivity : BaseActivity() {
         private const val MENU_ABOUT_ID = 1001
         private const val MENU_UPDATE_ID = 1002
         private const val MENU_USER_ID = 1003
+        private const val MENU_LOGS_ID = 1004
         private const val LATEST_RELEASE_API =
             "https://api.github.com/repos/kasherehauwa01-sudo/Calltrack/releases/latest"
         private const val FALLBACK_RELEASE_TAG = "v05-05-26-01"

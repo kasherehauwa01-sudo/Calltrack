@@ -1,0 +1,41 @@
+package com.example.calltrack.ui.main
+
+import android.content.Intent
+import android.os.Bundle
+import android.widget.Toast
+import androidx.core.content.FileProvider
+import com.example.calltrack.databinding.ActivityLogsBinding
+import com.example.calltrack.logging.AppLogger
+import com.example.calltrack.ui.base.BaseActivity
+
+class LogsActivity : BaseActivity() {
+    private lateinit var binding: ActivityLogsBinding
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityLogsBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        applyInsets(binding.root, binding.statusBarOverlay)
+
+        binding.tvLogs.text = AppLogger.readLogs(this)
+        binding.btnBack.setOnClickListener { finish() }
+        binding.btnShare.setOnClickListener { shareLogs() }
+    }
+
+    private fun shareLogs() {
+        val file = AppLogger.logFile(this)
+        if (!file.exists()) {
+            Toast.makeText(this, "Логи пока отсутствуют", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "Логи приложения Calltrack")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(send, "Поделиться логами"))
+    }
+}
