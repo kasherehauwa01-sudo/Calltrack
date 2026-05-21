@@ -37,7 +37,6 @@ class LogsActivity : BaseActivity() {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_TEXT, AppLogger.readLogs(this@LogsActivity))
             putExtra(Intent.EXTRA_SUBJECT, "Логи приложения Calltrack")
             clipData = ClipData.newUri(contentResolver, "app_logs", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
