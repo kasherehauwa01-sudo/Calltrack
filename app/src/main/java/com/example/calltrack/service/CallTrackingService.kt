@@ -93,11 +93,18 @@ class CallTrackingService : Service() {
         val repo = (application as App).repository
         val callId = repo.saveCall(entity)
         val clientName = repo.findClientName(entity.phone)
-        Log.d("WEBHOOK", "Пытаемся отправить данные в Google Sheets")
-        runCatching { repo.syncPending() }
-            .onFailure {
-                Log.e("WEBHOOK", "Ошибка отправки webhook", it)
-            }
+
+        // ВАЖНО: сначала мгновенно сохраняем звонок локально (что сразу обновляет экран "Последние"),
+        // а сетевую синхронизацию запускаем в отдельной фоновой корутине, чтобы интернет/таймауты
+        // не задерживали появление записи в UI.
+        scope.launch {
+            Log.d("WEBHOOK", "Пытаемся отправить данные в Google Sheets")
+            runCatching { repo.syncPending() }
+                .onFailure {
+                    Log.e("WEBHOOK", "Ошибка отправки webhook", it)
+                }
+        }
+
         if (clientName.isBlank()) {
             showMissingClientNotification()
         }
