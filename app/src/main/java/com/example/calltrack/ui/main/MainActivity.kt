@@ -122,13 +122,11 @@ class MainActivity : BaseActivity() {
                 menu.add(0, MENU_ABOUT_ID, 0, getString(R.string.about_app))
                 menu.add(0, MENU_UPDATE_ID, 1, getString(R.string.update_app))
                 menu.add(0, MENU_USER_ID, 2, getString(R.string.user))
-                menu.add(0, MENU_LOGS_ID, 3, getString(R.string.logs))
                 setOnMenuItemClickListener { menuItem ->
                     when (menuItem.itemId) {
                         MENU_ABOUT_ID -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
                         MENU_USER_ID -> openFragment(UserFragment.newInstance())
                         MENU_UPDATE_ID -> checkForUpdatesAndPrompt()
-                        MENU_LOGS_ID -> startActivity(Intent(this@MainActivity, LogsActivity::class.java))
                         else -> false
                     }
                     true
@@ -385,7 +383,6 @@ class MainActivity : BaseActivity() {
         private const val MENU_ABOUT_ID = 1001
         private const val MENU_UPDATE_ID = 1002
         private const val MENU_USER_ID = 1003
-        private const val MENU_LOGS_ID = 1004
         private const val LATEST_RELEASE_API =
             "https://api.github.com/repos/kasherehauwa01-sudo/Calltrack/releases/latest"
         private const val FALLBACK_RELEASE_TAG = "v05-05-26-01"

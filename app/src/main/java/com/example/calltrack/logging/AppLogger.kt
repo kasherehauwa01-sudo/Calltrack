@@ -11,10 +11,12 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 object AppLogger {
     private const val TAG = "APP_LOG"
     private const val LOG_FILE = "app_logs.txt"
+    private val retentionMs = TimeUnit.HOURS.toMillis(4)
     private val tsFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
 
     @Volatile
@@ -39,6 +41,7 @@ object AppLogger {
         runCatching {
             val file = File(context.filesDir, LOG_FILE)
             file.appendText(line)
+            pruneOldEntries(file)
             trimIfTooLarge(file)
         }
         when (level) {
@@ -51,6 +54,7 @@ object AppLogger {
     fun readLogs(context: Context): String {
         val file = File(context.filesDir, LOG_FILE)
         if (!file.exists()) return "Логи пока отсутствуют"
+        runCatching { pruneOldEntries(file) }
         return runCatching { file.readText() }.getOrElse { "Не удалось прочитать лог: ${it.message}" }
     }
 
@@ -98,5 +102,41 @@ object AppLogger {
         val text = file.readText()
         val keep = text.takeLast(maxBytes / 2)
         file.writeText(keep)
+    }
+
+    private fun pruneOldEntries(file: File) {
+        if (!file.exists()) return
+        val lines = file.readLines()
+        if (lines.isEmpty()) return
+
+        val cutoff = System.currentTimeMillis() - retentionMs
+        val kept = mutableListOf<String>()
+        var currentEntry = mutableListOf<String>()
+        var keepCurrent = false
+
+        fun flush() {
+            if (keepCurrent && currentEntry.isNotEmpty()) kept.addAll(currentEntry)
+            currentEntry = mutableListOf()
+            keepCurrent = false
+        }
+
+        lines.forEach { line ->
+            val ts = parseEntryTimestamp(line)
+            if (ts != null) {
+                flush()
+                keepCurrent = ts >= cutoff
+            }
+            currentEntry.add(line)
+        }
+        flush()
+
+        val newText = kept.joinToString("\n").let { if (it.isBlank()) "" else "$it\n" }
+        file.writeText(newText)
+    }
+
+    private fun parseEntryTimestamp(line: String): Long? {
+        if (line.length < 23) return null
+        val prefix = line.substring(0, 23)
+        return runCatching { tsFormat.parse(prefix)?.time }.getOrNull()
     }
 }
