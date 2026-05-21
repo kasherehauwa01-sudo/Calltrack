@@ -1,9 +1,12 @@
 package com.example.calltrack.ui.main
 
+import android.content.Intent
 import android.os.Bundle
-import com.example.calltrack.BuildConfig
 import com.example.calltrack.databinding.ActivityAboutBinding
 import com.example.calltrack.ui.base.BaseActivity
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class AboutActivity : BaseActivity() {
 
@@ -15,9 +18,13 @@ class AboutActivity : BaseActivity() {
         setContentView(binding.root)
         applyInsets(binding.root, binding.statusBarOverlay)
 
-        binding.tvVersionValue.text = BuildConfig.VERSION_NAME
-        binding.tvReleaseDateValue.text = BuildConfig.APP_RELEASE_DATE
+        val updatedAtMillis = packageManager.getPackageInfo(packageName, 0).lastUpdateTime
+        val formatter = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+        binding.tvReleaseDateValue.text = formatter.format(Date(updatedAtMillis))
 
         binding.btnBack.setOnClickListener { finish() }
+        binding.btnOpenLogs.setOnClickListener {
+            startActivity(Intent(this, LogsActivity::class.java))
+        }
     }
 }
