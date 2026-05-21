@@ -76,16 +76,17 @@ class CallTrackingService : Service() {
     }
 
     private suspend fun captureLatestCallWithRetry() {
-        // Стараемся показать post-call максимально быстро после завершения звонка.
-        repeat(10) { attempt ->
+        // На некоторых устройствах CallLog обновляется с задержкой, поэтому ждём дольше,
+        // чтобы не схватить предыдущий звонок вместо только что завершённого.
+        repeat(25) { attempt ->
             val captured = captureLatestCallIfNew()
             if (captured) return
-            if (attempt < 9) delay(200)
+            if (attempt < 24) delay(300)
         }
     }
 
     private suspend fun captureLatestCallIfNew(): Boolean {
-        val entity = readLatestCallEntity() ?: return false
+        val entity = readLatestCallEntityAfter(lastHandledTimestamp) ?: return false
         if (entity.timestamp <= lastHandledTimestamp) return false
 
         lastHandledTimestamp = entity.timestamp
@@ -181,7 +182,7 @@ class CallTrackingService : Service() {
         return phone
     }
 
-    private fun readLatestCallEntity(): CallEntity? {
+    private fun readLatestCallEntityAfter(minTimestampExclusive: Long): CallEntity? {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
             return null
         }
@@ -200,11 +201,13 @@ class CallTrackingService : Service() {
             null,
             "${CallLog.Calls.DATE} DESC"
         )?.use { cursor ->
-            if (cursor.moveToFirst()) {
+            while (cursor.moveToNext()) {
                 val number = cursor.getString(cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)).orEmpty()
                 val typeInt = cursor.getInt(cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE))
                 val duration = cursor.getLong(cursor.getColumnIndexOrThrow(CallLog.Calls.DURATION))
                 val timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(CallLog.Calls.DATE))
+
+                if (timestamp <= minTimestampExclusive) continue
 
                 val (type, note) = mapCallType(typeInt, duration)
                 return CallEntity(
