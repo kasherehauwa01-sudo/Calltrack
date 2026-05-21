@@ -1,6 +1,7 @@
 package com.example.calltrack.ui.main
 
 import android.content.Intent
+import android.content.ClipData
 import android.os.Bundle
 import android.widget.Toast
 import androidx.core.content.FileProvider
@@ -33,9 +34,16 @@ class LogsActivity : BaseActivity() {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_TEXT, AppLogger.readLogs(this@LogsActivity))
             putExtra(Intent.EXTRA_SUBJECT, "Логи приложения Calltrack")
+            clipData = ClipData.newUri(contentResolver, "app_logs", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        startActivity(Intent.createChooser(send, "Поделиться логами"))
+        val chooser = Intent.createChooser(send, "Поделиться логами")
+        if (send.resolveActivity(packageManager) == null) {
+            Toast.makeText(this, "Нет доступных приложений для отправки", Toast.LENGTH_SHORT).show()
+            return
+        }
+        startActivity(chooser)
     }
 }
