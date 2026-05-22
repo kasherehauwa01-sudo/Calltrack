@@ -12,8 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
-import android.text.InputFilter
-import android.widget.EditText
+import android.util.Log
 import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -169,6 +168,7 @@ class MainActivity : BaseActivity() {
 
     private fun startApkUpdateDownload(apkUrl: String) {
         lifecycleScope.launch {
+            Log.d("UPDATE_FLOW", "startApkUpdateDownload вызван")
             val manager = getSystemService(DownloadManager::class.java)
             val request = DownloadManager.Request(Uri.parse(apkUrl))
                 .setTitle("Обновление Calltrack")
@@ -180,6 +180,7 @@ class MainActivity : BaseActivity() {
                 .addRequestHeader("Accept", "application/vnd.android.package-archive")
                 .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, APK_FILE_NAME)
 
+            apkDownloadId = -1L
             apkDownloadId = manager.enqueue(request)
             AppLogger.log(this@MainActivity, "INFO", "Начата загрузка обновления. downloadId=$apkDownloadId, url=$apkUrl")
             Toast.makeText(this@MainActivity, "Началась загрузка обновления", Toast.LENGTH_SHORT).show()
