@@ -92,6 +92,8 @@ class CallRepository(
         return callDao.insert(call)
     }
 
+    suspend fun getLatestSavedCallTimestamp(): Long = callDao.getLatestTimestamp() ?: 0L
+
     suspend fun saveCallOutcome(
         callId: Long,
         phone: String,
@@ -147,6 +149,18 @@ class CallRepository(
         )
     }
 
+    suspend fun markAsPersonalContact(phone: String) {
+        if (phone.isBlank() || phone == "Неизвестно") return
+        ensureContact(phone)
+        contactDao.updateClient1cByPhone(phone, "Личный")
+    }
+
+    suspend fun unmarkPersonalContact(phone: String) {
+        if (phone.isBlank() || phone == "Неизвестно") return
+        ensureContact(phone)
+        contactDao.updateClient1cByPhone(phone, "")
+    }
+
 
     suspend fun saveCommentForCall(callId: Long, phone: String, text: String) {
         if (text.isBlank()) return
@@ -176,6 +190,7 @@ class CallRepository(
     suspend fun syncPending() {
         syncMutex.withLock {
             val managerName = prefs.getManagerName().ifBlank { "Не указан" }
+            val managerPhone = prefs.getManagerPhone().ifBlank { "Не указан" }
             val pending = callDao.getPending()
             val groupedPending = pending.groupBy { entity ->
                 // Антидубль: на некоторых устройствах один завершённый звонок может попасть в БД несколько раз
@@ -193,8 +208,10 @@ class CallRepository(
 
             groupedPending.values.forEach { duplicates ->
                 val entity = duplicates.first()
+                Log.d("WEBHOOK", "Отправка webhook: $entity")
                 runCatching {
-                    val clientName = findClientName(entity.phone)
+                    val personalMarked = contactDao.findByPhone(entity.phone)?.client1c == "Личный"
+                    val clientName = if (personalMarked) "Личный звонок" else findClientName(entity.phone)
                     val reminderText = extractReminderText(entity.reminder)
                     webhookApi.sendCall(
                         BuildConfig.WEBHOOK_URL,
@@ -206,6 +223,7 @@ class CallRepository(
                             type = entity.type,
                             duration = entity.duration,
                             manager = managerName,
+                            userPhone = managerPhone,
                             note = entity.note,
                             tag = entity.tag,
                             reminder = entity.reminder,
@@ -221,6 +239,7 @@ class CallRepository(
                 }.onSuccess {
                     Log.d("WEBHOOK", "Отправлено: phone=${entity.phone}, id=${entity.id}")
                 }.onFailure {
+                    Log.e("WEBHOOK", "Ошибка при вызове webhookApi.sendCall", it)
                     Log.e("WEBHOOK", "Ошибка отправки: id=${entity.id}", it)
                     Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
                 }
