@@ -63,6 +63,13 @@ class ContactCardFragment : Fragment() {
         }
         binding.btnAddComment.setOnClickListener { showAddCommentDialog(phone) }
         binding.btnAddReminder.setOnClickListener { showAddReminderDialog(phone) }
+        binding.btnMarkPersonal.setOnClickListener {
+            viewLifecycleOwner.lifecycleScope.launch {
+                viewModel.markAsPersonalContact(phone)
+                binding.tvClient1c.text = "Личный"
+                Toast.makeText(requireContext(), "Контакт помечен как личный", Toast.LENGTH_SHORT).show()
+            }
+        }
         binding.rowCallsHistory.setOnClickListener {
             (requireActivity() as com.example.calltrack.ui.main.MainActivity)
                 .openContactHistory(phone, ContactHistoryFragment.TYPE_CALLS)
@@ -92,6 +99,13 @@ class ContactCardFragment : Fragment() {
             binding.tvContactName.text = contact?.name?.ifBlank { currentName } ?: currentName
             val fallbackClient = viewModel.findClientName(phone).ifBlank { "—" }
             binding.tvClient1c.text = contact?.client1c?.ifBlank { fallbackClient } ?: fallbackClient
+            if (binding.tvClient1c.text.toString() == "Личный") {
+                binding.btnMarkPersonal.isEnabled = false
+                binding.btnMarkPersonal.text = "Личный контакт"
+            } else {
+                binding.btnMarkPersonal.isEnabled = true
+                binding.btnMarkPersonal.text = "Пометить как личный контакт"
+            }
         }
     }
 
