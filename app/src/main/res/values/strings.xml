@@ -4,8 +4,11 @@
     <string name="theme_app">Тема приложения</string>
     <string name="about_app">О приложении</string>
     <string name="version_label">Версия приложения</string>
-    <string name="release_date_label">Дата выхода версии</string>
+    <string name="release_date_label">Дата обновления</string>
     <string name="back">Назад</string>
     <string name="update_app">Обновить приложение</string>
     <string name="update_soon">Скоро здесь появится ссылка на обновление</string>
+    <string name="switch_user">Сменить пользователя</string>
+    <string name="user">Пользователь</string>
+    <string name="logs">Логи</string>
 </resources>
