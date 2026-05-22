@@ -151,7 +151,10 @@ class MainActivity : BaseActivity() {
             val latest = latestFromApi
             if (!isRemoteVersionNewer(BuildConfig.VERSION_NAME, latest.tag)) {
                 AppLogger.log(this@MainActivity, "INFO", "Обновление не требуется. Текущая версия актуальна")
-                Toast.makeText(this@MainActivity, "У Вас установлена актуальная версия приложения", Toast.LENGTH_LONG).show()
+                AlertDialog.Builder(this@MainActivity)
+                    .setMessage("У Вас установлена актуальная версия приложения")
+                    .setPositiveButton("OK", null)
+                    .show()
                 return@launch
             }
 
@@ -159,7 +162,7 @@ class MainActivity : BaseActivity() {
                 .setTitle("Найдена свежая версия")
                 .setMessage("Установить?")
                 .setPositiveButton("Да") { _, _ -> startApkUpdateDownload(latest.apkUrl) }
-                .setNegativeButton("Нет") { _, _ -> binding.bottomNav.selectedItemId = R.id.nav_dial }
+                .setNegativeButton("Нет", null)
                 .show()
         }
     }
