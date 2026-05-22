@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.PopupMenu
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -47,7 +48,6 @@ import java.io.File
 class MainActivity : BaseActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var prefsManager: PrefsManager
     private var apkDownloadId: Long = -1L
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
@@ -71,7 +71,6 @@ class MainActivity : BaseActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        prefsManager = PrefsManager(this)
         applySavedTheme()
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
