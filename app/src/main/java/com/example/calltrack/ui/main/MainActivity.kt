@@ -156,7 +156,8 @@ class MainActivity : BaseActivity() {
                 ).show()
             }
 
-            if (!isRemoteVersionNewer(BuildConfig.VERSION_NAME, latest.tag)) {
+            val remoteComparable = extractDotVersion(latest.apkUrl)?.joinToString(".") ?: latest.tag
+            if (!isRemoteVersionNewer(BuildConfig.VERSION_NAME, remoteComparable)) {
                 AppLogger.log(this@MainActivity, "INFO", "Обновление не требуется. Текущая версия актуальна")
                 Toast.makeText(this@MainActivity, "У вас уже актуальная версия", Toast.LENGTH_SHORT).show()
                 return@launch
@@ -200,17 +201,22 @@ class MainActivity : BaseActivity() {
             updateHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return null
                 val body = response.body?.string().orEmpty()
-                val tag = Regex("\\\"tag_name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
-                    .find(body)
-                    ?.groupValues
-                    ?.get(1)
-                    .orEmpty()
-                val apkUrl = Regex("\\\"browser_download_url\\\"\\s*:\\s*\\\"([^\\\"]+\\\\.apk)\\\"")
-                    .find(body)
-                    ?.groupValues
-                    ?.get(1)
-                    ?.replace("\\/", "/")
-                    .orEmpty()
+                val json = org.json.JSONObject(body)
+                val tag = json.optString("tag_name").orEmpty()
+
+                var apkUrl = ""
+                val assets = json.optJSONArray("assets")
+                if (assets != null) {
+                    for (i in 0 until assets.length()) {
+                        val asset = assets.optJSONObject(i) ?: continue
+                        val url = asset.optString("browser_download_url")
+                        if (url.endsWith(".apk", ignoreCase = true)) {
+                            apkUrl = url
+                            break
+                        }
+                    }
+                }
+
                 if (tag.isBlank() || apkUrl.isBlank()) return null
                 ReleaseInfo(tag = tag, apkUrl = apkUrl)
             }
@@ -218,16 +224,27 @@ class MainActivity : BaseActivity() {
     }
 
     private fun isRemoteVersionNewer(current: String, remoteTag: String): Boolean {
-        val currentNums = Regex("\\d+").findAll(current).map { it.value.toInt() }.toList()
-        val remoteNums = Regex("\\d+").findAll(remoteTag).map { it.value.toInt() }.toList()
-        val max = maxOf(currentNums.size, remoteNums.size)
+        val currentVersion = extractDotVersion(current)
+        val remoteVersion = extractDotVersion(remoteTag)
+
+        // Если у удалённого релиза нет нормального semver (например, tag вида v05-05-26-01),
+        // не считаем его автоматически «новее», чтобы не скачивать обновление ошибочно.
+        if (remoteVersion == null) return false
+        if (currentVersion == null) return true
+
+        val max = maxOf(currentVersion.size, remoteVersion.size)
         for (i in 0 until max) {
-            val c = currentNums.getOrElse(i) { 0 }
-            val r = remoteNums.getOrElse(i) { 0 }
+            val c = currentVersion.getOrElse(i) { 0 }
+            val r = remoteVersion.getOrElse(i) { 0 }
             if (r > c) return true
             if (r < c) return false
         }
         return false
+    }
+
+    private fun extractDotVersion(value: String): List<Int>? {
+        val match = Regex("(\\d+(?:\\.\\d+)+)").find(value) ?: return null
+        return match.groupValues[1].split('.').mapNotNull { it.toIntOrNull() }
     }
 
     private fun installDownloadedApk(downloadId: Long) {
