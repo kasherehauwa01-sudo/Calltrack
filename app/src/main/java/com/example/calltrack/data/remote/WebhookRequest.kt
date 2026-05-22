@@ -17,6 +17,8 @@ data class WebhookRequest(
     val duration: Long,
     @SerializedName("manager")
     val manager: String,
+    @SerializedName("user_phone")
+    val userPhone: String,
     @SerializedName("note")
     val note: String,
     @SerializedName("tag")
