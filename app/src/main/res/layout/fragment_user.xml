@@ -17,6 +17,24 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
+        android:text="Номер телефона"
+        android:textColor="@color/textSecondary" />
+
+    <TextView
+        android:id="@+id/tvCurrentUserPhone"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/bg_input"
+        android:padding="12dp"
+        android:text="—"
+        android:textColor="@color/textPrimary"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
         android:text="Текущий пользователь"
         android:textColor="@color/textSecondary" />
 
@@ -37,23 +55,5 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
         android:text="Сменить пользователя" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:text="Номер телефона"
-        android:textColor="@color/textSecondary" />
-
-    <TextView
-        android:id="@+id/tvCurrentUserPhone"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:background="@drawable/bg_input"
-        android:padding="12dp"
-        android:text="—"
-        android:textColor="@color/textPrimary"
-        android:textStyle="bold" />
 
 </LinearLayout>

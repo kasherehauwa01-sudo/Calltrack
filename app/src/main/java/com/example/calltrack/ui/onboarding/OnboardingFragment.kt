@@ -97,6 +97,10 @@ class OnboardingFragment : Fragment() {
                 binding.tvDescription.text = "Введите ФИО и номер телефона. Оба поля обязательны."
                 binding.etManager.visibility = View.VISIBLE
                 binding.etManagerPhone.visibility = View.VISIBLE
+                if (binding.etManagerPhone.text.isNullOrBlank()) {
+                    binding.etManagerPhone.setText("+7")
+                    binding.etManagerPhone.setSelection(binding.etManagerPhone.text?.length ?: 0)
+                }
                 binding.btnPrimary.text = "Ок"
                 binding.btnPrimary.visibility = View.VISIBLE
                 binding.btnSecondary.visibility = View.GONE

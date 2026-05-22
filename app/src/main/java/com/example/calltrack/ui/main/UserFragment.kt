@@ -1,14 +1,17 @@
 package com.example.calltrack.ui.main
 
 import android.app.AlertDialog
-import android.widget.LinearLayout
 import android.os.Bundle
 import android.text.InputFilter
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
@@ -57,14 +60,19 @@ class UserFragment : Fragment() {
             hint = "Номер телефона"
             inputType = android.text.InputType.TYPE_CLASS_PHONE
             filters = arrayOf(InputFilter.LengthFilter(30))
-            setText(if (currentPhone == "Не указан") "" else currentPhone)
+            setText(if (currentPhone == "Не указан") "+7" else currentPhone)
             setSelection(text?.length ?: 0)
+        }
+        val nameRow = buildInputRow(inputName) { inputName.setText("") }
+        val phoneRow = buildInputRow(inputPhone) {
+            inputPhone.setText("+7")
+            inputPhone.setSelection(inputPhone.text?.length ?: 0)
         }
         val container = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(36, 20, 36, 0)
-            addView(inputName)
-            addView(inputPhone)
+            addView(nameRow)
+            addView(phoneRow)
         }
 
         AlertDialog.Builder(requireContext())
@@ -88,6 +96,23 @@ class UserFragment : Fragment() {
             }
             .setNegativeButton("Отмена", null)
             .show()
+    }
+
+    private fun buildInputRow(editText: EditText, onClear: () -> Unit): LinearLayout {
+        val clear = ImageButton(requireContext()).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            background = null
+            contentDescription = "Очистить"
+            setOnClickListener { onClear() }
+            setColorFilter(ContextCompat.getColor(requireContext(), android.R.color.darker_gray))
+        }
+
+        return LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(editText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(clear)
+        }
     }
 
     override fun onDestroyView() {
