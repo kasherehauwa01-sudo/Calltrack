@@ -81,6 +81,9 @@ class MainActivity : BaseActivity() {
         setupSettingsButton()
         registerDownloadReceiver()
         handleExternalNavigation(intent)
+        if (intent.getBooleanExtra(EXTRA_RUN_UPDATE_CHECK, false)) {
+            checkForUpdatesAndPrompt()
+        }
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
