@@ -155,6 +155,12 @@ class CallRepository(
         contactDao.updateClient1cByPhone(phone, "Личный")
     }
 
+    suspend fun unmarkPersonalContact(phone: String) {
+        if (phone.isBlank() || phone == "Неизвестно") return
+        ensureContact(phone)
+        contactDao.updateClient1cByPhone(phone, "")
+    }
+
 
     suspend fun saveCommentForCall(callId: Long, phone: String, text: String) {
         if (text.isBlank()) return
