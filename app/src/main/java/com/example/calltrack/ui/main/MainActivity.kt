@@ -142,29 +142,21 @@ class MainActivity : BaseActivity() {
             Toast.makeText(this@MainActivity, "Проверяем наличие новой версии…", Toast.LENGTH_SHORT).show()
 
             val latestFromApi = withContext(Dispatchers.IO) { fetchLatestReleaseInfo() }
-            val latest = latestFromApi ?: ReleaseInfo(
-                tag = FALLBACK_RELEASE_TAG,
-                apkUrl = FALLBACK_RELEASE_APK_URL
-            )
-
             if (latestFromApi == null) {
-                AppLogger.log(this@MainActivity, "WARN", "GitHub API недоступен, используем fallback-обновление")
-                Toast.makeText(
-                    this@MainActivity,
-                    "GitHub API временно недоступен, используем резервный источник",
-                    Toast.LENGTH_LONG
-                ).show()
+                AppLogger.log(this@MainActivity, "WARN", "Не удалось получить данные о версии с GitHub")
+                Toast.makeText(this@MainActivity, "Не удалось проверить обновление. Повторите позже", Toast.LENGTH_LONG).show()
+                return@launch
             }
 
-            val remoteComparable = extractDotVersion(latest.apkUrl)?.joinToString(".") ?: latest.tag
-            if (!isRemoteVersionNewer(BuildConfig.VERSION_NAME, remoteComparable)) {
+            val latest = latestFromApi
+            if (!isRemoteVersionNewer(BuildConfig.VERSION_NAME, latest.tag)) {
                 AppLogger.log(this@MainActivity, "INFO", "Обновление не требуется. Текущая версия актуальна")
-                Toast.makeText(this@MainActivity, "У вас уже актуальная версия", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, "У Вас установлена актуальная версия приложения", Toast.LENGTH_LONG).show()
                 return@launch
             }
 
             AlertDialog.Builder(this@MainActivity)
-                .setTitle("Найдено обновление")
+                .setTitle("Найдена свежая версия")
                 .setMessage("Установить?")
                 .setPositiveButton("Да") { _, _ -> startApkUpdateDownload(latest.apkUrl) }
                 .setNegativeButton("Нет") { _, _ -> binding.bottomNav.selectedItemId = R.id.nav_dial }
@@ -227,10 +219,10 @@ class MainActivity : BaseActivity() {
         val currentVersion = extractDotVersion(current)
         val remoteVersion = extractDotVersion(remoteTag)
 
-        // Если у удалённого релиза нет нормального semver (например, tag вида v05-05-26-01),
-        // не считаем его автоматически «новее», чтобы не скачивать обновление ошибочно.
+        // Если любую из версий нельзя корректно распарсить в semver, считаем,
+        // что обновление недоступно, чтобы не запускать скачивание ошибочно.
         if (remoteVersion == null) return false
-        if (currentVersion == null) return true
+        if (currentVersion == null) return false
 
         val max = maxOf(currentVersion.size, remoteVersion.size)
         for (i in 0 until max) {
