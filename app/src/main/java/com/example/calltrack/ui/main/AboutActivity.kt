@@ -1,6 +1,9 @@
 package com.example.calltrack.ui.main
 
 import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import com.example.calltrack.databinding.ActivityAboutBinding
 import com.example.calltrack.ui.base.BaseActivity
@@ -18,7 +21,13 @@ class AboutActivity : BaseActivity() {
         setContentView(binding.root)
         applyInsets(binding.root, binding.statusBarOverlay)
 
-        val updatedAtMillis = packageManager.getPackageInfo(packageName, 0).lastUpdateTime
+        val packageInfo: PackageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0)
+        }
+        val updatedAtMillis = packageInfo.lastUpdateTime
         val formatter = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
         binding.tvReleaseDateValue.text = formatter.format(Date(updatedAtMillis))
 

@@ -200,12 +200,12 @@ class MainActivity : BaseActivity() {
             updateHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return null
                 val body = response.body?.string().orEmpty()
-                val tag = Regex("\"tag_name\"\s*:\s*\"([^\"]+)\"")
+                val tag = Regex("\\\"tag_name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
                     .find(body)
                     ?.groupValues
                     ?.get(1)
                     .orEmpty()
-                val apkUrl = Regex("\"browser_download_url\"\s*:\s*\"([^\"]+\\.apk)\"")
+                val apkUrl = Regex("\\\"browser_download_url\\\"\\s*:\\s*\\\"([^\\\"]+\\\\.apk)\\\"")
                     .find(body)
                     ?.groupValues
                     ?.get(1)
