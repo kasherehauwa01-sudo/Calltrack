@@ -17,6 +17,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     val calls = repository.observeCalls().asLiveData()
     val onboardingCompleted = repository.prefs.onboardingCompleted.asLiveData()
     val managerName = repository.prefs.managerName.asLiveData()
+    val managerPhone = repository.prefs.managerPhone.asLiveData()
 
     private val _dialNumber = MutableLiveData("")
     val dialNumber: LiveData<String> = _dialNumber
@@ -55,6 +56,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
 
     suspend fun markOnboardingCompleted() = repository.prefs.setOnboardingCompleted(true)
     suspend fun setManagerName(name: String) = repository.prefs.setManagerName(name)
+    suspend fun setManagerPhone(phone: String) = repository.prefs.setManagerPhone(phone)
     // Фоновая синхронизация с Google Sheets (с последующим сохранением статусов во внутреннем кэше БД).
     suspend fun sync() = repository.syncPending()
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> = repository.loadHistoryFromRemote(phone)

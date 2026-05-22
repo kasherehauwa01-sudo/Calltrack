@@ -178,6 +178,7 @@ class CallRepository(
     suspend fun syncPending() {
         syncMutex.withLock {
             val managerName = prefs.getManagerName().ifBlank { "Не указан" }
+            val managerPhone = prefs.getManagerPhone().ifBlank { "Не указан" }
             val pending = callDao.getPending()
             val groupedPending = pending.groupBy { entity ->
                 // Антидубль: на некоторых устройствах один завершённый звонок может попасть в БД несколько раз
@@ -209,6 +210,7 @@ class CallRepository(
                             type = entity.type,
                             duration = entity.duration,
                             manager = managerName,
+                            userPhone = managerPhone,
                             note = entity.note,
                             tag = entity.tag,
                             reminder = entity.reminder,
