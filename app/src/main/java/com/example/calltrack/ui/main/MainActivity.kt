@@ -49,6 +49,7 @@ class MainActivity : BaseActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private var apkDownloadId: Long = -1L
+    private var updateCheckHandled = false
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
@@ -113,7 +114,10 @@ class MainActivity : BaseActivity() {
             return
         }
         if (intent?.getBooleanExtra(EXTRA_RUN_UPDATE_CHECK, false) == true) {
-            checkForUpdatesAndPrompt()
+            if (!updateCheckHandled) {
+                updateCheckHandled = true
+                checkForUpdatesAndPrompt()
+            }
         }
     }
 
