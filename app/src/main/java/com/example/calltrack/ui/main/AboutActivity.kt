@@ -32,6 +32,15 @@ class AboutActivity : BaseActivity() {
         binding.tvReleaseDateValue.text = formatter.format(Date(updatedAtMillis))
 
         binding.btnBack.setOnClickListener { finish() }
+        binding.btnUpdateApp.setOnClickListener {
+            startActivity(
+                Intent(this, MainActivity::class.java).putExtra(
+                    MainActivity.EXTRA_RUN_UPDATE_CHECK,
+                    true
+                )
+            )
+            finish()
+        }
         binding.btnOpenLogs.setOnClickListener {
             startActivity(Intent(this, LogsActivity::class.java))
         }

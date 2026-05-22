@@ -107,6 +107,10 @@ class MainActivity : BaseActivity() {
         val phone = intent?.getStringExtra(EXTRA_OPEN_CONTACT_PHONE).orEmpty()
         if (phone.isNotBlank()) {
             openContactCard(phone)
+            return
+        }
+        if (intent?.getBooleanExtra(EXTRA_RUN_UPDATE_CHECK, false) == true) {
+            checkForUpdatesAndPrompt()
         }
     }
 
@@ -119,13 +123,11 @@ class MainActivity : BaseActivity() {
         binding.btnSettings.setOnClickListener { anchor ->
             PopupMenu(this, anchor).apply {
                 menu.add(0, MENU_ABOUT_ID, 0, getString(R.string.about_app))
-                menu.add(0, MENU_UPDATE_ID, 1, getString(R.string.update_app))
-                menu.add(0, MENU_USER_ID, 2, getString(R.string.user))
+                menu.add(0, MENU_USER_ID, 1, getString(R.string.user))
                 setOnMenuItemClickListener { menuItem ->
                     when (menuItem.itemId) {
                         MENU_ABOUT_ID -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
                         MENU_USER_ID -> openFragment(UserFragment.newInstance())
-                        MENU_UPDATE_ID -> checkForUpdatesAndPrompt()
                         else -> false
                     }
                     true
@@ -394,8 +396,8 @@ class MainActivity : BaseActivity() {
 
     companion object {
         const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
+        const val EXTRA_RUN_UPDATE_CHECK = "extra_run_update_check"
         private const val MENU_ABOUT_ID = 1001
-        private const val MENU_UPDATE_ID = 1002
         private const val MENU_USER_ID = 1003
         private const val LATEST_RELEASE_API =
             "https://api.github.com/repos/kasherehauwa01-sudo/Calltrack/releases/latest"

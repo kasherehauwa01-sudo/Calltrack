@@ -55,10 +55,17 @@
         android:textStyle="bold" />
 
     <Button
-        android:id="@+id/btnOpenLogs"
+        android:id="@+id/btnUpdateApp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
+        android:text="@string/update_app" />
+
+    <Button
+        android:id="@+id/btnOpenLogs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
         android:text="@string/logs" />
 
 </LinearLayout>
