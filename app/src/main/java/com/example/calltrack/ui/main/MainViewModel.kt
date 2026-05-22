@@ -53,6 +53,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     suspend fun addComment(phone: String, text: String) = repository.addComment(phone, text)
     suspend fun addReminder(phone: String, contactName: String, text: String, remindAt: Long) =
         repository.addReminder(phone, contactName, text, remindAt)
+    suspend fun markAsPersonalContact(phone: String) = repository.markAsPersonalContact(phone)
 
     suspend fun markOnboardingCompleted() = repository.prefs.setOnboardingCompleted(true)
     suspend fun setManagerName(name: String) = repository.prefs.setManagerName(name)

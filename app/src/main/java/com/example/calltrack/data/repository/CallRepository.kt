@@ -149,6 +149,12 @@ class CallRepository(
         )
     }
 
+    suspend fun markAsPersonalContact(phone: String) {
+        if (phone.isBlank() || phone == "Неизвестно") return
+        ensureContact(phone)
+        contactDao.updateClient1cByPhone(phone, "Личный")
+    }
+
 
     suspend fun saveCommentForCall(callId: Long, phone: String, text: String) {
         if (text.isBlank()) return
@@ -198,7 +204,8 @@ class CallRepository(
                 val entity = duplicates.first()
                 Log.d("WEBHOOK", "Отправка webhook: $entity")
                 runCatching {
-                    val clientName = findClientName(entity.phone)
+                    val personalMarked = contactDao.findByPhone(entity.phone)?.client1c == "Личный"
+                    val clientName = if (personalMarked) "Личный звонок" else findClientName(entity.phone)
                     val reminderText = extractReminderText(entity.reminder)
                     webhookApi.sendCall(
                         BuildConfig.WEBHOOK_URL,
