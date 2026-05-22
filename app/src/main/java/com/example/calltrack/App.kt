@@ -4,6 +4,7 @@ import android.app.Application
 import com.example.calltrack.data.local.CallDatabase
 import com.example.calltrack.data.remote.ApiFactory
 import com.example.calltrack.data.repository.CallRepository
+import com.example.calltrack.logging.AppLogger
 
 class App : Application() {
     lateinit var repository: CallRepository
@@ -11,6 +12,7 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        AppLogger.install(this)
         val db = CallDatabase.getInstance(this)
         repository = CallRepository(
             callDao = db.callDao(),
