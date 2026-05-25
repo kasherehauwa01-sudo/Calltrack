@@ -128,6 +128,86 @@ function doPost(e) {
 
   return ContentService.createTextOutput("ok");
 }
+
+
+// --- Почасовая сверка пустых "Клиент" в Calltrack ---
+var DIRECTORY_SPREADSHEET_IDS = [
+  "1Wl4UXI_x0a7A0iPYuW_ZRlrf3xEdVKMnOALi9p6J_Mc",
+  "1ysEVeWSw96UgrQ1_4dEO5cSyv-18DSdr_VWPj3rUlhM"
+];
+
+function normalizePhone(value) {
+  var digits = String(value || "").replace(/\D+/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
+function buildDirectoryMap() {
+  var map = {};
+  DIRECTORY_SPREADSHEET_IDS.forEach(function (spreadsheetId) {
+    var ss = SpreadsheetApp.openById(spreadsheetId);
+    ss.getSheets().forEach(function (sheet) {
+      var values = sheet.getDataRange().getValues();
+      if (!values || values.length < 2) return;
+      var header = values[0].map(function (h) { return String(h || "").trim(); });
+      var phoneIdx = header.indexOf("Телефон");
+      var clientIdx = header.indexOf("Клиент");
+      if (phoneIdx === -1 || clientIdx === -1) return;
+
+      for (var r = 1; r < values.length; r++) {
+        var key = normalizePhone(values[r][phoneIdx]);
+        var client = String(values[r][clientIdx] || "").trim();
+        if (!key || !client) continue;
+        if (!map[key]) map[key] = client;
+      }
+    });
+  });
+  return map;
+}
+
+function fillEmptyClientsInCalltrack() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var values = sheet.getDataRange().getValues();
+  if (!values || values.length < 2) return;
+
+  var header = values[0].map(function (h) { return String(h || "").trim(); });
+  var phoneIdx = header.indexOf("Номер телефона");
+  var clientIdx = header.indexOf("Клиент");
+  if (phoneIdx === -1 || clientIdx === -1) return;
+
+  var directoryMap = buildDirectoryMap();
+  var updated = 0;
+
+  for (var i = 1; i < values.length; i++) {
+    var currentClient = String(values[i][clientIdx] || "").trim();
+    if (currentClient) continue;
+
+    var normalizedPhone = normalizePhone(values[i][phoneIdx]);
+    if (!normalizedPhone) continue;
+
+    var foundClient = directoryMap[normalizedPhone];
+    if (!foundClient) continue;
+
+    sheet.getRange(i + 1, clientIdx + 1).setValue(foundClient);
+    updated++;
+  }
+
+  Logger.log("fillEmptyClientsInCalltrack: updated=" + updated);
+}
+
+function installHourlyClientBackfillTrigger() {
+  // Запускается один раз вручную: создаёт триггер раз в час.
+  var fnName = "fillEmptyClientsInCalltrack";
+  var existing = ScriptApp.getProjectTriggers().some(function (t) {
+    return t.getHandlerFunction() === fnName;
+  });
+  if (existing) return;
+
+  ScriptApp.newTrigger(fnName)
+    .timeBased()
+    .everyHours(1)
+    .create();
+}
+
 ```
 
 ### Шаг 3. Опубликовать
@@ -135,6 +215,7 @@ function doPost(e) {
 2. Тип: **Web App**.
 3. Доступ: **Anyone**.
 4. Скопируйте URL web app.
+5. Один раз вручную выполните функцию `installHourlyClientBackfillTrigger()` в редакторе Apps Script, чтобы создать почасовой триггер заполнения пустых значений в колонке "Клиент".
 
 ### Шаг 4. Вставить URL в приложение
 В `app/build.gradle` замените:
