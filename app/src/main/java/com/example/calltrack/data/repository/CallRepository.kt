@@ -181,7 +181,7 @@ class CallRepository(
     }
 
     private suspend fun syncPersonalContactToRemote(phone: String, isPersonal: Boolean, enqueueOnFailure: Boolean): Boolean {
-        val managerPhone = prefs.getManagerPhone().ifBlank { return }
+        val managerPhone = prefs.getManagerPhone().ifBlank { return false }
         val managerName = prefs.getManagerName().ifBlank { "Не указан" }
         val normalizedManagerPhone = normalizePhone(managerPhone)
         val normalizedContactPhone = normalizePhone(phone)
@@ -199,14 +199,11 @@ class CallRepository(
         return runCatching {
             withContext(Dispatchers.IO) {
                 personalContactsHttpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        throw IllegalStateException("HTTP ${response.code}")
-                    }
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ${response.code}")
+                    response.isSuccessful
                 }
             }
-            true
-        }.onFailure {
+        }.getOrElse {
             com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
             Log.e("CallRepository", "Не удалось отправить личный контакт в Calltrack_mop", it)
             if (enqueueOnFailure) {
@@ -219,7 +216,8 @@ class CallRepository(
                     )
                 )
             }
-        }.getOrDefault(false)
+            false
+        }
     }
 
     private suspend fun flushPendingPersonalContactsSync() {
