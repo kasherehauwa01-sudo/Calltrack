@@ -16,9 +16,16 @@ import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.data.remote.WebhookApi
 import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.data.remote.WebhookRequest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -32,12 +39,14 @@ class CallRepository(
     private val webhookApi: WebhookApi,
     context: Context
 ) {
+    private val appContext = context.applicationContext
     val prefs = PrefsManager(context)
     private val clientDirectory = ClientDirectory(context)
 
     private val dateFormat = SimpleDateFormat("dd.MM.yy", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
     private val syncMutex = Mutex()
+    private val personalContactsHttpClient = OkHttpClient()
 
     fun observeCalls(): Flow<List<CallEntity>> = callDao.observeAll()
     fun observeCallsByPhone(phone: String): Flow<List<CallEntity>> = callDao.observeByPhone(phone)
@@ -55,8 +64,13 @@ class CallRepository(
         if (normalizedPhone.isBlank()) return emptyList()
         val separator = if (BuildConfig.WEBHOOK_URL.contains("?")) "&" else "?"
         val url = "${BuildConfig.WEBHOOK_URL}${separator}phone=$normalizedPhone"
+        com.example.calltrack.logging.AppLogger.log(appContext, "API", "Запрос данных из таблицы")
         return runCatching { webhookApi.loadHistory(url) }
-            .onFailure { Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it) }
+            .onSuccess { com.example.calltrack.logging.AppLogger.log(appContext, "API", "Получено записей: ${it.size}") }
+            .onFailure {
+                Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it)
+                com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки данных: ${it.message}")
+            }
             .getOrElse { emptyList() }
     }
 
@@ -91,6 +105,8 @@ class CallRepository(
         }
         return callDao.insert(call)
     }
+
+    suspend fun getLatestSavedCallTimestamp(): Long = callDao.getLatestTimestamp() ?: 0L
 
     suspend fun saveCallOutcome(
         callId: Long,
@@ -147,6 +163,49 @@ class CallRepository(
         )
     }
 
+    suspend fun markAsPersonalContact(phone: String) {
+        if (phone.isBlank() || phone == "Неизвестно") return
+        ensureContact(phone)
+        contactDao.updateClient1cByPhone(phone, "Личный")
+        syncPersonalContactToRemote(phone, true)
+    }
+
+    suspend fun unmarkPersonalContact(phone: String) {
+        if (phone.isBlank() || phone == "Неизвестно") return
+        ensureContact(phone)
+        contactDao.updateClient1cByPhone(phone, "")
+        syncPersonalContactToRemote(phone, false)
+    }
+
+    private suspend fun syncPersonalContactToRemote(phone: String, isPersonal: Boolean) {
+        val managerPhone = prefs.getManagerPhone().ifBlank { return }
+        val managerName = prefs.getManagerName().ifBlank { "Не указан" }
+        val payload = JSONObject().apply {
+            put("manager_phone", normalizePhone(managerPhone))
+            put("manager_name", managerName)
+            put("contact_phone", normalizePhone(phone))
+            put("is_personal", isPersonal)
+        }
+        val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val request = Request.Builder()
+            .url(BuildConfig.PERSONAL_CONTACTS_WEBHOOK_URL)
+            .post(body)
+            .build()
+        runCatching {
+            withContext(Dispatchers.IO) {
+                personalContactsHttpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IllegalStateException("HTTP ${response.code}")
+                    }
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ${response.code}")
+                }
+            }
+        }.onFailure {
+            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
+            Log.e("CallRepository", "Не удалось отправить личный контакт в Calltrack_mop", it)
+        }
+    }
+
 
     suspend fun saveCommentForCall(callId: Long, phone: String, text: String) {
         if (text.isBlank()) return
@@ -176,6 +235,7 @@ class CallRepository(
     suspend fun syncPending() {
         syncMutex.withLock {
             val managerName = prefs.getManagerName().ifBlank { "Не указан" }
+            val managerPhone = prefs.getManagerPhone().ifBlank { "Не указан" }
             val pending = callDao.getPending()
             val groupedPending = pending.groupBy { entity ->
                 // Антидубль: на некоторых устройствах один завершённый звонок может попасть в БД несколько раз
@@ -193,9 +253,12 @@ class CallRepository(
 
             groupedPending.values.forEach { duplicates ->
                 val entity = duplicates.first()
+                Log.d("WEBHOOK", "Отправка webhook: $entity")
                 runCatching {
-                    val clientName = findClientName(entity.phone)
+                    val personalMarked = contactDao.findByPhone(entity.phone)?.client1c == "Личный"
+                    val clientName = if (personalMarked) "Личный звонок" else findClientName(entity.phone)
                     val reminderText = extractReminderText(entity.reminder)
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Отправка данных в таблицу: id=${entity.id}, phone=${entity.phone}, type=${entity.type}")
                     webhookApi.sendCall(
                         BuildConfig.WEBHOOK_URL,
                         WebhookRequest(
@@ -206,6 +269,7 @@ class CallRepository(
                             type = entity.type,
                             duration = entity.duration,
                             manager = managerName,
+                            userPhone = managerPhone,
                             note = entity.note,
                             tag = entity.tag,
                             reminder = entity.reminder,
@@ -214,6 +278,7 @@ class CallRepository(
                         )
                     )
                     callDao.markUploaded(duplicates.map { it.id })
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ok")
                     Log.d(
                         "CallRepository",
                         "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
@@ -221,8 +286,11 @@ class CallRepository(
                 }.onSuccess {
                     Log.d("WEBHOOK", "Отправлено: phone=${entity.phone}, id=${entity.id}")
                 }.onFailure {
+                    Log.e("WEBHOOK", "Ошибка при вызове webhookApi.sendCall", it)
                     Log.e("WEBHOOK", "Ошибка отправки: id=${entity.id}", it)
                     Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
+                    com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Повторная отправка данных")
                 }
             }
         }
