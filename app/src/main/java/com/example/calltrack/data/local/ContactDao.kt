@@ -22,4 +22,7 @@ interface ContactDao {
 
     @Query("UPDATE contacts SET client1c = :client1c WHERE phone = :phone")
     suspend fun updateClient1cByPhone(phone: String, client1c: String)
+
+    @Query("SELECT * FROM contacts")
+    suspend fun findAll(): List<ContactEntity>
 }

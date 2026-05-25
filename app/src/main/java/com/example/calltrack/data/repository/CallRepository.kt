@@ -60,6 +60,20 @@ class CallRepository(
         return clientName
     }
 
+    suspend fun isPersonalContact(phone: String): Boolean {
+        if (phone.isBlank() || phone == "Неизвестно") return false
+
+        val direct = contactDao.findByPhone(phone)
+        if (direct?.client1c == "Личный") return true
+
+        val normalized = normalizePhone(phone)
+        if (normalized.isBlank()) return false
+
+        return contactDao.findAll().any { contact ->
+            contact.client1c == "Личный" && normalizePhone(contact.phone) == normalized
+        }
+    }
+
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> {
         val normalizedPhone = normalizePhone(phone)
         if (normalizedPhone.isBlank()) return emptyList()

@@ -108,7 +108,8 @@ class CallTrackingService : Service() {
             latestSavedEntity = entity
             AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
 
-            if (shouldShowPostCallPrompt(entity.type)) {
+            val isPersonal = repo.isPersonalContact(entity.phone)
+            if (!isPersonal && shouldShowPostCallPrompt(entity.type)) {
                 val contactName = resolveContactName(entity.phone)
                 showPostCallNow(latestSavedCallId, entity.phone, contactName)
             }
@@ -116,6 +117,7 @@ class CallTrackingService : Service() {
         if (!hasNewData) return false
 
         val finalEntity = latestSavedEntity ?: return false
+        val isFinalPersonal = repo.isPersonalContact(finalEntity.phone)
         val clientName = repo.findClientName(finalEntity.phone)
 
         scope.launch {
@@ -126,7 +128,7 @@ class CallTrackingService : Service() {
                 }
         }
 
-        if (clientName.isBlank()) {
+        if (!isFinalPersonal && clientName.isBlank()) {
             AppLogger.log(this, "NOTIFY", "Показ уведомления: Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
             showMissingClientNotification()
         }
