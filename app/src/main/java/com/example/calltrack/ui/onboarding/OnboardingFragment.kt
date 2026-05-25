@@ -68,11 +68,16 @@ class OnboardingFragment : Fragment() {
     private fun submitManagerName() {
         val host = requireActivity() as MainActivity
         val fullName = binding.etManager.text.toString().trim()
+        val phone = binding.etManagerPhone.text.toString().trim()
         if (fullName.isBlank()) {
             Toast.makeText(requireContext(), "Поле ФИО обязательно", Toast.LENGTH_SHORT).show()
             return
         }
-        host.completeOnboarding(fullName)
+        if (phone.isBlank()) {
+            Toast.makeText(requireContext(), "Поле Номер телефона обязательно", Toast.LENGTH_SHORT).show()
+            return
+        }
+        host.completeOnboarding(fullName, phone)
     }
 
     private fun updateUi() {
@@ -81,6 +86,7 @@ class OnboardingFragment : Fragment() {
                 binding.tvTitle.text = "Нужны разрешения"
                 binding.tvDescription.text = "Для работы приложения выдайте необходимые разрешения."
                 binding.etManager.visibility = View.GONE
+                binding.etManagerPhone.visibility = View.GONE
                 binding.btnPrimary.text = "Повторить запрос"
                 binding.btnPrimary.visibility = View.VISIBLE
                 binding.btnSecondary.text = "Открыть настройки"
@@ -88,8 +94,13 @@ class OnboardingFragment : Fragment() {
             }
             Stage.AUTH -> {
                 binding.tvTitle.text = "Авторизация"
-                binding.tvDescription.text = "Введите ФИО. Поле обязательно для заполнения."
+                binding.tvDescription.text = "Введите ФИО и номер телефона. Оба поля обязательны."
                 binding.etManager.visibility = View.VISIBLE
+                binding.etManagerPhone.visibility = View.VISIBLE
+                if (binding.etManagerPhone.text.isNullOrBlank()) {
+                    binding.etManagerPhone.setText("+7")
+                    binding.etManagerPhone.setSelection(binding.etManagerPhone.text?.length ?: 0)
+                }
                 binding.btnPrimary.text = "Ок"
                 binding.btnPrimary.visibility = View.VISIBLE
                 binding.btnSecondary.visibility = View.GONE

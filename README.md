@@ -128,6 +128,86 @@ function doPost(e) {
 
   return ContentService.createTextOutput("ok");
 }
+
+
+// --- Почасовая сверка пустых "Клиент" в Calltrack ---
+var DIRECTORY_SPREADSHEET_IDS = [
+  "1Wl4UXI_x0a7A0iPYuW_ZRlrf3xEdVKMnOALi9p6J_Mc",
+  "1ysEVeWSw96UgrQ1_4dEO5cSyv-18DSdr_VWPj3rUlhM"
+];
+
+function normalizePhone(value) {
+  var digits = String(value || "").replace(/\D+/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
+function buildDirectoryMap() {
+  var map = {};
+  DIRECTORY_SPREADSHEET_IDS.forEach(function (spreadsheetId) {
+    var ss = SpreadsheetApp.openById(spreadsheetId);
+    ss.getSheets().forEach(function (sheet) {
+      var values = sheet.getDataRange().getValues();
+      if (!values || values.length < 2) return;
+      var header = values[0].map(function (h) { return String(h || "").trim(); });
+      var phoneIdx = header.indexOf("Телефон");
+      var clientIdx = header.indexOf("Клиент");
+      if (phoneIdx === -1 || clientIdx === -1) return;
+
+      for (var r = 1; r < values.length; r++) {
+        var key = normalizePhone(values[r][phoneIdx]);
+        var client = String(values[r][clientIdx] || "").trim();
+        if (!key || !client) continue;
+        if (!map[key]) map[key] = client;
+      }
+    });
+  });
+  return map;
+}
+
+function fillEmptyClientsInCalltrack() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var values = sheet.getDataRange().getValues();
+  if (!values || values.length < 2) return;
+
+  var header = values[0].map(function (h) { return String(h || "").trim(); });
+  var phoneIdx = header.indexOf("Номер телефона");
+  var clientIdx = header.indexOf("Клиент");
+  if (phoneIdx === -1 || clientIdx === -1) return;
+
+  var directoryMap = buildDirectoryMap();
+  var updated = 0;
+
+  for (var i = 1; i < values.length; i++) {
+    var currentClient = String(values[i][clientIdx] || "").trim();
+    if (currentClient) continue;
+
+    var normalizedPhone = normalizePhone(values[i][phoneIdx]);
+    if (!normalizedPhone) continue;
+
+    var foundClient = directoryMap[normalizedPhone];
+    if (!foundClient) continue;
+
+    sheet.getRange(i + 1, clientIdx + 1).setValue(foundClient);
+    updated++;
+  }
+
+  Logger.log("fillEmptyClientsInCalltrack: updated=" + updated);
+}
+
+function installHourlyClientBackfillTrigger() {
+  // Запускается один раз вручную: создаёт триггер раз в час.
+  var fnName = "fillEmptyClientsInCalltrack";
+  var existing = ScriptApp.getProjectTriggers().some(function (t) {
+    return t.getHandlerFunction() === fnName;
+  });
+  if (existing) return;
+
+  ScriptApp.newTrigger(fnName)
+    .timeBased()
+    .everyHours(1)
+    .create();
+}
+
 ```
 
 ### Шаг 3. Опубликовать
@@ -135,11 +215,12 @@ function doPost(e) {
 2. Тип: **Web App**.
 3. Доступ: **Anyone**.
 4. Скопируйте URL web app.
+5. Один раз вручную выполните функцию `installHourlyClientBackfillTrigger()` в редакторе Apps Script, чтобы создать почасовой триггер заполнения пустых значений в колонке "Клиент".
 
 ### Шаг 4. Вставить URL в приложение
 В `app/build.gradle` замените:
 ```gradle
-buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/AKfycbzeZKY0kOvV2gFVfrxvIGlt6jRk2sKGr6IhleWILIb6UCvE9hLXBjjJmskaeK8pDF5U4w/exec"'
+buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/AKfycbxTZ0CxeU2C9VLBnJeBH-0E_5bQqSes4ffekvQGR5J55iTXbBiCXeDA787bFDmu6xtEow/exec"'
 ```
 на ваш реальный URL.
 
@@ -166,6 +247,193 @@ buildConfigField "String", "CLIENT_DIRECTORY_SHEET_GIDS", '"0,123456789"'
 - порядок gid задаёт приоритет поиска (сначала первый gid, потом второй);
 - сравнение номеров делается после нормализации (только цифры, последние 10);
 - если клиент не найден, в webhook уходит `"-"` в поле `client`.
+
+### Шаг 6. Отдельный Google Apps Script для базы `Calltrack_mop` (личные контакты и восстановление)
+
+Ниже — готовый скрипт для таблицы:
+`https://docs.google.com/spreadsheets/d/1PEkVdGOJmYmzDmVCaIqFYl7holzkt6ohCHMIeLlAJks/edit`
+
+Он делает 2 вещи:
+1. **POST** — сохраняет/обновляет личные контакты (по паре: номер пользователя + номер контакта).
+2. **GET** — отдаёт записи для восстановления:
+   - по `manager_phone` — все записи пользователя;
+   - по `manager_phone + contact_phone` — точечная запись.
+
+```javascript
+/***** НАСТРОЙКИ *****/
+var SPREADSHEET_ID = "1PEkVdGOJmYmzDmVCaIqFYl7holzkt6ohCHMIeLlAJks";
+var SHEET_NAME = "Личные контакты";
+
+/***** СЛУЖЕБНЫЕ *****/
+function getSheet() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) throw new Error("Лист не найден: " + SHEET_NAME);
+  return sheet;
+}
+
+function json(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function normPhone(v) {
+  return String(v || "").replace(/\D/g, "").slice(-10);
+}
+
+function getHeaderMap(header) {
+  var map = {};
+  header.forEach(function(h, i) {
+    map[String(h || "").trim()] = i;
+  });
+  return map;
+}
+
+function ensureColumns(sheet) {
+  var required = [
+    "Дата обновления",
+    "Номер телефона пользователя",
+    "Менеджер",
+    "Личные номера",
+    "Признак личного"
+  ];
+
+  var lastCol = sheet.getLastColumn();
+  if (lastCol === 0) {
+    sheet.getRange(1, 1, 1, required.length).setValues([required]);
+    return required;
+  }
+
+  var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var changed = false;
+  required.forEach(function(col) {
+    if (header.indexOf(col) === -1) {
+      header.push(col);
+      changed = true;
+    }
+  });
+  if (changed) {
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  }
+  return header;
+}
+
+/***** POST: сохранить/обновить личный контакт *****/
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      throw new Error("Нет JSON в POST");
+    }
+
+    var payload = JSON.parse(e.postData.contents);
+    var sheet = getSheet();
+    var header = ensureColumns(sheet);
+    var map = getHeaderMap(header);
+
+    var managerPhone = normPhone(payload.manager_phone || payload.user_phone || payload.managerPhone);
+    var managerName = String(payload.manager_name || payload.manager || payload.managerName || "").trim();
+    var contactPhone = normPhone(payload.contact_phone || payload.phone || payload.contactPhone);
+    var isPersonal = String(payload.is_personal || payload.personal || "").toLowerCase();
+
+    if (!managerPhone) throw new Error("Пустой manager_phone");
+    if (!contactPhone) throw new Error("Пустой contact_phone");
+    if (!managerName) managerName = "Не указан";
+
+    // по умолчанию считаем личным, если не передан явный false
+    var personalFlag = (isPersonal === "false" || isPersonal === "0" || isPersonal === "no") ? "0" : "1";
+
+    var row = new Array(header.length).fill("");
+    row[map["Дата обновления"]] = Utilities.formatDate(new Date(), "Europe/Moscow", "yyyy-MM-dd HH:mm:ss");
+    row[map["Номер телефона пользователя"]] = managerPhone;
+    row[map["Менеджер"]] = managerName;
+    row[map["Личные номера"]] = contactPhone;
+    row[map["Признак личного"]] = personalFlag;
+
+    var lastRow = sheet.getLastRow();
+    var updated = false;
+    if (lastRow > 1) {
+      var data = sheet.getRange(2, 1, lastRow - 1, header.length).getValues();
+      for (var i = 0; i < data.length; i++) {
+        var r = data[i];
+        var mp = normPhone(r[map["Номер телефона пользователя"]]);
+        var cp = normPhone(r[map["Личные номера"]]);
+        if (mp === managerPhone && cp === contactPhone) {
+          sheet.getRange(i + 2, 1, 1, row.length).setValues([row]);
+          updated = true;
+          break;
+        }
+      }
+    }
+
+    if (!updated) sheet.appendRow(row);
+
+    return json({
+      status: updated ? "updated" : "inserted",
+      manager_phone: managerPhone,
+      contact_phone: contactPhone
+    });
+  } catch (err) {
+    return json({ status: "error", message: err.message });
+  }
+}
+
+/***** GET: получить данные для восстановления *****/
+function doGet(e) {
+  try {
+    var sheet = getSheet();
+    var header = ensureColumns(sheet);
+    var map = getHeaderMap(header);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return json([]);
+
+    var managerPhone = normPhone((e.parameter && e.parameter.manager_phone) || "");
+    var contactPhone = normPhone((e.parameter && e.parameter.contact_phone) || "");
+
+    var data = sheet.getRange(2, 1, lastRow - 1, header.length).getValues();
+    var result = [];
+
+    data.forEach(function(r) {
+      var mp = normPhone(r[map["Номер телефона пользователя"]]);
+      var cp = normPhone(r[map["Личные номера"]]);
+      var personal = String(r[map["Признак личного"]] || "0");
+      if (personal !== "1") return;
+      if (managerPhone && mp !== managerPhone) return;
+      if (contactPhone && cp !== contactPhone) return;
+
+      result.push({
+        updated_at: r[map["Дата обновления"]] || "",
+        manager_phone: mp,
+        manager_name: String(r[map["Менеджер"]] || "").trim(),
+        contact_phone: cp,
+        is_personal: true
+      });
+    });
+
+    return json(result);
+  } catch (err) {
+    return json({ status: "error", message: err.message });
+  }
+}
+```
+
+#### Как вызывать этот скрипт из приложения
+
+- При установке метки «Личный контакт» отправляйте POST:
+```json
+{
+  "manager_phone": "79990001122",
+  "manager_name": "Иванов Иван Иванович",
+  "contact_phone": "79995554433",
+  "is_personal": true
+}
+```
+
+- Для полной подгрузки (ежедневно в 11:00 МСК) используйте:
+`GET .../exec?manager_phone=79990001122`
+
+- Для точечной подгрузки (карточка/вызов):
+`GET .../exec?manager_phone=79990001122&contact_phone=79995554433`
 
 ---
 
