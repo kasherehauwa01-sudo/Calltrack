@@ -25,6 +25,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -167,23 +168,27 @@ class CallRepository(
         if (phone.isBlank() || phone == "Неизвестно") return
         ensureContact(phone)
         contactDao.updateClient1cByPhone(phone, "Личный")
-        syncPersonalContactToRemote(phone, true)
+        syncPersonalContactToRemote(phone, true, enqueueOnFailure = true)
+        flushPendingPersonalContactsSync()
     }
 
     suspend fun unmarkPersonalContact(phone: String) {
         if (phone.isBlank() || phone == "Неизвестно") return
         ensureContact(phone)
         contactDao.updateClient1cByPhone(phone, "")
-        syncPersonalContactToRemote(phone, false)
+        syncPersonalContactToRemote(phone, false, enqueueOnFailure = true)
+        flushPendingPersonalContactsSync()
     }
 
-    private suspend fun syncPersonalContactToRemote(phone: String, isPersonal: Boolean) {
+    private suspend fun syncPersonalContactToRemote(phone: String, isPersonal: Boolean, enqueueOnFailure: Boolean): Boolean {
         val managerPhone = prefs.getManagerPhone().ifBlank { return }
         val managerName = prefs.getManagerName().ifBlank { "Не указан" }
+        val normalizedManagerPhone = normalizePhone(managerPhone)
+        val normalizedContactPhone = normalizePhone(phone)
         val payload = JSONObject().apply {
-            put("manager_phone", normalizePhone(managerPhone))
+            put("manager_phone", normalizedManagerPhone)
             put("manager_name", managerName)
-            put("contact_phone", normalizePhone(phone))
+            put("contact_phone", normalizedContactPhone)
             put("is_personal", isPersonal)
         }
         val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
@@ -191,7 +196,7 @@ class CallRepository(
             .url(BuildConfig.PERSONAL_CONTACTS_WEBHOOK_URL)
             .post(body)
             .build()
-        runCatching {
+        return runCatching {
             withContext(Dispatchers.IO) {
                 personalContactsHttpClient.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
@@ -200,10 +205,75 @@ class CallRepository(
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ${response.code}")
                 }
             }
+            true
         }.onFailure {
             com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
             Log.e("CallRepository", "Не удалось отправить личный контакт в Calltrack_mop", it)
+            if (enqueueOnFailure) {
+                enqueuePendingPersonalSync(
+                    PersonalSyncItem(
+                        managerPhone = normalizedManagerPhone,
+                        managerName = managerName,
+                        contactPhone = normalizedContactPhone,
+                        isPersonal = isPersonal
+                    )
+                )
+            }
+        }.getOrDefault(false)
+    }
+
+    private suspend fun flushPendingPersonalContactsSync() {
+        val pending = readPendingPersonalSync()
+        if (pending.isEmpty()) return
+        val stillPending = mutableListOf<PersonalSyncItem>()
+        pending.forEach { item ->
+            val ok = syncPersonalContactToRemote(item.contactPhone, item.isPersonal, enqueueOnFailure = false)
+            if (!ok) stillPending.add(item)
         }
+        writePendingPersonalSync(stillPending)
+    }
+
+    private suspend fun enqueuePendingPersonalSync(item: PersonalSyncItem) {
+        val list = readPendingPersonalSync().toMutableList()
+        list.removeAll { it.managerPhone == item.managerPhone && it.contactPhone == item.contactPhone }
+        list.add(item)
+        writePendingPersonalSync(list)
+    }
+
+    private suspend fun readPendingPersonalSync(): List<PersonalSyncItem> {
+        val raw = prefs.getPendingPersonalSync()
+        if (raw.isBlank()) return emptyList()
+        return runCatching {
+            val arr = JSONArray(raw)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    add(
+                        PersonalSyncItem(
+                            managerPhone = o.optString("manager_phone"),
+                            managerName = o.optString("manager_name"),
+                            contactPhone = o.optString("contact_phone"),
+                            isPersonal = o.optBoolean("is_personal", true)
+                        )
+                    )
+                }
+            }
+        }.getOrElse { emptyList() }
+    }
+
+    private suspend fun writePendingPersonalSync(items: List<PersonalSyncItem>) {
+        val arr = JSONArray()
+        items.forEach { item ->
+            arr.put(
+                JSONObject().apply {
+                    put("manager_phone", item.managerPhone)
+                    put("manager_name", item.managerName)
+                    put("contact_phone", item.contactPhone)
+                    put("is_personal", item.isPersonal)
+                }
+            )
+        }
+        prefs.setPendingPersonalSync(arr.toString())
     }
 
 
@@ -348,5 +418,12 @@ class CallRepository(
         val tag: String,
         val reminder: String,
         val timestampBucket: Long
+    )
+
+    private data class PersonalSyncItem(
+        val managerPhone: String,
+        val managerName: String,
+        val contactPhone: String,
+        val isPersonal: Boolean
     )
 }
