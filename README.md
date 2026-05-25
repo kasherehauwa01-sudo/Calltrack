@@ -139,7 +139,7 @@ function doPost(e) {
 ### Шаг 4. Вставить URL в приложение
 В `app/build.gradle` замените:
 ```gradle
-buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/AKfycbzeZKY0kOvV2gFVfrxvIGlt6jRk2sKGr6IhleWILIb6UCvE9hLXBjjJmskaeK8pDF5U4w/exec"'
+buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/AKfycbxTZ0CxeU2C9VLBnJeBH-0E_5bQqSes4ffekvQGR5J55iTXbBiCXeDA787bFDmu6xtEow/exec"'
 ```
 на ваш реальный URL.
 
