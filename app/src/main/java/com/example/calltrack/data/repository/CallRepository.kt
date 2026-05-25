@@ -341,7 +341,7 @@ class CallRepository(
                     val clientName = if (personalMarked) "Личный звонок" else findClientName(entity.phone)
                     val reminderText = extractReminderText(entity.reminder)
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "Отправка данных в таблицу: id=${entity.id}, phone=${entity.phone}, type=${entity.type}")
-                    webhookApi.sendCall(
+                    val response = webhookApi.sendCall(
                         BuildConfig.WEBHOOK_URL,
                         WebhookRequest(
                             callId = "${entity.id}_${entity.timestamp}",
@@ -359,8 +359,15 @@ class CallRepository(
                             client = clientName
                         )
                     )
+                    val bodyText = response.body()?.string().orEmpty()
+                    if (!isWebhookAccepted(response.isSuccessful, bodyText)) {
+                        throw IllegalStateException(
+                            "Calltrack webhook rejected: code=${response.code()}, body=${bodyText.take(400)}"
+                        )
+                    }
+
                     callDao.markUploaded(duplicates.map { it.id })
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ok")
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: code=${response.code()}")
                     Log.d(
                         "CallRepository",
                         "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
@@ -376,6 +383,15 @@ class CallRepository(
                 }
             }
         }
+    }
+
+
+    private fun isWebhookAccepted(isSuccessful: Boolean, bodyText: String): Boolean {
+        if (!isSuccessful) return false
+        val normalized = bodyText.lowercase(Locale.getDefault())
+        if (normalized.contains("не удалось найти функцию скрипта")) return false
+        if (normalized.contains("ошибка")) return false
+        return true
     }
 
     private suspend fun ensureContact(phone: String) {
