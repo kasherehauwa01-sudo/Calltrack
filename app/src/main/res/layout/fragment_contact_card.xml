@@ -89,6 +89,13 @@
                         android:textColor="@color/textPrimary"
                         android:textSize="18sp" />
 
+                    <Button
+                        android:id="@+id/btnMarkPersonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Пометить как личный контакт" />
+
                     <TextView
                         android:id="@+id/tvContactPhone"
                         android:layout_width="match_parent"
