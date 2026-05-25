@@ -107,6 +107,11 @@ class CallTrackingService : Service() {
             latestSavedCallId = repo.saveCall(entity)
             latestSavedEntity = entity
             AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
+
+            if (shouldShowPostCallPrompt(entity.type)) {
+                val contactName = resolveContactName(entity.phone)
+                showPostCallNow(latestSavedCallId, entity.phone, contactName)
+            }
         }
         if (!hasNewData) return false
 
@@ -124,10 +129,6 @@ class CallTrackingService : Service() {
         if (clientName.isBlank()) {
             AppLogger.log(this, "NOTIFY", "Показ уведомления: Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
             showMissingClientNotification()
-        }
-        if (shouldShowPostCallPrompt(finalEntity.type)) {
-            val contactName = resolveContactName(finalEntity.phone)
-            showPostCallNow(latestSavedCallId, finalEntity.phone, contactName)
         }
         Log.d("CallTrackingService", "Calls captured count=${entities.size}, latest=${finalEntity.phone}, ts=${finalEntity.timestamp}")
         return true
