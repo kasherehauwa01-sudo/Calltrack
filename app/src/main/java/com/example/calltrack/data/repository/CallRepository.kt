@@ -190,7 +190,6 @@ class CallRepository(
             put("manager_name", managerName)
             put("contact_phone", normalizedContactPhone)
             put("is_personal", isPersonal)
-            put("delete", !isPersonal)
         }
         val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
         val request = Request.Builder()

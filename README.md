@@ -254,17 +254,13 @@ function doPost(e) {
     var managerName = String(payload.manager_name || payload.manager || payload.managerName || "").trim();
     var contactPhone = normPhone(payload.contact_phone || payload.phone || payload.contactPhone);
     var isPersonal = String(payload.is_personal || payload.personal || "").toLowerCase();
-    var deleteFlag = String(payload["delete"] || "").toLowerCase();
 
     if (!managerPhone) throw new Error("Пустой manager_phone");
     if (!contactPhone) throw new Error("Пустой contact_phone");
     if (!managerName) managerName = "Не указан";
 
-    // если передан delete=true (или is_personal=false) — удаляем запись
-    var shouldDelete = (deleteFlag === "true" || deleteFlag === "1" || deleteFlag === "yes");
     // по умолчанию считаем личным, если не передан явный false
     var personalFlag = (isPersonal === "false" || isPersonal === "0" || isPersonal === "no") ? "0" : "1";
-    if (personalFlag === "0") shouldDelete = true;
 
     var row = new Array(header.length).fill("");
     row[map["Дата обновления"]] = Utilities.formatDate(new Date(), "Europe/Moscow", "yyyy-MM-dd HH:mm:ss");
@@ -275,7 +271,6 @@ function doPost(e) {
 
     var lastRow = sheet.getLastRow();
     var updated = false;
-    var deleted = false;
     if (lastRow > 1) {
       var data = sheet.getRange(2, 1, lastRow - 1, header.length).getValues();
       for (var i = 0; i < data.length; i++) {
@@ -283,22 +278,17 @@ function doPost(e) {
         var mp = normPhone(r[map["Номер телефона пользователя"]]);
         var cp = normPhone(r[map["Личные номера"]]);
         if (mp === managerPhone && cp === contactPhone) {
-          if (shouldDelete) {
-            sheet.deleteRow(i + 2);
-            deleted = true;
-          } else {
-            sheet.getRange(i + 2, 1, 1, row.length).setValues([row]);
-            updated = true;
-          }
+          sheet.getRange(i + 2, 1, 1, row.length).setValues([row]);
+          updated = true;
           break;
         }
       }
     }
 
-    if (!updated && !deleted && !shouldDelete) sheet.appendRow(row);
+    if (!updated) sheet.appendRow(row);
 
     return json({
-      status: deleted ? "deleted" : (updated ? "updated" : (shouldDelete ? "not_found" : "inserted")),
+      status: updated ? "updated" : "inserted",
       manager_phone: managerPhone,
       contact_phone: contactPhone
     });
