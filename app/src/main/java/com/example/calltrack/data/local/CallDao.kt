@@ -14,6 +14,9 @@ interface CallDao {
     @Query("SELECT * FROM calls ORDER BY timestamp DESC")
     fun observeAll(): Flow<List<CallEntity>>
 
+    @Query("SELECT MAX(timestamp) FROM calls")
+    suspend fun getLatestTimestamp(): Long?
+
     @Query("SELECT * FROM calls WHERE phone = :phone ORDER BY timestamp DESC")
     fun observeByPhone(phone: String): Flow<List<CallEntity>>
 
