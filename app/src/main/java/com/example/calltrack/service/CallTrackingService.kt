@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.data.local.CallEntity
+import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.telephony.CallStateTracker
 import com.example.calltrack.ui.postcall.PostCallActivity
 import kotlinx.coroutines.CoroutineScope
@@ -60,11 +61,15 @@ class CallTrackingService : Service() {
         tracker = CallStateTracker(this) { state, _ ->
             when (state) {
                 TelephonyManager.CALL_STATE_RINGING,
-                TelephonyManager.CALL_STATE_OFFHOOK -> lastStateWasActive = true
+                TelephonyManager.CALL_STATE_OFFHOOK -> {
+                    lastStateWasActive = true
+                    AppLogger.log(this, "CALL", "Начало звонка: unknown")
+                }
 
                 TelephonyManager.CALL_STATE_IDLE -> {
                     if (lastStateWasActive) {
                         lastStateWasActive = false
+                        AppLogger.log(this, "CALL", "Завершение звонка: unknown")
                         scope.launch {
                             captureLatestCallWithRetry()
                         }
@@ -91,7 +96,9 @@ class CallTrackingService : Service() {
 
         lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
+        AppLogger.log(this, "CALL", "Сохранение звонка в локальную БД")
         val callId = repo.saveCall(entity)
+        AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
         val clientName = repo.findClientName(entity.phone)
 
         // ВАЖНО: сначала мгновенно сохраняем звонок локально (что сразу обновляет экран "Последние"),
@@ -106,6 +113,7 @@ class CallTrackingService : Service() {
         }
 
         if (clientName.isBlank()) {
+            AppLogger.log(this, "NOTIFY", "Показ уведомления: Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
             showMissingClientNotification()
         }
         if (shouldShowPostCallPrompt(entity.type)) {

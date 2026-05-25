@@ -181,7 +181,7 @@ buildConfigField "String", "CLIENT_DIRECTORY_SHEET_GIDS", '"0,123456789"'
 ```javascript
 /***** НАСТРОЙКИ *****/
 var SPREADSHEET_ID = "1PEkVdGOJmYmzDmVCaIqFYl7holzkt6ohCHMIeLlAJks";
-var SHEET_NAME = "Лист1";
+var SHEET_NAME = "Личные контакты";
 
 /***** СЛУЖЕБНЫЕ *****/
 function getSheet() {
@@ -213,8 +213,8 @@ function ensureColumns(sheet) {
   var required = [
     "Дата обновления",
     "Номер телефона пользователя",
-    "Номер контакта",
-    "Наименование клиента в 1с",
+    "Менеджер",
+    "Личные номера",
     "Признак личного"
   ];
 
@@ -251,13 +251,13 @@ function doPost(e) {
     var map = getHeaderMap(header);
 
     var managerPhone = normPhone(payload.manager_phone || payload.user_phone || payload.managerPhone);
+    var managerName = String(payload.manager_name || payload.manager || payload.managerName || "").trim();
     var contactPhone = normPhone(payload.contact_phone || payload.phone || payload.contactPhone);
-    var clientName = String(payload.client_name || payload.client || payload.client1c || "").trim();
     var isPersonal = String(payload.is_personal || payload.personal || "").toLowerCase();
 
     if (!managerPhone) throw new Error("Пустой manager_phone");
     if (!contactPhone) throw new Error("Пустой contact_phone");
-    if (!clientName) clientName = "Личный";
+    if (!managerName) managerName = "Не указан";
 
     // по умолчанию считаем личным, если не передан явный false
     var personalFlag = (isPersonal === "false" || isPersonal === "0" || isPersonal === "no") ? "0" : "1";
@@ -265,8 +265,8 @@ function doPost(e) {
     var row = new Array(header.length).fill("");
     row[map["Дата обновления"]] = Utilities.formatDate(new Date(), "Europe/Moscow", "yyyy-MM-dd HH:mm:ss");
     row[map["Номер телефона пользователя"]] = managerPhone;
-    row[map["Номер контакта"]] = contactPhone;
-    row[map["Наименование клиента в 1с"]] = clientName;
+    row[map["Менеджер"]] = managerName;
+    row[map["Личные номера"]] = contactPhone;
     row[map["Признак личного"]] = personalFlag;
 
     var lastRow = sheet.getLastRow();
@@ -276,7 +276,7 @@ function doPost(e) {
       for (var i = 0; i < data.length; i++) {
         var r = data[i];
         var mp = normPhone(r[map["Номер телефона пользователя"]]);
-        var cp = normPhone(r[map["Номер контакта"]]);
+        var cp = normPhone(r[map["Личные номера"]]);
         if (mp === managerPhone && cp === contactPhone) {
           sheet.getRange(i + 2, 1, 1, row.length).setValues([row]);
           updated = true;
@@ -314,7 +314,7 @@ function doGet(e) {
 
     data.forEach(function(r) {
       var mp = normPhone(r[map["Номер телефона пользователя"]]);
-      var cp = normPhone(r[map["Номер контакта"]]);
+      var cp = normPhone(r[map["Личные номера"]]);
       var personal = String(r[map["Признак личного"]] || "0");
       if (personal !== "1") return;
       if (managerPhone && mp !== managerPhone) return;
@@ -323,8 +323,8 @@ function doGet(e) {
       result.push({
         updated_at: r[map["Дата обновления"]] || "",
         manager_phone: mp,
+        manager_name: String(r[map["Менеджер"]] || "").trim(),
         contact_phone: cp,
-        client_name: String(r[map["Наименование клиента в 1с"]] || "").trim() || "Личный",
         is_personal: true
       });
     });
@@ -342,8 +342,8 @@ function doGet(e) {
 ```json
 {
   "manager_phone": "79990001122",
+  "manager_name": "Иванов Иван Иванович",
   "contact_phone": "79995554433",
-  "client_name": "Личный",
   "is_personal": true
 }
 ```

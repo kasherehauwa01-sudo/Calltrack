@@ -32,6 +32,7 @@ class CallRepository(
     private val webhookApi: WebhookApi,
     context: Context
 ) {
+    private val appContext = context.applicationContext
     val prefs = PrefsManager(context)
     private val clientDirectory = ClientDirectory(context)
 
@@ -55,8 +56,13 @@ class CallRepository(
         if (normalizedPhone.isBlank()) return emptyList()
         val separator = if (BuildConfig.WEBHOOK_URL.contains("?")) "&" else "?"
         val url = "${BuildConfig.WEBHOOK_URL}${separator}phone=$normalizedPhone"
+        com.example.calltrack.logging.AppLogger.log(appContext, "API", "Запрос данных из таблицы")
         return runCatching { webhookApi.loadHistory(url) }
-            .onFailure { Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it) }
+            .onSuccess { com.example.calltrack.logging.AppLogger.log(appContext, "API", "Получено записей: ${it.size}") }
+            .onFailure {
+                Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it)
+                com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки данных: ${it.message}")
+            }
             .getOrElse { emptyList() }
     }
 
@@ -213,6 +219,7 @@ class CallRepository(
                     val personalMarked = contactDao.findByPhone(entity.phone)?.client1c == "Личный"
                     val clientName = if (personalMarked) "Личный звонок" else findClientName(entity.phone)
                     val reminderText = extractReminderText(entity.reminder)
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Отправка данных в таблицу: id=${entity.id}, phone=${entity.phone}, type=${entity.type}")
                     webhookApi.sendCall(
                         BuildConfig.WEBHOOK_URL,
                         WebhookRequest(
@@ -232,6 +239,7 @@ class CallRepository(
                         )
                     )
                     callDao.markUploaded(duplicates.map { it.id })
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ok")
                     Log.d(
                         "CallRepository",
                         "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
@@ -242,6 +250,8 @@ class CallRepository(
                     Log.e("WEBHOOK", "Ошибка при вызове webhookApi.sendCall", it)
                     Log.e("WEBHOOK", "Ошибка отправки: id=${entity.id}", it)
                     Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
+                    com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Повторная отправка данных")
                 }
             }
         }

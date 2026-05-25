@@ -1,6 +1,7 @@
 package com.example.calltrack
 
 import android.app.Application
+import android.util.Log
 import com.example.calltrack.data.local.CallDatabase
 import com.example.calltrack.data.remote.ApiFactory
 import com.example.calltrack.data.repository.CallRepository
@@ -13,6 +14,9 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         AppLogger.install(this)
+        Thread.setDefaultUncaughtExceptionHandler { _, e ->
+            AppLogger.log(this, "CRASH", Log.getStackTraceString(e))
+        }
         val db = CallDatabase.getInstance(this)
         repository = CallRepository(
             callDao = db.callDao(),

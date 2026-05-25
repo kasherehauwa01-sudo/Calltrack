@@ -73,6 +73,7 @@ class MainActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         applySavedTheme()
         super.onCreate(savedInstanceState)
+        AppLogger.log(this, "APP", "MainActivity создана")
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -104,6 +105,16 @@ class MainActivity : BaseActivity() {
         handleExternalNavigation(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        AppLogger.log(this, "APP", "Приложение на экране")
+    }
+
+    override fun onPause() {
+        AppLogger.log(this, "APP", "Приложение свернуто")
+        super.onPause()
+    }
+
     private fun applyWindowInsets() = applyInsets(binding.root, binding.statusBarOverlay)
 
     private fun handleExternalNavigation(intent: Intent?) {
@@ -127,13 +138,17 @@ class MainActivity : BaseActivity() {
 
     private fun setupSettingsButton() {
         binding.btnSettings.setOnClickListener { anchor ->
+            AppLogger.log(this, "UI", "Нажата кнопка: Настройки")
             PopupMenu(this, anchor).apply {
                 menu.add(0, MENU_ABOUT_ID, 0, getString(R.string.about_app))
                 menu.add(0, MENU_USER_ID, 1, getString(R.string.user))
                 setOnMenuItemClickListener { menuItem ->
                     when (menuItem.itemId) {
                         MENU_ABOUT_ID -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
-                        MENU_USER_ID -> openFragment(UserFragment.newInstance())
+                        MENU_USER_ID -> {
+                            AppLogger.log(this@MainActivity, "UI", "Открыт экран: Пользователь")
+                            openFragment(UserFragment.newInstance())
+                        }
                         else -> false
                     }
                     true
@@ -145,25 +160,31 @@ class MainActivity : BaseActivity() {
 
     private fun checkForUpdatesAndPrompt() {
         lifecycleScope.launch {
-            AppLogger.log(this@MainActivity, "INFO", "Пользователь запустил проверку обновления")
+            AppLogger.log(this@MainActivity, "UI", "Нажата кнопка: Обновить")
+            AppLogger.log(this@MainActivity, "UPDATE", "Проверка обновлений")
+            AppLogger.log(this@MainActivity, "UPDATE", "Текущая версия: ${BuildConfig.VERSION_NAME}")
+            AppLogger.log(this@MainActivity, "NOTIFY", "Показ уведомления: Проверяем обновление")
             Toast.makeText(this@MainActivity, "Проверяем наличие новой версии…", Toast.LENGTH_SHORT).show()
 
             val latestFromApi = withContext(Dispatchers.IO) { fetchLatestReleaseInfo() }
             if (latestFromApi == null) {
-                AppLogger.log(this@MainActivity, "WARN", "Не удалось получить данные о версии с GitHub")
+                AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки данных: не удалось получить данные о версии с GitHub")
+                AppLogger.log(this@MainActivity, "NOTIFY", "Показ уведомления: Ошибка сети")
                 Toast.makeText(this@MainActivity, "Не удалось проверить обновление. Повторите позже", Toast.LENGTH_LONG).show()
                 return@launch
             }
 
             val latest = latestFromApi
+            AppLogger.log(this@MainActivity, "UPDATE", "Удаленная версия: ${latest.tag}")
             if (!isRemoteVersionNewer(BuildConfig.VERSION_NAME, latest.tag)) {
-                AppLogger.log(this@MainActivity, "INFO", "Обновление не требуется. Текущая версия актуальна")
+                AppLogger.log(this@MainActivity, "UPDATE", "Версия актуальна")
                 AlertDialog.Builder(this@MainActivity)
                     .setMessage("У Вас установлена актуальная версия приложения")
                     .setPositiveButton("OK", null)
                     .show()
                 return@launch
             }
+            AppLogger.log(this@MainActivity, "UPDATE", "Найдена новая версия")
 
             AlertDialog.Builder(this@MainActivity)
                 .setTitle("Найдена свежая версия")
@@ -177,6 +198,8 @@ class MainActivity : BaseActivity() {
     private fun startApkUpdateDownload(apkUrl: String) {
         lifecycleScope.launch {
             Log.d("UPDATE_FLOW", "startApkUpdateDownload вызван")
+            AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK")
+            AppLogger.log(this@MainActivity, "NOTIFY", "Показ уведомления: Началась загрузка")
             val manager = getSystemService(DownloadManager::class.java)
             val request = DownloadManager.Request(Uri.parse(apkUrl))
                 .setTitle("Обновление Calltrack")
@@ -252,6 +275,7 @@ class MainActivity : BaseActivity() {
     }
 
     private fun installDownloadedApk(downloadId: Long) {
+        AppLogger.log(this, "UPDATE", "APK загружен, запуск установки")
         val manager = getSystemService(DownloadManager::class.java)
         val query = DownloadManager.Query().setFilterById(downloadId)
         var localUri: String? = null
@@ -305,10 +329,12 @@ class MainActivity : BaseActivity() {
                     true
                 }
                 R.id.nav_recent -> {
+                    AppLogger.log(this, "UI", "Открыт экран: История звонков")
                     openFragment(CallListFragment.newInstance())
                     true
                 }
                 R.id.nav_contacts -> {
+                    AppLogger.log(this, "UI", "Открыт экран: Контакты")
                     openFragment(ContactsFragment.newInstance())
                     true
                 }
@@ -386,6 +412,7 @@ class MainActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        AppLogger.log(this, "APP", "MainActivity уничтожена")
         runCatching { unregisterReceiver(downloadCompleteReceiver) }
         super.onDestroy()
     }
