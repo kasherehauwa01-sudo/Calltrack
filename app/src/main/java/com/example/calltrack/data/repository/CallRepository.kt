@@ -16,9 +16,11 @@ import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.data.remote.WebhookApi
 import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.data.remote.WebhookRequest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -190,11 +192,13 @@ class CallRepository(
             .post(body)
             .build()
         runCatching {
-            personalContactsHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IllegalStateException("HTTP ${response.code}")
+            withContext(Dispatchers.IO) {
+                personalContactsHttpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IllegalStateException("HTTP ${response.code}")
+                    }
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ${response.code}")
                 }
-                com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ${response.code}")
             }
         }.onFailure {
             com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
