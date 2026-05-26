@@ -64,14 +64,6 @@ class ContactCardFragment : Fragment() {
         }
         binding.btnAddComment.setOnClickListener { showAddCommentDialog(phone) }
         binding.btnAddReminder.setOnClickListener { showAddReminderDialog(phone) }
-        binding.btnAddTo1c.setOnClickListener {
-            AlertDialog.Builder(requireContext())
-                .setMessage("Чтобы определить клиента, добавьте номер телефона в его карточку в 1С.")
-                .setPositiveButton("Ок") { _, _ ->
-                    requireActivity().onBackPressedDispatcher.onBackPressed()
-                }
-                .show()
-        }
         binding.btnMarkPersonal.setOnClickListener {
             viewLifecycleOwner.lifecycleScope.launch {
                 if (isPersonalContact) {

@@ -96,13 +96,6 @@
                         android:layout_marginTop="8dp"
                         android:text="Пометить как личный контакт" />
 
-                    <Button
-                        android:id="@+id/btnAddTo1c"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="Добавить контакт в базу 1с" />
-
                     <TextView
                         android:id="@+id/tvContactPhone"
                         android:layout_width="match_parent"

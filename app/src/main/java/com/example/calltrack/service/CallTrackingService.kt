@@ -179,14 +179,36 @@ class CallTrackingService : Service() {
 
     private fun showMissingClientNotification(phone: String) {
         val manager = getSystemService(NotificationManager::class.java)
-        val openIntent = Intent(this, com.example.calltrack.ui.main.MainActivity::class.java).apply {
+        val openIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            putExtra(com.example.calltrack.ui.main.MainActivity.EXTRA_OPEN_CONTACT_PHONE, phone)
+            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
         }
         val openPending = PendingIntent.getActivity(
             this,
             phone.hashCode(),
             openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val personalIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
+        }
+        val personalPending = PendingIntent.getActivity(
+            this,
+            phone.hashCode() + 1,
+            personalIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val addTo1cIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
+        }
+        val addTo1cPending = PendingIntent.getActivity(
+            this,
+            phone.hashCode() + 2,
+            addTo1cIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -198,6 +220,8 @@ class CallTrackingService : Service() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(openPending)
+            .addAction(0, "Личный контакт", personalPending)
+            .addAction(0, "Добавить в 1с", addTo1cPending)
             .build()
 
         manager.notify(MISSING_CLIENT_NOTIFICATION_ID, notification)
