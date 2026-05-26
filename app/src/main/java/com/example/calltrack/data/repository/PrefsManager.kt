@@ -14,6 +14,8 @@ private val Context.dataStore by preferencesDataStore("settings")
 class PrefsManager(private val context: Context) {
     private val onboardingKey = booleanPreferencesKey("onboarding_completed")
     private val managerKey = stringPreferencesKey("manager_name")
+    private val managerPhoneKey = stringPreferencesKey("manager_phone")
+    private val pendingPersonalSyncKey = stringPreferencesKey("pending_personal_sync")
     private val themeKey = stringPreferencesKey(PREF_THEME)
 
     val onboardingCompleted: Flow<Boolean> = context.dataStore.data.map { prefs ->
@@ -22,6 +24,10 @@ class PrefsManager(private val context: Context) {
 
     val managerName: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[managerKey].orEmpty()
+    }
+
+    val managerPhone: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[managerPhoneKey].orEmpty()
     }
 
     val themeMode: Flow<String> = context.dataStore.data.map { prefs ->
@@ -36,13 +42,25 @@ class PrefsManager(private val context: Context) {
         context.dataStore.edit { it[managerKey] = value }
     }
 
+    suspend fun setManagerPhone(value: String) {
+        context.dataStore.edit { it[managerPhoneKey] = value }
+    }
+
     suspend fun setThemeMode(value: String) {
         context.dataStore.edit { it[themeKey] = value }
     }
 
     suspend fun getManagerName(): String = managerName.first()
+    suspend fun getManagerPhone(): String = managerPhone.first()
 
     suspend fun getThemeMode(): String = themeMode.first()
+
+    suspend fun getPendingPersonalSync(): String =
+        context.dataStore.data.map { it[pendingPersonalSyncKey].orEmpty() }.first()
+
+    suspend fun setPendingPersonalSync(value: String) {
+        context.dataStore.edit { it[pendingPersonalSyncKey] = value }
+    }
 
     companion object {
         const val PREF_THEME = "app_theme"
