@@ -67,10 +67,15 @@ Android-приложение для корпоративных устройст�
 
 ### Шаг 2. Вставить webhook-код
 ```javascript
+var CALLTRACK_SPREADSHEET_ID = "PASTE_CALLTRACK_SPREADSHEET_ID_HERE";
 var CALLS_SHEET_NAME = "Calls";
 
 function getCallsSheet() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CALLS_SHEET_NAME);
+  var ss = CALLTRACK_SPREADSHEET_ID && CALLTRACK_SPREADSHEET_ID !== "PASTE_CALLTRACK_SPREADSHEET_ID_HERE"
+    ? SpreadsheetApp.openById(CALLTRACK_SPREADSHEET_ID)
+    : SpreadsheetApp.getActiveSpreadsheet();
+
+  var sheet = ss.getSheetByName(CALLS_SHEET_NAME);
   if (!sheet) throw new Error("Лист не найден: " + CALLS_SHEET_NAME);
   return sheet;
 }
@@ -224,6 +229,7 @@ function installHourlyClientBackfillTrigger() {
 3. Доступ: **Anyone**.
 4. Скопируйте URL web app.
 5. Один раз вручную выполните функцию `installHourlyClientBackfillTrigger()` в редакторе Apps Script, чтобы создать почасовой триггер заполнения пустых значений в колонке "Клиент".
+6. После правок обязательно нажмите **Deploy → Manage deployments → Edit → Deploy** (новая версия), иначе будет работать старый код и запись может уходить не в `Calls`.
 
 ### Шаг 4. Вставить URL в приложение
 В `app/build.gradle` замените:
@@ -507,10 +513,15 @@ POST JSON:
 ### 1) Полный скрипт для таблицы **Calltrack** (звонки + почасовой backfill клиента)
 
 ```javascript
+var CALLTRACK_SPREADSHEET_ID = "PASTE_CALLTRACK_SPREADSHEET_ID_HERE";
 var CALLS_SHEET_NAME = "Calls";
 
 function getCallsSheet() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CALLS_SHEET_NAME);
+  var ss = CALLTRACK_SPREADSHEET_ID && CALLTRACK_SPREADSHEET_ID !== "PASTE_CALLTRACK_SPREADSHEET_ID_HERE"
+    ? SpreadsheetApp.openById(CALLTRACK_SPREADSHEET_ID)
+    : SpreadsheetApp.getActiveSpreadsheet();
+
+  var sheet = ss.getSheetByName(CALLS_SHEET_NAME);
   if (!sheet) throw new Error("Лист не найден: " + CALLS_SHEET_NAME);
   return sheet;
 }
