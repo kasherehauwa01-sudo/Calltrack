@@ -114,6 +114,7 @@ function doPost(e) {
   put("Текст напоминания", reminderText);
   put("Клиент", data.client || "");
   put("ID", callId);
+  put("Номер телефона пользователя", data.user_phone || data.userPhone || data.manager_phone || "");
 
   // Ищем уже существующую строку по call_id в колонке L (12-я колонка).
   // Это позволяет обновлять ту же строку после заполнения "Результат звонка",
@@ -558,6 +559,7 @@ function doPost(e) {
   put("Текст напоминания", reminderText);
   put("Клиент", data.client || "");
   put("ID", callId);
+  put("Номер телефона пользователя", data.user_phone || data.userPhone || data.manager_phone || "");
 
   var lastRow = sheet.getLastRow();
   var targetRow = 0;
