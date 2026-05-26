@@ -130,7 +130,7 @@ class CallTrackingService : Service() {
 
         if (!isFinalPersonal && clientName.isBlank()) {
             AppLogger.log(this, "NOTIFY", "Показ уведомления: Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
-            showMissingClientNotification()
+            showMissingClientNotification(finalEntity.phone)
         }
         Log.d("CallTrackingService", "Calls captured count=${entities.size}, latest=${finalEntity.phone}, ts=${finalEntity.timestamp}")
         return true
@@ -177,15 +177,27 @@ class CallTrackingService : Service() {
         manager.notify(notificationId, notification)
     }
 
-    private fun showMissingClientNotification() {
+    private fun showMissingClientNotification(phone: String) {
         val manager = getSystemService(NotificationManager::class.java)
+        val openIntent = Intent(this, com.example.calltrack.ui.main.MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(com.example.calltrack.ui.main.MainActivity.EXTRA_OPEN_CONTACT_PHONE, phone)
+        }
+        val openPending = PendingIntent.getActivity(
+            this,
+            phone.hashCode(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_clover)
             .setContentTitle("Клиент не найден")
-            .setContentText("Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
+            .setContentText("Клиент не найден в базе 1с. Выберите действие")
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setContentIntent(openPending)
             .build()
 
         manager.notify(MISSING_CLIENT_NOTIFICATION_ID, notification)
