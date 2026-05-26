@@ -67,8 +67,16 @@ Android-приложение для корпоративных устройст�
 
 ### Шаг 2. Вставить webhook-код
 ```javascript
+var CALLS_SHEET_NAME = "Calls";
+
+function getCallsSheet() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CALLS_SHEET_NAME);
+  if (!sheet) throw new Error("Лист не найден: " + CALLS_SHEET_NAME);
+  return sheet;
+}
+
 function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var sheet = getCallsSheet();
   var data = JSON.parse(e.postData.contents);
   var comment = data.comment || data.note || "";
   var reminderText = data.reminder_text || data.reminderText || "";
@@ -165,7 +173,7 @@ function buildDirectoryMap() {
 }
 
 function fillEmptyClientsInCalltrack() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var sheet = getCallsSheet();
   var values = sheet.getDataRange().getValues();
   if (!values || values.length < 2) return;
 
@@ -499,8 +507,16 @@ POST JSON:
 ### 1) Полный скрипт для таблицы **Calltrack** (звонки + почасовой backfill клиента)
 
 ```javascript
+var CALLS_SHEET_NAME = "Calls";
+
+function getCallsSheet() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CALLS_SHEET_NAME);
+  if (!sheet) throw new Error("Лист не найден: " + CALLS_SHEET_NAME);
+  return sheet;
+}
+
 function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var sheet = getCallsSheet();
   var data = JSON.parse(e.postData.contents);
   var comment = data.comment || data.note || "";
   var reminderText = data.reminder_text || data.reminderText || "";
@@ -588,7 +604,7 @@ function buildDirectoryMap() {
 }
 
 function fillEmptyClientsInCalltrack() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var sheet = getCallsSheet();
   var values = sheet.getDataRange().getValues();
   if (!values || values.length < 2) return;
 
