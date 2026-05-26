@@ -12,21 +12,23 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.util.Log
 import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import com.example.calltrack.App
+import com.example.calltrack.BuildConfig
 import com.example.calltrack.R
-import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.data.repository.PrefsManager
+import com.example.calltrack.databinding.ActivityMainBinding
+import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.service.CallTrackingService
-import com.example.calltrack.service.CallUiEventBus
 import com.example.calltrack.ui.calls.CallListFragment
 import com.example.calltrack.ui.base.BaseActivity
 import com.example.calltrack.ui.contacts.ContactsFragment
@@ -36,6 +38,9 @@ import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
 
 class MainActivity : BaseActivity() {
@@ -43,9 +48,11 @@ class MainActivity : BaseActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var prefsManager: PrefsManager
     private var apkDownloadId: Long = -1L
+    private var updateCheckHandled = false
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
+    private val updateHttpClient = OkHttpClient()
 
     private val permissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -67,6 +74,7 @@ class MainActivity : BaseActivity() {
         prefsManager = PrefsManager(this)
         applySavedTheme()
         super.onCreate(savedInstanceState)
+        AppLogger.log(this, "APP", "MainActivity создана")
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -95,12 +103,29 @@ class MainActivity : BaseActivity() {
         handleExternalNavigation(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        AppLogger.log(this, "APP", "Приложение на экране")
+    }
+
+    override fun onPause() {
+        AppLogger.log(this, "APP", "Приложение свернуто")
+        super.onPause()
+    }
+
     private fun applyWindowInsets() = applyInsets(binding.root, binding.statusBarOverlay)
 
     private fun handleExternalNavigation(intent: Intent?) {
         val phone = intent?.getStringExtra(EXTRA_OPEN_CONTACT_PHONE).orEmpty()
         if (phone.isNotBlank()) {
             openContactCard(phone)
+            return
+        }
+        if (intent?.getBooleanExtra(EXTRA_RUN_UPDATE_CHECK, false) == true) {
+            if (!updateCheckHandled) {
+                updateCheckHandled = true
+                checkForUpdatesAndPrompt()
+            }
         }
     }
 
@@ -111,13 +136,18 @@ class MainActivity : BaseActivity() {
 
     private fun setupSettingsButton() {
         binding.btnSettings.setOnClickListener { anchor ->
+            AppLogger.log(this, "UI", "Нажата кнопка: Настройки")
             PopupMenu(this, anchor).apply {
-                menu.add(getString(R.string.about_app))
-                menu.add(getString(R.string.update_app))
+                menu.add(0, MENU_ABOUT_ID, 0, getString(R.string.about_app))
+                menu.add(0, MENU_USER_ID, 1, getString(R.string.user))
                 setOnMenuItemClickListener { menuItem ->
-                    when (menuItem.title) {
-                        getString(R.string.about_app) -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
-                        else -> startApkUpdateDownload()
+                    when (menuItem.itemId) {
+                        MENU_ABOUT_ID -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
+                        MENU_USER_ID -> {
+                            AppLogger.log(this@MainActivity, "UI", "Открыт экран: Пользователь")
+                            openFragment(UserFragment.newInstance())
+                        }
+                        else -> false
                     }
                     true
                 }
@@ -126,11 +156,50 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    private fun startApkUpdateDownload() {
+    private fun checkForUpdatesAndPrompt() {
         lifecycleScope.launch {
+            AppLogger.log(this@MainActivity, "UI", "Нажата кнопка: Обновить")
+            AppLogger.log(this@MainActivity, "UPDATE", "Проверка обновлений")
+            AppLogger.log(this@MainActivity, "UPDATE", "Текущая версия: ${BuildConfig.VERSION_NAME}")
+            AppLogger.log(this@MainActivity, "NOTIFY", "Показ уведомления: Проверяем обновление")
             Toast.makeText(this@MainActivity, "Проверяем наличие новой версии…", Toast.LENGTH_SHORT).show()
+
+            val latestFromApi = withContext(Dispatchers.IO) { fetchLatestReleaseInfo() }
+            if (latestFromApi == null) {
+                AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки данных: не удалось получить данные о версии с GitHub")
+                AppLogger.log(this@MainActivity, "NOTIFY", "Показ уведомления: Ошибка сети")
+                Toast.makeText(this@MainActivity, "Не удалось проверить обновление. Повторите позже", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+
+            val latest = latestFromApi
+            AppLogger.log(this@MainActivity, "UPDATE", "Удаленная версия: ${latest.tag}")
+            if (!isRemoteVersionNewer(BuildConfig.VERSION_NAME, latest.tag)) {
+                AppLogger.log(this@MainActivity, "UPDATE", "Версия актуальна")
+                AlertDialog.Builder(this@MainActivity)
+                    .setMessage("У Вас установлена актуальная версия приложения")
+                    .setPositiveButton("OK", null)
+                    .show()
+                return@launch
+            }
+            AppLogger.log(this@MainActivity, "UPDATE", "Найдена новая версия")
+
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("Найдена свежая версия")
+                .setMessage("Установить?")
+                .setPositiveButton("Да") { _, _ -> startApkUpdateDownload(latest.apkUrl) }
+                .setNegativeButton("Нет", null)
+                .show()
+        }
+    }
+
+    private fun startApkUpdateDownload(apkUrl: String) {
+        lifecycleScope.launch {
+            Log.d("UPDATE_FLOW", "startApkUpdateDownload вызван")
+            AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK")
+            AppLogger.log(this@MainActivity, "NOTIFY", "Показ уведомления: Началась загрузка")
             val manager = getSystemService(DownloadManager::class.java)
-            val request = DownloadManager.Request(Uri.parse(RELEASE_APK_URL))
+            val request = DownloadManager.Request(Uri.parse(apkUrl))
                 .setTitle("Обновление Calltrack")
                 .setDescription("Загрузка новой версии приложения")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -140,12 +209,71 @@ class MainActivity : BaseActivity() {
                 .addRequestHeader("Accept", "application/vnd.android.package-archive")
                 .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, APK_FILE_NAME)
 
+            apkDownloadId = -1L
             apkDownloadId = manager.enqueue(request)
+            AppLogger.log(this@MainActivity, "INFO", "Начата загрузка обновления. downloadId=$apkDownloadId, url=$apkUrl")
             Toast.makeText(this@MainActivity, "Началась загрузка обновления", Toast.LENGTH_SHORT).show()
         }
     }
 
+    private fun fetchLatestReleaseInfo(): ReleaseInfo? {
+        val request = Request.Builder()
+            .url(LATEST_RELEASE_API)
+            .addHeader("Accept", "application/vnd.github+json")
+            .build()
+
+        return runCatching {
+            updateHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val body = response.body?.string().orEmpty()
+                val json = org.json.JSONObject(body)
+                val tag = json.optString("tag_name").orEmpty()
+
+                var apkUrl = ""
+                val assets = json.optJSONArray("assets")
+                if (assets != null) {
+                    for (i in 0 until assets.length()) {
+                        val asset = assets.optJSONObject(i) ?: continue
+                        val url = asset.optString("browser_download_url")
+                        if (url.endsWith(".apk", ignoreCase = true)) {
+                            apkUrl = url
+                            break
+                        }
+                    }
+                }
+
+                if (tag.isBlank() || apkUrl.isBlank()) return null
+                ReleaseInfo(tag = tag, apkUrl = apkUrl)
+            }
+        }.getOrNull()
+    }
+
+    private fun isRemoteVersionNewer(current: String, remoteTag: String): Boolean {
+        val currentVersion = extractDotVersion(current)
+        val remoteVersion = extractDotVersion(remoteTag)
+
+        // Если любую из версий нельзя корректно распарсить в semver, считаем,
+        // что обновление недоступно, чтобы не запускать скачивание ошибочно.
+        if (remoteVersion == null) return false
+        if (currentVersion == null) return false
+
+        val max = maxOf(currentVersion.size, remoteVersion.size)
+        for (i in 0 until max) {
+            val c = currentVersion.getOrElse(i) { 0 }
+            val r = remoteVersion.getOrElse(i) { 0 }
+            if (r > c) return true
+            if (r < c) return false
+        }
+        return false
+    }
+
+    private fun extractDotVersion(value: String): List<Int>? {
+        val match = Regex("(\\d+(?:\\.\\d+)+)").find(value) ?: return null
+        return match.groupValues[1].split('.').mapNotNull { it.toIntOrNull() }
+    }
+
     private fun installDownloadedApk(downloadId: Long) {
+        AppLogger.log(this, "UPDATE", "APK загружен, запуск установки")
         val manager = getSystemService(DownloadManager::class.java)
         val query = DownloadManager.Query().setFilterById(downloadId)
         var localUri: String? = null
@@ -199,10 +327,12 @@ class MainActivity : BaseActivity() {
                     true
                 }
                 R.id.nav_recent -> {
+                    AppLogger.log(this, "UI", "Открыт экран: История звонков")
                     openFragment(CallListFragment.newInstance())
                     true
                 }
                 R.id.nav_contacts -> {
+                    AppLogger.log(this, "UI", "Открыт экран: Контакты")
                     openFragment(ContactsFragment.newInstance())
                     true
                 }
@@ -215,9 +345,10 @@ class MainActivity : BaseActivity() {
         permissionsLauncher.launch(requiredPermissions())
     }
 
-    fun completeOnboarding(managerName: String? = null) {
+    fun completeOnboarding(managerName: String? = null, managerPhone: String? = null) {
         lifecycleScope.launch {
             managerName?.let { viewModel.setManagerName(it) }
+            managerPhone?.let { viewModel.setManagerPhone(it) }
             viewModel.markOnboardingCompleted()
         }
     }
@@ -279,6 +410,7 @@ class MainActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        AppLogger.log(this, "APP", "MainActivity уничтожена")
         runCatching { unregisterReceiver(downloadCompleteReceiver) }
         super.onDestroy()
     }
@@ -295,8 +427,19 @@ class MainActivity : BaseActivity() {
 
     companion object {
         const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
-        private const val RELEASE_APK_URL =
-            "https://github.com/kasherehauwa01-sudo/Calltrack/releases/download/v05-05-26-01/CallTrack-1.0.apk"
+        const val EXTRA_RUN_UPDATE_CHECK = "extra_run_update_check"
+        private const val MENU_ABOUT_ID = 1001
+        private const val MENU_USER_ID = 1003
+        private const val LATEST_RELEASE_API =
+            "https://api.github.com/repos/kasherehauwa01-sudo/Calltrack/releases/latest"
+        private const val FALLBACK_RELEASE_TAG = "v05-05-26-01"
+        private const val FALLBACK_RELEASE_APK_URL =
+            "https://github.com/kasherehauwa01-sudo/Calltrack/releases/download/v05-05-26-01/app-debug.apk"
         private const val APK_FILE_NAME = "update.apk"
     }
+
+    private data class ReleaseInfo(
+        val tag: String,
+        val apkUrl: String
+    )
 }

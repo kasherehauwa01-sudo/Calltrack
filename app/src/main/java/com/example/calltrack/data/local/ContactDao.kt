@@ -19,4 +19,10 @@ interface ContactDao {
 
     @Query("UPDATE contacts SET client1c = :client1c WHERE id = :id")
     suspend fun updateClient1c(id: Long, client1c: String)
+
+    @Query("UPDATE contacts SET client1c = :client1c WHERE phone = :phone")
+    suspend fun updateClient1cByPhone(phone: String, client1c: String)
+
+    @Query("SELECT * FROM contacts")
+    suspend fun findAll(): List<ContactEntity>
 }
