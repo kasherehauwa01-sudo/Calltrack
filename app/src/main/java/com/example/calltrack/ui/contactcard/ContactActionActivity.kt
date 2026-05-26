@@ -25,6 +25,11 @@ class ContactActionActivity : AppCompatActivity() {
         binding.tvPhone.text = phone
 
         binding.btnBack.setOnClickListener { finish() }
+
+        if (intent.getBooleanExtra(EXTRA_SHOW_ADD_TO_1C_DIALOG, false)) {
+            showAddTo1cInfoAndClose()
+            return
+        }
         binding.btnAddTo1c.setOnClickListener {
             AlertDialog.Builder(this)
                 .setMessage("Чтобы определить клиента, добавьте номер телефона в его карточку в 1С.")
@@ -53,6 +58,15 @@ class ContactActionActivity : AppCompatActivity() {
         }
     }
 
+
+    private fun showAddTo1cInfoAndClose() {
+        AlertDialog.Builder(this)
+            .setMessage("Чтобы определить клиента, добавьте номер телефона в его карточку в 1С.")
+            .setPositiveButton("Ок") { _, _ -> finish() }
+            .setOnCancelListener { finish() }
+            .show()
+    }
+
     private fun renderPersonalButton() {
         if (isPersonal) {
             binding.btnMarkPersonal.text = "Убрать пометку \"Личный контакт\""
@@ -65,5 +79,6 @@ class ContactActionActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_PHONE = "extra_phone"
+        const val EXTRA_SHOW_ADD_TO_1C_DIALOG = "extra_show_add_to_1c_dialog"
     }
 }
