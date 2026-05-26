@@ -101,6 +101,7 @@ class CallRepository(
                 val request = Request.Builder().url(url).get().build()
                 personalContactsHttpClient.newCall(request).execute().use { response ->
                     val body = response.body?.string().orEmpty()
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "RAW history response: ${body.take(500)}")
                     parseHistoryResponse(body)
                 }
             }
@@ -112,6 +113,7 @@ class CallRepository(
     private fun parseHistoryResponse(raw: String): List<CallHistoryItem> {
         val text = raw.trim()
         if (text.isBlank()) return emptyList()
+        if (text.startsWith("<")) return emptyList()
 
         val token = runCatching { JSONTokener(text).nextValue() }.getOrNull() ?: return emptyList()
         val arr = when (token) {
@@ -427,6 +429,7 @@ class CallRepository(
 
                     callDao.markUploaded(duplicates.map { it.id })
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: code=${response.code()}")
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED: ids=${duplicates.joinToString { it.id.toString() }}")
                     Log.d(
                         "CallRepository",
                         "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
