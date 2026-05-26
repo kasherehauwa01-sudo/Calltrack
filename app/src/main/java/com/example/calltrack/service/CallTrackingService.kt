@@ -385,5 +385,6 @@ class CallTrackingService : Service() {
 
         private const val POST_CALL_CHANNEL_ID = "postcall"
         private const val POST_CALL_NOTIFICATION_ID_BASE = 1000
+        private const val MISSING_CLIENT_NOTIFICATION_ID = 2001
     }
 }
