@@ -60,6 +60,16 @@
             android:theme="@style/Theme.Calltrack" />
 
         <activity
+            android:name=".ui.main.LogsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Calltrack" />
+
+        <activity
+            android:name=".ui.contactcard.ContactActionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Calltrack" />
+
+        <activity
             android:name=".ui.main.MainActivity"
             android:exported="true">
             <intent-filter>
