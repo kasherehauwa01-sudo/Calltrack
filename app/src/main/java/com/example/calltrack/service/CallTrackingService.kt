@@ -39,6 +39,26 @@ class CallTrackingService : Service() {
     private var lastStateWasActive = false
     private var lastHandledTimestamp: Long = 0L
 
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_MARK_PERSONAL_FROM_NOTIFICATION -> {
+                val phone = intent.getStringExtra(EXTRA_NOTIFICATION_PHONE).orEmpty()
+                if (phone.isNotBlank()) {
+                    scope.launch {
+                        runCatching {
+                            (application as App).repository.markAsPersonalContact(phone)
+                            AppLogger.log(this@CallTrackingService, "UI", "Пометка личного контакта из уведомления: $phone")
+                        }
+                    }
+                    getSystemService(NotificationManager::class.java)
+                        .cancel(MISSING_CLIENT_NOTIFICATION_ID)
+                }
+            }
+        }
+        return START_STICKY
+    }
+
     override fun onCreate() {
         super.onCreate()
         createChannel()
@@ -190,11 +210,11 @@ class CallTrackingService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val personalIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
+        val personalIntent = Intent(this, CallTrackingService::class.java).apply {
+            action = ACTION_MARK_PERSONAL_FROM_NOTIFICATION
+            putExtra(EXTRA_NOTIFICATION_PHONE, phone)
         }
-        val personalPending = PendingIntent.getActivity(
+        val personalPending = PendingIntent.getService(
             this,
             phone.hashCode() + 1,
             personalIntent,
@@ -216,11 +236,12 @@ class CallTrackingService : Service() {
             .setSmallIcon(R.drawable.ic_clover)
             .setContentTitle("Клиент не найден")
             .setContentText("Клиент не найден в базе 1с. Выберите действие")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("Клиент не найден в базе 1с. Выберите действие"))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(openPending)
-            .addAction(0, "Личный контакт", personalPending)
+            .addAction(0, "Пометить как личный контакт", personalPending)
             .addAction(0, "Добавить в 1с", addTo1cPending)
             .build()
 

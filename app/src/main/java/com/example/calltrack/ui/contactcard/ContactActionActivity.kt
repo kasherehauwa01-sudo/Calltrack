@@ -28,7 +28,7 @@ class ContactActionActivity : AppCompatActivity() {
         binding.btnAddTo1c.setOnClickListener {
             AlertDialog.Builder(this)
                 .setMessage("Чтобы определить клиента, добавьте номер телефона в его карточку в 1С.")
-                .setPositiveButton("Ок") { _, _ -> finish() }
+                .setPositiveButton("Ок", null)
                 .show()
         }
 
