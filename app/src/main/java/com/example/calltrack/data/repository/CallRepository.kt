@@ -27,6 +27,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import org.json.JSONTokener
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -80,13 +81,65 @@ class CallRepository(
         val separator = if (BuildConfig.WEBHOOK_URL.contains("?")) "&" else "?"
         val url = "${BuildConfig.WEBHOOK_URL}${separator}phone=$normalizedPhone"
         com.example.calltrack.logging.AppLogger.log(appContext, "API", "Запрос данных из таблицы")
-        return runCatching { webhookApi.loadHistory(url) }
+
+        val retrofitResult = runCatching { webhookApi.loadHistory(url) }
             .onSuccess { com.example.calltrack.logging.AppLogger.log(appContext, "API", "Получено записей: ${it.size}") }
             .onFailure {
                 Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it)
                 com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки данных: ${it.message}")
             }
             .getOrElse { emptyList() }
+
+        if (retrofitResult.isNotEmpty()) return retrofitResult
+
+        return fetchHistoryFallback(url)
+    }
+
+    private suspend fun fetchHistoryFallback(url: String): List<CallHistoryItem> {
+        return runCatching {
+            withContext(Dispatchers.IO) {
+                val request = Request.Builder().url(url).get().build()
+                personalContactsHttpClient.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    parseHistoryResponse(body)
+                }
+            }
+        }.onFailure {
+            Log.e("CallRepository", "Fallback загрузки истории не удался", it)
+        }.getOrElse { emptyList() }
+    }
+
+    private fun parseHistoryResponse(raw: String): List<CallHistoryItem> {
+        val text = raw.trim()
+        if (text.isBlank()) return emptyList()
+
+        val token = runCatching { JSONTokener(text).nextValue() }.getOrNull() ?: return emptyList()
+        val arr = when (token) {
+            is JSONArray -> token
+            is JSONObject -> token.optJSONArray("data") ?: token.optJSONArray("rows") ?: JSONArray()
+            else -> JSONArray()
+        }
+
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                add(
+                    CallHistoryItem(
+                        date = o.optString("date"),
+                        time = o.optString("time"),
+                        phone = o.optString("phone"),
+                        type = o.optString("type"),
+                        duration = o.optString("duration"),
+                        manager = o.optString("manager"),
+                        note = o.optString("note"),
+                        tag = o.optString("tag"),
+                        reminder = o.optString("reminder"),
+                        reminderText = o.optString("reminder_text"),
+                        client = o.optString("client")
+                    )
+                )
+            }
+        }
     }
 
     suspend fun getHistory(phone: String): List<CallHistoryEntity> {
