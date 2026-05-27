@@ -330,7 +330,8 @@ class CallTrackingService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
-        tracker.stop()
+        if (this::tracker.isInitialized) tracker.stop()
+        stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
@@ -387,5 +388,6 @@ class CallTrackingService : Service() {
 
         private const val POST_CALL_CHANNEL_ID = "postcall"
         private const val POST_CALL_NOTIFICATION_ID_BASE = 1000
+        private const val MISSING_CLIENT_NOTIFICATION_ID = 2001
     }
 }
