@@ -26,6 +26,36 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/statusBarOverlay" />
 
+    
+    <FrameLayout
+        android:id="@+id/notificationAnchor"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        app:layout_constraintEnd_toStartOf="@+id/btnSettings"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnNotifications"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_input"
+            android:contentDescription="Уведомления"
+            android:padding="8dp"
+            android:src="@drawable/ic_notifications"
+            android:tint="@color/textPrimary" />
+
+        <View
+            android:id="@+id/viewBadge"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_gravity="end|top"
+            android:background="@drawable/bg_badge_dot"
+            android:visibility="gone" />
+    </FrameLayout>
+
+
     <ImageButton
         android:id="@+id/btnSettings"
         android:layout_width="40dp"
