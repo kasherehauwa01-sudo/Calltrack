@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.data.local.CallEntity
+import com.example.calltrack.data.repository.NotificationType
 import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.telephony.CallStateTracker
 import com.example.calltrack.ui.postcall.PostCallActivity
@@ -249,6 +250,16 @@ class CallTrackingService : Service() {
             .build()
 
         manager.notify(MISSING_CLIENT_NOTIFICATION_ID, notification)
+        scope.launch {
+            val repo = (application as App).repository
+            repo.saveAppNotification(
+                title = "Клиент не найден",
+                message = "Клиент не найден в базе 1с. Выберите действие",
+                type = NotificationType.MISSING_CLIENT,
+                targetScreen = "contact_card",
+                entityId = phone
+            )
+        }
     }
 
     private fun buildPostCallNotificationId(callId: Long): Int {

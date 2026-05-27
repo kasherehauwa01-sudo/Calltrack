@@ -27,6 +27,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import org.json.JSONTokener
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -75,13 +76,27 @@ class CallRepository(
         }
     }
 
+
+
+    suspend fun saveAppNotification(
+        title: String,
+        message: String,
+        type: NotificationType,
+        targetScreen: String = "",
+        entityId: String = "",
+        payloadJson: String = ""
+    ) {
+        notificationRepository?.insertNotification(title, message, type, targetScreen, entityId, payloadJson)
+    }
+
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> {
         val normalizedPhone = normalizePhone(phone)
         if (normalizedPhone.isBlank()) return emptyList()
         val separator = if (BuildConfig.WEBHOOK_URL.contains("?")) "&" else "?"
         val url = "${BuildConfig.WEBHOOK_URL}${separator}phone=$normalizedPhone"
         com.example.calltrack.logging.AppLogger.log(appContext, "API", "Запрос данных из таблицы")
-        return runCatching { webhookApi.loadHistory(url) }
+
+        val retrofitResult = runCatching { webhookApi.loadHistory(url) }
             .onSuccess { com.example.calltrack.logging.AppLogger.log(appContext, "API", "Получено записей: ${it.size}") }
             .onFailure {
                 Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it)
@@ -112,14 +127,21 @@ class CallRepository(
     private fun parseHistoryResponse(raw: String): List<CallHistoryItem> {
         val text = raw.trim()
         if (text.isBlank()) return emptyList()
-        if (text.startsWith("<")) return emptyList()
-
-        val token = runCatching { JSONTokener(text).nextValue() }.getOrNull() ?: return emptyList()
-        val arr = when (token) {
-            is JSONArray -> token
-            is JSONObject -> token.optJSONArray("data") ?: token.optJSONArray("rows") ?: JSONArray()
-            else -> JSONArray()
+        if (text.startsWith("<")) {
+            com.example.calltrack.logging.AppLogger.log(appContext, "API", "History response is HTML, fallback to empty list")
+            return emptyList()
         }
+
+        val arr = runCatching {
+            val root = JSONTokener(text).nextValue()
+            when (root) {
+                is JSONArray -> root
+                is JSONObject -> root.optJSONArray("data") ?: root.optJSONArray("rows") ?: JSONArray()
+                else -> JSONArray()
+            }
+        }.onFailure {
+            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Malformed history JSON: ${it.message}; raw=${text.take(500)}")
+        }.getOrElse { JSONArray() }
 
         return buildList {
             for (i in 0 until arr.length()) {
@@ -428,6 +450,7 @@ class CallRepository(
 
                     callDao.markUploaded(duplicates.map { it.id })
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: code=${response.code()}")
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED: ids=${duplicates.joinToString { it.id.toString() }}")
                     Log.d(
                         "CallRepository",
                         "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
