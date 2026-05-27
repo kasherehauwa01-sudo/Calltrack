@@ -7,7 +7,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
@@ -29,7 +29,7 @@
             android:name=".service.CallTrackingService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="phoneCall" />
 
 
         <receiver
@@ -56,6 +56,16 @@
 
         <activity
             android:name=".ui.main.AboutActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Calltrack" />
+
+        <activity
+            android:name=".ui.main.LogsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Calltrack" />
+
+        <activity
+            android:name=".ui.contactcard.ContactActionActivity"
             android:exported="false"
             android:theme="@style/Theme.Calltrack" />
 
