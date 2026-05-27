@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.PopupMenu
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -37,6 +38,7 @@ import com.example.calltrack.ui.contactcard.ContactHistoryFragment
 import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -46,7 +48,6 @@ import java.io.File
 class MainActivity : BaseActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var prefsManager: PrefsManager
     private var apkDownloadId: Long = -1L
     private var updateCheckHandled = false
     private val viewModel: MainViewModel by viewModels {
@@ -71,7 +72,6 @@ class MainActivity : BaseActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        prefsManager = PrefsManager(this)
         applySavedTheme()
         super.onCreate(savedInstanceState)
         AppLogger.log(this, "APP", "MainActivity создана")
@@ -81,8 +81,12 @@ class MainActivity : BaseActivity() {
         applyWindowInsets()
         setupBottomNav()
         setupSettingsButton()
+        setupNotificationsButton()
         registerDownloadReceiver()
         handleExternalNavigation(intent)
+        if (intent.getBooleanExtra(EXTRA_RUN_UPDATE_CHECK, false)) {
+            checkForUpdatesAndPrompt()
+        }
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
@@ -92,7 +96,10 @@ class MainActivity : BaseActivity() {
             } else {
                 binding.bottomNav.visibility = android.view.View.VISIBLE
                 if (savedInstanceState == null) binding.bottomNav.selectedItemId = R.id.nav_dial
-                startTrackingService()
+                if (!trackingServiceStarted) {
+                    trackingServiceStarted = true
+                    startTrackingService()
+                }
             }
             updateWarningState()
         }
@@ -426,6 +433,18 @@ class MainActivity : BaseActivity() {
     }
 
     companion object {
+        const val EXTRA_OPEN_REMINDER_PHONE = "extra_open_reminder_phone"
+        fun createNotificationNavigationIntent(context: Context, targetScreen: String, entityId: String): Intent {
+            return Intent(context, MainActivity::class.java).apply {
+                when (targetScreen) {
+                    "contact_card", "personal_contact" -> putExtra(EXTRA_OPEN_CONTACT_PHONE, entityId)
+                    "call_history" -> putExtra(EXTRA_OPEN_CONTACT_PHONE, entityId)
+                    "reminder" -> putExtra(EXTRA_OPEN_CONTACT_PHONE, entityId)
+                }
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+        }
+
         const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
         const val EXTRA_RUN_UPDATE_CHECK = "extra_run_update_check"
         private const val MENU_ABOUT_ID = 1001

@@ -39,6 +39,28 @@ class CallTrackingService : Service() {
     private var lastStateWasActive = false
     private var lastHandledTimestamp: Long = 0L
 
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_MARK_PERSONAL_FROM_NOTIFICATION -> {
+                val phone = intent?.getStringExtra(EXTRA_NOTIFICATION_PHONE).orEmpty()
+                if (phone.isNotBlank()) {
+                    scope.launch {
+                        runCatching {
+                            val repository = (application as App).repository
+                            repository.markAsPersonalContact(phone)
+                            repository.markCallsPendingForPhoneResync(phone)
+                            AppLogger.log(this@CallTrackingService, "UI", "Пометка личного контакта из уведомления: $phone")
+                        }
+                    }
+                    getSystemService(NotificationManager::class.java)
+                        .cancel(MISSING_CLIENT_NOTIFICATION_ID)
+                }
+            }
+        }
+        return START_STICKY
+    }
+
     override fun onCreate() {
         super.onCreate()
         createChannel()
@@ -270,7 +292,8 @@ class CallTrackingService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
-        tracker.stop()
+        if (this::tracker.isInitialized) tracker.stop()
+        stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
@@ -317,6 +340,14 @@ class CallTrackingService : Service() {
     }
 
     companion object {
+        const val ACTION_MARK_PERSONAL_FROM_NOTIFICATION =
+            "com.example.calltrack.ACTION_MARK_PERSONAL_FROM_NOTIFICATION"
+
+        const val EXTRA_NOTIFICATION_PHONE =
+            "extra_notification_phone"
+
+        const val MISSING_CLIENT_NOTIFICATION_ID = 1002
+
         private const val POST_CALL_CHANNEL_ID = "postcall"
         private const val POST_CALL_NOTIFICATION_ID_BASE = 1000
         private const val MISSING_CLIENT_NOTIFICATION_ID = 2001
