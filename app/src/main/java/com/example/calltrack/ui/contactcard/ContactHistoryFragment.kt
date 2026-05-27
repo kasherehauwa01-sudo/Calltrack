@@ -72,6 +72,12 @@ class ContactHistoryFragment : Fragment() {
         }
     }
 
+    private inline fun withBinding(block: (FragmentContactHistoryBinding) -> Unit) {
+        val b = _binding ?: return
+        if (!isAdded) return
+        block(b)
+    }
+
     private fun formatCalls(calls: List<CallEntity>): String {
         if (calls.isEmpty()) return "Нет данных"
         return calls.joinToString("\n") {
@@ -145,6 +151,7 @@ class ContactHistoryFragment : Fragment() {
     }
 
     private fun renderCallCards(items: List<CallHistoryEntity>) {
+        if (_binding == null || !isAdded) return
         val latestCalls = items
             .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
             .take(20)
@@ -272,8 +279,10 @@ class ContactHistoryFragment : Fragment() {
     }
 
     private fun renderHistoryCards(lines: List<String>) {
-        binding.historyContainer.removeAllViews()
-        lines.forEachIndexed { index, line ->
+        withBinding { binding ->
+            runCatching {
+                binding.historyContainer.removeAllViews()
+                lines.forEachIndexed { index, line ->
             val card = MaterialCardView(requireContext()).apply {
                 radius = 14f
                 cardElevation = 1f
@@ -291,8 +300,12 @@ class ContactHistoryFragment : Fragment() {
                 setPadding(24, 18, 24, 18)
                 text = line
             }
-            card.addView(text)
-            binding.historyContainer.addView(card)
+                    card.addView(text)
+                    binding.historyContainer.addView(card)
+                }
+            }.onFailure {
+                // Игнорируем ошибки рендера, чтобы не падать при уходе со страницы
+            }
         }
     }
 

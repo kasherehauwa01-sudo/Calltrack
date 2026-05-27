@@ -39,6 +39,28 @@ class CallTrackingService : Service() {
     private var lastStateWasActive = false
     private var lastHandledTimestamp: Long = 0L
 
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_MARK_PERSONAL_FROM_NOTIFICATION -> {
+                val phone = intent?.getStringExtra(EXTRA_NOTIFICATION_PHONE).orEmpty()
+                if (phone.isNotBlank()) {
+                    scope.launch {
+                        runCatching {
+                            val repository = (application as App).repository
+                            repository.markAsPersonalContact(phone)
+                            repository.markCallsPendingForPhoneResync(phone)
+                            AppLogger.log(this@CallTrackingService, "UI", "Пометка личного контакта из уведомления: $phone")
+                        }
+                    }
+                    getSystemService(NotificationManager::class.java)
+                        .cancel(MISSING_CLIENT_NOTIFICATION_ID)
+                }
+            }
+        }
+        return START_STICKY
+    }
+
     override fun onCreate() {
         super.onCreate()
         createChannel()
@@ -94,7 +116,6 @@ class CallTrackingService : Service() {
         val entity = readLatestCallEntityAfter(lastHandledTimestamp) ?: return false
         if (entity.timestamp <= lastHandledTimestamp) return false
 
-        lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
         AppLogger.log(this, "CALL", "Сохранение звонка в локальную БД")
         val callId = repo.saveCall(entity)
@@ -120,7 +141,12 @@ class CallTrackingService : Service() {
             val contactName = resolveContactName(entity.phone)
             showPostCallNow(callId, entity.phone, contactName)
         }
-        Log.d("CallTrackingService", "Call captured: ${entity.phone}, ${entity.type}, ${entity.timestamp}")
+
+        if (!isFinalPersonal && clientName.isBlank()) {
+            AppLogger.log(this, "NOTIFY", "Показ уведомления: Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
+            showMissingClientNotification(finalEntity.phone)
+        }
+        Log.d("CallTrackingService", "Calls captured count=${entities.size}, latest=${finalEntity.phone}, ts=${finalEntity.timestamp}")
         return true
     }
 
@@ -199,7 +225,7 @@ class CallTrackingService : Service() {
 
     private fun readLatestCallEntityAfter(minTimestampExclusive: Long): CallEntity? {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
-            return null
+            return emptyList()
         }
 
         val projection = arrayOf(
@@ -209,6 +235,7 @@ class CallTrackingService : Service() {
             CallLog.Calls.DATE
         )
 
+        val result = mutableListOf<CallEntity>()
         contentResolver.query(
             CallLog.Calls.CONTENT_URI,
             projection,
@@ -225,16 +252,18 @@ class CallTrackingService : Service() {
                 if (timestamp <= minTimestampExclusive) continue
 
                 val (type, note) = mapCallType(typeInt, duration)
-                return CallEntity(
+                result.add(
+                    CallEntity(
                     phone = if (number.isBlank()) "Неизвестно" else number,
                     type = type,
                     duration = duration,
                     note = note,
                     timestamp = timestamp
                 )
+                )
             }
         }
-        return null
+        return result.sortedBy { it.timestamp }
     }
 
     private fun mapCallType(typeInt: Int, duration: Long): Pair<String, String> {
@@ -255,7 +284,8 @@ class CallTrackingService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
-        tracker.stop()
+        if (this::tracker.isInitialized) tracker.stop()
+        stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
@@ -302,6 +332,14 @@ class CallTrackingService : Service() {
     }
 
     companion object {
+        const val ACTION_MARK_PERSONAL_FROM_NOTIFICATION =
+            "com.example.calltrack.ACTION_MARK_PERSONAL_FROM_NOTIFICATION"
+
+        const val EXTRA_NOTIFICATION_PHONE =
+            "extra_notification_phone"
+
+        const val MISSING_CLIENT_NOTIFICATION_ID = 1002
+
         private const val POST_CALL_CHANNEL_ID = "postcall"
         private const val POST_CALL_NOTIFICATION_ID_BASE = 1000
         private const val MISSING_CLIENT_NOTIFICATION_ID = 2001

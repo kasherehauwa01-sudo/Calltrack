@@ -48,4 +48,7 @@ interface CallDao {
 
     @Query("UPDATE calls SET note = :note, tag = :tag, reminder = :reminder, uploaded = 0 WHERE id = :id")
     suspend fun updateOutcome(id: Long, note: String, tag: String, reminder: String)
+
+    @Query("UPDATE calls SET uploaded = 0 WHERE phone = :phone")
+    suspend fun markPendingByPhone(phone: String)
 }

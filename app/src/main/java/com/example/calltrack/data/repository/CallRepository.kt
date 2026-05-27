@@ -38,7 +38,8 @@ class CallRepository(
     private val commentDao: CommentDao,
     private val callHistoryDao: CallHistoryDao,
     private val webhookApi: WebhookApi,
-    context: Context
+    context: Context,
+    private val notificationRepository: NotificationRepository? = null
 ) {
     private val appContext = context.applicationContext
     val prefs = PrefsManager(context)
@@ -60,6 +61,33 @@ class CallRepository(
         return clientName
     }
 
+    suspend fun isPersonalContact(phone: String): Boolean {
+        if (phone.isBlank() || phone == "Неизвестно") return false
+
+        val direct = contactDao.findByPhone(phone)
+        if (direct?.client1c == "Личный") return true
+
+        val normalized = normalizePhone(phone)
+        if (normalized.isBlank()) return false
+
+        return contactDao.findAll().any { contact ->
+            contact.client1c == "Личный" && normalizePhone(contact.phone) == normalized
+        }
+    }
+
+
+
+    suspend fun saveAppNotification(
+        title: String,
+        message: String,
+        type: NotificationType,
+        targetScreen: String = "",
+        entityId: String = "",
+        payloadJson: String = ""
+    ) {
+        notificationRepository?.insertNotification(title, message, type, targetScreen, entityId, payloadJson)
+    }
+
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> {
         val normalizedPhone = normalizePhone(phone)
         if (normalizedPhone.isBlank()) return emptyList()
@@ -73,6 +101,59 @@ class CallRepository(
                 com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки данных: ${it.message}")
             }
             .getOrElse { emptyList() }
+
+        if (retrofitResult.isNotEmpty()) return retrofitResult
+
+        return fetchHistoryFallback(url)
+    }
+
+    private suspend fun fetchHistoryFallback(url: String): List<CallHistoryItem> {
+        return runCatching {
+            withContext(Dispatchers.IO) {
+                val request = Request.Builder().url(url).get().build()
+                personalContactsHttpClient.newCall(request).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "RAW history response: ${body.take(500)}")
+                    parseHistoryResponse(body)
+                }
+            }
+        }.onFailure {
+            Log.e("CallRepository", "Fallback загрузки истории не удался", it)
+        }.getOrElse { emptyList() }
+    }
+
+    private fun parseHistoryResponse(raw: String): List<CallHistoryItem> {
+        val text = raw.trim()
+        if (text.isBlank()) return emptyList()
+        if (text.startsWith("<")) return emptyList()
+
+        val token = runCatching { JSONTokener(text).nextValue() }.getOrNull() ?: return emptyList()
+        val arr = when (token) {
+            is JSONArray -> token
+            is JSONObject -> token.optJSONArray("data") ?: token.optJSONArray("rows") ?: JSONArray()
+            else -> JSONArray()
+        }
+
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                add(
+                    CallHistoryItem(
+                        date = o.optString("date"),
+                        time = o.optString("time"),
+                        phone = o.optString("phone"),
+                        type = o.optString("type"),
+                        duration = o.optString("duration"),
+                        manager = o.optString("manager"),
+                        note = o.optString("note"),
+                        tag = o.optString("tag"),
+                        reminder = o.optString("reminder"),
+                        reminderText = o.optString("reminder_text"),
+                        client = o.optString("client")
+                    )
+                )
+            }
+        }
     }
 
     suspend fun getHistory(phone: String): List<CallHistoryEntity> {
@@ -345,6 +426,13 @@ class CallRepository(
                             client = clientName
                         )
                     )
+                    val bodyText = response.body()?.string().orEmpty()
+                    if (!isWebhookAccepted(response.isSuccessful, bodyText)) {
+                        throw IllegalStateException(
+                            "Calltrack webhook rejected: code=${response.code()}, body=${bodyText.take(400)}"
+                        )
+                    }
+
                     callDao.markUploaded(duplicates.map { it.id })
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ok")
                     Log.d(
@@ -362,6 +450,15 @@ class CallRepository(
                 }
             }
         }
+    }
+
+
+    private fun isWebhookAccepted(isSuccessful: Boolean, bodyText: String): Boolean {
+        if (!isSuccessful) return false
+        val normalized = bodyText.lowercase(Locale.getDefault())
+        if (normalized.contains("не удалось найти функцию скрипта")) return false
+        if (normalized.contains("ошибка")) return false
+        return true
     }
 
     private suspend fun ensureContact(phone: String) {
