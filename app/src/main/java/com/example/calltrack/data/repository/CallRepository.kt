@@ -240,6 +240,12 @@ class CallRepository(
         flushPendingPersonalContactsSync()
     }
 
+    suspend fun markCallsPendingForPhoneResync(phone: String) {
+        if (phone.isBlank() || phone == "Неизвестно") return
+        callDao.markPendingByPhone(phone)
+        syncPending()
+    }
+
     suspend fun unmarkPersonalContact(phone: String) {
         if (phone.isBlank() || phone == "Неизвестно") return
         ensureContact(phone)

@@ -453,7 +453,7 @@ class MainActivity : BaseActivity() {
             "https://api.github.com/repos/kasherehauwa01-sudo/Calltrack/releases/latest"
         private const val FALLBACK_RELEASE_TAG = "v05-05-26-01"
         private const val FALLBACK_RELEASE_APK_URL =
-            "https://github.com/kasherehauwa01-sudo/Calltrack/releases/download/v05-05-26-01/CallTrack-1.0.apk"
+            "https://github.com/kasherehauwa01-sudo/Calltrack/releases/download/v05-05-26-01/app-debug.apk"
         private const val APK_FILE_NAME = "update.apk"
     }
 

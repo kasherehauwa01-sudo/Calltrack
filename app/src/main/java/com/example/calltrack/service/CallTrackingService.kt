@@ -47,7 +47,9 @@ class CallTrackingService : Service() {
                 if (phone.isNotBlank()) {
                     scope.launch {
                         runCatching {
-                            (application as App).repository.markAsPersonalContact(phone)
+                            val repository = (application as App).repository
+                            repository.markAsPersonalContact(phone)
+                            repository.markCallsPendingForPhoneResync(phone)
                             AppLogger.log(this@CallTrackingService, "UI", "Пометка личного контакта из уведомления: $phone")
                         }
                     }
