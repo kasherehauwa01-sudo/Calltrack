@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.PopupMenu
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -47,7 +48,6 @@ import java.io.File
 class MainActivity : BaseActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var prefsManager: PrefsManager
     private var apkDownloadId: Long = -1L
     private var updateCheckHandled = false
     private var trackingServiceStarted = false
@@ -73,7 +73,6 @@ class MainActivity : BaseActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        prefsManager = PrefsManager(this)
         applySavedTheme()
         super.onCreate(savedInstanceState)
         AppLogger.log(this, "APP", "MainActivity создана")
@@ -86,6 +85,9 @@ class MainActivity : BaseActivity() {
         setupNotificationsButton()
         registerDownloadReceiver()
         handleExternalNavigation(intent)
+        if (intent.getBooleanExtra(EXTRA_RUN_UPDATE_CHECK, false)) {
+            checkForUpdatesAndPrompt()
+        }
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
