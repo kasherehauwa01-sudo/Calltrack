@@ -43,8 +43,8 @@ class CallTrackingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_MARK_PERSONAL_FROM_NOTIFICATION -> {
-                val phone = intent?.getStringExtra(EXTRA_NOTIFICATION_PHONE).orEmpty()
+            CallTrackingService.ACTION_MARK_PERSONAL_FROM_NOTIFICATION -> {
+                val phone = intent?.getStringExtra(CallTrackingService.EXTRA_NOTIFICATION_PHONE).orEmpty()
                 if (phone.isNotBlank()) {
                     scope.launch {
                         runCatching {
@@ -55,7 +55,7 @@ class CallTrackingService : Service() {
                         }
                     }
                     getSystemService(NotificationManager::class.java)
-                        .cancel(MISSING_CLIENT_NOTIFICATION_ID)
+                        .cancel(CallTrackingService.MISSING_CLIENT_NOTIFICATION_ID)
                 }
             }
         }
@@ -214,8 +214,8 @@ class CallTrackingService : Service() {
         )
 
         val personalIntent = Intent(this, CallTrackingService::class.java).apply {
-            action = ACTION_MARK_PERSONAL_FROM_NOTIFICATION
-            putExtra(EXTRA_NOTIFICATION_PHONE, phone)
+            action = CallTrackingService.ACTION_MARK_PERSONAL_FROM_NOTIFICATION
+            putExtra(CallTrackingService.EXTRA_NOTIFICATION_PHONE, phone)
         }
         val personalPending = PendingIntent.getService(
             this,
@@ -249,7 +249,7 @@ class CallTrackingService : Service() {
             .addAction(0, "Добавить в 1с", addTo1cPending)
             .build()
 
-        manager.notify(MISSING_CLIENT_NOTIFICATION_ID, notification)
+        manager.notify(CallTrackingService.MISSING_CLIENT_NOTIFICATION_ID, notification)
         scope.launch {
             val repo = (application as App).repository
             repo.saveAppNotification(
@@ -390,7 +390,7 @@ class CallTrackingService : Service() {
 
     companion object {
         const val ACTION_MARK_PERSONAL_FROM_NOTIFICATION =
-            "com.example.calltrack.ACTION_MARK_PERSONAL_FROM_NOTIFICATION"
+            "com.example.calltrack.CallTrackingService.ACTION_MARK_PERSONAL_FROM_NOTIFICATION"
 
         const val EXTRA_NOTIFICATION_PHONE =
             "extra_notification_phone"
