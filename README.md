@@ -179,7 +179,7 @@ function buildDirectoryMap() {
 }
 
 function fillEmptyClientsInCalltrack() {
-  var sheet = getCallsSheet();
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var values = sheet.getDataRange().getValues();
   if (!values || values.length < 2) return;
 
@@ -230,12 +230,11 @@ function installHourlyClientBackfillTrigger() {
 3. Доступ: **Anyone**.
 4. Скопируйте URL web app.
 5. Один раз вручную выполните функцию `installHourlyClientBackfillTrigger()` в редакторе Apps Script, чтобы создать почасовой триггер заполнения пустых значений в колонке "Клиент".
-6. После правок обязательно нажмите **Deploy → Manage deployments → Edit → Deploy** (новая версия), иначе будет работать старый код и запись может уходить не в `Calls`.
 
 ### Шаг 4. Вставить URL в приложение
 В `app/build.gradle` замените:
 ```gradle
-buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/AKfycbyUtYmL4-L1Ldzhrrn3kgst_gODDdu2lBqkk1_qtf6-IwWXoXizhP_J-AoJbYE7U2Zq1w/exec"'
+buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/AKfycbxTZ0CxeU2C9VLBnJeBH-0E_5bQqSes4ffekvQGR5J55iTXbBiCXeDA787bFDmu6xtEow/exec"'
 ```
 на ваш реальный URL.
 
@@ -514,21 +513,8 @@ POST JSON:
 ### 1) Полный скрипт для таблицы **Calltrack** (звонки + почасовой backfill клиента)
 
 ```javascript
-var CALLTRACK_SPREADSHEET_ID = "PASTE_CALLTRACK_SPREADSHEET_ID_HERE";
-var CALLS_SHEET_NAME = "Calls";
-
-function getCallsSheet() {
-  var ss = CALLTRACK_SPREADSHEET_ID && CALLTRACK_SPREADSHEET_ID !== "PASTE_CALLTRACK_SPREADSHEET_ID_HERE"
-    ? SpreadsheetApp.openById(CALLTRACK_SPREADSHEET_ID)
-    : SpreadsheetApp.getActiveSpreadsheet();
-
-  var sheet = ss.getSheetByName(CALLS_SHEET_NAME);
-  if (!sheet) throw new Error("Лист не найден: " + CALLS_SHEET_NAME);
-  return sheet;
-}
-
 function doPost(e) {
-  var sheet = getCallsSheet();
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = JSON.parse(e.postData.contents);
   var comment = data.comment || data.note || "";
   var reminderText = data.reminder_text || data.reminderText || "";
@@ -559,7 +545,6 @@ function doPost(e) {
   put("Текст напоминания", reminderText);
   put("Клиент", data.client || "");
   put("ID", callId);
-  put("Номер телефона пользователя", data.user_phone || data.userPhone || data.manager_phone || "");
 
   var lastRow = sheet.getLastRow();
   var targetRow = 0;
@@ -617,7 +602,7 @@ function buildDirectoryMap() {
 }
 
 function fillEmptyClientsInCalltrack() {
-  var sheet = getCallsSheet();
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var values = sheet.getDataRange().getValues();
   if (!values || values.length < 2) return;
 

@@ -75,19 +75,6 @@ class CallRepository(
         }
     }
 
-
-
-    suspend fun saveAppNotification(
-        title: String,
-        message: String,
-        type: NotificationType,
-        targetScreen: String = "",
-        entityId: String = "",
-        payloadJson: String = ""
-    ) {
-        notificationRepository?.insertNotification(title, message, type, targetScreen, entityId, payloadJson)
-    }
-
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> {
         val normalizedPhone = normalizePhone(phone)
         if (normalizedPhone.isBlank()) return emptyList()

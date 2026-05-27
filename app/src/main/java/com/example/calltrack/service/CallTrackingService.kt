@@ -113,18 +113,35 @@ class CallTrackingService : Service() {
     }
 
     private suspend fun captureLatestCallIfNew(): Boolean {
-        val entity = readLatestCallEntityAfter(lastHandledTimestamp) ?: return false
-        if (entity.timestamp <= lastHandledTimestamp) return false
+        val entities = readLatestCallEntitiesAfter(lastHandledTimestamp)
+        if (entities.isEmpty()) return false
 
         val repo = (application as App).repository
-        AppLogger.log(this, "CALL", "Сохранение звонка в локальную БД")
-        val callId = repo.saveCall(entity)
-        AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
-        val clientName = repo.findClientName(entity.phone)
+        var latestSavedCallId = 0L
+        var latestSavedEntity: CallEntity? = null
+        var hasNewData = false
 
-        // ВАЖНО: сначала мгновенно сохраняем звонок локально (что сразу обновляет экран "Последние"),
-        // а сетевую синхронизацию запускаем в отдельной фоновой корутине, чтобы интернет/таймауты
-        // не задерживали появление записи в UI.
+        entities.forEach { entity ->
+            if (entity.timestamp <= lastHandledTimestamp) return@forEach
+            hasNewData = true
+            lastHandledTimestamp = maxOf(lastHandledTimestamp, entity.timestamp)
+            AppLogger.log(this, "CALL", "Сохранение звонка в локальную БД")
+            latestSavedCallId = repo.saveCall(entity)
+            latestSavedEntity = entity
+            AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
+
+            val isPersonal = repo.isPersonalContact(entity.phone)
+            if (!isPersonal && shouldShowPostCallPrompt(entity.type)) {
+                val contactName = resolveContactName(entity.phone)
+                showPostCallNow(latestSavedCallId, entity.phone, contactName)
+            }
+        }
+        if (!hasNewData) return false
+
+        val finalEntity = latestSavedEntity ?: return false
+        val isFinalPersonal = repo.isPersonalContact(finalEntity.phone)
+        val clientName = repo.findClientName(finalEntity.phone)
+
         scope.launch {
             Log.d("WEBHOOK", "Пытаемся отправить данные в Google Sheets")
             runCatching { repo.syncPending() }
@@ -133,18 +150,9 @@ class CallTrackingService : Service() {
                 }
         }
 
-        if (clientName.isBlank()) {
-            AppLogger.log(this, "NOTIFY", "Показ уведомления: Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
-            showMissingClientNotification()
-        }
-        if (shouldShowPostCallPrompt(entity.type)) {
-            val contactName = resolveContactName(entity.phone)
-            showPostCallNow(callId, entity.phone, contactName)
-        }
-
         if (!isFinalPersonal && clientName.isBlank()) {
             AppLogger.log(this, "NOTIFY", "Показ уведомления: Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
-            showMissingClientNotification(finalEntity.phone)
+            showMissingClientNotification()
         }
         Log.d("CallTrackingService", "Calls captured count=${entities.size}, latest=${finalEntity.phone}, ts=${finalEntity.timestamp}")
         return true
@@ -223,7 +231,7 @@ class CallTrackingService : Service() {
         return phone
     }
 
-    private fun readLatestCallEntityAfter(minTimestampExclusive: Long): CallEntity? {
+    private fun readLatestCallEntitiesAfter(minTimestampExclusive: Long): List<CallEntity> {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
             return emptyList()
         }
