@@ -47,9 +47,7 @@ class CallTrackingService : Service() {
                 if (phone.isNotBlank()) {
                     scope.launch {
                         runCatching {
-                            val repository = (application as App).repository
-                            repository.markAsPersonalContact(phone)
-                            repository.markCallsPendingForPhoneResync(phone)
+                            (application as App).repository.markAsPersonalContact(phone)
                             AppLogger.log(this@CallTrackingService, "UI", "Пометка личного контакта из уведомления: $phone")
                         }
                     }
@@ -152,7 +150,7 @@ class CallTrackingService : Service() {
 
         if (!isFinalPersonal && clientName.isBlank()) {
             AppLogger.log(this, "NOTIFY", "Показ уведомления: Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
-            showMissingClientNotification()
+            showMissingClientNotification(finalEntity.phone)
         }
         Log.d("CallTrackingService", "Calls captured count=${entities.size}, latest=${finalEntity.phone}, ts=${finalEntity.timestamp}")
         return true
@@ -199,15 +197,53 @@ class CallTrackingService : Service() {
         manager.notify(notificationId, notification)
     }
 
-    private fun showMissingClientNotification() {
+    private fun showMissingClientNotification(phone: String) {
         val manager = getSystemService(NotificationManager::class.java)
+        val openIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
+        }
+        val openPending = PendingIntent.getActivity(
+            this,
+            phone.hashCode(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val personalIntent = Intent(this, CallTrackingService::class.java).apply {
+            action = ACTION_MARK_PERSONAL_FROM_NOTIFICATION
+            putExtra(EXTRA_NOTIFICATION_PHONE, phone)
+        }
+        val personalPending = PendingIntent.getService(
+            this,
+            phone.hashCode() + 1,
+            personalIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val addTo1cIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
+            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_SHOW_ADD_TO_1C_DIALOG, true)
+        }
+        val addTo1cPending = PendingIntent.getActivity(
+            this,
+            phone.hashCode() + 2,
+            addTo1cIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_clover)
             .setContentTitle("Клиент не найден")
-            .setContentText("Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
+            .setContentText("Клиент не найден в базе 1с. Выберите действие")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("Клиент не найден в базе 1с. Выберите действие"))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setContentIntent(openPending)
+            .addAction(0, "Пометить как личный контакт", personalPending)
+            .addAction(0, "Добавить в 1с", addTo1cPending)
             .build()
 
         manager.notify(MISSING_CLIENT_NOTIFICATION_ID, notification)

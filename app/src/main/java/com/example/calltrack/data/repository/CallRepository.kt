@@ -395,7 +395,7 @@ class CallRepository(
                     val clientName = if (personalMarked) "Личный звонок" else findClientName(entity.phone)
                     val reminderText = extractReminderText(entity.reminder)
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "Отправка данных в таблицу: id=${entity.id}, phone=${entity.phone}, type=${entity.type}")
-                    webhookApi.sendCall(
+                    val response = webhookApi.sendCall(
                         BuildConfig.WEBHOOK_URL,
                         WebhookRequest(
                             callId = "${entity.id}_${entity.timestamp}",
@@ -421,7 +421,7 @@ class CallRepository(
                     }
 
                     callDao.markUploaded(duplicates.map { it.id })
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ok")
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: code=${response.code()}")
                     Log.d(
                         "CallRepository",
                         "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
