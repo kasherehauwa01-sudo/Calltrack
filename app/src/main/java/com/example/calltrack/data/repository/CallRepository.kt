@@ -27,7 +27,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import org.json.JSONTokener
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -95,8 +94,7 @@ class CallRepository(
         val separator = if (BuildConfig.WEBHOOK_URL.contains("?")) "&" else "?"
         val url = "${BuildConfig.WEBHOOK_URL}${separator}phone=$normalizedPhone"
         com.example.calltrack.logging.AppLogger.log(appContext, "API", "Запрос данных из таблицы")
-
-        val retrofitResult = runCatching { webhookApi.loadHistory(url) }
+        return runCatching { webhookApi.loadHistory(url) }
             .onSuccess { com.example.calltrack.logging.AppLogger.log(appContext, "API", "Получено записей: ${it.size}") }
             .onFailure {
                 Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it)
@@ -255,12 +253,6 @@ class CallRepository(
         flushPendingPersonalContactsSync()
     }
 
-    suspend fun markCallsPendingForPhoneResync(phone: String) {
-        if (phone.isBlank() || phone == "Неизвестно") return
-        callDao.markPendingByPhone(phone)
-        syncPending()
-    }
-
     suspend fun unmarkPersonalContact(phone: String) {
         if (phone.isBlank() || phone == "Неизвестно") return
         ensureContact(phone)
@@ -416,7 +408,7 @@ class CallRepository(
                     val clientName = if (personalMarked) "Личный звонок" else findClientName(entity.phone)
                     val reminderText = extractReminderText(entity.reminder)
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "Отправка данных в таблицу: id=${entity.id}, phone=${entity.phone}, type=${entity.type}")
-                    val response = webhookApi.sendCall(
+                    webhookApi.sendCall(
                         BuildConfig.WEBHOOK_URL,
                         WebhookRequest(
                             callId = "${entity.id}_${entity.timestamp}",
@@ -442,8 +434,7 @@ class CallRepository(
                     }
 
                     callDao.markUploaded(duplicates.map { it.id })
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: code=${response.code()}")
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED: ids=${duplicates.joinToString { it.id.toString() }}")
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ok")
                     Log.d(
                         "CallRepository",
                         "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"

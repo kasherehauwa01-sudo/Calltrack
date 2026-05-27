@@ -50,7 +50,6 @@ class MainActivity : BaseActivity() {
     private lateinit var binding: ActivityMainBinding
     private var apkDownloadId: Long = -1L
     private var updateCheckHandled = false
-    private var trackingServiceStarted = false
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
@@ -454,7 +453,7 @@ class MainActivity : BaseActivity() {
             "https://api.github.com/repos/kasherehauwa01-sudo/Calltrack/releases/latest"
         private const val FALLBACK_RELEASE_TAG = "v05-05-26-01"
         private const val FALLBACK_RELEASE_APK_URL =
-            "https://github.com/kasherehauwa01-sudo/Calltrack/releases/download/v05-05-26-01/app-debug.apk"
+            "https://github.com/kasherehauwa01-sudo/Calltrack/releases/download/v05-05-26-01/CallTrack-1.0.apk"
         private const val APK_FILE_NAME = "update.apk"
     }
 

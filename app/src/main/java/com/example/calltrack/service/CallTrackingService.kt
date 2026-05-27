@@ -22,7 +22,6 @@ import androidx.core.content.ContextCompat
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.data.local.CallEntity
-import com.example.calltrack.data.repository.NotificationType
 import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.telephony.CallStateTracker
 import com.example.calltrack.ui.postcall.PostCallActivity
@@ -114,41 +113,33 @@ class CallTrackingService : Service() {
     }
 
     private suspend fun captureLatestCallIfNew(): Boolean {
-        val entities = readLatestCallEntitiesAfter(lastHandledTimestamp)
-        if (entities.isEmpty()) return false
+        val entity = readLatestCallEntityAfter(lastHandledTimestamp) ?: return false
+        if (entity.timestamp <= lastHandledTimestamp) return false
 
         val repo = (application as App).repository
-        var latestSavedCallId = 0L
-        var latestSavedEntity: CallEntity? = null
-        var hasNewData = false
+        AppLogger.log(this, "CALL", "Сохранение звонка в локальную БД")
+        val callId = repo.saveCall(entity)
+        AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
+        val clientName = repo.findClientName(entity.phone)
 
-        entities.forEach { entity ->
-            if (entity.timestamp <= lastHandledTimestamp) return@forEach
-            hasNewData = true
-            lastHandledTimestamp = maxOf(lastHandledTimestamp, entity.timestamp)
-            AppLogger.log(this, "CALL", "Сохранение звонка в локальную БД")
-            latestSavedCallId = repo.saveCall(entity)
-            latestSavedEntity = entity
-            AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
-
-            val isPersonal = repo.isPersonalContact(entity.phone)
-            if (!isPersonal && shouldShowPostCallPrompt(entity.type)) {
-                val contactName = resolveContactName(entity.phone)
-                showPostCallNow(latestSavedCallId, entity.phone, contactName)
-            }
-        }
-        if (!hasNewData) return false
-
-        val finalEntity = latestSavedEntity ?: return false
-        val isFinalPersonal = repo.isPersonalContact(finalEntity.phone)
-        val clientName = repo.findClientName(finalEntity.phone)
-
+        // ВАЖНО: сначала мгновенно сохраняем звонок локально (что сразу обновляет экран "Последние"),
+        // а сетевую синхронизацию запускаем в отдельной фоновой корутине, чтобы интернет/таймауты
+        // не задерживали появление записи в UI.
         scope.launch {
             Log.d("WEBHOOK", "Пытаемся отправить данные в Google Sheets")
             runCatching { repo.syncPending() }
                 .onFailure {
                     Log.e("WEBHOOK", "Ошибка отправки webhook", it)
                 }
+        }
+
+        if (clientName.isBlank()) {
+            AppLogger.log(this, "NOTIFY", "Показ уведомления: Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
+            showMissingClientNotification()
+        }
+        if (shouldShowPostCallPrompt(entity.type)) {
+            val contactName = resolveContactName(entity.phone)
+            showPostCallNow(callId, entity.phone, contactName)
         }
 
         if (!isFinalPersonal && clientName.isBlank()) {
@@ -200,66 +191,18 @@ class CallTrackingService : Service() {
         manager.notify(notificationId, notification)
     }
 
-    private fun showMissingClientNotification(phone: String) {
+    private fun showMissingClientNotification() {
         val manager = getSystemService(NotificationManager::class.java)
-        val openIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
-        }
-        val openPending = PendingIntent.getActivity(
-            this,
-            phone.hashCode(),
-            openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val personalIntent = Intent(this, CallTrackingService::class.java).apply {
-            action = ACTION_MARK_PERSONAL_FROM_NOTIFICATION
-            putExtra(EXTRA_NOTIFICATION_PHONE, phone)
-        }
-        val personalPending = PendingIntent.getService(
-            this,
-            phone.hashCode() + 1,
-            personalIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val addTo1cIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
-            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_SHOW_ADD_TO_1C_DIALOG, true)
-        }
-        val addTo1cPending = PendingIntent.getActivity(
-            this,
-            phone.hashCode() + 2,
-            addTo1cIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
         val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_clover)
             .setContentTitle("Клиент не найден")
-            .setContentText("Клиент не найден в базе 1с. Выберите действие")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Клиент не найден в базе 1с. Выберите действие"))
+            .setContentText("Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(openPending)
-            .addAction(0, "Пометить как личный контакт", personalPending)
-            .addAction(0, "Добавить в 1с", addTo1cPending)
             .build()
 
         manager.notify(MISSING_CLIENT_NOTIFICATION_ID, notification)
-        scope.launch {
-            val repo = (application as App).repository
-            repo.saveAppNotification(
-                title = "Клиент не найден",
-                message = "Клиент не найден в базе 1с. Выберите действие",
-                type = NotificationType.MISSING_CLIENT,
-                targetScreen = "contact_card",
-                entityId = phone
-            )
-        }
     }
 
     private fun buildPostCallNotificationId(callId: Long): Int {
@@ -280,7 +223,7 @@ class CallTrackingService : Service() {
         return phone
     }
 
-    private fun readLatestCallEntitiesAfter(minTimestampExclusive: Long): List<CallEntity> {
+    private fun readLatestCallEntityAfter(minTimestampExclusive: Long): CallEntity? {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
             return emptyList()
         }
