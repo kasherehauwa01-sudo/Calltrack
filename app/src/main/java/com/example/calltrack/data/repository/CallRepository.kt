@@ -39,7 +39,8 @@ class CallRepository(
     private val commentDao: CommentDao,
     private val callHistoryDao: CallHistoryDao,
     private val webhookApi: WebhookApi,
-    context: Context
+    context: Context,
+    private val notificationRepository: NotificationRepository? = null
 ) {
     private val appContext = context.applicationContext
     val prefs = PrefsManager(context)
@@ -73,6 +74,19 @@ class CallRepository(
         return contactDao.findAll().any { contact ->
             contact.client1c == "Личный" && normalizePhone(contact.phone) == normalized
         }
+    }
+
+
+
+    suspend fun saveAppNotification(
+        title: String,
+        message: String,
+        type: NotificationType,
+        targetScreen: String = "",
+        entityId: String = "",
+        payloadJson: String = ""
+    ) {
+        notificationRepository?.insertNotification(title, message, type, targetScreen, entityId, payloadJson)
     }
 
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> {

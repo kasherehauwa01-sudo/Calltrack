@@ -38,6 +38,7 @@ import com.example.calltrack.ui.contactcard.ContactHistoryFragment
 import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -49,6 +50,7 @@ class MainActivity : BaseActivity() {
     private lateinit var binding: ActivityMainBinding
     private var apkDownloadId: Long = -1L
     private var updateCheckHandled = false
+    private var trackingServiceStarted = false
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
@@ -80,6 +82,7 @@ class MainActivity : BaseActivity() {
         applyWindowInsets()
         setupBottomNav()
         setupSettingsButton()
+        setupNotificationsButton()
         registerDownloadReceiver()
         handleExternalNavigation(intent)
         if (intent.getBooleanExtra(EXTRA_RUN_UPDATE_CHECK, false)) {
@@ -94,7 +97,10 @@ class MainActivity : BaseActivity() {
             } else {
                 binding.bottomNav.visibility = android.view.View.VISIBLE
                 if (savedInstanceState == null) binding.bottomNav.selectedItemId = R.id.nav_dial
-                startTrackingService()
+                if (!trackingServiceStarted) {
+                    trackingServiceStarted = true
+                    startTrackingService()
+                }
             }
             updateWarningState()
         }
@@ -428,6 +434,18 @@ class MainActivity : BaseActivity() {
     }
 
     companion object {
+        const val EXTRA_OPEN_REMINDER_PHONE = "extra_open_reminder_phone"
+        fun createNotificationNavigationIntent(context: Context, targetScreen: String, entityId: String): Intent {
+            return Intent(context, MainActivity::class.java).apply {
+                when (targetScreen) {
+                    "contact_card", "personal_contact" -> putExtra(EXTRA_OPEN_CONTACT_PHONE, entityId)
+                    "call_history" -> putExtra(EXTRA_OPEN_CONTACT_PHONE, entityId)
+                    "reminder" -> putExtra(EXTRA_OPEN_CONTACT_PHONE, entityId)
+                }
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+        }
+
         const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
         const val EXTRA_RUN_UPDATE_CHECK = "extra_run_update_check"
         private const val MENU_ABOUT_ID = 1001
