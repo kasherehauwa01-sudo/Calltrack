@@ -126,8 +126,9 @@ class MainActivity : BaseActivity() {
     private fun ensureTrackingServiceRunning() {
         if (trackingServiceStarted) return
         lifecycleScope.launch {
-            val completed =
-                viewModel.onboardingCompleted.value == true
+            val completed = (viewModel.onboardingCompleted.value == true) || runCatching {
+                viewModel.isOnboardingCompleted()
+            }.getOrDefault(false)
             if (completed && hasAllPermissions()) {
                 trackingServiceStarted = true
                 startTrackingService()

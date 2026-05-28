@@ -12,6 +12,7 @@ import com.example.calltrack.data.local.ContactEntity
 import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.data.repository.CallRepository
+import kotlinx.coroutines.flow.first
 
 class MainViewModel(private val repository: CallRepository) : ViewModel() {
     val calls = repository.observeCalls().asLiveData()
@@ -59,6 +60,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     suspend fun markOnboardingCompleted() = repository.prefs.setOnboardingCompleted(true)
     suspend fun setManagerName(name: String) = repository.prefs.setManagerName(name)
     suspend fun setManagerPhone(phone: String) = repository.prefs.setManagerPhone(phone)
+    suspend fun isOnboardingCompleted(): Boolean = repository.prefs.onboardingCompleted.first()
     // Фоновая синхронизация с Google Sheets (с последующим сохранением статусов во внутреннем кэше БД).
     suspend fun sync() = repository.syncPending()
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> = repository.loadHistoryFromRemote(phone)
