@@ -39,6 +39,29 @@ class CallTrackingService : Service() {
     private lateinit var tracker: CallStateTracker
     private var lastStateWasActive = false
     private var lastHandledTimestamp: Long = 0L
+    private var pollingJobStarted = false
+
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            CallTrackingService.ACTION_MARK_PERSONAL_FROM_NOTIFICATION -> {
+                val phone = intent?.getStringExtra(CallTrackingService.EXTRA_NOTIFICATION_PHONE).orEmpty()
+                if (phone.isNotBlank()) {
+                    scope.launch {
+                        runCatching {
+                            val repository = (application as App).repository
+                            repository.markAsPersonalContact(phone)
+                            repository.markCallsPendingForPhoneResync(phone)
+                            AppLogger.log(this@CallTrackingService, "UI", "Пометка личного контакта из уведомления: $phone")
+                        }
+                    }
+                    getSystemService(NotificationManager::class.java)
+                        .cancel(CallTrackingService.MISSING_CLIENT_NOTIFICATION_ID)
+                }
+            }
+        }
+        return START_STICKY
+    }
 
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -100,7 +123,25 @@ class CallTrackingService : Service() {
                 }
             }
         }
-        tracker.start()
+        val trackerStarted = tracker.start()
+        AppLogger.log(this, "SERVICE", "CallStateTracker start result=$trackerStarted")
+        startPeriodicCaptureFallback()
+    }
+
+
+    private fun startPeriodicCaptureFallback() {
+        if (pollingJobStarted) return
+        pollingJobStarted = true
+        scope.launch {
+            while (true) {
+                runCatching {
+                    captureLatestCallIfNew()
+                }.onFailure {
+                    AppLogger.log(this@CallTrackingService, "ERROR", "Periodic capture failed: ${it.message}")
+                }
+                delay(5000)
+            }
+        }
     }
 
     private suspend fun captureLatestCallWithRetry() {
