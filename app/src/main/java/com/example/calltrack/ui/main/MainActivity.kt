@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.PopupMenu
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -83,6 +84,9 @@ class MainActivity : BaseActivity() {
         setupNotificationsButton()
         registerDownloadReceiver()
         handleExternalNavigation(intent)
+        if (intent.getBooleanExtra(EXTRA_RUN_UPDATE_CHECK, false)) {
+            checkForUpdatesAndPrompt()
+        }
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
