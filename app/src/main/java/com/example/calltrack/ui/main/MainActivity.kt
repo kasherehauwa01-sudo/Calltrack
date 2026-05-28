@@ -142,6 +142,11 @@ class MainActivity : BaseActivity() {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
     }
 
+    private fun setupNotificationsButton() {
+        // Временная безопасная заглушка: сохраняем вызов в onCreate,
+        // но не изменяем остальную логику Activity.
+    }
+
     private fun setupSettingsButton() {
         binding.btnSettings.setOnClickListener { anchor ->
             AppLogger.log(this, "UI", "Нажата кнопка: Настройки")
