@@ -235,7 +235,7 @@ function installHourlyClientBackfillTrigger() {
 ### Шаг 4. Вставить URL в приложение
 В `app/build.gradle` замените:
 ```gradle
-buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/AKfycbyUtYmL4-L1Ldzhrrn3kgst_gODDdu2lBqkk1_qtf6-IwWXoXizhP_J-AoJbYE7U2Zq1w/exec"'
+buildConfigField "String", "WEBHOOK_URL", '"https://script.google.com/macros/s/AKfycbxrpLKT3jE-AwhgItoH3z7hM486RIxq3wL2gOUqAzqz4cBtjuC9VkMCeHblLe-_OIccRA/exec"'
 ```
 на ваш реальный URL.
 
