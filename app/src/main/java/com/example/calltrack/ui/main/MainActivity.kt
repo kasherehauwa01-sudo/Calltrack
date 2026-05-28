@@ -26,7 +26,6 @@ import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.App
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.R
-import com.example.calltrack.data.repository.PrefsManager
 import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.service.CallTrackingService
@@ -39,7 +38,6 @@ import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -128,7 +126,8 @@ class MainActivity : BaseActivity() {
     private fun ensureTrackingServiceRunning() {
         if (trackingServiceStarted) return
         lifecycleScope.launch {
-            val completed = runCatching { prefsManager.onboardingCompleted.first() }.getOrDefault(false)
+            val completed =
+                viewModel.onboardingCompleted.value == true
             if (completed && hasAllPermissions()) {
                 trackingServiceStarted = true
                 startTrackingService()
