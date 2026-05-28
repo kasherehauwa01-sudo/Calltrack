@@ -39,6 +39,7 @@ import com.example.calltrack.ui.dialpad.DialPadFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -114,6 +115,7 @@ class MainActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         AppLogger.log(this, "APP", "Приложение на экране")
+        ensureTrackingServiceRunning()
     }
 
     override fun onPause() {
@@ -122,6 +124,19 @@ class MainActivity : BaseActivity() {
     }
 
     private fun applyWindowInsets() = applyInsets(binding.root, binding.statusBarOverlay)
+
+    private fun ensureTrackingServiceRunning() {
+        if (trackingServiceStarted) return
+        lifecycleScope.launch {
+            val completed = runCatching { prefsManager.onboardingCompleted.first() }.getOrDefault(false)
+            if (completed && hasAllPermissions()) {
+                trackingServiceStarted = true
+                startTrackingService()
+                AppLogger.log(this@MainActivity, "SERVICE", "CallTrackingService автозапуск из onResume")
+            }
+        }
+    }
+
 
     private fun handleExternalNavigation(intent: Intent?) {
         val phone = intent?.getStringExtra(EXTRA_OPEN_CONTACT_PHONE).orEmpty()
