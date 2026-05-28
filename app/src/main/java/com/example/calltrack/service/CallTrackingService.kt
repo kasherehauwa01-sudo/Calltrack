@@ -22,6 +22,8 @@ import androidx.core.content.ContextCompat
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.data.local.CallEntity
+import com.example.calltrack.data.repository.NotificationType
+import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.telephony.CallStateTracker
 import com.example.calltrack.ui.postcall.PostCallActivity
 import kotlinx.coroutines.CoroutineScope
@@ -30,12 +32,36 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 class CallTrackingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var tracker: CallStateTracker
     private var lastStateWasActive = false
     private var lastHandledTimestamp: Long = 0L
+    private var pollingJobStarted = false
+
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            CallTrackingService.ACTION_MARK_PERSONAL_FROM_NOTIFICATION -> {
+                val phone = intent?.getStringExtra(CallTrackingService.EXTRA_NOTIFICATION_PHONE).orEmpty()
+                if (phone.isNotBlank()) {
+                    scope.launch {
+                        runCatching {
+                            val repository = (application as App).repository
+                            repository.markAsPersonalContact(phone)
+                            repository.markCallsPendingForPhoneResync(phone)
+                            AppLogger.log(this@CallTrackingService, "UI", "Пометка личного контакта из уведомления: $phone")
+                        }
+                    }
+                    getSystemService(NotificationManager::class.java)
+                        .cancel(CallTrackingService.MISSING_CLIENT_NOTIFICATION_ID)
+                }
+            }
+        }
+        return START_STICKY
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -49,17 +75,25 @@ class CallTrackingService : Service() {
             return
         }
 
-        // Запоминаем текущую последнюю запись, чтобы не дублировать старые звонки после старта сервиса.
-        lastHandledTimestamp = readLatestCallEntity()?.timestamp ?: 0L
+        // Берём метку последнего УЖЕ сохранённого звонка из локальной БД.
+        // Так мы не пропускаем звонки за сегодня, которые были в CallLog, но ещё не попали в кэш приложения.
+        val repo = (application as App).repository
+        lastHandledTimestamp = runBlocking(Dispatchers.IO) {
+            repo.getLatestSavedCallTimestamp()
+        }
 
         tracker = CallStateTracker(this) { state, _ ->
             when (state) {
                 TelephonyManager.CALL_STATE_RINGING,
-                TelephonyManager.CALL_STATE_OFFHOOK -> lastStateWasActive = true
+                TelephonyManager.CALL_STATE_OFFHOOK -> {
+                    lastStateWasActive = true
+                    AppLogger.log(this, "CALL", "Начало звонка: unknown")
+                }
 
                 TelephonyManager.CALL_STATE_IDLE -> {
                     if (lastStateWasActive) {
                         lastStateWasActive = false
+                        AppLogger.log(this, "CALL", "Завершение звонка: unknown")
                         scope.launch {
                             captureLatestCallWithRetry()
                         }
@@ -67,32 +101,80 @@ class CallTrackingService : Service() {
                 }
             }
         }
-        tracker.start()
+        val trackerStarted = tracker.start()
+        AppLogger.log(this, "SERVICE", "CallStateTracker start result=$trackerStarted")
+        startPeriodicCaptureFallback()
+    }
+
+
+    private fun startPeriodicCaptureFallback() {
+        if (pollingJobStarted) return
+        pollingJobStarted = true
+        scope.launch {
+            while (true) {
+                runCatching {
+                    captureLatestCallIfNew()
+                }.onFailure {
+                    AppLogger.log(this@CallTrackingService, "ERROR", "Periodic capture failed: ${it.message}")
+                }
+                delay(5000)
+            }
+        }
     }
 
     private suspend fun captureLatestCallWithRetry() {
-        // Стараемся показать post-call максимально быстро после завершения звонка.
-        repeat(10) { attempt ->
+        // На некоторых устройствах CallLog обновляется с задержкой, поэтому ждём дольше,
+        // чтобы не схватить предыдущий звонок вместо только что завершённого.
+        repeat(25) { attempt ->
             val captured = captureLatestCallIfNew()
             if (captured) return
-            if (attempt < 9) delay(200)
+            if (attempt < 24) delay(300)
         }
     }
 
     private suspend fun captureLatestCallIfNew(): Boolean {
-        val entity = readLatestCallEntity() ?: return false
-        if (entity.timestamp <= lastHandledTimestamp) return false
+        val entities = readLatestCallEntitiesAfter(lastHandledTimestamp)
+        if (entities.isEmpty()) return false
 
-        lastHandledTimestamp = entity.timestamp
         val repo = (application as App).repository
-        val callId = repo.saveCall(entity)
-        runCatching { repo.syncPending() }
-            .onFailure { Log.e("CallTrackingService", "Ошибка syncPending после saveCall id=$callId", it) }
-        if (shouldShowPostCallPrompt(entity.type)) {
-            val contactName = resolveContactName(entity.phone)
-            showPostCallNow(callId, entity.phone, contactName)
+        var latestSavedCallId = 0L
+        var latestSavedEntity: CallEntity? = null
+        var hasNewData = false
+
+        entities.forEach { entity ->
+            if (entity.timestamp <= lastHandledTimestamp) return@forEach
+            hasNewData = true
+            lastHandledTimestamp = maxOf(lastHandledTimestamp, entity.timestamp)
+            AppLogger.log(this, "CALL", "Сохранение звонка в локальную БД")
+            latestSavedCallId = repo.saveCall(entity)
+            latestSavedEntity = entity
+            AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
+
+            val isPersonal = repo.isPersonalContact(entity.phone)
+            if (!isPersonal && shouldShowPostCallPrompt(entity.type)) {
+                val contactName = resolveContactName(entity.phone)
+                showPostCallNow(latestSavedCallId, entity.phone, contactName)
+            }
         }
-        Log.d("CallTrackingService", "Call captured: ${entity.phone}, ${entity.type}, ${entity.timestamp}")
+        if (!hasNewData) return false
+
+        val finalEntity = latestSavedEntity ?: return false
+        val isFinalPersonal = repo.isPersonalContact(finalEntity.phone)
+        val clientName = repo.findClientName(finalEntity.phone)
+
+        scope.launch {
+            Log.d("WEBHOOK", "Пытаемся отправить данные в Google Sheets")
+            runCatching { repo.syncPending() }
+                .onFailure {
+                    Log.e("WEBHOOK", "Ошибка отправки webhook", it)
+                }
+        }
+
+        if (!isFinalPersonal && clientName.isBlank()) {
+            AppLogger.log(this, "NOTIFY", "Показ уведомления: Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
+            showMissingClientNotification(finalEntity.phone)
+        }
+        Log.d("CallTrackingService", "Calls captured count=${entities.size}, latest=${finalEntity.phone}, ts=${finalEntity.timestamp}")
         return true
     }
 
@@ -137,6 +219,68 @@ class CallTrackingService : Service() {
         manager.notify(notificationId, notification)
     }
 
+    private fun showMissingClientNotification(phone: String) {
+        val manager = getSystemService(NotificationManager::class.java)
+        val openIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
+        }
+        val openPending = PendingIntent.getActivity(
+            this,
+            phone.hashCode(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val personalIntent = Intent(this, CallTrackingService::class.java).apply {
+            action = CallTrackingService.ACTION_MARK_PERSONAL_FROM_NOTIFICATION
+            putExtra(CallTrackingService.EXTRA_NOTIFICATION_PHONE, phone)
+        }
+        val personalPending = PendingIntent.getService(
+            this,
+            phone.hashCode() + 1,
+            personalIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val addTo1cIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
+            putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_SHOW_ADD_TO_1C_DIALOG, true)
+        }
+        val addTo1cPending = PendingIntent.getActivity(
+            this,
+            phone.hashCode() + 2,
+            addTo1cIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_clover)
+            .setContentTitle("Клиент не найден")
+            .setContentText("Клиент не найден в базе 1с. Выберите действие")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("Клиент не найден в базе 1с. Выберите действие"))
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(openPending)
+            .addAction(0, "Пометить как личный контакт", personalPending)
+            .addAction(0, "Добавить в 1с", addTo1cPending)
+            .build()
+
+        manager.notify(CallTrackingService.MISSING_CLIENT_NOTIFICATION_ID, notification)
+        scope.launch {
+            val repo = (application as App).repository
+            repo.saveAppNotification(
+                title = "Клиент не найден",
+                message = "Клиент не найден в базе 1с. Выберите действие",
+                type = NotificationType.MISSING_CLIENT,
+                targetScreen = "contact_card",
+                entityId = phone
+            )
+        }
+    }
+
     private fun buildPostCallNotificationId(callId: Long): Int {
         val stablePart = (callId and 0x7FFFFFFF).toInt()
         return POST_CALL_NOTIFICATION_ID_BASE + (stablePart % 100000)
@@ -155,9 +299,9 @@ class CallTrackingService : Service() {
         return phone
     }
 
-    private fun readLatestCallEntity(): CallEntity? {
+    private fun readLatestCallEntitiesAfter(minTimestampExclusive: Long): List<CallEntity> {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
-            return null
+            return emptyList()
         }
 
         val projection = arrayOf(
@@ -167,6 +311,7 @@ class CallTrackingService : Service() {
             CallLog.Calls.DATE
         )
 
+        val result = mutableListOf<CallEntity>()
         contentResolver.query(
             CallLog.Calls.CONTENT_URI,
             projection,
@@ -174,23 +319,27 @@ class CallTrackingService : Service() {
             null,
             "${CallLog.Calls.DATE} DESC"
         )?.use { cursor ->
-            if (cursor.moveToFirst()) {
+            while (cursor.moveToNext()) {
                 val number = cursor.getString(cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)).orEmpty()
                 val typeInt = cursor.getInt(cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE))
                 val duration = cursor.getLong(cursor.getColumnIndexOrThrow(CallLog.Calls.DURATION))
                 val timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(CallLog.Calls.DATE))
 
+                if (timestamp <= minTimestampExclusive) continue
+
                 val (type, note) = mapCallType(typeInt, duration)
-                return CallEntity(
+                result.add(
+                    CallEntity(
                     phone = if (number.isBlank()) "Неизвестно" else number,
                     type = type,
                     duration = duration,
                     note = note,
                     timestamp = timestamp
                 )
+                )
             }
         }
-        return null
+        return result.sortedBy { it.timestamp }
     }
 
     private fun mapCallType(typeInt: Int, duration: Long): Pair<String, String> {
@@ -211,7 +360,8 @@ class CallTrackingService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
-        tracker.stop()
+        if (this::tracker.isInitialized) tracker.stop()
+        stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
@@ -258,6 +408,14 @@ class CallTrackingService : Service() {
     }
 
     companion object {
+        const val ACTION_MARK_PERSONAL_FROM_NOTIFICATION =
+            "com.example.calltrack.CallTrackingService.ACTION_MARK_PERSONAL_FROM_NOTIFICATION"
+
+        const val EXTRA_NOTIFICATION_PHONE =
+            "extra_notification_phone"
+
+        const val MISSING_CLIENT_NOTIFICATION_ID = 1002
+
         private const val POST_CALL_CHANNEL_ID = "postcall"
         private const val POST_CALL_NOTIFICATION_ID_BASE = 1000
     }
