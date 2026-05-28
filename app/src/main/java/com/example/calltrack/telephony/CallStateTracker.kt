@@ -5,6 +5,7 @@ import android.os.Build
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
+import android.util.Log
 
 class CallStateTracker(
     private val context: Context,
@@ -14,7 +15,7 @@ class CallStateTracker(
     private var callback: TelephonyCallback? = null
     private var phoneStateListener: PhoneStateListener? = null
 
-    fun start() {
+    fun start(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val cb = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
                 override fun onCallStateChanged(state: Int) {
@@ -22,7 +23,13 @@ class CallStateTracker(
                 }
             }
             callback = cb
-            telephonyManager.registerTelephonyCallback(context.mainExecutor, cb)
+            return try {
+                telephonyManager.registerTelephonyCallback(context.mainExecutor, cb)
+                true
+            } catch (se: SecurityException) {
+                Log.e("CallStateTracker", "Нет разрешения на подписку CallState", se)
+                false
+            }
         } else {
             @Suppress("DEPRECATION")
             val legacy = object : PhoneStateListener() {
@@ -32,7 +39,13 @@ class CallStateTracker(
             }
             phoneStateListener = legacy
             @Suppress("DEPRECATION")
-            telephonyManager.listen(legacy, PhoneStateListener.LISTEN_CALL_STATE)
+            return try {
+                telephonyManager.listen(legacy, PhoneStateListener.LISTEN_CALL_STATE)
+                true
+            } catch (se: SecurityException) {
+                Log.e("CallStateTracker", "Нет разрешения на legacy CallState", se)
+                false
+            }
         }
     }
 

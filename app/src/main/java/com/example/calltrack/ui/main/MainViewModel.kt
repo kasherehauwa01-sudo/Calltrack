@@ -12,10 +12,13 @@ import com.example.calltrack.data.local.ContactEntity
 import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.data.repository.CallRepository
+import kotlinx.coroutines.flow.first
 
 class MainViewModel(private val repository: CallRepository) : ViewModel() {
     val calls = repository.observeCalls().asLiveData()
     val onboardingCompleted = repository.prefs.onboardingCompleted.asLiveData()
+    val managerName = repository.prefs.managerName.asLiveData()
+    val managerPhone = repository.prefs.managerPhone.asLiveData()
 
     private val _dialNumber = MutableLiveData("")
     val dialNumber: LiveData<String> = _dialNumber
@@ -51,11 +54,15 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     suspend fun addComment(phone: String, text: String) = repository.addComment(phone, text)
     suspend fun addReminder(phone: String, contactName: String, text: String, remindAt: Long) =
         repository.addReminder(phone, contactName, text, remindAt)
+    suspend fun markAsPersonalContact(phone: String) = repository.markAsPersonalContact(phone)
+    suspend fun unmarkPersonalContact(phone: String) = repository.unmarkPersonalContact(phone)
 
     suspend fun markOnboardingCompleted() = repository.prefs.setOnboardingCompleted(true)
     suspend fun setManagerName(name: String) = repository.prefs.setManagerName(name)
-    // Синхронизацию выполняем только после сохранения результата звонка (saveCallOutcome).
-    suspend fun sync() = Unit
+    suspend fun setManagerPhone(phone: String) = repository.prefs.setManagerPhone(phone)
+    suspend fun isOnboardingCompleted(): Boolean = repository.prefs.onboardingCompleted.first()
+    // Фоновая синхронизация с Google Sheets (с последующим сохранением статусов во внутреннем кэше БД).
+    suspend fun sync() = repository.syncPending()
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> = repository.loadHistoryFromRemote(phone)
     suspend fun getHistory(phone: String): List<CallHistoryEntity> = repository.getHistory(phone)
     suspend fun refreshHistory(phone: String) = repository.refreshHistory(phone)
