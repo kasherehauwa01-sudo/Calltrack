@@ -90,6 +90,7 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
             binding.chipOutcomeDeal.id -> "договорились"
             binding.chipOutcomeDecline.id -> "отказ"
             binding.chipOutcomeRecall.id -> "перезвонить"
+            binding.chipOutcomePotential.id -> "потенциальный клиент"
             else -> ""
         }
         return outcome.takeIf { it.isNotBlank() }?.let { "Итог: $it" }.orEmpty()
