@@ -16,6 +16,7 @@ import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.data.remote.WebhookApi
 import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.data.remote.WebhookRequest
+import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -50,6 +51,7 @@ class CallRepository(
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
     private val syncMutex = Mutex()
     private val personalContactsHttpClient = OkHttpClient()
+    private val gson = Gson()
 
     fun observeCalls(): Flow<List<CallEntity>> = callDao.observeAll()
     fun observeCallsByPhone(phone: String): Flow<List<CallEntity>> = callDao.observeByPhone(phone)
@@ -423,29 +425,39 @@ class CallRepository(
                     val clientName = if (personalMarked) "Личный звонок" else findClientName(entity.phone)
                     val reminderText = extractReminderText(entity.reminder)
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "Отправка данных в таблицу: id=${entity.id}, phone=${entity.phone}, type=${entity.type}")
-                    val response = webhookApi.sendCall(
-                        BuildConfig.WEBHOOK_URL,
-                        WebhookRequest(
-                            callId = "${entity.id}_${entity.timestamp}",
-                            date = dateFormat.format(Date(entity.timestamp)),
-                            time = timeFormat.format(Date(entity.timestamp)),
-                            phone = normalizePhone(entity.phone),
-                            type = entity.type,
-                            duration = entity.duration,
-                            manager = managerName,
-                            userPhone = managerPhone,
-                            note = entity.note,
-                            tag = entity.tag,
-                            reminder = entity.reminder,
-                            reminderText = reminderText,
-                            client = clientName
-                        )
+                    val payload = WebhookRequest(
+                        callId = "${entity.id}_${entity.timestamp}",
+                        date = dateFormat.format(Date(entity.timestamp)),
+                        time = timeFormat.format(Date(entity.timestamp)),
+                        phone = normalizePhone(entity.phone),
+                        type = entity.type,
+                        duration = entity.duration,
+                        manager = managerName,
+                        userPhone = managerPhone,
+                        note = entity.note,
+                        tag = entity.tag,
+                        reminder = entity.reminder,
+                        reminderText = reminderText,
+                        client = clientName
                     )
-                    val bodyText = response.body()?.string().orEmpty()
-                    if (!isWebhookAccepted(response.isSuccessful, bodyText)) {
-                        throw IllegalStateException(
-                            "Calltrack webhook rejected: code=${response.code()}, body=${bodyText.take(400)}"
+
+                    val response = webhookApi.sendCall(BuildConfig.WEBHOOK_URL, payload)
+                    val bodyText = response.body()?.string().orEmpty().ifBlank { response.errorBody()?.string().orEmpty() }
+                    var accepted = isWebhookAccepted(response.isSuccessful, bodyText)
+
+                    if (!accepted) {
+                        com.example.calltrack.logging.AppLogger.log(
+                            appContext,
+                            "API",
+                            "Retrofit webhook rejected, fallback OkHttp: code=${response.code()}, body=${bodyText.take(400)}"
                         )
+                        val (fallbackCode, fallbackBody) = sendCallViaOkHttp(payload)
+                        accepted = isWebhookAccepted(fallbackCode in 200..299, fallbackBody)
+                        if (!accepted) {
+                            throw IllegalStateException(
+                                "Calltrack webhook rejected (retrofit+fallback): retrofitCode=${response.code()}, fallbackCode=$fallbackCode, fallbackBody=${fallbackBody.take(400)}"
+                            )
+                        }
                     }
 
                     callDao.markUploaded(duplicates.map { it.id })
@@ -468,6 +480,19 @@ class CallRepository(
         }
     }
 
+
+    private suspend fun sendCallViaOkHttp(requestBody: WebhookRequest): Pair<Int, String> = withContext(Dispatchers.IO) {
+        val json = gson.toJson(requestBody)
+        val request = Request.Builder()
+            .url(BuildConfig.WEBHOOK_URL)
+            .post(json.toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .build()
+
+        personalContactsHttpClient.newCall(request).execute().use { response ->
+            val text = response.body?.string().orEmpty()
+            response.code to text
+        }
+    }
 
     private fun isWebhookAccepted(isSuccessful: Boolean, bodyText: String): Boolean {
         if (!isSuccessful) return false
