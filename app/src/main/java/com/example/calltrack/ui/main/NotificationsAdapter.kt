@@ -22,12 +22,17 @@ class NotificationsAdapter(
     override fun getItemCount()=items.size
     override fun onBindViewHolder(h: VH, p: Int)=h.bind(items[p])
     inner class VH(private val b: ItemNotificationBinding): RecyclerView.ViewHolder(b.root){
-        fun bind(it: AppNotificationEntity){
-            b.tvTitle.text=it.title; b.tvMessage.text=it.message; b.tvMeta.text="${group(it.createdAt)} • ${it.type} • ${fmt.format(Date(it.createdAt))}"
-            b.tvTitle.setTypeface(null, if (it.isRead) Typeface.NORMAL else Typeface.BOLD)
-            b.unreadDot.alpha = if (it.isRead) 0f else 1f
-            b.root.alpha= if (it.isRead) 0.85f else 1f
-            b.root.setOnClickListener { onRead(it); onClick(it) }
+        fun bind(item: AppNotificationEntity){
+            b.tvTitle.text = item.title
+            b.tvMessage.text = item.message
+            b.tvMeta.text = "${group(item.createdAt)} • ${item.type} • ${fmt.format(Date(item.createdAt))}"
+            b.tvTitle.setTypeface(null, if (item.isRead) Typeface.NORMAL else Typeface.BOLD)
+            b.unreadDot.alpha = if (item.isRead) 0f else 1f
+            b.root.alpha = if (item.isRead) 0.85f else 1f
+            b.root.setOnClickListener {
+                onRead(item)
+                onClick(item)
+            }
         }
         private fun group(ts: Long): String { val d=Date(ts); val now=System.currentTimeMillis(); val day=24*60*60*1000L
             return when { now-ts < day -> "Сегодня"; now-ts < 2*day -> "Вчера"; else -> "Ранее" }
