@@ -40,6 +40,7 @@ class ContactCardFragment : Fragment() {
 
     private val dateTimeFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
     private var currentPhone: String = ""
+    private var isPersonalContact: Boolean = false
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentContactCardBinding.inflate(inflater, container, false)
@@ -63,6 +64,23 @@ class ContactCardFragment : Fragment() {
         }
         binding.btnAddComment.setOnClickListener { showAddCommentDialog(phone) }
         binding.btnAddReminder.setOnClickListener { showAddReminderDialog(phone) }
+        binding.btnMarkPersonal.setOnClickListener {
+            viewLifecycleOwner.lifecycleScope.launch {
+                if (isPersonalContact) {
+                    viewModel.unmarkPersonalContact(phone)
+                    binding.tvClient1c.text = "—"
+                    isPersonalContact = false
+                    renderPersonalButtonState()
+                    Toast.makeText(requireContext(), "Пометка личного контакта убрана", Toast.LENGTH_SHORT).show()
+                } else {
+                    viewModel.markAsPersonalContact(phone)
+                    binding.tvClient1c.text = "Личный"
+                    isPersonalContact = true
+                    renderPersonalButtonState()
+                    Toast.makeText(requireContext(), "Контакт помечен как личный", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
         binding.rowCallsHistory.setOnClickListener {
             (requireActivity() as com.example.calltrack.ui.main.MainActivity)
                 .openContactHistory(phone, ContactHistoryFragment.TYPE_CALLS)
@@ -92,6 +110,18 @@ class ContactCardFragment : Fragment() {
             binding.tvContactName.text = contact?.name?.ifBlank { currentName } ?: currentName
             val fallbackClient = viewModel.findClientName(phone).ifBlank { "—" }
             binding.tvClient1c.text = contact?.client1c?.ifBlank { fallbackClient } ?: fallbackClient
+            isPersonalContact = binding.tvClient1c.text.toString() == "Личный"
+            renderPersonalButtonState()
+        }
+    }
+
+    private fun renderPersonalButtonState() {
+        if (isPersonalContact) {
+            binding.btnMarkPersonal.text = "Убрать пометку \"Личный контакт\""
+            binding.btnMarkPersonal.setBackgroundColor(0xFF9E9E9E.toInt())
+        } else {
+            binding.btnMarkPersonal.text = "Пометить как личный контакт"
+            binding.btnMarkPersonal.setBackgroundColor(0xFF4CAF50.toInt())
         }
     }
 
