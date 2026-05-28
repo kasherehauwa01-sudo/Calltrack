@@ -812,3 +812,170 @@ function doGet(e) {
   }
 }
 ```
+
+## Новый скрипт Calltrack (актуальная версия)
+
+Ниже — полный код, который вы прислали. Его можно вставить в Google Apps Script для таблицы Calltrack без изменений:
+
+```javascript
+var CALLTRACK_SPREADSHEET_ID =
+  "1ZNvJK0s1KkoOY9M-iIvNBAX07YBBcSFTaht1smCQDLc";
+
+var CALLS_SHEET_NAME = "Calls";
+
+function jsonResponse(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function normalizePhone(value) {
+  var digits = String(value || "").replace(/\D+/g, "");
+  if (digits.length === 10) digits = "7" + digits;
+  if (digits.length === 11 && digits[0] === "8") digits = "7" + digits.slice(1);
+  return digits;
+}
+
+function getSpreadsheet() {
+  return SpreadsheetApp.openById(CALLTRACK_SPREADSHEET_ID);
+}
+
+function getCallsSheet() {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(CALLS_SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(CALLS_SHEET_NAME);
+  return sheet;
+}
+
+function ensureHeaders(sheet) {
+  var required = [
+    "Дата","Время","Номер телефона","Тип звонка","Длительность","Менеджер",
+    "Комментарий","Тег","Напоминание","Текст напоминания","Клиент","ID","Номер телефона пользователя"
+  ];
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(required);
+    return required;
+  }
+  return sheet.getRange(1, 1, 1, required.length).getValues()[0];
+}
+
+function getHeaderMap(header) {
+  var map = {};
+  for (var i = 0; i < header.length; i++) {
+    map[String(header[i] || "").trim()] = i;
+  }
+  return map;
+}
+
+function doPost(e) {
+  try {
+    if (!e || !e.postData) {
+      return jsonResponse({ status: "error", message: "NO_POST_DATA" });
+    }
+
+    var body = e.postData.contents || "";
+    var data = {};
+
+    try {
+      data = JSON.parse(body);
+    } catch (parseError) {
+      return jsonResponse({ status: "error", message: "INVALID_JSON", raw: body });
+    }
+
+    if (!data.phone) {
+      return jsonResponse({ status: "error", message: "PHONE_REQUIRED" });
+    }
+
+    var sheet = getCallsSheet();
+    var header = ensureHeaders(sheet);
+    var map = getHeaderMap(header);
+
+    var row = [];
+    for (var z = 0; z < header.length; z++) row.push("");
+
+    function put(column, value) {
+      var idx = map[column];
+      if (idx === undefined) return;
+      row[idx] = value;
+    }
+
+    var callId = String(data.call_id || "");
+
+    put("Дата", data.date || "");
+    put("Время", data.time || "");
+    put("Номер телефона", normalizePhone(data.phone || ""));
+    put("Тип звонка", data.type || "");
+    put("Длительность", data.duration || "");
+    put("Менеджер", data.manager || "");
+    put("Комментарий", data.comment || data.note || "");
+    put("Тег", data.tag || "");
+    put("Напоминание", data.reminder || "");
+    put("Текст напоминания", data.reminder_text || data.reminderText || "");
+    put("Клиент", data.client || "");
+    put("ID", callId);
+    put("Номер телефона пользователя", normalizePhone(data.user_phone || data.userPhone || data.manager_phone || ""));
+
+    var updated = false;
+    if (callId) {
+      var lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        var ids = sheet.getRange(2, 12, lastRow - 1, 1).getValues();
+        for (var i = 0; i < ids.length; i++) {
+          if (String(ids[i][0]) === callId) {
+            sheet.getRange(i + 2, 1, 1, row.length).setValues([row]);
+            updated = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!updated) sheet.appendRow(row);
+
+    return jsonResponse({ status: "success" });
+  } catch (err) {
+    return jsonResponse({ status: "error", message: String(err) });
+  }
+}
+
+function doGet(e) {
+  try {
+    var sheet = getCallsSheet();
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return jsonResponse([]);
+
+    var data = sheet.getDataRange().getValues();
+    var header = data[0];
+    var map = getHeaderMap(header);
+
+    var userPhone = normalizePhone((e.parameter && e.parameter.user_phone) || "");
+    var result = [];
+
+    for (var i = data.length - 1; i >= 1; i--) {
+      var row = data[i];
+      var rowUserPhone = normalizePhone(row[map["Номер телефона пользователя"]]);
+      if (userPhone && rowUserPhone !== userPhone) continue;
+
+      result.push({
+        date: row[map["Дата"]] || "",
+        time: row[map["Время"]] || "",
+        phone: row[map["Номер телефона"]] || "",
+        type: row[map["Тип звонка"]] || "",
+        duration: row[map["Длительность"]] || "",
+        manager: row[map["Менеджер"]] || "",
+        comment: row[map["Комментарий"]] || "",
+        tag: row[map["Тег"]] || "",
+        reminder: row[map["Напоминание"]] || "",
+        reminder_text: row[map["Текст напоминания"]] || "",
+        client: row[map["Клиент"]] || "",
+        call_id: row[map["ID"]] || "",
+        user_phone: rowUserPhone || ""
+      });
+    }
+
+    return jsonResponse(result);
+  } catch (err) {
+    return jsonResponse({ status: "error", message: String(err) });
+  }
+}
+```
