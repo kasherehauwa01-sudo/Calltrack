@@ -418,6 +418,9 @@ class MainActivity : BaseActivity() {
     private fun startTrackingService() {
         runCatching {
             ContextCompat.startForegroundService(this, Intent(this, CallTrackingService::class.java))
+            AppLogger.log(this, "SERVICE", "CallTrackingService startForegroundService вызван")
+        }.onFailure {
+            AppLogger.log(this, "ERROR", "Не удалось запустить CallTrackingService: ${it.message}")
         }
         lifecycleScope.launch { viewModel.sync() }
     }
