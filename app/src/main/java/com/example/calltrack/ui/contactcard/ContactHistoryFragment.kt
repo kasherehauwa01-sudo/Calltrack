@@ -88,17 +88,8 @@ class ContactHistoryFragment : Fragment() {
     private fun loadStyledCallHistory(phone: String) {
         renderHistoryCards(listOf("Загрузка..."))
         lifecycleScope.launch {
-            val cached = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-            renderCallCards(cached)
-            launch {
-                val result = runCatching { withContext(Dispatchers.IO) { viewModel.refreshHistory(phone) } }
-                if (result.isSuccess) {
-                    val updated = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-                    renderCallCards(updated)
-                } else if (cached.isEmpty()) {
-                    renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
-                }
-            }
+            val calls = withContext(Dispatchers.IO) { viewModel.getDeviceCallHistory(phone) }
+            renderCallCards(calls)
         }
     }
 
