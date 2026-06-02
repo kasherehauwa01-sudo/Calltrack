@@ -17,6 +17,7 @@ import android.provider.CallLog
 import android.provider.ContactsContract
 import android.telephony.TelephonyManager
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.calltrack.App
@@ -151,8 +152,9 @@ class CallTrackingService : Service() {
         }
 
         if (!isFinalPersonal && clientName.isBlank()) {
-            AppLogger.log(this, "NOTIFY", "Показ уведомления: Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
-            showMissingClientNotification(finalEntity.phone)
+            val missingClientLabel = resolveContactName(finalEntity.phone)
+            AppLogger.log(this, "NOTIFY", "Показ уведомления: клиент $missingClientLabel не найден в базе 1с")
+            showMissingClientNotification(finalEntity.phone, missingClientLabel)
         }
         Log.d("CallTrackingService", "Calls captured count=${entities.size}, latest=${finalEntity.phone}, ts=${finalEntity.timestamp}")
         return true
@@ -199,8 +201,10 @@ class CallTrackingService : Service() {
         manager.notify(notificationId, notification)
     }
 
-    private fun showMissingClientNotification(phone: String) {
+    private fun showMissingClientNotification(phone: String, clientLabel: String) {
         val manager = getSystemService(NotificationManager::class.java)
+        val displayClient = clientLabel.ifBlank { phone }
+        val message = "Клиент $displayClient не найден в базе 1с. Выберите действие"
         val openIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
@@ -237,9 +241,9 @@ class CallTrackingService : Service() {
 
         val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_clover)
-            .setContentTitle("Клиент не найден")
-            .setContentText("Клиент не найден в базе 1с. Выберите действие")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Клиент не найден в базе 1с. Выберите действие"))
+            .setContentTitle("Клиент $displayClient не найден")
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
@@ -328,9 +332,19 @@ class CallTrackingService : Service() {
         return callTypeString to ""
     }
 
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        // Android 15 завершает foreground service с тайм-аутом, если приложение само не остановится.
+        // Явно убираем сервис из foreground и завершаем его, чтобы система не уронила процесс.
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf(startId)
+    }
+
     override fun onDestroy() {
         scope.cancel()
-        tracker.stop()
+        if (::tracker.isInitialized) {
+            tracker.stop()
+        }
         super.onDestroy()
     }
 
@@ -383,10 +397,9 @@ class CallTrackingService : Service() {
         const val EXTRA_NOTIFICATION_PHONE =
             "extra_notification_phone"
 
-        const val MISSING_CLIENT_NOTIFICATION_ID = 1002
+        const val MISSING_CLIENT_NOTIFICATION_ID = 2001
 
         private const val POST_CALL_CHANNEL_ID = "postcall"
         private const val POST_CALL_NOTIFICATION_ID_BASE = 1000
-        private const val MISSING_CLIENT_NOTIFICATION_ID = 2001
     }
 }
