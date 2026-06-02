@@ -88,17 +88,8 @@ class ContactHistoryFragment : Fragment() {
     private fun loadStyledCallHistory(phone: String) {
         renderHistoryCards(listOf("Загрузка..."))
         lifecycleScope.launch {
-            val cached = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-            renderCallCards(cached)
-            launch {
-                val result = runCatching { withContext(Dispatchers.IO) { viewModel.refreshHistory(phone) } }
-                if (result.isSuccess) {
-                    val updated = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-                    renderCallCards(updated)
-                } else if (cached.isEmpty()) {
-                    renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
-                }
-            }
+            val calls = withContext(Dispatchers.IO) { viewModel.getDeviceCallHistory(phone) }
+            renderCallCards(calls)
         }
     }
 
@@ -111,7 +102,8 @@ class ContactHistoryFragment : Fragment() {
                     .filter { it.reminder.isNotBlank() || it.reminderText.isNotBlank() }
                     .take(20)
                 if (reminders.isEmpty()) listOf("Нет истории") else reminders.map {
-                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.reminder.ifBlank { it.reminderText }}"
+                    val reminder = it.reminder.ifBlank { it.reminderText }
+                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | $reminder"
                 }
             }
         )
@@ -123,10 +115,10 @@ class ContactHistoryFragment : Fragment() {
             onSuccess = { items ->
                 val comments = items
                     .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
-                    .filter { it.note.isNotBlank() || it.tag.isNotBlank() }
+                    .filter { it.note.isNotBlank() }
                     .take(20)
                 if (comments.isEmpty()) listOf("Нет истории") else comments.map {
-                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.note.ifBlank { it.tag }}"
+                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.note}"
                 }
             }
         )
