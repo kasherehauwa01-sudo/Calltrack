@@ -230,6 +230,68 @@ class CallRepository(
         callHistoryDao.insertAll(remote.map { it.toEntity(normalized) })
     }
 
+    suspend fun getDeviceCallHistory(phone: String, limit: Int = DEVICE_CONTACT_HISTORY_LIMIT): List<CallHistoryEntity> =
+        withContext(Dispatchers.IO) {
+            val normalizedPhone = normalizePhone(phone)
+            if (normalizedPhone.isBlank()) return@withContext emptyList()
+            if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+                Log.w("CallRepository", "Нет разрешения READ_CALL_LOG для истории звонков карточки контакта")
+                return@withContext emptyList()
+            }
+
+            val projection = arrayOf(
+                CallLog.Calls.NUMBER,
+                CallLog.Calls.TYPE,
+                CallLog.Calls.DURATION,
+                CallLog.Calls.DATE
+            )
+            val result = mutableListOf<CallHistoryEntity>()
+
+            runCatching {
+                appContext.contentResolver.query(
+                    CallLog.Calls.CONTENT_URI,
+                    projection,
+                    null,
+                    null,
+                    "${CallLog.Calls.DATE} DESC"
+                )?.use { cursor ->
+                    val numberIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)
+                    val typeIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE)
+                    val durationIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.DURATION)
+                    val dateIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.DATE)
+
+                    while (cursor.moveToNext() && result.size < limit) {
+                        val rawPhone = cursor.getString(numberIdx).orEmpty()
+                        if (normalizePhone(rawPhone) != normalizedPhone) continue
+
+                        val duration = cursor.getLong(durationIdx)
+                        val timestamp = cursor.getLong(dateIdx)
+                        val (type, note) = mapDeviceCallType(cursor.getInt(typeIdx), duration)
+                        // Карточка контакта должна показывать историю из стандартной звонилки Android,
+                        // поэтому формируем элементы экрана напрямую из CallLog, без чтения Google Sheets.
+                        result += CallHistoryEntity(
+                            phone = normalizedPhone,
+                            date = dateFormat.format(Date(timestamp)),
+                            time = timeFormat.format(Date(timestamp)),
+                            type = type,
+                            duration = duration.toString(),
+                            manager = "",
+                            note = note,
+                            tag = "",
+                            reminder = "",
+                            reminderText = "",
+                            client = "",
+                            updatedAt = timestamp
+                        )
+                    }
+                }
+            }.onFailure {
+                Log.e("CallRepository", "Не удалось загрузить историю звонков контакта из стандартной звонилки", it)
+            }
+
+            result
+        }
+
     suspend fun saveCall(call: CallEntity): Long {
         ensureContact(call.phone)
         val duplicate = callDao.findRecentDuplicate(
@@ -649,6 +711,7 @@ class CallRepository(
 
     private companion object {
         private const val DEVICE_RECENT_CALLS_LIMIT = 100
+        private const val DEVICE_CONTACT_HISTORY_LIMIT = 100
         private const val CALL_HISTORY_MIN_ARRAY_COLUMNS = 5
     }
 

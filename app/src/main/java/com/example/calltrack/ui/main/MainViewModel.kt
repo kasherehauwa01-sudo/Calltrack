@@ -65,6 +65,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     // Экран «Последние» обновляем из стандартной звонилки Android, а не из Google Sheets.
     suspend fun refreshRecentCallsFromDevice() = repository.importRecentCallsFromDevice()
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> = repository.loadHistoryFromRemote(phone)
+    suspend fun getDeviceCallHistory(phone: String): List<CallHistoryEntity> = repository.getDeviceCallHistory(phone)
     suspend fun getHistory(phone: String): List<CallHistoryEntity> = repository.getHistory(phone)
     suspend fun refreshHistory(phone: String) = repository.refreshHistory(phone)
 
