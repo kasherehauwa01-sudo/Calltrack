@@ -185,6 +185,36 @@ class CallRepository(
                 if (item != null) add(item)
             }
         }
+        return ""
+    }
+
+    private fun List<CallHistoryItem>.filterForHistoryScreen(normalizedPhone: String): List<CallHistoryItem> {
+        return filter { item ->
+            // Пустые строки появляются, когда Retrofit получил объекты с русскими названиями колонок
+            // и не смог разложить их по @SerializedName. Такие строки отбрасываем и даём fallback-парсеру
+            // прочитать колонки «Комментарии» и «Напоминания» вручную.
+            if (!item.hasHistoryContent()) return@filter false
+            if (item.isHeaderRow()) return@filter false
+
+            val itemPhone = normalizePhone(item.phone)
+            itemPhone.isBlank() || itemPhone == normalizedPhone
+        }
+    }
+
+    private fun CallHistoryItem.hasHistoryContent(): Boolean {
+        return listOf(date, time, phone, type, duration, manager, note, tag, reminder, reminderText, client)
+            .any { it.isNotBlank() }
+    }
+
+    private fun CallHistoryItem.isHeaderRow(): Boolean {
+        return normalizeHeader(date) == "дата" ||
+            normalizeHeader(phone) in setOf("номертелефона", "телефон", "phone", "contactphone") ||
+            normalizeHeader(note) in setOf("комментарий", "комментарии", "коментарий", "коментарии", "comment", "comments") ||
+            normalizeHeader(reminder) in setOf("напоминание", "напоминания", "reminder", "reminders")
+    }
+
+    private fun normalizeHeader(value: String): String {
+        return value.filter { it.isLetterOrDigit() }.lowercase(Locale.getDefault())
     }
 
     private fun JSONObject.toCallHistoryItem(): CallHistoryItem {
