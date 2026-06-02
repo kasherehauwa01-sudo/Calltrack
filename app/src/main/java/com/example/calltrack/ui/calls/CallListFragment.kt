@@ -93,7 +93,6 @@ class CallListFragment : Fragment() {
                 val text = input.text.toString().trim()
                 viewLifecycleOwner.lifecycleScope.launch {
                     viewModel.saveCommentForCall(item.call.id, item.call.phone, text)
-                    viewModel.sync()
                 }
                 dialog.dismiss()
             }
@@ -162,7 +161,6 @@ class CallListFragment : Fragment() {
                     viewLifecycleOwner.lifecycleScope.launch {
                         viewModel.saveReminderForCall(item.call.id, item.call.phone, item.contactName, text, at)
                         ReminderScheduler.schedule(requireContext(), item.call.phone, item.contactName, at, text)
-                        viewModel.sync()
                     }
                     dialog.dismiss()
                 }
