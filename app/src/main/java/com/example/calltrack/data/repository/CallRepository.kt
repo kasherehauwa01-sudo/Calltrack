@@ -174,7 +174,11 @@ class CallRepository(
             timestamp = call.timestamp
         )
         if (duplicate != null) {
-            Log.d("CallRepository", "Пропускаем дубль звонка, используем id=${duplicate.id}")
+            // Если дубль был заранее подтянут из системной звонилки как историческая запись,
+            // он мог быть помечен uploaded=true. При реальном завершении звонка возвращаем его в очередь,
+            // чтобы syncPending отправил запись в Google Sheets.
+            callDao.markPending(duplicate.id)
+            Log.d("CallRepository", "Пропускаем дубль звонка, используем id=${duplicate.id} и ставим его в очередь отправки")
             return duplicate.id
         }
         return callDao.insert(call)
