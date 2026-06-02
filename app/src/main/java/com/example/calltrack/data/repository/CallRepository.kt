@@ -415,6 +415,17 @@ class CallRepository(
         if (phone.isBlank() || text.isBlank()) return
         ensureContact(phone)
         commentDao.insert(CommentEntity(phone = phone, text = text))
+
+        val latestCall = findLatestCallForPhone(phone)
+        if (latestCall == null) {
+            Log.w("CallRepository", "Комментарий сохранён локально, но звонок для отправки в таблицу не найден: phone=$phone")
+            return
+        }
+
+        // Комментарий из карточки контакта привязываем к последнему звонку этого номера,
+        // чтобы в таблице обновилась колонка «Комментарий» в строке с конкретным call_id.
+        callDao.updateOutcome(latestCall.id, text, latestCall.tag, latestCall.reminder)
+        syncCallById(latestCall.id)
     }
 
     suspend fun addReminder(phone: String, contactName: String, text: String, remindAt: Long) {
@@ -429,6 +440,18 @@ class CallRepository(
                 status = "Активно"
             )
         )
+
+        val latestCall = findLatestCallForPhone(phone)
+        if (latestCall == null) {
+            Log.w("CallRepository", "Напоминание сохранено локально, но звонок для отправки в таблицу не найден: phone=$phone")
+            return
+        }
+
+        val reminderValue = "${dateFormat.format(Date(remindAt))} ${timeFormat.format(Date(remindAt))} | $text"
+        // Напоминание из карточки контакта привязываем к последнему звонку этого номера,
+        // чтобы в таблице обновились колонки «Напоминание»/«Текст напоминания» по call_id.
+        callDao.updateOutcome(latestCall.id, latestCall.note, latestCall.tag, reminderValue)
+        syncCallById(latestCall.id)
     }
 
     suspend fun markAsPersonalContact(phone: String) {
@@ -547,6 +570,12 @@ class CallRepository(
         prefs.setPendingPersonalSync(arr.toString())
     }
 
+
+    private suspend fun findLatestCallForPhone(phone: String): CallEntity? {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return null
+        return callDao.getAllOnce().firstOrNull { call -> normalizePhone(call.phone) == normalizedPhone }
+    }
 
     suspend fun saveCommentForCall(callId: Long, phone: String, text: String) {
         val call = callDao.getById(callId) ?: return

@@ -26,6 +26,9 @@ interface CallDao {
     @Query("SELECT * FROM calls WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): CallEntity?
 
+    @Query("SELECT * FROM calls ORDER BY timestamp DESC")
+    suspend fun getAllOnce(): List<CallEntity>
+
     @Query(
         "SELECT * FROM calls " +
             "WHERE phone = :phone AND type = :type AND duration = :duration " +
