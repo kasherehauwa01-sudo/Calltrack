@@ -102,7 +102,8 @@ class ContactHistoryFragment : Fragment() {
                     .filter { it.reminder.isNotBlank() || it.reminderText.isNotBlank() }
                     .take(20)
                 if (reminders.isEmpty()) listOf("Нет истории") else reminders.map {
-                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.reminder.ifBlank { it.reminderText }}"
+                    val reminder = it.reminder.ifBlank { it.reminderText }
+                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | $reminder"
                 }
             }
         )
@@ -114,10 +115,10 @@ class ContactHistoryFragment : Fragment() {
             onSuccess = { items ->
                 val comments = items
                     .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
-                    .filter { it.note.isNotBlank() || it.tag.isNotBlank() }
+                    .filter { it.note.isNotBlank() }
                     .take(20)
                 if (comments.isEmpty()) listOf("Нет истории") else comments.map {
-                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.note.ifBlank { it.tag }}"
+                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.note}"
                 }
             }
         )

@@ -93,11 +93,11 @@ class CallRepository(
                     com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки истории: ${it.message}")
                 }
                 .getOrElse { emptyList() }
-                .filterByHistoryPhone(normalizedPhone)
+                .filterForHistoryScreen(normalizedPhone)
 
             if (retrofitResult.isNotEmpty()) return retrofitResult
 
-            val fallbackResult = fetchHistoryFallback(url).filterByHistoryPhone(normalizedPhone)
+            val fallbackResult = fetchHistoryFallback(url).filterForHistoryScreen(normalizedPhone)
             if (fallbackResult.isNotEmpty()) return fallbackResult
         }
 
@@ -166,10 +166,10 @@ class CallRepository(
             type = firstString("type", "Тип звонка", "Тип"),
             duration = firstString("duration", "Длительность"),
             manager = firstString("manager", "Менеджер"),
-            note = firstString("note", "comment", "Комментарий"),
-            tag = firstString("tag", "Тег"),
-            reminder = firstString("reminder", "Напоминание"),
-            reminderText = firstString("reminder_text", "reminderText", "Текст напоминания"),
+            note = firstString("note", "comment", "comments", "comment_text", "Комментарий", "Комментарии", "Коментарий", "Коментарии"),
+            tag = firstString("tag", "tags", "Тег", "Теги"),
+            reminder = firstString("reminder", "reminders", "Напоминание", "Напоминания"),
+            reminderText = firstString("reminder_text", "reminderText", "reminder_texts", "Текст напоминания", "Тексты напоминаний"),
             client = firstString("client", "Клиент")
         )
     }
@@ -206,11 +206,33 @@ class CallRepository(
         return ""
     }
 
-    private fun List<CallHistoryItem>.filterByHistoryPhone(normalizedPhone: String): List<CallHistoryItem> {
+    private fun List<CallHistoryItem>.filterForHistoryScreen(normalizedPhone: String): List<CallHistoryItem> {
         return filter { item ->
+            // Пустые строки появляются, когда Retrofit получил объекты с русскими названиями колонок
+            // и не смог разложить их по @SerializedName. Такие строки отбрасываем и даём fallback-парсеру
+            // прочитать колонки «Комментарии» и «Напоминания» вручную.
+            if (!item.hasHistoryContent()) return@filter false
+            if (item.isHeaderRow()) return@filter false
+
             val itemPhone = normalizePhone(item.phone)
             itemPhone.isBlank() || itemPhone == normalizedPhone
         }
+    }
+
+    private fun CallHistoryItem.hasHistoryContent(): Boolean {
+        return listOf(date, time, phone, type, duration, manager, note, tag, reminder, reminderText, client)
+            .any { it.isNotBlank() }
+    }
+
+    private fun CallHistoryItem.isHeaderRow(): Boolean {
+        return normalizeHeader(date) == "дата" ||
+            normalizeHeader(phone) in setOf("номертелефона", "телефон", "phone", "contactphone") ||
+            normalizeHeader(note) in setOf("комментарий", "комментарии", "коментарий", "коментарии", "comment", "comments") ||
+            normalizeHeader(reminder) in setOf("напоминание", "напоминания", "reminder", "reminders")
+    }
+
+    private fun normalizeHeader(value: String): String {
+        return value.filter { it.isLetterOrDigit() }.lowercase(Locale.getDefault())
     }
 
     suspend fun getHistory(phone: String): List<CallHistoryEntity> {
