@@ -115,51 +115,54 @@ class CallRepository(
         val separator = if (baseUrl.contains("?")) "&" else "?"
         val contactPhones = listOf(normalizedPhone, apiPhone).filter { it.isNotBlank() }.distinct()
         val userPhones = listOf(managerPhone, apiUserPhone).filter { it.isNotBlank() }.distinct()
-        val userQueries = buildList {
-            add("")
-            userPhones.forEach { phone ->
-                add("manager_phone=$phone&")
-                add("user_phone=$phone&")
-            }
-        }.distinct()
+        val userQueries = mutableListOf("")
+        userPhones.forEach { phone ->
+            userQueries += "manager_phone=$phone&"
+            userQueries += "user_phone=$phone&"
+        }
 
-        return buildList {
-            userQueries.forEach { userQuery ->
-                contactPhones.forEach { contactPhone ->
-                    // Основные варианты для скрипта таблицы Calltrack.
-                    add("${baseUrl}${separator}${userQuery}phone=$contactPhone")
-                    add("${baseUrl}${separator}${userQuery}contact_phone=$contactPhone")
-                    // Запасные варианты на случай, если опубликованный doGet ожидает action.
-                    add("${baseUrl}${separator}${userQuery}action=history&phone=$contactPhone")
-                    add("${baseUrl}${separator}${userQuery}action=history&contact_phone=$contactPhone")
-                }
+        val urls = mutableListOf<String>()
+        userQueries.distinct().forEach { userQuery ->
+            contactPhones.forEach { contactPhone ->
+                // Основные варианты для скрипта таблицы Calltrack.
+                urls += "${baseUrl}${separator}${userQuery}phone=$contactPhone"
+                urls += "${baseUrl}${separator}${userQuery}contact_phone=$contactPhone"
+                // Запасные варианты на случай, если опубликованный doGet ожидает action.
+                urls += "${baseUrl}${separator}${userQuery}action=history&phone=$contactPhone"
+                urls += "${baseUrl}${separator}${userQuery}action=history&contact_phone=$contactPhone"
             }
-        }.distinct()
+        }
+        return urls.distinct()
     }
 
     private suspend fun fetchHistoryFromUrl(url: String, normalizedPhone: String): List<CallHistoryItem> {
         Log.d(HISTORY_LOG_TAG, "URL запроса истории: $url")
-        return runCatching {
+        val result: Result<List<CallHistoryItem>> = runCatching {
             withContext(Dispatchers.IO) {
                 val request = Request.Builder().url(url).get().build()
-                personalContactsHttpClient.newCall(request).execute().use { response ->
+                val response = personalContactsHttpClient.newCall(request).execute()
+                try {
                     val body = response.body?.string().orEmpty()
                     Log.d(HISTORY_LOG_TAG, "Код ответа истории: code=${response.code}, url=$url")
                     Log.d(HISTORY_LOG_TAG, "Полный JSON ответа истории: $body")
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "RAW Calltrack history response: ${body.take(500)}")
 
-                    val parsed = parseHistoryResponse(body)
+                    val parsed: List<CallHistoryItem> = parseHistoryResponse(body)
                     Log.d(HISTORY_LOG_TAG, "Количество записей после парсинга: ${parsed.size}, url=$url")
-                    val filtered = parsed.filterForHistoryScreen(normalizedPhone)
+                    val filtered: List<CallHistoryItem> = parsed.filterForHistoryScreen(normalizedPhone)
                     Log.d(HISTORY_LOG_TAG, "Количество записей после фильтрации: ${filtered.size}, url=$url")
                     filtered
+                } finally {
+                    response.close()
                 }
             }
-        }.onFailure {
+        }
+        result.onFailure {
             Log.e(HISTORY_LOG_TAG, "Ошибка HTTP/coroutine/Gson при загрузке истории: url=$url", it)
             Log.e("CallRepository", "Fallback загрузки истории из Calltrack не удался", it)
             com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки истории: ${it.message}")
-        }.getOrElse { emptyList() }
+        }
+        return result.getOrElse { emptyList<CallHistoryItem>() }
     }
 
     private fun parseHistoryResponse(raw: String): List<CallHistoryItem> {
@@ -174,16 +177,77 @@ class CallRepository(
             else -> JSONArray()
         }
 
-        return buildList {
-            for (i in 0 until arr.length()) {
-                val row = arr.opt(i)
-                val item = when (row) {
-                    is JSONObject -> row.toCallHistoryItem()
-                    is JSONArray -> row.toCallHistoryItem()
-                    else -> null
-                }
-                if (item != null) add(item)
+        val items = mutableListOf<CallHistoryItem>()
+        for (i in 0 until arr.length()) {
+            val row = arr.opt(i)
+            val item = when (row) {
+                is JSONObject -> row.toCallHistoryItem()
+                is JSONArray -> row.toCallHistoryItem()
+                else -> null
             }
+            if (item != null) items += item
+        }
+        return items
+    }
+
+    private fun JSONObject.toCallHistoryItem(): CallHistoryItem {
+        return CallHistoryItem(
+            date = firstString("date", "Дата"),
+            time = firstString("time", "Время"),
+            phone = firstString("phone", "contact_phone", "Номер телефона", "Телефон"),
+            type = firstString("type", "Тип звонка", "Тип"),
+            duration = firstString("duration", "Длительность"),
+            manager = firstString("manager", "Менеджер"),
+            note = firstString("note", "comment", "comments", "comment_text", "Комментарий", "Комментарии", "Коментарий", "Коментарии"),
+            tag = firstString("tag", "tags", "Тег", "Теги"),
+            reminder = firstString("reminder", "reminders", "Напоминание", "Напоминания"),
+            reminderText = firstString("reminder_text", "reminderText", "reminder_texts", "Текст напоминания", "Тексты напоминаний"),
+            client = firstString("client", "Клиент")
+        )
+    }
+
+    private fun JSONArray.toCallHistoryItem(): CallHistoryItem? {
+        if (length() < CALL_HISTORY_MIN_ARRAY_COLUMNS) return null
+        return CallHistoryItem(
+            date = optString(0),
+            time = optString(1),
+            phone = optString(2),
+            type = optString(3),
+            duration = optString(4),
+            manager = optString(5),
+            note = optString(6),
+            tag = optString(7),
+            reminder = optString(8),
+            reminderText = optString(9),
+            client = optString(10)
+        )
+    }
+
+    private fun JSONObject.firstArray(vararg keys: String): JSONArray? {
+        keys.forEach { key -> optJSONArray(key)?.let { return it } }
+        return null
+    }
+
+    private fun JSONObject.firstString(vararg keys: String): String {
+        keys.forEach { key ->
+            if (has(key) && !isNull(key)) {
+                val value = optString(key).trim()
+                if (value.isNotBlank()) return value
+            }
+        }
+        return ""
+    }
+
+    private fun List<CallHistoryItem>.filterForHistoryScreen(normalizedPhone: String): List<CallHistoryItem> {
+        return filter { item ->
+            // Пустые строки появляются, когда Retrofit получил объекты с русскими названиями колонок
+            // и не смог разложить их по @SerializedName. Такие строки отбрасываем и даём fallback-парсеру
+            // прочитать колонки «Комментарии» и «Напоминания» вручную.
+            if (!item.hasHistoryContent()) return@filter false
+            if (item.isHeaderRow()) return@filter false
+
+            val itemPhone = normalizePhone(item.phone)
+            itemPhone.isBlank() || itemPhone == normalizedPhone
         }
         return ""
     }
@@ -276,6 +340,22 @@ class CallRepository(
             val itemPhone = normalizePhone(item.phone)
             itemPhone.isBlank() || itemPhone == normalizedPhone
         }
+    }
+
+    private fun CallHistoryItem.hasHistoryContent(): Boolean {
+        return listOf(date, time, phone, type, duration, manager, note, tag, reminder, reminderText, client)
+            .any { it.isNotBlank() }
+    }
+
+    private fun CallHistoryItem.isHeaderRow(): Boolean {
+        return normalizeHeader(date) == "дата" ||
+            normalizeHeader(phone) in setOf("номертелефона", "телефон", "phone", "contactphone") ||
+            normalizeHeader(note) in setOf("комментарий", "комментарии", "коментарий", "коментарии", "comment", "comments") ||
+            normalizeHeader(reminder) in setOf("напоминание", "напоминания", "reminder", "reminders")
+    }
+
+    private fun normalizeHeader(value: String): String {
+        return value.filter { it.isLetterOrDigit() }.lowercase(Locale.getDefault())
     }
 
     private fun CallHistoryItem.hasHistoryContent(): Boolean {
@@ -573,14 +653,18 @@ class CallRepository(
             .url(BuildConfig.PERSONAL_CONTACTS_WEBHOOK_URL)
             .post(body)
             .build()
-        return runCatching {
+        val result: Result<Boolean> = runCatching {
             withContext(Dispatchers.IO) {
-                personalContactsHttpClient.newCall(request).execute().use { response ->
+                val response = personalContactsHttpClient.newCall(request).execute()
+                try {
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ${response.code}")
                     response.isSuccessful
+                } finally {
+                    response.close()
                 }
             }
-        }.getOrElse {
+        }
+        return result.getOrElse {
             com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
             Log.e("CallRepository", "Не удалось отправить личный контакт в Calltrack_mop", it)
             if (enqueueOnFailure) {
@@ -620,20 +704,18 @@ class CallRepository(
         if (raw.isBlank()) return emptyList()
         return runCatching {
             val arr = JSONArray(raw)
-            buildList {
-                for (i in 0 until arr.length()) {
-                    val o = arr.optJSONObject(i) ?: continue
-                    add(
-                        PersonalSyncItem(
-                            managerPhone = o.optString("manager_phone"),
-                            managerName = o.optString("manager_name"),
-                            contactPhone = o.optString("contact_phone"),
-                            isPersonal = o.optBoolean("is_personal", true)
-                        )
-                    )
-                }
+            val items = mutableListOf<PersonalSyncItem>()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                items += PersonalSyncItem(
+                    managerPhone = o.optString("manager_phone"),
+                    managerName = o.optString("manager_name"),
+                    contactPhone = o.optString("contact_phone"),
+                    isPersonal = o.optBoolean("is_personal", true)
+                )
             }
-        }.getOrElse { emptyList() }
+            items
+        }.getOrElse { emptyList<PersonalSyncItem>() }
     }
 
     private suspend fun writePendingPersonalSync(items: List<PersonalSyncItem>) {
