@@ -17,6 +17,7 @@ import android.provider.CallLog
 import android.provider.ContactsContract
 import android.telephony.TelephonyManager
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.calltrack.App
@@ -328,9 +329,19 @@ class CallTrackingService : Service() {
         return callTypeString to ""
     }
 
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        // Android 15 завершает foreground service с тайм-аутом, если приложение само не остановится.
+        // Явно убираем сервис из foreground и завершаем его, чтобы система не уронила процесс.
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf(startId)
+    }
+
     override fun onDestroy() {
         scope.cancel()
-        tracker.stop()
+        if (::tracker.isInitialized) {
+            tracker.stop()
+        }
         super.onDestroy()
     }
 
@@ -383,10 +394,9 @@ class CallTrackingService : Service() {
         const val EXTRA_NOTIFICATION_PHONE =
             "extra_notification_phone"
 
-        const val MISSING_CLIENT_NOTIFICATION_ID = 1002
+        const val MISSING_CLIENT_NOTIFICATION_ID = 2001
 
         private const val POST_CALL_CHANNEL_ID = "postcall"
         private const val POST_CALL_NOTIFICATION_ID_BASE = 1000
-        private const val MISSING_CLIENT_NOTIFICATION_ID = 2001
     }
 }

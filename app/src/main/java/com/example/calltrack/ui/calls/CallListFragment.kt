@@ -66,11 +66,11 @@ class CallListFragment : Fragment() {
         binding.recyclerView.adapter = adapter
         attachSwipeToCall()
 
-        // При открытии экрана "Последние" запускаем фоновую синхронизацию звонков с Google Sheets.
-        // syncPending помечает успешно отправленные записи как uploaded во внутреннем кэше (Room).
+        // При открытии экрана «Последние» подтягиваем записи из стандартной звонилки Android.
+        // Google Sheets здесь не читаем: таблица нужна только для отправки/истории, а список берём из CallLog.
         viewLifecycleOwner.lifecycleScope.launch {
-            runCatching { viewModel.sync() }
-                .onFailure { Log.e("WEBHOOK", "Ошибка фоновой синхронизации на экране Последние", it) }
+            runCatching { viewModel.refreshRecentCallsFromDevice() }
+                .onFailure { Log.e("CALL_LOG", "Ошибка загрузки последних звонков из системной звонилки", it) }
         }
 
         viewModel.calls.observe(viewLifecycleOwner) { calls ->
