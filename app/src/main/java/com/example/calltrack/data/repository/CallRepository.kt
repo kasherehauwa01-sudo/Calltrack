@@ -1,7 +1,11 @@
 package com.example.calltrack.data.repository
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.provider.CallLog
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.data.local.CallDao
 import com.example.calltrack.data.local.CallEntity
@@ -174,6 +178,69 @@ class CallRepository(
             return duplicate.id
         }
         return callDao.insert(call)
+    }
+
+    suspend fun importRecentCallsFromDevice(limit: Int = DEVICE_RECENT_CALLS_LIMIT): Int = withContext(Dispatchers.IO) {
+        if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+            Log.w("CallRepository", "Нет разрешения READ_CALL_LOG для загрузки экрана Последние из звонилки")
+            return@withContext 0
+        }
+
+        val projection = arrayOf(
+            CallLog.Calls.NUMBER,
+            CallLog.Calls.TYPE,
+            CallLog.Calls.DURATION,
+            CallLog.Calls.DATE
+        )
+        var scanned = 0
+
+        runCatching {
+            appContext.contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                projection,
+                null,
+                null,
+                "${CallLog.Calls.DATE} DESC"
+            )?.use { cursor ->
+                val numberIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)
+                val typeIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE)
+                val durationIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.DURATION)
+                val dateIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.DATE)
+
+                while (cursor.moveToNext() && scanned < limit) {
+                    val phone = cursor.getString(numberIdx).orEmpty().ifBlank { "Неизвестно" }
+                    val duration = cursor.getLong(durationIdx)
+                    val timestamp = cursor.getLong(dateIdx)
+                    val (type, note) = mapDeviceCallType(cursor.getInt(typeIdx), duration)
+                    val call = CallEntity(
+                        phone = phone,
+                        type = type,
+                        duration = duration,
+                        note = note,
+                        timestamp = timestamp,
+                        // Исторические записи из звонилки нужны для отображения на экране «Последние».
+                        // Не отправляем их пачкой в Google Sheets, пока пользователь не изменит заметку/напоминание.
+                        uploaded = true
+                    )
+                    val duplicate = callDao.findRecentDuplicate(
+                        phone = call.phone,
+                        type = call.type,
+                        duration = call.duration,
+                        timestamp = call.timestamp
+                    )
+                    if (duplicate == null) {
+                        // Экран «Последние» должен брать звонки из системной звонилки,
+                        // поэтому не прогреваем справочник клиентов из Google Sheets при импорте.
+                        callDao.insert(call)
+                    }
+                    scanned++
+                }
+            }
+        }.onFailure {
+            Log.e("CallRepository", "Не удалось загрузить последние звонки из системной звонилки", it)
+        }
+
+        scanned
     }
 
     suspend fun getLatestSavedCallTimestamp(): Long = callDao.getLatestTimestamp() ?: 0L
@@ -481,6 +548,17 @@ class CallRepository(
         return reminderValue.substringAfter("|", reminderValue).trim()
     }
 
+    private fun mapDeviceCallType(typeInt: Int, duration: Long): Pair<String, String> {
+        val callTypeString = when (typeInt) {
+            CallLog.Calls.INCOMING_TYPE -> if (duration < 2L) "Пропущенный" else "Входящий"
+            CallLog.Calls.OUTGOING_TYPE -> if (duration < 2L) "Неотвеченный" else "Исходящий"
+            CallLog.Calls.MISSED_TYPE -> "Пропущенный"
+            CallLog.Calls.REJECTED_TYPE -> "Сброшенный"
+            else -> "Неотвеченный"
+        }
+        return callTypeString to ""
+    }
+
     fun normalizePhone(phone: String): String = phone.filter { it.isDigit() }.takeLast(10)
 
     private fun CallHistoryItem.toEntity(phone: String): CallHistoryEntity {
@@ -498,6 +576,10 @@ class CallRepository(
             client = client,
             updatedAt = System.currentTimeMillis()
         )
+    }
+
+    private companion object {
+        private const val DEVICE_RECENT_CALLS_LIMIT = 100
     }
 
     private data class SyncFingerprint(
