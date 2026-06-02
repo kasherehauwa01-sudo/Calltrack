@@ -82,21 +82,40 @@ class CallRepository(
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> {
         val normalizedPhone = normalizePhone(phone)
         if (normalizedPhone.isBlank()) return emptyList()
-        val separator = if (BuildConfig.WEBHOOK_URL.contains("?")) "&" else "?"
-        val url = "${BuildConfig.WEBHOOK_URL}${separator}phone=$normalizedPhone"
-        com.example.calltrack.logging.AppLogger.log(appContext, "API", "Запрос данных из таблицы")
+        val managerPhone = normalizePhone(prefs.getManagerPhone())
+        com.example.calltrack.logging.AppLogger.log(appContext, "API", "Запрос истории звонков из таблицы Calltrack")
 
-        val retrofitResult = runCatching { webhookApi.loadHistory(url) }
-            .onSuccess { com.example.calltrack.logging.AppLogger.log(appContext, "API", "Получено записей: ${it.size}") }
-            .onFailure {
-                Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it)
-                com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки данных: ${it.message}")
-            }
-            .getOrElse { emptyList() }
+        for (url in buildCallHistoryUrls(normalizedPhone, managerPhone)) {
+            val retrofitResult = runCatching { webhookApi.loadHistory(url) }
+                .onSuccess { com.example.calltrack.logging.AppLogger.log(appContext, "API", "Получено записей из Calltrack: ${it.size}") }
+                .onFailure {
+                    Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone url=$url", it)
+                    com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки истории: ${it.message}")
+                }
+                .getOrElse { emptyList() }
+                .filterByHistoryPhone(normalizedPhone)
 
-        if (retrofitResult.isNotEmpty()) return retrofitResult
+            if (retrofitResult.isNotEmpty()) return retrofitResult
 
-        return fetchHistoryFallback(url)
+            val fallbackResult = fetchHistoryFallback(url).filterByHistoryPhone(normalizedPhone)
+            if (fallbackResult.isNotEmpty()) return fallbackResult
+        }
+
+        return emptyList()
+    }
+
+    private fun buildCallHistoryUrls(normalizedPhone: String, managerPhone: String): List<String> {
+        val baseUrl = BuildConfig.WEBHOOK_URL
+        val separator = if (baseUrl.contains("?")) "&" else "?"
+        val managerQuery = if (managerPhone.isNotBlank()) "manager_phone=$managerPhone&" else ""
+        return listOf(
+            // Основной вариант для скрипта таблицы Calltrack.
+            "${baseUrl}${separator}${managerQuery}phone=$normalizedPhone",
+            // Запасные варианты на случай, если опубликованный doGet ожидает другое имя параметра.
+            "${baseUrl}${separator}${managerQuery}contact_phone=$normalizedPhone",
+            "${baseUrl}${separator}${managerQuery}action=history&phone=$normalizedPhone",
+            "${baseUrl}${separator}${managerQuery}action=history&contact_phone=$normalizedPhone"
+        ).distinct()
     }
 
     private suspend fun fetchHistoryFallback(url: String): List<CallHistoryItem> {
@@ -105,12 +124,12 @@ class CallRepository(
                 val request = Request.Builder().url(url).get().build()
                 personalContactsHttpClient.newCall(request).execute().use { response ->
                     val body = response.body?.string().orEmpty()
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "RAW history response: ${body.take(500)}")
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "RAW Calltrack history response: ${body.take(500)}")
                     parseHistoryResponse(body)
                 }
             }
         }.onFailure {
-            Log.e("CallRepository", "Fallback загрузки истории не удался", it)
+            Log.e("CallRepository", "Fallback загрузки истории из Calltrack не удался", it)
         }.getOrElse { emptyList() }
     }
 
@@ -122,29 +141,75 @@ class CallRepository(
         val token = runCatching { JSONTokener(text).nextValue() }.getOrNull() ?: return emptyList()
         val arr = when (token) {
             is JSONArray -> token
-            is JSONObject -> token.optJSONArray("data") ?: token.optJSONArray("rows") ?: JSONArray()
+            is JSONObject -> token.firstArray("data", "rows", "history", "calls", "items", "result") ?: JSONArray()
             else -> JSONArray()
         }
 
         return buildList {
             for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i) ?: continue
-                add(
-                    CallHistoryItem(
-                        date = o.optString("date"),
-                        time = o.optString("time"),
-                        phone = o.optString("phone"),
-                        type = o.optString("type"),
-                        duration = o.optString("duration"),
-                        manager = o.optString("manager"),
-                        note = o.optString("note"),
-                        tag = o.optString("tag"),
-                        reminder = o.optString("reminder"),
-                        reminderText = o.optString("reminder_text"),
-                        client = o.optString("client")
-                    )
-                )
+                val row = arr.opt(i)
+                val item = when (row) {
+                    is JSONObject -> row.toCallHistoryItem()
+                    is JSONArray -> row.toCallHistoryItem()
+                    else -> null
+                }
+                if (item != null) add(item)
             }
+        }
+    }
+
+    private fun JSONObject.toCallHistoryItem(): CallHistoryItem {
+        return CallHistoryItem(
+            date = firstString("date", "Дата"),
+            time = firstString("time", "Время"),
+            phone = firstString("phone", "contact_phone", "Номер телефона", "Телефон"),
+            type = firstString("type", "Тип звонка", "Тип"),
+            duration = firstString("duration", "Длительность"),
+            manager = firstString("manager", "Менеджер"),
+            note = firstString("note", "comment", "Комментарий"),
+            tag = firstString("tag", "Тег"),
+            reminder = firstString("reminder", "Напоминание"),
+            reminderText = firstString("reminder_text", "reminderText", "Текст напоминания"),
+            client = firstString("client", "Клиент")
+        )
+    }
+
+    private fun JSONArray.toCallHistoryItem(): CallHistoryItem? {
+        if (length() < CALL_HISTORY_MIN_ARRAY_COLUMNS) return null
+        return CallHistoryItem(
+            date = optString(0),
+            time = optString(1),
+            phone = optString(2),
+            type = optString(3),
+            duration = optString(4),
+            manager = optString(5),
+            note = optString(6),
+            tag = optString(7),
+            reminder = optString(8),
+            reminderText = optString(9),
+            client = optString(10)
+        )
+    }
+
+    private fun JSONObject.firstArray(vararg keys: String): JSONArray? {
+        keys.forEach { key -> optJSONArray(key)?.let { return it } }
+        return null
+    }
+
+    private fun JSONObject.firstString(vararg keys: String): String {
+        keys.forEach { key ->
+            if (has(key) && !isNull(key)) {
+                val value = optString(key).trim()
+                if (value.isNotBlank()) return value
+            }
+        }
+        return ""
+    }
+
+    private fun List<CallHistoryItem>.filterByHistoryPhone(normalizedPhone: String): List<CallHistoryItem> {
+        return filter { item ->
+            val itemPhone = normalizePhone(item.phone)
+            itemPhone.isBlank() || itemPhone == normalizedPhone
         }
     }
 
@@ -584,6 +649,7 @@ class CallRepository(
 
     private companion object {
         private const val DEVICE_RECENT_CALLS_LIMIT = 100
+        private const val CALL_HISTORY_MIN_ARRAY_COLUMNS = 5
     }
 
     private data class SyncFingerprint(
