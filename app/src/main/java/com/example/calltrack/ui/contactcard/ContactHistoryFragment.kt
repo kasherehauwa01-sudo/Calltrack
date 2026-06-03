@@ -116,18 +116,44 @@ class ContactHistoryFragment : Fragment() {
 
     private fun loadRemoteComments(phone: String) {
         Log.d(HISTORY_LOG_TAG, "Начало загрузки истории комментариев: phone=$phone")
-        loadCachedThenRefresh(
-            phone = phone,
-            historyType = "comments",
-            onSuccess = { items ->
-                val comments = items
-                    .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
-                    .filter { it.note.isNotBlank() }
-                    .take(20)
-                Log.d(HISTORY_LOG_TAG, "Записей комментариев после фильтрации UI: ${comments.size}, source=${items.size}")
-                if (comments.isEmpty()) listOf("Нет истории") else comments.map {
-                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.note}"
+        renderHistoryCards(listOf("Загрузка..."))
+        lifecycleScope.launch {
+            runCatching {
+                val cached = withContext(Dispatchers.IO) { viewModel.getStoredComments(phone) }
+                Log.d(HISTORY_LOG_TAG, "Комментарии из внутренней памяти: records=${cached.size}, phone=$phone")
+                renderCommentCards(cached)
+
+                val refreshResult = runCatching {
+                    withContext(Dispatchers.IO) { viewModel.refreshCommentsFromRemote(phone) }
                 }
+                if (refreshResult.isSuccess) {
+                    val updated = refreshResult.getOrDefault(emptyList<CommentEntity>())
+                    Log.d(HISTORY_LOG_TAG, "Комментарии из таблицы сохранены в память: records=${updated.size}, phone=$phone")
+                    renderCommentCards(updated)
+                } else {
+                    Log.e(HISTORY_LOG_TAG, "Ошибка обновления комментариев из таблицы: phone=$phone", refreshResult.exceptionOrNull())
+                    if (cached.isEmpty()) renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
+                }
+            }.onFailure {
+                Log.e(HISTORY_LOG_TAG, "Ошибка coroutine на экране истории комментариев: phone=$phone", it)
+                renderHistoryCards(listOf("Ошибка загрузки истории"))
+            }
+        }
+    }
+
+    private fun renderCommentCards(comments: List<CommentEntity>) {
+        val latestComments = comments
+            .filter { it.text.isNotBlank() }
+            .sortedByDescending { it.createdAt }
+            .take(20)
+        Log.d(HISTORY_LOG_TAG, "Записей комментариев после фильтрации UI: ${latestComments.size}, source=${comments.size}")
+        if (latestComments.isEmpty()) {
+            renderHistoryCards(listOf("Нет истории"))
+            return
+        }
+        renderHistoryCards(
+            latestComments.map { comment ->
+                "${dateTimeFormat.format(Date(comment.createdAt))} | ${comment.text}"
             }
         )
     }

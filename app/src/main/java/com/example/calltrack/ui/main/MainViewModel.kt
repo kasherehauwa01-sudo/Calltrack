@@ -68,6 +68,8 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     suspend fun getDeviceCallHistory(phone: String): List<CallHistoryEntity> = repository.getDeviceCallHistory(phone)
     suspend fun getHistory(phone: String): List<CallHistoryEntity> = repository.getHistory(phone)
     suspend fun refreshHistory(phone: String) = repository.refreshHistory(phone)
+    suspend fun getStoredComments(phone: String): List<CommentEntity> = repository.getStoredComments(phone)
+    suspend fun refreshCommentsFromRemote(phone: String): List<CommentEntity> = repository.refreshCommentsFromRemote(phone)
 
     class Factory(private val repository: CallRepository) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {

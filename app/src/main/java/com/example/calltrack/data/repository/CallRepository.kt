@@ -249,113 +249,6 @@ class CallRepository(
             val itemPhone = normalizePhone(item.phone)
             itemPhone.isBlank() || itemPhone == normalizedPhone
         }
-        return ""
-    }
-
-    private fun List<CallHistoryItem>.filterForHistoryScreen(normalizedPhone: String): List<CallHistoryItem> {
-        return filter { item ->
-            // Пустые строки появляются, когда Retrofit получил объекты с русскими названиями колонок
-            // и не смог разложить их по @SerializedName. Такие строки отбрасываем и даём fallback-парсеру
-            // прочитать колонки «Комментарии» и «Напоминания» вручную.
-            if (!item.hasHistoryContent()) return@filter false
-            if (item.isHeaderRow()) return@filter false
-
-            val itemPhone = normalizePhone(item.phone)
-            itemPhone.isBlank() || itemPhone == normalizedPhone
-        }
-    }
-
-    private fun CallHistoryItem.hasHistoryContent(): Boolean {
-        return listOf(date, time, phone, type, duration, manager, note, tag, reminder, reminderText, client)
-            .any { it.isNotBlank() }
-    }
-
-    private fun CallHistoryItem.isHeaderRow(): Boolean {
-        return normalizeHeader(date) == "дата" ||
-            normalizeHeader(phone) in setOf("номертелефона", "телефон", "phone", "contactphone") ||
-            normalizeHeader(note) in setOf("комментарий", "комментарии", "коментарий", "коментарии", "comment", "comments") ||
-            normalizeHeader(reminder) in setOf("напоминание", "напоминания", "reminder", "reminders")
-    }
-
-    private fun normalizeHeader(value: String): String {
-        return value.filter { it.isLetterOrDigit() }.lowercase(Locale.getDefault())
-    }
-
-    private fun JSONObject.toCallHistoryItem(): CallHistoryItem {
-        return CallHistoryItem(
-            date = firstString("date", "Дата"),
-            time = firstString("time", "Время"),
-            phone = firstString("phone", "contact_phone", "Номер телефона", "Телефон"),
-            type = firstString("type", "Тип звонка", "Тип"),
-            duration = firstString("duration", "Длительность"),
-            manager = firstString("manager", "Менеджер"),
-            note = firstString("note", "comment", "comments", "comment_text", "Комментарий", "Комментарии", "Коментарий", "Коментарии"),
-            tag = firstString("tag", "tags", "Тег", "Теги"),
-            reminder = firstString("reminder", "reminders", "Напоминание", "Напоминания"),
-            reminderText = firstString("reminder_text", "reminderText", "reminder_texts", "Текст напоминания", "Тексты напоминаний"),
-            client = firstString("client", "Клиент")
-        )
-    }
-
-    private fun JSONArray.toCallHistoryItem(): CallHistoryItem? {
-        if (length() < CALL_HISTORY_MIN_ARRAY_COLUMNS) return null
-        return CallHistoryItem(
-            date = optString(0),
-            time = optString(1),
-            phone = optString(2),
-            type = optString(3),
-            duration = optString(4),
-            manager = optString(5),
-            note = optString(6),
-            tag = optString(7),
-            reminder = optString(8),
-            reminderText = optString(9),
-            client = optString(10)
-        )
-    }
-
-    private fun JSONObject.firstArray(vararg keys: String): JSONArray? {
-        keys.forEach { key -> optJSONArray(key)?.let { return it } }
-        return null
-    }
-
-    private fun JSONObject.firstString(vararg keys: String): String {
-        keys.forEach { key ->
-            if (has(key) && !isNull(key)) {
-                val value = optString(key).trim()
-                if (value.isNotBlank()) return value
-            }
-        }
-        return ""
-    }
-
-    private fun List<CallHistoryItem>.filterForHistoryScreen(normalizedPhone: String): List<CallHistoryItem> {
-        return filter { item ->
-            // Пустые строки появляются, когда Retrofit получил объекты с русскими названиями колонок
-            // и не смог разложить их по @SerializedName. Такие строки отбрасываем и даём fallback-парсеру
-            // прочитать колонки «Комментарии» и «Напоминания» вручную.
-            if (!item.hasHistoryContent()) return@filter false
-            if (item.isHeaderRow()) return@filter false
-
-            val itemPhone = normalizePhone(item.phone)
-            itemPhone.isBlank() || itemPhone == normalizedPhone
-        }
-    }
-
-    private fun CallHistoryItem.hasHistoryContent(): Boolean {
-        return listOf(date, time, phone, type, duration, manager, note, tag, reminder, reminderText, client)
-            .any { it.isNotBlank() }
-    }
-
-    private fun CallHistoryItem.isHeaderRow(): Boolean {
-        return normalizeHeader(date) == "дата" ||
-            normalizeHeader(phone) in setOf("номертелефона", "телефон", "phone", "contactphone") ||
-            normalizeHeader(note) in setOf("комментарий", "комментарии", "коментарий", "коментарии", "comment", "comments") ||
-            normalizeHeader(reminder) in setOf("напоминание", "напоминания", "reminder", "reminders")
-    }
-
-    private fun normalizeHeader(value: String): String {
-        return value.filter { it.isLetterOrDigit() }.lowercase(Locale.getDefault())
     }
 
     private fun CallHistoryItem.hasHistoryContent(): Boolean {
@@ -389,6 +282,52 @@ class CallRepository(
         val remote = loadHistoryFromRemote(normalized)
         callHistoryDao.deleteByPhone(normalized)
         callHistoryDao.insertAll(remote.map { it.toEntity(normalized) })
+    }
+
+    suspend fun getStoredComments(phone: String): List<CommentEntity> = withContext(Dispatchers.IO) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return@withContext emptyList<CommentEntity>()
+
+        commentDao.getAllOnce()
+            .filter { comment -> normalizePhone(comment.phone) == normalizedPhone && comment.text.isNotBlank() }
+            .sortedByDescending { it.createdAt }
+    }
+
+    suspend fun refreshCommentsFromRemote(phone: String): List<CommentEntity> = withContext(Dispatchers.IO) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return@withContext emptyList<CommentEntity>()
+
+        Log.d(HISTORY_LOG_TAG, "Начало импорта комментариев из Calltrack во внутреннюю память: phone=$phone, normalized=$normalizedPhone")
+        val remoteItems = loadHistoryFromRemote(phone)
+        val remoteComments = remoteItems
+            .filter { item -> item.note.isNotBlank() }
+            .map { item ->
+                CommentEntity(
+                    phone = normalizedPhone,
+                    text = item.note.trim(),
+                    createdAt = parseHistoryTimestamp(item.date, item.time)
+                )
+            }
+        Log.d(HISTORY_LOG_TAG, "Комментариев из таблицы после парсинга: ${remoteComments.size}, phone=$phone")
+
+        val existingFingerprints = commentDao.getAllOnce()
+            .filter { comment -> normalizePhone(comment.phone) == normalizedPhone }
+            .map { comment -> comment.commentFingerprint() }
+            .toMutableSet()
+
+        var inserted = 0
+        remoteComments.forEach { comment ->
+            val fingerprint = comment.commentFingerprint()
+            if (fingerprint !in existingFingerprints) {
+                // Комментарии из Google Sheets сохраняем во внутреннюю БД, чтобы экран истории
+                // открывался из памяти приложения даже без повторного сетевого запроса.
+                commentDao.insert(comment)
+                existingFingerprints += fingerprint
+                inserted++
+            }
+        }
+        Log.d(HISTORY_LOG_TAG, "Импорт комментариев завершён: inserted=$inserted, totalRemote=${remoteComments.size}, phone=$phone")
+        getStoredComments(normalizedPhone)
     }
 
     suspend fun getDeviceCallHistory(phone: String, limit: Int = DEVICE_CONTACT_HISTORY_LIMIT): List<CallHistoryEntity> =
@@ -894,6 +833,38 @@ class CallRepository(
     private fun extractReminderText(reminderValue: String): String {
         if (reminderValue.isBlank()) return ""
         return reminderValue.substringAfter("|", reminderValue).trim()
+    }
+
+    private fun parseHistoryTimestamp(date: String, time: String): Long {
+        val datePart = date.trim()
+        val timePart = time.trim()
+        if (datePart.isBlank() && timePart.isBlank()) return System.currentTimeMillis()
+
+        val rawDateTime = listOf(datePart, timePart).filter { it.isNotBlank() }.joinToString(" ")
+        val formats = listOf(
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yyyy HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "dd.MM.yy HH:mm",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yy",
+            "yyyy-MM-dd"
+        )
+
+        formats.forEach { pattern ->
+            val parsed = runCatching {
+                SimpleDateFormat(pattern, Locale.getDefault()).parse(rawDateTime)?.time
+            }.getOrNull()
+            if (parsed != null) return parsed
+        }
+        return System.currentTimeMillis()
+    }
+
+    private fun CommentEntity.commentFingerprint(): String {
+        return "${normalizePhone(phone)}|${text.trim()}|$createdAt"
     }
 
     private fun mapDeviceCallType(typeInt: Int, duration: Long): Pair<String, String> {
