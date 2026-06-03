@@ -97,19 +97,44 @@ class ContactHistoryFragment : Fragment() {
 
     private fun loadRemoteReminders(phone: String) {
         Log.d(HISTORY_LOG_TAG, "Начало загрузки истории напоминаний: phone=$phone")
-        loadCachedThenRefresh(
-            phone = phone,
-            historyType = "reminders",
-            onSuccess = { items ->
-                val reminders = items
-                    .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
-                    .filter { it.reminder.isNotBlank() || it.reminderText.isNotBlank() }
-                    .take(20)
-                Log.d(HISTORY_LOG_TAG, "Записей напоминаний после фильтрации UI: ${reminders.size}, source=${items.size}")
-                if (reminders.isEmpty()) listOf("Нет истории") else reminders.map {
-                    val reminder = it.reminder.ifBlank { it.reminderText }
-                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | $reminder"
+        renderHistoryCards(listOf("Загрузка..."))
+        lifecycleScope.launch {
+            runCatching {
+                val cached = withContext(Dispatchers.IO) { viewModel.getStoredReminders(phone) }
+                Log.d(HISTORY_LOG_TAG, "Напоминания из внутренней памяти: records=${cached.size}, phone=$phone")
+                renderReminderCards(cached)
+
+                val refreshResult = runCatching {
+                    withContext(Dispatchers.IO) { viewModel.refreshRemindersFromRemote(phone) }
                 }
+                if (refreshResult.isSuccess) {
+                    val updated = refreshResult.getOrDefault(emptyList<ReminderEntity>())
+                    Log.d(HISTORY_LOG_TAG, "Напоминания из таблицы сохранены в память: records=${updated.size}, phone=$phone")
+                    renderReminderCards(updated)
+                } else {
+                    Log.e(HISTORY_LOG_TAG, "Ошибка обновления напоминаний из таблицы: phone=$phone", refreshResult.exceptionOrNull())
+                    if (cached.isEmpty()) renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
+                }
+            }.onFailure {
+                Log.e(HISTORY_LOG_TAG, "Ошибка coroutine на экране истории напоминаний: phone=$phone", it)
+                renderHistoryCards(listOf("Ошибка загрузки истории"))
+            }
+        }
+    }
+
+    private fun renderReminderCards(reminders: List<ReminderEntity>) {
+        val latestReminders = reminders
+            .filter { it.message.isNotBlank() }
+            .sortedByDescending { it.remindAt }
+            .take(20)
+        Log.d(HISTORY_LOG_TAG, "Записей напоминаний после фильтрации UI: ${latestReminders.size}, source=${reminders.size}")
+        if (latestReminders.isEmpty()) {
+            renderHistoryCards(listOf("Нет истории"))
+            return
+        }
+        renderHistoryCards(
+            latestReminders.map { reminder ->
+                "${dateTimeFormat.format(Date(reminder.remindAt))} | ${reminder.status} | ${reminder.message}"
             }
         )
     }

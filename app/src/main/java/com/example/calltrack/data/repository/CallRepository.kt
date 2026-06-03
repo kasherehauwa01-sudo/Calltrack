@@ -284,6 +284,45 @@ class CallRepository(
         callHistoryDao.insertAll(remote.map { it.toEntity(normalized) })
     }
 
+    suspend fun getStoredReminders(phone: String): List<ReminderEntity> = withContext(Dispatchers.IO) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return@withContext emptyList<ReminderEntity>()
+
+        reminderDao.getAllOnce()
+            .filter { reminder -> normalizePhone(reminder.phone) == normalizedPhone && reminder.message.isNotBlank() }
+            .sortedByDescending { it.remindAt }
+    }
+
+    suspend fun refreshRemindersFromRemote(phone: String): List<ReminderEntity> = withContext(Dispatchers.IO) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return@withContext emptyList<ReminderEntity>()
+
+        Log.d(HISTORY_LOG_TAG, "Начало импорта напоминаний из Calltrack во внутреннюю память: phone=$phone, normalized=$normalizedPhone")
+        val remoteItems = loadHistoryFromRemote(phone)
+        val remoteReminders = remoteItems
+            .mapNotNull { item -> item.toReminderEntity(normalizedPhone) }
+        Log.d(HISTORY_LOG_TAG, "Напоминаний из таблицы после парсинга: ${remoteReminders.size}, phone=$phone")
+
+        val existingFingerprints = reminderDao.getAllOnce()
+            .filter { reminder -> normalizePhone(reminder.phone) == normalizedPhone }
+            .map { reminder -> reminder.reminderFingerprint() }
+            .toMutableSet()
+
+        var inserted = 0
+        remoteReminders.forEach { reminder ->
+            val fingerprint = reminder.reminderFingerprint()
+            if (fingerprint !in existingFingerprints) {
+                // Напоминания из Google Sheets сохраняем во внутреннюю БД,
+                // чтобы история напоминаний восстанавливалась после переустановки приложения.
+                reminderDao.insert(reminder)
+                existingFingerprints += fingerprint
+                inserted++
+            }
+        }
+        Log.d(HISTORY_LOG_TAG, "Импорт напоминаний завершён: inserted=$inserted, totalRemote=${remoteReminders.size}, phone=$phone")
+        getStoredReminders(normalizedPhone)
+    }
+
     suspend fun getStoredComments(phone: String): List<CommentEntity> = withContext(Dispatchers.IO) {
         val normalizedPhone = normalizePhone(phone)
         if (normalizedPhone.isBlank()) return@withContext emptyList<CommentEntity>()
@@ -836,9 +875,13 @@ class CallRepository(
     }
 
     private fun parseHistoryTimestamp(date: String, time: String): Long {
+        return parseHistoryTimestampOrNull(date, time) ?: System.currentTimeMillis()
+    }
+
+    private fun parseHistoryTimestampOrNull(date: String, time: String): Long? {
         val datePart = date.trim()
         val timePart = time.trim()
-        if (datePart.isBlank() && timePart.isBlank()) return System.currentTimeMillis()
+        if (datePart.isBlank() && timePart.isBlank()) return null
 
         val rawDateTime = listOf(datePart, timePart).filter { it.isNotBlank() }.joinToString(" ")
         val formats = listOf(
@@ -860,7 +903,41 @@ class CallRepository(
             }.getOrNull()
             if (parsed != null) return parsed
         }
-        return System.currentTimeMillis()
+        return null
+    }
+
+    private fun CallHistoryItem.toReminderEntity(normalizedPhone: String): ReminderEntity? {
+        val rawReminder = reminder.trim()
+        val rawReminderText = reminderText.trim()
+        if (rawReminder.isBlank() && rawReminderText.isBlank()) return null
+
+        val message = when {
+            rawReminderText.isNotBlank() -> rawReminderText
+            rawReminder.contains("|") -> rawReminder.substringAfter("|").trim()
+            else -> rawReminder
+        }.ifBlank { return null }
+
+        val remindAt = parseReminderTimestamp(rawReminder, date, time)
+        return ReminderEntity(
+            phone = normalizedPhone,
+            contactName = client,
+            message = message,
+            remindAt = remindAt,
+            status = "Активно",
+            createdAt = parseHistoryTimestamp(date, time)
+        )
+    }
+
+    private fun parseReminderTimestamp(reminderValue: String, fallbackDate: String, fallbackTime: String): Long {
+        val reminderDateTime = reminderValue.substringBefore("|").trim()
+        if (reminderDateTime.any { it.isDigit() }) {
+            parseHistoryTimestampOrNull(reminderDateTime, "")?.let { return it }
+        }
+        return parseHistoryTimestamp(fallbackDate, fallbackTime)
+    }
+
+    private fun ReminderEntity.reminderFingerprint(): String {
+        return "${normalizePhone(phone)}|${message.trim()}|$remindAt"
     }
 
     private fun CommentEntity.commentFingerprint(): String {
