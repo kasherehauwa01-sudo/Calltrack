@@ -15,7 +15,6 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.PopupMenu
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -26,6 +25,8 @@ import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.App
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.R
+import com.example.calltrack.data.local.NotificationEntity
+import com.example.calltrack.data.notification.NotificationTargets
 import com.example.calltrack.data.repository.PrefsManager
 import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.logging.AppLogger
@@ -36,12 +37,16 @@ import com.example.calltrack.ui.contacts.ContactsFragment
 import com.example.calltrack.ui.contactcard.ContactCardFragment
 import com.example.calltrack.ui.contactcard.ContactHistoryFragment
 import com.example.calltrack.ui.dialpad.DialPadFragment
+import com.example.calltrack.ui.notifications.NotificationBadgeManager
+import com.example.calltrack.ui.notifications.NotificationsFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
+import com.example.calltrack.ui.postcall.PostCallActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONObject
 import java.io.File
 
 class MainActivity : BaseActivity() {
@@ -80,6 +85,7 @@ class MainActivity : BaseActivity() {
         applyWindowInsets()
         setupBottomNav()
         setupSettingsButton()
+        setupNotificationButton()
         registerDownloadReceiver()
         handleExternalNavigation(intent)
         if (intent.getBooleanExtra(EXTRA_RUN_UPDATE_CHECK, false)) {
@@ -134,6 +140,22 @@ class MainActivity : BaseActivity() {
 
     private fun applySavedTheme() {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+    }
+
+    private fun setupNotificationButton() {
+        binding.btnNotifications.setOnClickListener {
+            AppLogger.log(this, "UI", "Открыт экран: Уведомления")
+            supportFragmentManager.beginTransaction()
+                .replace(R.id.fragmentContainer, NotificationsFragment.newInstance())
+                .addToBackStack(null)
+                .commit()
+        }
+        NotificationBadgeManager(
+            lifecycleOwner = this,
+            scope = lifecycleScope,
+            repository = (application as App).notificationRepository,
+            badgeView = binding.notificationBadge
+        ).start()
     }
 
     private fun setupSettingsButton() {
@@ -376,6 +398,37 @@ class MainActivity : BaseActivity() {
             .replace(R.id.fragmentContainer, ContactHistoryFragment.newInstance(phone, type))
             .addToBackStack(null)
             .commit()
+    }
+
+    fun openNotificationTarget(notification: NotificationEntity) {
+        val payload = runCatching { JSONObject(notification.payloadJson) }.getOrNull()
+        val phone = payload?.optString("phone").orEmpty()
+        when (notification.targetScreen) {
+            NotificationTargets.CONTACT_CARD,
+            NotificationTargets.PERSONAL_CONTACT -> {
+                if (phone.isNotBlank()) openContactCard(phone) else binding.bottomNav.selectedItemId = R.id.nav_contacts
+            }
+            NotificationTargets.REMINDER -> {
+                if (phone.isNotBlank()) openContactHistory(phone, ContactHistoryFragment.TYPE_REMINDERS) else binding.bottomNav.selectedItemId = R.id.nav_recent
+            }
+            NotificationTargets.CALL_HISTORY -> {
+                if (phone.isNotBlank()) openContactHistory(phone, ContactHistoryFragment.TYPE_CALLS) else binding.bottomNav.selectedItemId = R.id.nav_recent
+            }
+            NotificationTargets.CALL_DETAIL -> {
+                if (notification.entityId != null && phone.isNotBlank()) {
+                    startActivity(
+                        Intent(this, PostCallActivity::class.java).apply {
+                            putExtra(PostCallActivity.EXTRA_CALL_ID, notification.entityId)
+                            putExtra(PostCallActivity.EXTRA_PHONE, phone)
+                            putExtra(PostCallActivity.EXTRA_NAME, payload?.optString("name").orEmpty().ifBlank { phone })
+                        }
+                    )
+                } else {
+                    binding.bottomNav.selectedItemId = R.id.nav_recent
+                }
+            }
+            else -> binding.bottomNav.selectedItemId = R.id.nav_recent
+        }
     }
 
     private fun openFragment(fragment: androidx.fragment.app.Fragment) {

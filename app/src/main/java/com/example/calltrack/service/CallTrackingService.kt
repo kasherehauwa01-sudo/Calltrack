@@ -23,6 +23,9 @@ import androidx.core.content.ContextCompat
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.data.local.CallEntity
+import com.example.calltrack.data.local.NotificationEntity
+import com.example.calltrack.data.local.NotificationType
+import com.example.calltrack.data.notification.NotificationTargets
 import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.telephony.CallStateTracker
 import com.example.calltrack.ui.postcall.PostCallActivity
@@ -33,6 +36,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 
 class CallTrackingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -199,6 +203,18 @@ class CallTrackingService : Service() {
             .build()
 
         manager.notify(notificationId, notification)
+        saveNotificationCenterItem(
+            title = "Звонок завершён",
+            message = "Заполните результат звонка: $contactName",
+            type = NotificationType.CALLBACK,
+            targetScreen = NotificationTargets.CALL_DETAIL,
+            entityId = callId,
+            payloadJson = JSONObject().apply {
+                put("phone", phone)
+                put("name", contactName)
+                put("call_id", callId)
+            }.toString()
+        )
     }
 
     private fun showMissingClientNotification(phone: String, clientLabel: String) {
@@ -253,6 +269,39 @@ class CallTrackingService : Service() {
             .build()
 
         manager.notify(MISSING_CLIENT_NOTIFICATION_ID, notification)
+        saveNotificationCenterItem(
+            title = "Клиент $displayClient не найден",
+            message = message,
+            type = NotificationType.MISSING_CLIENT,
+            targetScreen = NotificationTargets.PERSONAL_CONTACT,
+            payloadJson = JSONObject().apply {
+                put("phone", phone)
+                put("client", displayClient)
+            }.toString()
+        )
+    }
+
+    private fun saveNotificationCenterItem(
+        title: String,
+        message: String,
+        type: NotificationType,
+        targetScreen: String,
+        entityId: Long? = null,
+        payloadJson: String = ""
+    ) {
+        val repository = (application as? App)?.notificationRepository ?: return
+        scope.launch {
+            repository.insertNotification(
+                NotificationEntity(
+                    title = title,
+                    message = message,
+                    type = type,
+                    targetScreen = targetScreen,
+                    entityId = entityId,
+                    payloadJson = payloadJson
+                )
+            )
+        }
     }
 
     private fun buildPostCallNotificationId(callId: Long): Int {

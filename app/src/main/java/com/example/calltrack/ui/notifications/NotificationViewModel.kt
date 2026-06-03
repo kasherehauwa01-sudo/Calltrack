@@ -1,0 +1,76 @@
+package com.example.calltrack.ui.notifications
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.example.calltrack.data.local.NotificationEntity
+import com.example.calltrack.data.local.NotificationType
+import com.example.calltrack.data.notification.NotificationRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.util.Calendar
+
+class NotificationViewModel(
+    private val repository: NotificationRepository
+) : ViewModel() {
+    private val filter = MutableStateFlow(NotificationFilter.ALL)
+
+    val unreadCount: StateFlow<Int> = repository.unreadCount.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = 0
+    )
+
+    val groupedNotifications: StateFlow<List<NotificationListItem>> = repository.notifications
+        .combine(filter) { list, currentFilter -> list.applyFilter(currentFilter).toGroupedItems() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun setFilter(value: NotificationFilter) {
+        filter.value = value
+    }
+
+    fun markAsRead(id: Long) = viewModelScope.launch { repository.markAsRead(id) }
+
+    fun markAllAsRead() = viewModelScope.launch { repository.markAllAsRead() }
+
+    fun delete(id: Long) = viewModelScope.launch { repository.deleteById(id) }
+
+    private fun List<NotificationEntity>.applyFilter(filter: NotificationFilter): List<NotificationEntity> {
+        return when (filter) {
+            NotificationFilter.ALL -> this
+            NotificationFilter.UNREAD -> filter { !it.isRead }
+            NotificationFilter.REMINDERS -> filter { it.type == NotificationType.REMINDER || it.type == NotificationType.CALLBACK }
+            NotificationFilter.ERRORS -> filter { it.type == NotificationType.SYNC_ERROR }
+        }
+    }
+
+    private fun List<NotificationEntity>.toGroupedItems(): List<NotificationListItem> {
+        val result = mutableListOf<NotificationListItem>()
+        groupBy { groupTitle(it.createdAt) }.forEach { (title, items) ->
+            result += NotificationListItem.Header(title)
+            result += items.map { NotificationListItem.Item(it) }
+        }
+        return result
+    }
+
+    private fun groupTitle(timestamp: Long): String {
+        val now = Calendar.getInstance()
+        val item = Calendar.getInstance().apply { timeInMillis = timestamp }
+        return when {
+            now.get(Calendar.YEAR) == item.get(Calendar.YEAR) && now.get(Calendar.DAY_OF_YEAR) == item.get(Calendar.DAY_OF_YEAR) -> "Сегодня"
+            now.get(Calendar.YEAR) == item.get(Calendar.YEAR) && now.get(Calendar.DAY_OF_YEAR) - item.get(Calendar.DAY_OF_YEAR) == 1 -> "Вчера"
+            else -> "Ранее"
+        }
+    }
+
+    class Factory(private val repository: NotificationRepository) : ViewModelProvider.Factory {
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            @Suppress("UNCHECKED_CAST")
+            return NotificationViewModel(repository) as T
+        }
+    }
+}
