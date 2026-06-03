@@ -1,6 +1,7 @@
 package com.example.calltrack.ui.contactcard
 
 import android.os.Bundle
+import android.util.Log
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
@@ -51,6 +52,7 @@ class ContactHistoryFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val phone = requireArguments().getString(ARG_PHONE).orEmpty()
         val type = requireArguments().getString(ARG_TYPE).orEmpty()
+        Log.d(HISTORY_LOG_TAG, "Открыт экран истории: type=$type, phone=$phone")
 
         binding.btnBack.setOnClickListener {
             requireActivity().onBackPressedDispatcher.onBackPressed()
@@ -88,64 +90,98 @@ class ContactHistoryFragment : Fragment() {
     private fun loadStyledCallHistory(phone: String) {
         renderHistoryCards(listOf("Загрузка..."))
         lifecycleScope.launch {
-            val cached = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-            renderCallCards(cached)
-            launch {
-                val result = runCatching { withContext(Dispatchers.IO) { viewModel.refreshHistory(phone) } }
-                if (result.isSuccess) {
-                    val updated = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-                    renderCallCards(updated)
-                } else if (cached.isEmpty()) {
-                    renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
-                }
-            }
+            val calls = withContext(Dispatchers.IO) { viewModel.getDeviceCallHistory(phone) }
+            renderCallCards(calls)
         }
     }
 
     private fun loadRemoteReminders(phone: String) {
+        Log.d(HISTORY_LOG_TAG, "Начало загрузки истории напоминаний: phone=$phone")
         loadCachedThenRefresh(
             phone = phone,
+            historyType = "reminders",
             onSuccess = { items ->
                 val reminders = items
                     .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
                     .filter { it.reminder.isNotBlank() || it.reminderText.isNotBlank() }
                     .take(20)
+                Log.d(HISTORY_LOG_TAG, "Записей напоминаний после фильтрации UI: ${reminders.size}, source=${items.size}")
                 if (reminders.isEmpty()) listOf("Нет истории") else reminders.map {
-                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.reminder.ifBlank { it.reminderText }}"
+                    val reminder = it.reminder.ifBlank { it.reminderText }
+                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | $reminder"
                 }
             }
         )
     }
 
     private fun loadRemoteComments(phone: String) {
-        loadCachedThenRefresh(
-            phone = phone,
-            onSuccess = { items ->
-                val comments = items
-                    .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
-                    .filter { it.note.isNotBlank() || it.tag.isNotBlank() }
-                    .take(20)
-                if (comments.isEmpty()) listOf("Нет истории") else comments.map {
-                    "${normalizeDate(it.date)} | ${normalizeTime(it.time)} | ${it.note.ifBlank { it.tag }}"
+        Log.d(HISTORY_LOG_TAG, "Начало загрузки истории комментариев: phone=$phone")
+        renderHistoryCards(listOf("Загрузка..."))
+        lifecycleScope.launch {
+            runCatching {
+                val cached = withContext(Dispatchers.IO) { viewModel.getStoredComments(phone) }
+                Log.d(HISTORY_LOG_TAG, "Комментарии из внутренней памяти: records=${cached.size}, phone=$phone")
+                renderCommentCards(cached)
+
+                val refreshResult = runCatching {
+                    withContext(Dispatchers.IO) { viewModel.refreshCommentsFromRemote(phone) }
                 }
+                if (refreshResult.isSuccess) {
+                    val updated = refreshResult.getOrDefault(emptyList<CommentEntity>())
+                    Log.d(HISTORY_LOG_TAG, "Комментарии из таблицы сохранены в память: records=${updated.size}, phone=$phone")
+                    renderCommentCards(updated)
+                } else {
+                    Log.e(HISTORY_LOG_TAG, "Ошибка обновления комментариев из таблицы: phone=$phone", refreshResult.exceptionOrNull())
+                    if (cached.isEmpty()) renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
+                }
+            }.onFailure {
+                Log.e(HISTORY_LOG_TAG, "Ошибка coroutine на экране истории комментариев: phone=$phone", it)
+                renderHistoryCards(listOf("Ошибка загрузки истории"))
+            }
+        }
+    }
+
+    private fun renderCommentCards(comments: List<CommentEntity>) {
+        val latestComments = comments
+            .filter { it.text.isNotBlank() }
+            .sortedByDescending { it.createdAt }
+            .take(20)
+        Log.d(HISTORY_LOG_TAG, "Записей комментариев после фильтрации UI: ${latestComments.size}, source=${comments.size}")
+        if (latestComments.isEmpty()) {
+            renderHistoryCards(listOf("Нет истории"))
+            return
+        }
+        renderHistoryCards(
+            latestComments.map { comment ->
+                "${dateTimeFormat.format(Date(comment.createdAt))} | ${comment.text}"
             }
         )
     }
 
-    private fun loadCachedThenRefresh(phone: String, onSuccess: (List<CallHistoryEntity>) -> List<String>) {
+    private fun loadCachedThenRefresh(
+        phone: String,
+        historyType: String,
+        onSuccess: (List<CallHistoryEntity>) -> List<String>
+    ) {
         renderHistoryCards(listOf("Загрузка..."))
         lifecycleScope.launch {
-            val cached = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-            renderHistoryCards(onSuccess(cached))
+            runCatching {
+                val cached = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
+                Log.d(HISTORY_LOG_TAG, "Кэш истории $historyType: records=${cached.size}, phone=$phone")
+                renderHistoryCards(onSuccess(cached))
 
-            launch {
-                val result = runCatching { withContext(Dispatchers.IO) { viewModel.refreshHistory(phone) } }
-                if (result.isSuccess) {
+                val refreshResult = runCatching { withContext(Dispatchers.IO) { viewModel.refreshHistory(phone) } }
+                if (refreshResult.isSuccess) {
                     val updated = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
+                    Log.d(HISTORY_LOG_TAG, "Успешная загрузка истории $historyType: records=${updated.size}, phone=$phone")
                     renderHistoryCards(onSuccess(updated))
-                } else if (cached.isEmpty()) {
-                    renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
+                } else {
+                    Log.e(HISTORY_LOG_TAG, "Ошибка обновления истории $historyType: phone=$phone", refreshResult.exceptionOrNull())
+                    if (cached.isEmpty()) renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
                 }
+            }.onFailure {
+                Log.e(HISTORY_LOG_TAG, "Ошибка coroutine на экране истории $historyType: phone=$phone", it)
+                renderHistoryCards(listOf("Ошибка загрузки истории"))
             }
         }
     }
@@ -334,6 +370,7 @@ class ContactHistoryFragment : Fragment() {
         const val TYPE_COMMENTS = "comments"
         private const val ARG_PHONE = "arg_phone"
         private const val ARG_TYPE = "arg_type"
+        private const val HISTORY_LOG_TAG = "COMMENT_HISTORY"
 
         fun newInstance(phone: String, type: String) = ContactHistoryFragment().apply {
             arguments = Bundle().apply {
