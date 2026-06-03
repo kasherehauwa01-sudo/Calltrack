@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
@@ -202,7 +203,9 @@ class MainActivity : BaseActivity() {
                 AppLogger.log(this@MainActivity, "UPDATE", "Версия актуальна")
                 AlertDialog.Builder(this@MainActivity)
                     .setMessage("У Вас установлена актуальная версия приложения")
-                    .setPositiveButton("OK", null)
+                    .setPositiveButton("OK") { dialog: DialogInterface, _: Int ->
+                        dialog.dismiss()
+                    }
                     .show()
                 return@launch
             }
@@ -211,8 +214,12 @@ class MainActivity : BaseActivity() {
             AlertDialog.Builder(this@MainActivity)
                 .setTitle("Найдена свежая версия")
                 .setMessage("Установить?")
-                .setPositiveButton("Да") { _, _ -> startApkUpdateDownload(latest.apkUrl) }
-                .setNegativeButton("Нет", null)
+                .setPositiveButton("Да") { _: DialogInterface, _: Int ->
+                    startApkUpdateDownload(latest.apkUrl)
+                }
+                .setNegativeButton("Нет") { dialog: DialogInterface, _: Int ->
+                    dialog.dismiss()
+                }
                 .show()
         }
     }
