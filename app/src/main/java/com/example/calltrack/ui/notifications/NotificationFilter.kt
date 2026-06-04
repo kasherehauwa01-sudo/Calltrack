@@ -1,8 +1,7 @@
 package com.example.calltrack.ui.notifications
 
 enum class NotificationFilter {
-    ALL,
-    UNREAD,
-    REMINDERS,
-    ERRORS
+    CLIENT_NOT_FOUND,
+    CALL_RESULT,
+    UNREAD
 }

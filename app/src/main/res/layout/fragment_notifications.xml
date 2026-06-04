@@ -56,12 +56,19 @@
             app:singleSelection="true">
 
             <com.google.android.material.chip.Chip
-                android:id="@+id/chipAll"
+                android:id="@+id/chipClientNotFound"
                 style="@style/Widget.Material3.Chip.Filter"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:checked="true"
-                android:text="Все" />
+                android:text="Клиент не найден" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipCallResult"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Результат звонка" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chipUnread"
@@ -69,20 +76,6 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Непрочитанные" />
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipReminders"
-                style="@style/Widget.Material3.Chip.Filter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Напоминания" />
-
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipErrors"
-                style="@style/Widget.Material3.Chip.Filter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Ошибки" />
         </com.google.android.material.chip.ChipGroup>
     </HorizontalScrollView>
 
