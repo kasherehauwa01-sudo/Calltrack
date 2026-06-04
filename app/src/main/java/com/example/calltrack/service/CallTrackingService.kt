@@ -17,11 +17,15 @@ import android.provider.CallLog
 import android.provider.ContactsContract
 import android.telephony.TelephonyManager
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.data.local.CallEntity
+import com.example.calltrack.data.local.NotificationEntity
+import com.example.calltrack.data.local.NotificationType
+import com.example.calltrack.data.notification.NotificationTargets
 import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.telephony.CallStateTracker
 import com.example.calltrack.ui.postcall.PostCallActivity
@@ -32,6 +36,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 
 class CallTrackingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -129,6 +134,9 @@ class CallTrackingService : Service() {
             latestSavedCallId = repo.saveCall(entity)
             latestSavedEntity = entity
             AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
+            Log.d("WEBHOOK", "Сразу отправляем завершённый звонок в Google Sheets: id=$latestSavedCallId")
+            runCatching { repo.syncCallById(latestSavedCallId) }
+                .onFailure { Log.e("WEBHOOK", "Не удалось сразу отправить звонок: id=$latestSavedCallId", it) }
 
             val isPersonal = repo.isPersonalContact(entity.phone)
             if (!isPersonal && shouldShowPostCallPrompt(entity.type)) {
@@ -142,17 +150,12 @@ class CallTrackingService : Service() {
         val isFinalPersonal = repo.isPersonalContact(finalEntity.phone)
         val clientName = repo.findClientName(finalEntity.phone)
 
-        scope.launch {
-            Log.d("WEBHOOK", "Пытаемся отправить данные в Google Sheets")
-            runCatching { repo.syncPending() }
-                .onFailure {
-                    Log.e("WEBHOOK", "Ошибка отправки webhook", it)
-                }
-        }
+        Log.d("WEBHOOK", "Завершённые звонки обработаны и отправлены точечной синхронизацией")
 
         if (!isFinalPersonal && clientName.isBlank()) {
-            AppLogger.log(this, "NOTIFY", "Показ уведомления: Номер телефона не найден в базе 1с. Занесите данный номер в 1с")
-            showMissingClientNotification(finalEntity.phone)
+            val missingClientLabel = resolveContactName(finalEntity.phone)
+            AppLogger.log(this, "NOTIFY", "Показ уведомления: клиент $missingClientLabel не найден в базе 1с")
+            showMissingClientNotification(finalEntity.phone, missingClientLabel)
         }
         Log.d("CallTrackingService", "Calls captured count=${entities.size}, latest=${finalEntity.phone}, ts=${finalEntity.timestamp}")
         return true
@@ -197,10 +200,24 @@ class CallTrackingService : Service() {
             .build()
 
         manager.notify(notificationId, notification)
+        saveNotificationCenterItem(
+            title = "Звонок завершён",
+            message = "Заполните результат звонка: $contactName",
+            type = NotificationType.CALLBACK,
+            targetScreen = NotificationTargets.CALL_DETAIL,
+            entityId = callId,
+            payloadJson = JSONObject().apply {
+                put("phone", phone)
+                put("name", contactName)
+                put("call_id", callId)
+            }.toString()
+        )
     }
 
-    private fun showMissingClientNotification(phone: String) {
+    private fun showMissingClientNotification(phone: String, clientLabel: String) {
         val manager = getSystemService(NotificationManager::class.java)
+        val displayClient = clientLabel.ifBlank { phone }
+        val message = "Клиент $displayClient не найден в базе 1с. Выберите действие"
         val openIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
@@ -237,9 +254,9 @@ class CallTrackingService : Service() {
 
         val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_clover)
-            .setContentTitle("Клиент не найден")
-            .setContentText("Клиент не найден в базе 1с. Выберите действие")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Клиент не найден в базе 1с. Выберите действие"))
+            .setContentTitle("Клиент $displayClient не найден")
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
@@ -249,6 +266,39 @@ class CallTrackingService : Service() {
             .build()
 
         manager.notify(MISSING_CLIENT_NOTIFICATION_ID, notification)
+        saveNotificationCenterItem(
+            title = "Клиент $displayClient не найден",
+            message = message,
+            type = NotificationType.MISSING_CLIENT,
+            targetScreen = NotificationTargets.PERSONAL_CONTACT,
+            payloadJson = JSONObject().apply {
+                put("phone", phone)
+                put("client", displayClient)
+            }.toString()
+        )
+    }
+
+    private fun saveNotificationCenterItem(
+        title: String,
+        message: String,
+        type: NotificationType,
+        targetScreen: String,
+        entityId: Long? = null,
+        payloadJson: String = ""
+    ) {
+        val repository = (application as? App)?.notificationRepository ?: return
+        scope.launch {
+            repository.insertNotification(
+                NotificationEntity(
+                    title = title,
+                    message = message,
+                    type = type,
+                    targetScreen = targetScreen,
+                    entityId = entityId,
+                    payloadJson = payloadJson
+                )
+            )
+        }
     }
 
     private fun buildPostCallNotificationId(callId: Long): Int {
@@ -328,9 +378,19 @@ class CallTrackingService : Service() {
         return callTypeString to ""
     }
 
+    @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        // Android 15 завершает foreground service с тайм-аутом, если приложение само не остановится.
+        // Явно убираем сервис из foreground и завершаем его, чтобы система не уронила процесс.
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf(startId)
+    }
+
     override fun onDestroy() {
         scope.cancel()
-        tracker.stop()
+        if (::tracker.isInitialized) {
+            tracker.stop()
+        }
         super.onDestroy()
     }
 
@@ -383,10 +443,9 @@ class CallTrackingService : Service() {
         const val EXTRA_NOTIFICATION_PHONE =
             "extra_notification_phone"
 
-        const val MISSING_CLIENT_NOTIFICATION_ID = 1002
+        const val MISSING_CLIENT_NOTIFICATION_ID = 2001
 
         private const val POST_CALL_CHANNEL_ID = "postcall"
         private const val POST_CALL_NOTIFICATION_ID_BASE = 1000
-        private const val MISSING_CLIENT_NOTIFICATION_ID = 2001
     }
 }
