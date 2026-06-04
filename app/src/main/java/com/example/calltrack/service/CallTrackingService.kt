@@ -134,6 +134,9 @@ class CallTrackingService : Service() {
             latestSavedCallId = repo.saveCall(entity)
             latestSavedEntity = entity
             AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
+            Log.d("WEBHOOK", "Сразу отправляем завершённый звонок в Google Sheets: id=$latestSavedCallId")
+            runCatching { repo.syncCallById(latestSavedCallId) }
+                .onFailure { Log.e("WEBHOOK", "Не удалось сразу отправить звонок: id=$latestSavedCallId", it) }
 
             val isPersonal = repo.isPersonalContact(entity.phone)
             if (!isPersonal && shouldShowPostCallPrompt(entity.type)) {
@@ -147,13 +150,7 @@ class CallTrackingService : Service() {
         val isFinalPersonal = repo.isPersonalContact(finalEntity.phone)
         val clientName = repo.findClientName(finalEntity.phone)
 
-        scope.launch {
-            Log.d("WEBHOOK", "Пытаемся отправить данные в Google Sheets")
-            runCatching { repo.syncPending() }
-                .onFailure {
-                    Log.e("WEBHOOK", "Ошибка отправки webhook", it)
-                }
-        }
+        Log.d("WEBHOOK", "Завершённые звонки обработаны и отправлены точечной синхронизацией")
 
         if (!isFinalPersonal && clientName.isBlank()) {
             val missingClientLabel = resolveContactName(finalEntity.phone)

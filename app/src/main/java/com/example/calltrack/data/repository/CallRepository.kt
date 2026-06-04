@@ -773,7 +773,7 @@ class CallRepository(
         syncCallById(callId)
     }
 
-    private suspend fun syncCallById(callId: Long) {
+    suspend fun syncCallById(callId: Long) {
         syncMutex.withLock {
             val entity = callDao.getById(callId) ?: return@withLock
             val managerName = prefs.getManagerName().ifBlank { "Не указан" }
