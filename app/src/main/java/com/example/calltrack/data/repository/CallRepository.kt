@@ -234,6 +234,7 @@ class CallRepository(
                 val value = optString(key).trim()
                 if (value.isNotBlank()) return value
             }
+            if (item != null) items += item
         }
         return ""
     }
@@ -680,6 +681,8 @@ class CallRepository(
                 val personalOk = personalContactsHttpClient.newCall(personalRequest).execute().use { response ->
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера личных контактов: ${response.code}")
                     response.isSuccessful
+                } finally {
+                    response.close()
                 }
 
                 val calltrackRequest = Request.Builder()
