@@ -596,23 +596,46 @@ class CallRepository(
     suspend fun markAsPersonalContact(phone: String) {
         if (phone.isBlank() || phone == "Неизвестно") return
         ensureContact(phone)
-        contactDao.updateClient1cByPhone(phone, "Личный")
+        updatePersonalContactLocal(phone, isPersonal = true)
         syncPersonalContactToRemote(phone, true, enqueueOnFailure = true)
+        val pendingCount = markCallsPendingForNormalizedPhone(phone)
+        Log.d("CallRepository", "Личный контакт: поставили в очередь $pendingCount звонков для обновления колонки Клиент")
+        syncPending()
         flushPendingPersonalContactsSync()
     }
 
     suspend fun markCallsPendingForPhoneResync(phone: String) {
         if (phone.isBlank() || phone == "Неизвестно") return
-        callDao.markPendingByPhone(phone)
+        markCallsPendingForNormalizedPhone(phone)
         syncPending()
     }
 
     suspend fun unmarkPersonalContact(phone: String) {
         if (phone.isBlank() || phone == "Неизвестно") return
         ensureContact(phone)
-        contactDao.updateClient1cByPhone(phone, "")
+        updatePersonalContactLocal(phone, isPersonal = false)
         syncPersonalContactToRemote(phone, false, enqueueOnFailure = true)
+        val pendingCount = markCallsPendingForNormalizedPhone(phone)
+        Log.d("CallRepository", "Личный контакт снят: поставили в очередь $pendingCount звонков для очистки колонки Клиент")
+        syncPending()
         flushPendingPersonalContactsSync()
+    }
+
+    private suspend fun updatePersonalContactLocal(phone: String, isPersonal: Boolean) {
+        val normalizedPhone = normalizePhone(phone)
+        val value = if (isPersonal) "Личный" else ""
+        contactDao.updateClient1cByPhone(phone, value)
+        contactDao.findAll()
+            .filter { contact -> normalizePhone(contact.phone) == normalizedPhone }
+            .forEach { contact -> contactDao.updateClient1c(contact.id, value) }
+    }
+
+    private suspend fun markCallsPendingForNormalizedPhone(phone: String): Int {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return 0
+        val calls = callDao.getAllOnce().filter { call -> normalizePhone(call.phone) == normalizedPhone }
+        calls.forEach { call -> callDao.markPending(call.id) }
+        return calls.size
     }
 
     private suspend fun syncPersonalContactToRemote(phone: String, isPersonal: Boolean, enqueueOnFailure: Boolean): Boolean {
@@ -624,7 +647,11 @@ class CallRepository(
             put("manager_phone", normalizedManagerPhone)
             put("manager_name", managerName)
             put("contact_phone", normalizedContactPhone)
+            put("phone", normalizedContactPhone)
             put("is_personal", if (isPersonal) "1" else "0")
+            put("client", if (isPersonal) PERSONAL_CALL_CLIENT_VALUE else "")
+            put("client_value", if (isPersonal) PERSONAL_CALL_CLIENT_VALUE else "")
+            put("apply_to_calls", "1")
         }
         val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
         val request = Request.Builder()
@@ -794,8 +821,8 @@ class CallRepository(
     private suspend fun sendCallToWebhook(entity: CallEntity, managerName: String, managerPhone: String): Boolean {
         Log.d("WEBHOOK", "Отправка webhook: $entity")
         return runCatching {
-            val personalMarked = contactDao.findByPhone(entity.phone)?.client1c == "Личный"
-            val clientName = if (personalMarked) "Личный звонок" else findClientName(entity.phone)
+            val personalMarked = isPersonalContact(entity.phone)
+            val clientName = if (personalMarked) PERSONAL_CALL_CLIENT_VALUE else findClientName(entity.phone)
             val reminderText = extractReminderText(entity.reminder)
             com.example.calltrack.logging.AppLogger.log(
                 appContext,
@@ -990,6 +1017,7 @@ class CallRepository(
         private const val DEVICE_RECENT_CALLS_LIMIT = 100
         private const val DEVICE_CONTACT_HISTORY_LIMIT = 100
         private const val CALL_HISTORY_MIN_ARRAY_COLUMNS = 5
+        private const val PERSONAL_CALL_CLIENT_VALUE = "Личный звонок"
     }
 
     private data class SyncFingerprint(
