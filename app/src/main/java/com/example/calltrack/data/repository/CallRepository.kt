@@ -598,6 +598,7 @@ class CallRepository(
         ensureContact(phone)
         updatePersonalContactLocal(phone, isPersonal = true)
         syncPersonalContactToRemote(phone, true, enqueueOnFailure = true)
+        syncCalltrackClientColumnByPhone(phone, isPersonal = true)
         val pendingCount = markCallsPendingForNormalizedPhone(phone)
         Log.d("CallRepository", "Личный контакт: поставили в очередь $pendingCount звонков для обновления колонки Клиент")
         syncPending()
@@ -615,6 +616,7 @@ class CallRepository(
         ensureContact(phone)
         updatePersonalContactLocal(phone, isPersonal = false)
         syncPersonalContactToRemote(phone, false, enqueueOnFailure = true)
+        syncCalltrackClientColumnByPhone(phone, isPersonal = false)
         val pendingCount = markCallsPendingForNormalizedPhone(phone)
         Log.d("CallRepository", "Личный контакт снят: поставили в очередь $pendingCount звонков для очистки колонки Клиент")
         syncPending()
@@ -636,6 +638,56 @@ class CallRepository(
         val calls = callDao.getAllOnce().filter { call -> normalizePhone(call.phone) == normalizedPhone }
         calls.forEach { call -> callDao.markPending(call.id) }
         return calls.size
+    }
+
+    private suspend fun syncCalltrackClientColumnByPhone(phone: String, isPersonal: Boolean): Boolean {
+        val normalizedContactPhone = normalizePhone(phone)
+        if (normalizedContactPhone.isBlank()) return false
+        val managerPhone = normalizePhone(prefs.getManagerPhone())
+        val managerName = prefs.getManagerName().ifBlank { "Не указан" }
+        val clientValue = if (isPersonal) PERSONAL_CALL_CLIENT_VALUE else ""
+        val payload = JSONObject().apply {
+            put("action", "update_client_by_phone")
+            put("operation", if (isPersonal) "set_personal_call" else "clear_personal_call")
+            put("phone", normalizedContactPhone)
+            put("contact_phone", normalizedContactPhone)
+            put("manager_phone", managerPhone)
+            put("manager_name", managerName)
+            put("phone_column", "Номер телефона")
+            put("client_column", "Клиент")
+            put("client", clientValue)
+            put("client_value", clientValue)
+            put("clear_value", PERSONAL_CALL_CLIENT_VALUE)
+            put("is_personal", if (isPersonal) "1" else "0")
+            put("update_all_rows", "1")
+            put("restore_from_directory", if (isPersonal) "0" else "1")
+        }
+        val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val request = Request.Builder()
+            .url(BuildConfig.WEBHOOK_URL)
+            .post(body)
+            .build()
+        val result = runCatching {
+            withContext(Dispatchers.IO) {
+                val response = personalContactsHttpClient.newCall(request).execute()
+                try {
+                    val bodyText = response.body?.string().orEmpty()
+                    val accepted = isWebhookAccepted(response.isSuccessful, bodyText)
+                    Log.d(
+                        "CallRepository",
+                        "Массовое обновление колонки Клиент в Calltrack: phone=$normalizedContactPhone, " +
+                            "isPersonal=$isPersonal, code=${response.code}, accepted=$accepted, body=${bodyText.take(300)}"
+                    )
+                    accepted
+                } finally {
+                    response.close()
+                }
+            }
+        }
+        return result.getOrElse {
+            Log.e("CallRepository", "Не удалось массово обновить колонку Клиент в Calltrack: phone=$normalizedContactPhone", it)
+            false
+        }
     }
 
     private suspend fun syncPersonalContactToRemote(phone: String, isPersonal: Boolean, enqueueOnFailure: Boolean): Boolean {
