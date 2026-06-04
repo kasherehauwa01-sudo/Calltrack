@@ -13,4 +13,7 @@ interface CommentDao {
 
     @Query("SELECT * FROM comments WHERE phone = :phone ORDER BY createdAt DESC")
     fun observeByPhone(phone: String): Flow<List<CommentEntity>>
+
+    @Query("SELECT * FROM comments ORDER BY createdAt DESC")
+    suspend fun getAllOnce(): List<CommentEntity>
 }
