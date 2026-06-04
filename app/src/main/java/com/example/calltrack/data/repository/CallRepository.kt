@@ -234,6 +234,7 @@ class CallRepository(
                 val value = optString(key).trim()
                 if (value.isNotBlank()) return value
             }
+            if (item != null) items += item
         }
         return ""
     }
@@ -643,35 +644,68 @@ class CallRepository(
         val managerName = prefs.getManagerName().ifBlank { "Не указан" }
         val normalizedManagerPhone = normalizePhone(managerPhone)
         val normalizedContactPhone = normalizePhone(phone)
-        val payload = JSONObject().apply {
+        val clientValue = if (isPersonal) PERSONAL_CALL_CLIENT_VALUE else ""
+        val personalPayload = JSONObject().apply {
             put("manager_phone", normalizedManagerPhone)
             put("manager_name", managerName)
             put("contact_phone", normalizedContactPhone)
             put("phone", normalizedContactPhone)
             put("is_personal", if (isPersonal) "1" else "0")
-            put("client", if (isPersonal) PERSONAL_CALL_CLIENT_VALUE else "")
-            put("client_value", if (isPersonal) PERSONAL_CALL_CLIENT_VALUE else "")
+            put("client", clientValue)
+            put("client_value", clientValue)
             put("apply_to_calls", "1")
         }
-        val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-        val request = Request.Builder()
-            .url(BuildConfig.PERSONAL_CONTACTS_WEBHOOK_URL)
-            .post(body)
-            .build()
+        val calltrackPayload = JSONObject().apply {
+            put("action", "update_client_by_phone")
+            put("operation", if (isPersonal) "set_personal_call" else "clear_personal_call")
+            put("phone", normalizedContactPhone)
+            put("contact_phone", normalizedContactPhone)
+            put("manager_phone", normalizedManagerPhone)
+            put("manager_name", managerName)
+            put("phone_column", "Номер телефона")
+            put("client_column", "Клиент")
+            put("client", clientValue)
+            put("client_value", clientValue)
+            put("clear_value", PERSONAL_CALL_CLIENT_VALUE)
+            put("is_personal", if (isPersonal) "1" else "0")
+            put("update_all_rows", "1")
+            put("restore_from_directory", if (isPersonal) "0" else "1")
+        }
+
         val result: Result<Boolean> = runCatching {
             withContext(Dispatchers.IO) {
-                val response = personalContactsHttpClient.newCall(request).execute()
-                try {
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ${response.code}")
+                val personalRequest = Request.Builder()
+                    .url(BuildConfig.PERSONAL_CONTACTS_WEBHOOK_URL)
+                    .post(personalPayload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
+                val personalOk = personalContactsHttpClient.newCall(personalRequest).execute().use { response ->
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера личных контактов: ${response.code}")
                     response.isSuccessful
                 } finally {
                     response.close()
                 }
+
+                val calltrackRequest = Request.Builder()
+                    .url(BuildConfig.WEBHOOK_URL)
+                    .post(calltrackPayload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
+                val calltrackOk = personalContactsHttpClient.newCall(calltrackRequest).execute().use { response ->
+                    val bodyText = response.body?.string().orEmpty()
+                    val accepted = isWebhookAccepted(response.isSuccessful, bodyText)
+                    Log.d(
+                        "CallRepository",
+                        "Массовое обновление колонки Клиент в Calltrack: phone=$normalizedContactPhone, " +
+                            "isPersonal=$isPersonal, code=${response.code}, accepted=$accepted, body=${bodyText.take(300)}"
+                    )
+                    accepted
+                }
+
+                personalOk && calltrackOk
             }
         }
         return result.getOrElse {
             com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
-            Log.e("CallRepository", "Не удалось отправить личный контакт в Calltrack_mop", it)
+            Log.e("CallRepository", "Не удалось отправить личный контакт и обновить колонку Клиент в Calltrack", it)
             if (enqueueOnFailure) {
                 enqueuePendingPersonalSync(
                     PersonalSyncItem(

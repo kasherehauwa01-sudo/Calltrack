@@ -33,16 +33,20 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import java.util.concurrent.atomic.AtomicBoolean
 import org.json.JSONObject
 
 class CallTrackingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var tracker: CallStateTracker
     private var lastStateWasActive = false
+    @Volatile
     private var lastHandledTimestamp: Long = 0L
+    private val initialTimestampReady = CompletableDeferred<Unit>()
+    private val captureInProgress = AtomicBoolean(false)
 
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -78,11 +82,31 @@ class CallTrackingService : Service() {
             return
         }
 
-        // Берём метку последнего УЖЕ сохранённого звонка из локальной БД.
-        // Так мы не пропускаем звонки за сегодня, которые были в CallLog, но ещё не попали в кэш приложения.
+        // Метку последнего сохранённого звонка читаем асинхронно, чтобы onCreate() сервиса
+        // не блокировал главный поток и не мог сам стать причиной ANR.
         val repo = (application as App).repository
-        lastHandledTimestamp = runBlocking(Dispatchers.IO) {
-            repo.getLatestSavedCallTimestamp()
+        scope.launch {
+            val startedAt = System.currentTimeMillis()
+            AppLogger.log(this@CallTrackingService, "PERF", "initLastHandledTimestamp started")
+            runCatching { repo.getLatestSavedCallTimestamp() }
+                .onSuccess { timestamp ->
+                    lastHandledTimestamp = maxOf(lastHandledTimestamp, timestamp)
+                    AppLogger.log(
+                        this@CallTrackingService,
+                        "PERF",
+                        "initLastHandledTimestamp finished in ${System.currentTimeMillis() - startedAt} ms, ts=$lastHandledTimestamp"
+                    )
+                }
+                .onFailure { error ->
+                    AppLogger.log(
+                        this@CallTrackingService,
+                        "PERF",
+                        "initLastHandledTimestamp failed in ${System.currentTimeMillis() - startedAt} ms: ${error.message}"
+                    )
+                }
+            if (!initialTimestampReady.isCompleted) {
+                initialTimestampReady.complete(Unit)
+            }
         }
 
         tracker = CallStateTracker(this) { state, _ ->
@@ -108,57 +132,122 @@ class CallTrackingService : Service() {
     }
 
     private suspend fun captureLatestCallWithRetry() {
-        // На некоторых устройствах CallLog обновляется с задержкой, поэтому ждём дольше,
-        // чтобы не схватить предыдущий звонок вместо только что завершённого.
-        repeat(25) { attempt ->
-            val captured = captureLatestCallIfNew()
-            if (captured) return
-            if (attempt < 24) delay(300)
+        if (!captureInProgress.compareAndSet(false, true)) {
+            AppLogger.log(this, "PERF", "captureLatestCallWithRetry skipped: previous capture is still running")
+            return
+        }
+
+        val startedAt = System.currentTimeMillis()
+        var attempts = 0
+        var captured = false
+        AppLogger.log(this, "PERF", "captureLatestCallWithRetry started")
+        try {
+            initialTimestampReady.await()
+            // На некоторых устройствах CallLog обновляется с задержкой, поэтому ждём дольше,
+            // чтобы не схватить предыдущий звонок вместо только что завершённого.
+            while (attempts < CALL_CAPTURE_RETRY_COUNT && !captured) {
+                attempts++
+                captured = captureLatestCallIfNew()
+                if (!captured && attempts < CALL_CAPTURE_RETRY_COUNT) {
+                    delay(CALL_CAPTURE_RETRY_DELAY_MS)
+                }
+            }
+        } finally {
+            AppLogger.log(
+                this,
+                "PERF",
+                "captureLatestCallWithRetry finished in ${System.currentTimeMillis() - startedAt} ms, attempts=$attempts, captured=$captured"
+            )
+            captureInProgress.set(false)
         }
     }
 
     private suspend fun captureLatestCallIfNew(): Boolean {
-        val entities = readLatestCallEntitiesAfter(lastHandledTimestamp)
-        if (entities.isEmpty()) return false
+        val startedAt = System.currentTimeMillis()
+        var readCalls = 0
+        var processedCalls = 0
+        AppLogger.log(this, "PERF", "captureLatestCallIfNew started, minTs=$lastHandledTimestamp")
 
-        val repo = (application as App).repository
-        var latestSavedCallId = 0L
-        var latestSavedEntity: CallEntity? = null
-        var hasNewData = false
+        return try {
+            val entities = readLatestCallEntitiesAfter(lastHandledTimestamp)
+            readCalls = entities.size
+            if (entities.isEmpty()) return false
 
-        entities.forEach { entity ->
-            if (entity.timestamp <= lastHandledTimestamp) return@forEach
-            hasNewData = true
-            lastHandledTimestamp = maxOf(lastHandledTimestamp, entity.timestamp)
-            AppLogger.log(this, "CALL", "Сохранение звонка в локальную БД")
-            latestSavedCallId = repo.saveCall(entity)
-            latestSavedEntity = entity
-            AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
-            Log.d("WEBHOOK", "Сразу отправляем завершённый звонок в Google Sheets: id=$latestSavedCallId")
-            runCatching { repo.syncCallById(latestSavedCallId) }
-                .onFailure { Log.e("WEBHOOK", "Не удалось сразу отправить звонок: id=$latestSavedCallId", it) }
+            val repo = (application as App).repository
+            val personalContactCache = mutableMapOf<String, Boolean>()
+            val contactNameCache = mutableMapOf<String, String>()
+            var latestSavedCallId = 0L
+            var latestSavedEntity: CallEntity? = null
+            var hasNewData = false
 
-            val isPersonal = repo.isPersonalContact(entity.phone)
-            if (!isPersonal && shouldShowPostCallPrompt(entity.type)) {
-                val contactName = resolveContactName(entity.phone)
-                showPostCallNow(latestSavedCallId, entity.phone, contactName)
+            suspend fun isPersonalContactCached(phone: String): Boolean {
+                personalContactCache[phone]?.let { return it }
+                val value = repo.isPersonalContact(phone)
+                personalContactCache[phone] = value
+                return value
             }
+
+            fun resolveContactNameCached(phone: String): String {
+                return contactNameCache.getOrPut(phone) { resolveContactName(phone) }
+            }
+
+            entities.forEach { entity ->
+                if (entity.timestamp <= lastHandledTimestamp) return@forEach
+                hasNewData = true
+                processedCalls++
+                lastHandledTimestamp = maxOf(lastHandledTimestamp, entity.timestamp)
+                AppLogger.log(this, "CALL", "Сохранение звонка в локальную БД")
+                latestSavedCallId = repo.saveCall(entity)
+                latestSavedEntity = entity
+                AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
+                Log.d("WEBHOOK", "Сразу отправляем завершённый звонок в Google Sheets: id=$latestSavedCallId")
+                val syncStartedAt = System.currentTimeMillis()
+                AppLogger.log(this, "PERF", "syncCallById started, id=$latestSavedCallId")
+                runCatching { repo.syncCallById(latestSavedCallId) }
+                    .onSuccess {
+                        AppLogger.log(
+                            this,
+                            "PERF",
+                            "syncCallById finished in ${System.currentTimeMillis() - syncStartedAt} ms, id=$latestSavedCallId"
+                        )
+                    }
+                    .onFailure { error ->
+                        AppLogger.log(
+                            this,
+                            "PERF",
+                            "syncCallById failed in ${System.currentTimeMillis() - syncStartedAt} ms, id=$latestSavedCallId: ${error.message}"
+                        )
+                        Log.e("WEBHOOK", "Не удалось сразу отправить звонок: id=$latestSavedCallId", error)
+                    }
+
+                val isPersonal = isPersonalContactCached(entity.phone)
+                if (!isPersonal && shouldShowPostCallPrompt(entity.type)) {
+                    val contactName = resolveContactNameCached(entity.phone)
+                    showPostCallNow(latestSavedCallId, entity.phone, contactName)
+                }
+            }
+            if (!hasNewData) return false
+
+            val finalEntity = latestSavedEntity ?: return false
+            val isFinalPersonal = isPersonalContactCached(finalEntity.phone)
+            val clientName = repo.findClientName(finalEntity.phone)
+
+            Log.d("WEBHOOK", "Завершённые звонки обработаны и отправлены точечной синхронизацией")
+
+            if (!isFinalPersonal && clientName.isBlank()) {
+                val missingClientLabel = resolveContactNameCached(finalEntity.phone)
+                AppLogger.log(this, "NOTIFY", "Показ уведомления: клиент $missingClientLabel не найден в базе 1с")
+                showMissingClientNotification(finalEntity.phone, missingClientLabel)
+            }
+            Log.d("CallTrackingService", "Calls captured count=${entities.size}, latest=${finalEntity.phone}, ts=${finalEntity.timestamp}")
+            true
+        } finally {
+            AppLogger.log(
+                this,
+                "PERF",
+                "captureLatestCallIfNew finished in ${System.currentTimeMillis() - startedAt} ms, read=$readCalls, calls=$processedCalls"
+            )
         }
-        if (!hasNewData) return false
-
-        val finalEntity = latestSavedEntity ?: return false
-        val isFinalPersonal = repo.isPersonalContact(finalEntity.phone)
-        val clientName = repo.findClientName(finalEntity.phone)
-
-        Log.d("WEBHOOK", "Завершённые звонки обработаны и отправлены точечной синхронизацией")
-
-        if (!isFinalPersonal && clientName.isBlank()) {
-            val missingClientLabel = resolveContactName(finalEntity.phone)
-            AppLogger.log(this, "NOTIFY", "Показ уведомления: клиент $missingClientLabel не найден в базе 1с")
-            showMissingClientNotification(finalEntity.phone, missingClientLabel)
-        }
-        Log.d("CallTrackingService", "Calls captured count=${entities.size}, latest=${finalEntity.phone}, ts=${finalEntity.timestamp}")
-        return true
     }
 
     private fun shouldShowPostCallPrompt(callType: String): Boolean {
@@ -320,7 +409,16 @@ class CallTrackingService : Service() {
     }
 
     private fun readLatestCallEntitiesAfter(minTimestampExclusive: Long): List<CallEntity> {
+        val startedAt = System.currentTimeMillis()
+        var scannedRows = 0
+        AppLogger.log(this, "PERF", "readLatestCallEntitiesAfter started, minTs=$minTimestampExclusive")
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+            AppLogger.log(
+                this,
+                "PERF",
+                "readLatestCallEntitiesAfter finished in ${System.currentTimeMillis() - startedAt} ms, scanned=0, calls=0, no READ_CALL_LOG permission"
+            )
             return emptyList()
         }
 
@@ -332,34 +430,48 @@ class CallTrackingService : Service() {
         )
 
         val result = mutableListOf<CallEntity>()
-        contentResolver.query(
-            CallLog.Calls.CONTENT_URI,
-            projection,
-            null,
-            null,
-            "${CallLog.Calls.DATE} DESC"
-        )?.use { cursor ->
-            while (cursor.moveToNext()) {
-                val number = cursor.getString(cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)).orEmpty()
-                val typeInt = cursor.getInt(cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE))
-                val duration = cursor.getLong(cursor.getColumnIndexOrThrow(CallLog.Calls.DURATION))
-                val timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(CallLog.Calls.DATE))
+        val selection = "${CallLog.Calls.DATE} > ?"
+        val selectionArgs = arrayOf(minTimestampExclusive.toString())
+        runCatching {
+            contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                "${CallLog.Calls.DATE} DESC"
+            )?.use { cursor ->
+                while (cursor.moveToNext() && scannedRows < CALL_LOG_QUERY_LIMIT) {
+                    scannedRows++
+                    val number = cursor.getString(cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)).orEmpty()
+                    val typeInt = cursor.getInt(cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE))
+                    val duration = cursor.getLong(cursor.getColumnIndexOrThrow(CallLog.Calls.DURATION))
+                    val timestamp = cursor.getLong(cursor.getColumnIndexOrThrow(CallLog.Calls.DATE))
 
-                if (timestamp <= minTimestampExclusive) continue
-
-                val (type, note) = mapCallType(typeInt, duration)
-                result.add(
-                    CallEntity(
-                    phone = if (number.isBlank()) "Неизвестно" else number,
-                    type = type,
-                    duration = duration,
-                    note = note,
-                    timestamp = timestamp
-                )
-                )
+                    if (timestamp > minTimestampExclusive) {
+                        val (type, note) = mapCallType(typeInt, duration)
+                        result.add(
+                            CallEntity(
+                                phone = if (number.isBlank()) "Неизвестно" else number,
+                                type = type,
+                                duration = duration,
+                                note = note,
+                                timestamp = timestamp
+                            )
+                        )
+                    }
+                }
             }
+        }.onFailure { error ->
+            AppLogger.log(this, "PERF", "readLatestCallEntitiesAfter query failed: ${error.message}")
         }
-        return result.sortedBy { it.timestamp }
+
+        val sortedResult = result.sortedBy { it.timestamp }
+        AppLogger.log(
+            this,
+            "PERF",
+            "readLatestCallEntitiesAfter finished in ${System.currentTimeMillis() - startedAt} ms, scanned=$scannedRows, calls=${sortedResult.size}"
+        )
+        return sortedResult
     }
 
     private fun mapCallType(typeInt: Int, duration: Long): Pair<String, String> {
@@ -447,5 +559,8 @@ class CallTrackingService : Service() {
 
         private const val POST_CALL_CHANNEL_ID = "postcall"
         private const val POST_CALL_NOTIFICATION_ID_BASE = 1000
+        private const val CALL_CAPTURE_RETRY_COUNT = 25
+        private const val CALL_CAPTURE_RETRY_DELAY_MS = 300L
+        private const val CALL_LOG_QUERY_LIMIT = 50
     }
 }
