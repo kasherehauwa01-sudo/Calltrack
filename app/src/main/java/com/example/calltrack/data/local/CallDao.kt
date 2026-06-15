@@ -26,6 +26,9 @@ interface CallDao {
     @Query("SELECT * FROM calls WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): CallEntity?
 
+    @Query("SELECT * FROM calls ORDER BY timestamp DESC")
+    suspend fun getAllOnce(): List<CallEntity>
+
     @Query(
         "SELECT * FROM calls " +
             "WHERE phone = :phone AND type = :type AND duration = :duration " +
@@ -45,6 +48,9 @@ interface CallDao {
 
     @Query("UPDATE calls SET uploaded = 1 WHERE id IN (:ids)")
     suspend fun markUploaded(ids: List<Long>)
+
+    @Query("UPDATE calls SET uploaded = 0 WHERE id = :id")
+    suspend fun markPending(id: Long)
 
     @Query("UPDATE calls SET note = :note, tag = :tag, reminder = :reminder, uploaded = 0 WHERE id = :id")
     suspend fun updateOutcome(id: Long, note: String, tag: String, reminder: String)
