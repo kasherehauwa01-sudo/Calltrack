@@ -10,8 +10,16 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.example.calltrack.App
 import com.example.calltrack.R
+import com.example.calltrack.data.local.NotificationEntity
+import com.example.calltrack.data.local.NotificationType
+import com.example.calltrack.data.notification.NotificationTargets
 import com.example.calltrack.ui.main.MainActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 object ReminderNotifier {
     const val CHANNEL_ID = "reminder_channel"
@@ -72,6 +80,27 @@ object ReminderNotifier {
             .build()
 
         manager.notify(("reminder" + phone).hashCode(), notification)
+        saveToNotificationCenter(context, phone, name, message)
+    }
+
+    private fun saveToNotificationCenter(context: Context, phone: String, name: String, message: String) {
+        val app = context.applicationContext as? App ?: return
+        val text = if (message.isBlank()) name.ifBlank { phone } else message
+        val payload = JSONObject().apply {
+            put("phone", phone)
+            put("name", name)
+        }.toString()
+        CoroutineScope(Dispatchers.IO).launch {
+            app.notificationRepository.insertNotification(
+                NotificationEntity(
+                    title = "Позвонить клиенту",
+                    message = text,
+                    type = NotificationType.REMINDER,
+                    targetScreen = NotificationTargets.REMINDER,
+                    payloadJson = payload
+                )
+            )
+        }
     }
 
     private fun resolveSoundUri(context: Context): Uri {
