@@ -234,7 +234,6 @@ class CallRepository(
                 val value = optString(key).trim()
                 if (value.isNotBlank()) return value
             }
-            if (item != null) items += item
         }
         return ""
     }
@@ -644,16 +643,31 @@ class CallRepository(
         val managerName = prefs.getManagerName().ifBlank { "Не указан" }
         val normalizedManagerPhone = normalizePhone(managerPhone)
         val normalizedContactPhone = normalizePhone(phone)
+        val personalFlag = if (isPersonal) 1 else 0
         val clientValue = if (isPersonal) PERSONAL_CALL_CLIENT_VALUE else ""
         val personalPayload = JSONObject().apply {
+            // Для листа calltrack_mop / «Личные контакты» передаём все ключи явно:
+            // строка должна быть уникальной по пользователю приложения и номеру контакта.
+            put("action", "upsert_personal_contact")
+            put("operation", if (isPersonal) "set_personal" else "clear_personal")
+            put("spreadsheet", "calltrack_mop")
+            put("sheet", "Личные контакты")
+            put("target_sheet", "Личные контакты")
             put("manager_phone", normalizedManagerPhone)
+            put("user_phone", normalizedManagerPhone)
+            put("raw_user_phone", managerPhone)
             put("manager_name", managerName)
+            put("user_name", managerName)
             put("contact_phone", normalizedContactPhone)
             put("phone", normalizedContactPhone)
-            put("is_personal", if (isPersonal) "1" else "0")
+            put("raw_contact_phone", phone)
+            put("personal_flag", personalFlag)
+            put("is_personal", personalFlag)
+            put("Признак личного", personalFlag)
             put("client", clientValue)
             put("client_value", clientValue)
-            put("apply_to_calls", "1")
+            put("apply_to_calls", 1)
+            put("key_columns", JSONArray().put("user_phone").put("contact_phone"))
         }
         val calltrackPayload = JSONObject().apply {
             put("action", "update_client_by_phone")
@@ -661,15 +675,19 @@ class CallRepository(
             put("phone", normalizedContactPhone)
             put("contact_phone", normalizedContactPhone)
             put("manager_phone", normalizedManagerPhone)
+            put("user_phone", normalizedManagerPhone)
             put("manager_name", managerName)
+            put("user_name", managerName)
             put("phone_column", "Номер телефона")
             put("client_column", "Клиент")
             put("client", clientValue)
             put("client_value", clientValue)
             put("clear_value", PERSONAL_CALL_CLIENT_VALUE)
-            put("is_personal", if (isPersonal) "1" else "0")
-            put("update_all_rows", "1")
-            put("restore_from_directory", if (isPersonal) "0" else "1")
+            put("personal_flag", personalFlag)
+            put("is_personal", personalFlag)
+            put("Признак личного", personalFlag)
+            put("update_all_rows", 1)
+            put("restore_from_directory", if (isPersonal) 0 else 1)
         }
 
         val result: Result<Boolean> = runCatching {
@@ -679,10 +697,16 @@ class CallRepository(
                     .post(personalPayload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
                     .build()
                 val personalOk = personalContactsHttpClient.newCall(personalRequest).execute().use { response ->
+                    val bodyText = response.body?.string().orEmpty()
+                    val accepted = isWebhookAccepted(response.isSuccessful, bodyText)
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера личных контактов: ${response.code}")
-                    response.isSuccessful
-                } finally {
-                    response.close()
+                    Log.d(
+                        "CallRepository",
+                        "Обновление calltrack_mop/Личные контакты: user=$normalizedManagerPhone, " +
+                            "phone=$normalizedContactPhone, personalFlag=$personalFlag, code=${response.code}, " +
+                            "accepted=$accepted, body=${bodyText.take(300)}"
+                    )
+                    accepted
                 }
 
                 val calltrackRequest = Request.Builder()
