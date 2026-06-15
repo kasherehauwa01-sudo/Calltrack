@@ -34,6 +34,7 @@ import org.json.JSONObject
 import org.json.JSONTokener
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.net.URLEncoder
 import java.util.Locale
 
 class CallRepository(
@@ -93,24 +94,38 @@ class CallRepository(
         )
         com.example.calltrack.logging.AppLogger.log(appContext, "API", "Запрос истории звонков из таблицы Calltrack")
 
-        for (url in buildCallHistoryUrls(normalizedPhone, apiPhone, managerPhone, apiUserPhone)) {
+        val sqlUrl = buildSqlHistoryUrl(apiPhone.ifBlank { normalizedPhone }, apiUserPhone.ifBlank { managerPhone })
+        val sqlLoaded = fetchHistoryFromUrl(sqlUrl, normalizedPhone)
+        if (sqlLoaded.isNotEmpty()) {
+            Log.d(HISTORY_LOG_TAG, "Успешная загрузка истории из SQL API: url=$sqlUrl, records=${sqlLoaded.size}")
+            return sqlLoaded
+        }
+
+        // LEGACY_GAS: старые Apps Script URL оставлены только как fallback на период миграции на SQL API.
+        for (url in buildLegacyGasCallHistoryUrls(normalizedPhone, apiPhone, managerPhone, apiUserPhone)) {
             val loaded = fetchHistoryFromUrl(url, normalizedPhone)
             if (loaded.isNotEmpty()) {
-                Log.d(HISTORY_LOG_TAG, "Успешная загрузка истории из Calltrack: url=$url, records=${loaded.size}")
+                Log.d(HISTORY_LOG_TAG, "Успешная загрузка истории через LEGACY_GAS: url=$url, records=${loaded.size}")
                 return loaded
             }
         }
 
-        Log.d(HISTORY_LOG_TAG, "История из Calltrack не найдена: rawPhone=$phone, normalizedPhone=$normalizedPhone, apiPhone=$apiPhone")
+        Log.d(HISTORY_LOG_TAG, "История из SQL API и LEGACY_GAS не найдена: rawPhone=$phone, normalizedPhone=$normalizedPhone, apiPhone=$apiPhone")
         return emptyList()
     }
 
-    private fun buildCallHistoryUrls(
+    private fun buildSqlHistoryUrl(phone: String, userPhone: String): String {
+        val query = "phone=${urlEncode(phone)}&user_phone=${urlEncode(userPhone)}"
+        return sqlApiUrl("get_history.php") + "?" + query
+    }
+
+    private fun buildLegacyGasCallHistoryUrls(
         normalizedPhone: String,
         apiPhone: String,
         managerPhone: String,
         apiUserPhone: String
     ): List<String> {
+        // LEGACY_GAS: старый Apps Script endpoint используется только как fallback.
         val baseUrl = BuildConfig.WEBHOOK_URL
         val separator = if (baseUrl.contains("?")) "&" else "?"
         val contactPhones = listOf(normalizedPhone, apiPhone).filter { it.isNotBlank() }.distinct()
@@ -192,17 +207,19 @@ class CallRepository(
 
     private fun JSONObject.toCallHistoryItem(): CallHistoryItem {
         return CallHistoryItem(
-            date = firstString("date", "Дата"),
-            time = firstString("time", "Время"),
+            date = firstString("date", "call_date", "Дата"),
+            time = firstString("time", "call_time", "Время"),
             phone = firstString("phone", "contact_phone", "Номер телефона", "Телефон"),
-            type = firstString("type", "Тип звонка", "Тип"),
+            type = firstString("type", "call_type", "Тип звонка", "Тип"),
             duration = firstString("duration", "Длительность"),
             manager = firstString("manager", "Менеджер"),
             note = firstString("note", "comment", "comments", "comment_text", "Комментарий", "Комментарии", "Коментарий", "Коментарии"),
             tag = firstString("tag", "tags", "Тег", "Теги"),
             reminder = firstString("reminder", "reminders", "Напоминание", "Напоминания"),
             reminderText = firstString("reminder_text", "reminderText", "reminder_texts", "Текст напоминания", "Тексты напоминаний"),
-            client = firstString("client", "Клиент")
+            client = firstString("client", "Клиент"),
+            callId = firstString("call_id", "ID", "id"),
+            userPhone = firstString("user_phone", "manager_phone", "Номер телефона пользователя")
         )
     }
 
@@ -252,7 +269,7 @@ class CallRepository(
     }
 
     private fun CallHistoryItem.hasHistoryContent(): Boolean {
-        return listOf(date, time, phone, type, duration, manager, note, tag, reminder, reminderText, client)
+        return listOf(date, time, phone, type, duration, manager, note, tag, reminder, reminderText, client, callId, userPhone)
             .any { it.isNotBlank() }
     }
 
@@ -709,6 +726,8 @@ class CallRepository(
                     accepted
                 }
 
+                // LEGACY_GAS: массовое обновление колонки «Клиент» в Google Sheets оставлено как fallback
+                // до появления аналогичного SQL endpoint для личных контактов.
                 val calltrackRequest = Request.Builder()
                     .url(BuildConfig.WEBHOOK_URL)
                     .post(calltrackPayload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
@@ -877,20 +896,86 @@ class CallRepository(
     }
 
     private suspend fun sendCallToWebhook(entity: CallEntity, managerName: String, managerPhone: String): Boolean {
-        Log.d("WEBHOOK", "Отправка webhook: $entity")
+        Log.d("WEBHOOK", "Отправка звонка в SQL API: $entity")
+        val personalMarked = isPersonalContact(entity.phone)
+        val clientName = if (personalMarked) PERSONAL_CALL_CLIENT_VALUE else findClientName(entity.phone)
+        val reminderText = extractReminderText(entity.reminder)
+        val callId = buildWebhookCallId(entity)
+
+        if (sendCallToSqlApi(entity, managerName, managerPhone, clientName, reminderText, callId)) {
+            return true
+        }
+
+        // LEGACY_GAS: Google Apps Script оставлен только как fallback, если SQL API временно недоступен.
+        return sendCallToLegacyGas(entity, managerName, managerPhone, clientName, reminderText, callId)
+    }
+
+    private suspend fun sendCallToSqlApi(
+        entity: CallEntity,
+        managerName: String,
+        managerPhone: String,
+        clientName: String,
+        reminderText: String,
+        callId: String
+    ): Boolean {
         return runCatching {
-            val personalMarked = isPersonalContact(entity.phone)
-            val clientName = if (personalMarked) PERSONAL_CALL_CLIENT_VALUE else findClientName(entity.phone)
-            val reminderText = extractReminderText(entity.reminder)
+            val payload = JSONObject().apply {
+                put("date", dateFormat.format(Date(entity.timestamp)))
+                put("time", timeFormat.format(Date(entity.timestamp)))
+                put("phone", normalizePhone(entity.phone))
+                put("type", entity.type)
+                put("duration", entity.duration)
+                put("manager", managerName)
+                put("comment", entity.note)
+                put("tag", entity.tag)
+                put("reminder", entity.reminder)
+                put("reminder_text", reminderText)
+                put("client", clientName)
+                put("call_id", callId)
+                put("user_phone", normalizePhone(managerPhone))
+            }
             com.example.calltrack.logging.AppLogger.log(
                 appContext,
                 "API",
-                "Отправка данных в таблицу: call_id=${buildWebhookCallId(entity)}, phone=${entity.phone}, type=${entity.type}"
+                "Отправка данных в SQL API: call_id=$callId, phone=${entity.phone}, type=${entity.type}"
             )
+            withContext(Dispatchers.IO) {
+                val request = Request.Builder()
+                    .url(sqlApiUrl("add_call.php"))
+                    .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
+                personalContactsHttpClient.newCall(request).execute().use { response ->
+                    val bodyText = response.body?.string().orEmpty()
+                    if (!isSqlApiAccepted(response.isSuccessful, bodyText)) {
+                        throw IllegalStateException(
+                            "SQL API rejected: code=${response.code}, body=${bodyText.take(400)}"
+                        )
+                    }
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ SQL API: code=${response.code}")
+                    Log.d("WEBHOOK", "Отправлено в SQL API: phone=${entity.phone}, id=${entity.id}, call_id=$callId")
+                    true
+                }
+            }
+        }.onFailure {
+            Log.e("WEBHOOK", "Ошибка отправки в SQL API: id=${entity.id}", it)
+            Log.e("CallRepository", "SQL API send failed for id=${entity.id}", it)
+            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка SQL API: ${it.message}")
+        }.getOrDefault(false)
+    }
+
+    private suspend fun sendCallToLegacyGas(
+        entity: CallEntity,
+        managerName: String,
+        managerPhone: String,
+        clientName: String,
+        reminderText: String,
+        callId: String
+    ): Boolean {
+        return runCatching {
             val response = webhookApi.sendCall(
                 BuildConfig.WEBHOOK_URL,
                 WebhookRequest(
-                    callId = buildWebhookCallId(entity),
+                    callId = callId,
                     date = dateFormat.format(Date(entity.timestamp)),
                     time = timeFormat.format(Date(entity.timestamp)),
                     phone = normalizePhone(entity.phone),
@@ -908,23 +993,41 @@ class CallRepository(
             val bodyText = response.body()?.string().orEmpty()
             if (!isWebhookAccepted(response.isSuccessful, bodyText)) {
                 throw IllegalStateException(
-                    "Calltrack webhook rejected: code=${response.code()}, body=${bodyText.take(400)}"
+                    "LEGACY_GAS webhook rejected: code=${response.code()}, body=${bodyText.take(400)}"
                 )
             }
 
-            com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: code=${response.code()}")
-            Log.d("WEBHOOK", "Отправлено: phone=${entity.phone}, id=${entity.id}")
+            com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ LEGACY_GAS: code=${response.code()}")
+            Log.d("WEBHOOK", "Отправлено через LEGACY_GAS: phone=${entity.phone}, id=${entity.id}")
             true
         }.onFailure {
-            Log.e("WEBHOOK", "Ошибка при вызове webhookApi.sendCall", it)
+            Log.e("WEBHOOK", "Ошибка при вызове LEGACY_GAS webhookApi.sendCall", it)
             Log.e("WEBHOOK", "Ошибка отправки: id=${entity.id}", it)
-            Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
+            Log.e("CallRepository", "LEGACY_GAS webhook send failed for id=${entity.id}", it)
             com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
             com.example.calltrack.logging.AppLogger.log(appContext, "API", "Повторная отправка данных")
         }.getOrDefault(false)
     }
 
     private fun buildWebhookCallId(entity: CallEntity): String = "${entity.id}_${entity.timestamp}"
+
+    private fun sqlApiUrl(endpoint: String): String {
+        return BuildConfig.SQL_API_BASE_URL.trimEnd('/') + "/" + endpoint.trimStart('/')
+    }
+
+    private fun urlEncode(value: String): String {
+        return URLEncoder.encode(value, "UTF-8")
+    }
+
+    private fun isSqlApiAccepted(isSuccessful: Boolean, bodyText: String): Boolean {
+        if (!isSuccessful) return false
+        val token = runCatching { JSONTokener(bodyText.trim()).nextValue() }.getOrNull()
+        if (token is JSONObject) {
+            return token.optString("status").equals("success", ignoreCase = true)
+        }
+        val normalized = bodyText.lowercase(Locale.getDefault())
+        return normalized.contains("\"status\":\"success\"") || normalized.contains("'status':'success")
+    }
 
     private fun isWebhookAccepted(isSuccessful: Boolean, bodyText: String): Boolean {
         if (!isSuccessful) return false
