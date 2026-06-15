@@ -88,12 +88,14 @@ function normalizeTime(?string $value): ?string
     return $timestamp === false ? null : date('H:i:s', $timestamp);
 }
 
-function normalizeDateTime(?string $value): ?string
+function normalizeDateTime(mixed $value): ?string
 {
-    if ($value === null || trim($value) === '') {
+    // MariaDB DATETIME не принимает пустую строку.
+    // При отсутствии значения передаём NULL.
+    if (empty($value)) {
         return null;
     }
-    $timestamp = strtotime(trim($value));
+    $timestamp = strtotime(trim((string)$value));
     return $timestamp === false ? null : date('Y-m-d H:i:s', $timestamp);
 }
 

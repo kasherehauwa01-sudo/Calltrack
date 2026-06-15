@@ -35,6 +35,10 @@ try {
         $value = valueOrNull($data, $jsonKey);
         if (($rule['cast'] ?? null) === 'int') {
             $value = (int)($data[$jsonKey] ?? 0);
+        } elseif (($rule['normalizer'] ?? null) === 'normalizeDateTime') {
+            // MariaDB DATETIME не принимает пустую строку.
+            // При отсутствии значения передаём NULL.
+            $value = empty($data[$jsonKey] ?? null) ? null : normalizeDateTime($data[$jsonKey]);
         } elseif (isset($rule['normalizer'])) {
             $value = $rule['normalizer']($value);
         }

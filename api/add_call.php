@@ -9,6 +9,10 @@ try {
         sendJson(['status' => 'error', 'message' => 'Поле call_id обязательно'], 400);
     }
 
+    // MariaDB DATETIME не принимает пустую строку.
+    // При отсутствии значения передаём NULL.
+    $reminder = empty($data['reminder'] ?? null) ? null : normalizeDateTime($data['reminder']);
+
     $params = [
         ':call_date' => normalizeDate(valueOrNull($data, 'date')),
         ':call_time' => normalizeTime(valueOrNull($data, 'time')),
@@ -18,7 +22,7 @@ try {
         ':manager' => valueOrNull($data, 'manager'),
         ':comment' => valueOrNull($data, 'comment'),
         ':tag' => valueOrNull($data, 'tag'),
-        ':reminder' => normalizeDateTime(valueOrNull($data, 'reminder')),
+        ':reminder' => $reminder,
         ':reminder_text' => valueOrNull($data, 'reminder_text'),
         ':client' => valueOrNull($data, 'client'),
         ':call_id' => $callId,
