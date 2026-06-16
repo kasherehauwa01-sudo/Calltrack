@@ -932,7 +932,7 @@ class CallRepository(
                 put("manager", managerName)
                 put("comment", entity.note)
                 put("tag", entity.tag)
-                put("reminder", entity.reminder)
+                put("reminder", if (entity.reminder.isBlank()) JSONObject.NULL else entity.reminder)
                 put("reminder_text", reminderText)
                 put("client", clientName)
                 put("call_id", callId)
