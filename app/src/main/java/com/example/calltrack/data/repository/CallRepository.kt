@@ -906,8 +906,12 @@ class CallRepository(
             return true
         }
 
-        // LEGACY_GAS: Google Apps Script оставлен только как fallback, если SQL API временно недоступен.
-        return sendCallToLegacyGas(entity, managerName, managerPhone, clientName, reminderText, callId)
+        // LEGACY_GAS: Google Apps Script оставлен только как резервная отправка, если SQL API временно недоступен.
+        // Но локальную запись НЕ считаем синхронизированной, чтобы syncPending повторил SQL-отправку
+        // и звонок не потерялся для новой таблицы MySQL.
+        val legacyOk = sendCallToLegacyGas(entity, managerName, managerPhone, clientName, reminderText, callId)
+        Log.w("WEBHOOK", "SQL API не принял звонок id=${entity.id}; LEGACY_GAS=$legacyOk, запись остаётся pending для повтора SQL")
+        return false
     }
 
     private suspend fun sendCallToSqlApi(
