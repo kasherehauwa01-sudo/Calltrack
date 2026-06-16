@@ -50,7 +50,7 @@ class CallRepository(
     val prefs = PrefsManager(context)
     private val clientDirectory = ClientDirectory(context)
 
-    private val dateFormat = SimpleDateFormat("dd.MM.yy", Locale.getDefault())
+    private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
     private val syncMutex = Mutex()
     private val personalContactsHttpClient = OkHttpClient()

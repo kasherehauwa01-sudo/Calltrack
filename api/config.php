@@ -62,9 +62,11 @@ function normalizeDate(?string $value): ?string
         return null;
     }
     $value = trim($value);
-    foreach (['Y-m-d', 'd.m.Y', 'd.m.y'] as $format) {
+    foreach (['Y-m-d', 'd.m.y', 'd.m.Y'] as $format) {
         $date = DateTime::createFromFormat($format, $value);
-        if ($date instanceof DateTime) {
+        $errors = DateTime::getLastErrors();
+        $hasErrors = is_array($errors) && ($errors['warning_count'] > 0 || $errors['error_count'] > 0);
+        if ($date instanceof DateTime && !$hasErrors) {
             return $date->format('Y-m-d');
         }
     }
