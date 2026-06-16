@@ -67,7 +67,7 @@ class CallListFragment : Fragment() {
         attachSwipeToCall()
 
         // При открытии экрана «Последние» подтягиваем записи из стандартной звонилки Android.
-        // Google Sheets здесь не читаем: таблица нужна только для отправки/истории, а список берём из CallLog.
+        // SQL API здесь не читаем: таблица нужна только для отправки/истории, а список берём из CallLog.
         viewLifecycleOwner.lifecycleScope.launch {
             runCatching { viewModel.refreshRecentCallsFromDevice() }
                 .onFailure { Log.e("CALL_LOG", "Ошибка загрузки последних звонков из системной звонилки", it) }

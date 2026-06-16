@@ -19,7 +19,6 @@ import com.example.calltrack.data.local.ReminderDao
 import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.data.remote.WebhookApi
 import com.example.calltrack.data.remote.CallHistoryItem
-import com.example.calltrack.data.remote.WebhookRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -101,53 +100,13 @@ class CallRepository(
             return sqlLoaded
         }
 
-        // LEGACY_GAS: старые Apps Script URL оставлены только как fallback на период миграции на SQL API.
-        for (url in buildLegacyGasCallHistoryUrls(normalizedPhone, apiPhone, managerPhone, apiUserPhone)) {
-            val loaded = fetchHistoryFromUrl(url, normalizedPhone)
-            if (loaded.isNotEmpty()) {
-                Log.d(HISTORY_LOG_TAG, "Успешная загрузка истории через LEGACY_GAS: url=$url, records=${loaded.size}")
-                return loaded
-            }
-        }
-
-        Log.d(HISTORY_LOG_TAG, "История из SQL API и LEGACY_GAS не найдена: rawPhone=$phone, normalizedPhone=$normalizedPhone, apiPhone=$apiPhone")
+        Log.d(HISTORY_LOG_TAG, "История из SQL API не найдена: rawPhone=$phone, normalizedPhone=$normalizedPhone, apiPhone=$apiPhone")
         return emptyList()
     }
 
     private fun buildSqlHistoryUrl(phone: String, userPhone: String): String {
         val query = "phone=${urlEncode(phone)}&user_phone=${urlEncode(userPhone)}"
         return sqlApiUrl("get_history.php") + "?" + query
-    }
-
-    private fun buildLegacyGasCallHistoryUrls(
-        normalizedPhone: String,
-        apiPhone: String,
-        managerPhone: String,
-        apiUserPhone: String
-    ): List<String> {
-        // LEGACY_GAS: старый Apps Script endpoint используется только как fallback.
-        val baseUrl = BuildConfig.WEBHOOK_URL
-        val separator = if (baseUrl.contains("?")) "&" else "?"
-        val contactPhones = listOf(normalizedPhone, apiPhone).filter { it.isNotBlank() }.distinct()
-        val userPhones = listOf(managerPhone, apiUserPhone).filter { it.isNotBlank() }.distinct()
-        val userQueries = mutableListOf("")
-        userPhones.forEach { phone ->
-            userQueries += "manager_phone=$phone&"
-            userQueries += "user_phone=$phone&"
-        }
-
-        val urls = mutableListOf<String>()
-        userQueries.distinct().forEach { userQuery ->
-            contactPhones.forEach { contactPhone ->
-                // Основные варианты для скрипта таблицы Calltrack.
-                urls += "${baseUrl}${separator}${userQuery}phone=$contactPhone"
-                urls += "${baseUrl}${separator}${userQuery}contact_phone=$contactPhone"
-                // Запасные варианты на случай, если опубликованный doGet ожидает action.
-                urls += "${baseUrl}${separator}${userQuery}action=history&phone=$contactPhone"
-                urls += "${baseUrl}${separator}${userQuery}action=history&contact_phone=$contactPhone"
-            }
-        }
-        return urls.distinct()
     }
 
     private suspend fun fetchHistoryFromUrl(url: String, normalizedPhone: String): List<CallHistoryItem> {
@@ -329,7 +288,7 @@ class CallRepository(
         remoteReminders.forEach { reminder ->
             val fingerprint = reminder.reminderFingerprint()
             if (fingerprint !in existingFingerprints) {
-                // Напоминания из Google Sheets сохраняем во внутреннюю БД,
+                // Напоминания из SQL API сохраняем во внутреннюю БД,
                 // чтобы история напоминаний восстанавливалась после переустановки приложения.
                 reminderDao.insert(reminder)
                 existingFingerprints += fingerprint
@@ -375,7 +334,7 @@ class CallRepository(
         remoteComments.forEach { comment ->
             val fingerprint = comment.commentFingerprint()
             if (fingerprint !in existingFingerprints) {
-                // Комментарии из Google Sheets сохраняем во внутреннюю БД, чтобы экран истории
+                // Комментарии из SQL API сохраняем во внутреннюю БД, чтобы экран истории
                 // открывался из памяти приложения даже без повторного сетевого запроса.
                 commentDao.insert(comment)
                 existingFingerprints += fingerprint
@@ -424,7 +383,7 @@ class CallRepository(
                         val timestamp = cursor.getLong(dateIdx)
                         val (type, note) = mapDeviceCallType(cursor.getInt(typeIdx), duration)
                         // Карточка контакта должна показывать историю из стандартной звонилки Android,
-                        // поэтому формируем элементы экрана напрямую из CallLog, без чтения Google Sheets.
+                        // поэтому формируем элементы экрана напрямую из CallLog, без чтения SQL API.
                         result += CallHistoryEntity(
                             phone = normalizedPhone,
                             date = dateFormat.format(Date(timestamp)),
@@ -459,7 +418,7 @@ class CallRepository(
         if (duplicate != null) {
             // Если дубль был заранее подтянут из системной звонилки как историческая запись,
             // он мог быть помечен uploaded=true. При реальном завершении звонка возвращаем его в очередь,
-            // чтобы syncPending отправил запись в Google Sheets.
+            // чтобы syncPending отправил запись в SQL API.
             callDao.markPending(duplicate.id)
             Log.d("CallRepository", "Пропускаем дубль звонка, используем id=${duplicate.id} и ставим его в очередь отправки")
             return duplicate.id
@@ -506,7 +465,7 @@ class CallRepository(
                         note = note,
                         timestamp = timestamp,
                         // Исторические записи из звонилки нужны для отображения на экране «Последние».
-                        // Не отправляем их пачкой в Google Sheets, пока пользователь не изменит заметку/напоминание.
+                        // Не отправляем их пачкой в SQL API, пока пользователь не изменит заметку/напоминание.
                         uploaded = true
                     )
                     val duplicate = callDao.findRecentDuplicate(
@@ -517,7 +476,7 @@ class CallRepository(
                     )
                     if (duplicate == null) {
                         // Экран «Последние» должен брать звонки из системной звонилки,
-                        // поэтому не прогреваем справочник клиентов из Google Sheets при импорте.
+                        // поэтому не прогреваем справочник клиентов из SQL API при импорте.
                         callDao.insert(call)
                     }
                     scanned++
@@ -656,111 +615,17 @@ class CallRepository(
     }
 
     private suspend fun syncPersonalContactToRemote(phone: String, isPersonal: Boolean, enqueueOnFailure: Boolean): Boolean {
-        val managerPhone = prefs.getManagerPhone().ifBlank { return false }
-        val managerName = prefs.getManagerName().ifBlank { "Не указан" }
-        val normalizedManagerPhone = normalizePhone(managerPhone)
         val normalizedContactPhone = normalizePhone(phone)
-        val personalFlag = if (isPersonal) 1 else 0
         val clientValue = if (isPersonal) PERSONAL_CALL_CLIENT_VALUE else ""
-        val personalPayload = JSONObject().apply {
-            // Для листа calltrack_mop / «Личные контакты» передаём все ключи явно:
-            // строка должна быть уникальной по пользователю приложения и номеру контакта.
-            put("action", "upsert_personal_contact")
-            put("operation", if (isPersonal) "set_personal" else "clear_personal")
-            put("spreadsheet", "calltrack_mop")
-            put("sheet", "Личные контакты")
-            put("target_sheet", "Личные контакты")
-            put("manager_phone", normalizedManagerPhone)
-            put("user_phone", normalizedManagerPhone)
-            put("raw_user_phone", managerPhone)
-            put("manager_name", managerName)
-            put("user_name", managerName)
-            put("contact_phone", normalizedContactPhone)
-            put("phone", normalizedContactPhone)
-            put("raw_contact_phone", phone)
-            put("personal_flag", personalFlag)
-            put("is_personal", personalFlag)
-            put("Признак личного", personalFlag)
-            put("client", clientValue)
-            put("client_value", clientValue)
-            put("apply_to_calls", 1)
-            put("key_columns", JSONArray().put("user_phone").put("contact_phone"))
+        Log.d(
+            "CallRepository",
+            "Запись личного контакта в таблицы Google отключена: phone=$normalizedContactPhone, " +
+                "client='$clientValue'. Связанные звонки отправляются только в SQL API через syncPending."
+        )
+        if (enqueueOnFailure) {
+            writePendingPersonalSync(emptyList())
         }
-        val calltrackPayload = JSONObject().apply {
-            put("action", "update_client_by_phone")
-            put("operation", if (isPersonal) "set_personal_call" else "clear_personal_call")
-            put("phone", normalizedContactPhone)
-            put("contact_phone", normalizedContactPhone)
-            put("manager_phone", normalizedManagerPhone)
-            put("user_phone", normalizedManagerPhone)
-            put("manager_name", managerName)
-            put("user_name", managerName)
-            put("phone_column", "Номер телефона")
-            put("client_column", "Клиент")
-            put("client", clientValue)
-            put("client_value", clientValue)
-            put("clear_value", PERSONAL_CALL_CLIENT_VALUE)
-            put("personal_flag", personalFlag)
-            put("is_personal", personalFlag)
-            put("Признак личного", personalFlag)
-            put("update_all_rows", 1)
-            put("restore_from_directory", if (isPersonal) 0 else 1)
-        }
-
-        val result: Result<Boolean> = runCatching {
-            withContext(Dispatchers.IO) {
-                val personalRequest = Request.Builder()
-                    .url(BuildConfig.PERSONAL_CONTACTS_WEBHOOK_URL)
-                    .post(personalPayload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
-                    .build()
-                val personalOk = personalContactsHttpClient.newCall(personalRequest).execute().use { response ->
-                    val bodyText = response.body?.string().orEmpty()
-                    val accepted = isWebhookAccepted(response.isSuccessful, bodyText)
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера личных контактов: ${response.code}")
-                    Log.d(
-                        "CallRepository",
-                        "Обновление calltrack_mop/Личные контакты: user=$normalizedManagerPhone, " +
-                            "phone=$normalizedContactPhone, personalFlag=$personalFlag, code=${response.code}, " +
-                            "accepted=$accepted, body=${bodyText.take(300)}"
-                    )
-                    accepted
-                }
-
-                // LEGACY_GAS: массовое обновление колонки «Клиент» в Google Sheets оставлено как fallback
-                // до появления аналогичного SQL endpoint для личных контактов.
-                val calltrackRequest = Request.Builder()
-                    .url(BuildConfig.WEBHOOK_URL)
-                    .post(calltrackPayload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
-                    .build()
-                val calltrackOk = personalContactsHttpClient.newCall(calltrackRequest).execute().use { response ->
-                    val bodyText = response.body?.string().orEmpty()
-                    val accepted = isWebhookAccepted(response.isSuccessful, bodyText)
-                    Log.d(
-                        "CallRepository",
-                        "Массовое обновление колонки Клиент в Calltrack: phone=$normalizedContactPhone, " +
-                            "isPersonal=$isPersonal, code=${response.code}, accepted=$accepted, body=${bodyText.take(300)}"
-                    )
-                    accepted
-                }
-
-                personalOk && calltrackOk
-            }
-        }
-        return result.getOrElse {
-            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
-            Log.e("CallRepository", "Не удалось отправить личный контакт и обновить колонку Клиент в Calltrack", it)
-            if (enqueueOnFailure) {
-                enqueuePendingPersonalSync(
-                    PersonalSyncItem(
-                        managerPhone = normalizedManagerPhone,
-                        managerName = managerName,
-                        contactPhone = normalizedContactPhone,
-                        isPersonal = isPersonal
-                    )
-                )
-            }
-            false
-        }
+        return true
     }
 
     private suspend fun flushPendingPersonalContactsSync() {
@@ -902,16 +767,11 @@ class CallRepository(
         val reminderText = extractReminderText(entity.reminder)
         val callId = buildWebhookCallId(entity)
 
-        if (sendCallToSqlApi(entity, managerName, managerPhone, clientName, reminderText, callId)) {
-            return true
+        val sent = sendCallToSqlApi(entity, managerName, managerPhone, clientName, reminderText, callId)
+        if (!sent) {
+            Log.w("WEBHOOK", "SQL API не принял звонок id=${entity.id}; запись остаётся pending для повторной отправки")
         }
-
-        // LEGACY_GAS: Google Apps Script оставлен только как резервная отправка, если SQL API временно недоступен.
-        // Но локальную запись НЕ считаем синхронизированной, чтобы syncPending повторил SQL-отправку
-        // и звонок не потерялся для новой таблицы MySQL.
-        val legacyOk = sendCallToLegacyGas(entity, managerName, managerPhone, clientName, reminderText, callId)
-        Log.w("WEBHOOK", "SQL API не принял звонок id=${entity.id}; LEGACY_GAS=$legacyOk, запись остаётся pending для повтора SQL")
-        return false
+        return sent
     }
 
     private suspend fun sendCallToSqlApi(
@@ -967,51 +827,6 @@ class CallRepository(
         }.getOrDefault(false)
     }
 
-    private suspend fun sendCallToLegacyGas(
-        entity: CallEntity,
-        managerName: String,
-        managerPhone: String,
-        clientName: String,
-        reminderText: String,
-        callId: String
-    ): Boolean {
-        return runCatching {
-            val response = webhookApi.sendCall(
-                BuildConfig.WEBHOOK_URL,
-                WebhookRequest(
-                    callId = callId,
-                    date = dateFormat.format(Date(entity.timestamp)),
-                    time = timeFormat.format(Date(entity.timestamp)),
-                    phone = normalizePhone(entity.phone),
-                    type = entity.type,
-                    duration = entity.duration,
-                    manager = managerName,
-                    userPhone = managerPhone,
-                    note = entity.note,
-                    tag = entity.tag,
-                    reminder = entity.reminder,
-                    reminderText = reminderText,
-                    client = clientName
-                )
-            )
-            val bodyText = response.body()?.string().orEmpty()
-            if (!isWebhookAccepted(response.isSuccessful, bodyText)) {
-                throw IllegalStateException(
-                    "LEGACY_GAS webhook rejected: code=${response.code()}, body=${bodyText.take(400)}"
-                )
-            }
-
-            com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ LEGACY_GAS: code=${response.code()}")
-            Log.d("WEBHOOK", "Отправлено через LEGACY_GAS: phone=${entity.phone}, id=${entity.id}")
-            true
-        }.onFailure {
-            Log.e("WEBHOOK", "Ошибка при вызове LEGACY_GAS webhookApi.sendCall", it)
-            Log.e("WEBHOOK", "Ошибка отправки: id=${entity.id}", it)
-            Log.e("CallRepository", "LEGACY_GAS webhook send failed for id=${entity.id}", it)
-            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
-            com.example.calltrack.logging.AppLogger.log(appContext, "API", "Повторная отправка данных")
-        }.getOrDefault(false)
-    }
 
     private fun buildWebhookCallId(entity: CallEntity): String = "${entity.id}_${entity.timestamp}"
 

@@ -200,7 +200,7 @@ class CallTrackingService : Service() {
                 latestSavedCallId = repo.saveCall(entity)
                 latestSavedEntity = entity
                 AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
-                Log.d("WEBHOOK", "Сразу отправляем завершённый звонок в Google Sheets: id=$latestSavedCallId")
+                Log.d("WEBHOOK", "Сразу отправляем завершённый звонок в SQL API: id=$latestSavedCallId")
                 val syncStartedAt = System.currentTimeMillis()
                 AppLogger.log(this, "PERF", "syncCallById started, id=$latestSavedCallId")
                 runCatching { repo.syncCallById(latestSavedCallId) }

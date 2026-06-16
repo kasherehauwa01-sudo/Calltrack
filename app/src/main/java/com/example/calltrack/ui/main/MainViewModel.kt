@@ -59,10 +59,10 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     suspend fun markOnboardingCompleted() = repository.prefs.setOnboardingCompleted(true)
     suspend fun setManagerName(name: String) = repository.prefs.setManagerName(name)
     suspend fun setManagerPhone(phone: String) = repository.prefs.setManagerPhone(phone)
-    // Фоновая синхронизация с Google Sheets (с последующим сохранением статусов во внутреннем кэше БД).
+    // Фоновая синхронизация с SQL API (с последующим сохранением статусов во внутреннем кэше БД).
     suspend fun sync() = repository.syncPending()
 
-    // Экран «Последние» обновляем из стандартной звонилки Android, а не из Google Sheets.
+    // Экран «Последние» обновляем из стандартной звонилки Android, а не из SQL API.
     suspend fun refreshRecentCallsFromDevice() = repository.importRecentCallsFromDevice()
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> = repository.loadHistoryFromRemote(phone)
     suspend fun getDeviceCallHistory(phone: String): List<CallHistoryEntity> = repository.getDeviceCallHistory(phone)
