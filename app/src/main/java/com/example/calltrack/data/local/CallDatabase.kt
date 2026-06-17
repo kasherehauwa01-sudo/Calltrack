@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
@@ -13,16 +14,21 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ContactEntity::class,
         ReminderEntity::class,
         CommentEntity::class,
-        CallHistoryEntity::class
+        CallHistoryEntity::class,
+        NotificationEntity::class,
+        PersonalContactEntity::class
     ],
-    version = 5
+    version = 7
 )
+@TypeConverters(NotificationTypeConverter::class)
 abstract class CallDatabase : RoomDatabase() {
     abstract fun callDao(): CallDao
     abstract fun contactDao(): ContactDao
     abstract fun reminderDao(): ReminderDao
     abstract fun commentDao(): CommentDao
     abstract fun callHistoryDao(): CallHistoryDao
+    abstract fun notificationDao(): NotificationDao
+    abstract fun personalContactDao(): PersonalContactDao
 
     companion object {
         @Volatile
@@ -106,13 +112,54 @@ abstract class CallDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS notifications (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        message TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        isRead INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        targetScreen TEXT NOT NULL,
+                        entityId INTEGER,
+                        payloadJson TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS personal_contacts (
+                        contactPhone TEXT PRIMARY KEY NOT NULL,
+                        personalFlag INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getInstance(context: Context): CallDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     CallDatabase::class.java,
                     "calltrack.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                ).addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6,
+                        MIGRATION_6_7
+                    )
                     .fallbackToDestructiveMigration()
                     .build().also { INSTANCE = it }
             }

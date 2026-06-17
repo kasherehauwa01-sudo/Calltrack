@@ -1,7 +1,11 @@
 package com.example.calltrack.data.repository
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.provider.CallLog
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.data.local.CallDao
 import com.example.calltrack.data.local.CallEntity
@@ -13,9 +17,10 @@ import com.example.calltrack.data.local.ContactDao
 import com.example.calltrack.data.local.ContactEntity
 import com.example.calltrack.data.local.ReminderDao
 import com.example.calltrack.data.local.ReminderEntity
+import com.example.calltrack.data.local.PersonalContactDao
+import com.example.calltrack.data.local.PersonalContactEntity
 import com.example.calltrack.data.remote.WebhookApi
 import com.example.calltrack.data.remote.CallHistoryItem
-import com.example.calltrack.data.remote.WebhookRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -30,6 +35,7 @@ import org.json.JSONObject
 import org.json.JSONTokener
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.net.URLEncoder
 import java.util.Locale
 
 class CallRepository(
@@ -38,6 +44,7 @@ class CallRepository(
     private val reminderDao: ReminderDao,
     private val commentDao: CommentDao,
     private val callHistoryDao: CallHistoryDao,
+    private val personalContactDao: PersonalContactDao,
     private val webhookApi: WebhookApi,
     context: Context
 ) {
@@ -45,8 +52,10 @@ class CallRepository(
     val prefs = PrefsManager(context)
     private val clientDirectory = ClientDirectory(context)
 
-    private val dateFormat = SimpleDateFormat("dd.MM.yy", Locale.getDefault())
+    private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val sqlDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val sqlTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
     private val syncMutex = Mutex()
     private val personalContactsHttpClient = OkHttpClient()
 
@@ -64,11 +73,14 @@ class CallRepository(
     suspend fun isPersonalContact(phone: String): Boolean {
         if (phone.isBlank() || phone == "Неизвестно") return false
 
-        val direct = contactDao.findByPhone(phone)
-        if (direct?.client1c == "Личный") return true
-
         val normalized = normalizePhone(phone)
         if (normalized.isBlank()) return false
+
+        val cachedFlag = personalContactDao.getFlag(normalized)
+        if (cachedFlag != null) return cachedFlag == 1
+
+        val direct = contactDao.findByPhone(phone)
+        if (direct?.client1c == "Личный") return true
 
         return contactDao.findAll().any { contact ->
             contact.client1c == "Личный" && normalizePhone(contact.phone) == normalized
@@ -77,37 +89,124 @@ class CallRepository(
 
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> {
         val normalizedPhone = normalizePhone(phone)
-        if (normalizedPhone.isBlank()) return emptyList()
-        val separator = if (BuildConfig.WEBHOOK_URL.contains("?")) "&" else "?"
-        val url = "${BuildConfig.WEBHOOK_URL}${separator}phone=$normalizedPhone"
-        com.example.calltrack.logging.AppLogger.log(appContext, "API", "Запрос данных из таблицы")
+        val apiPhone = normalizePhoneForHistoryApi(phone)
+        if (normalizedPhone.isBlank() && apiPhone.isBlank()) return emptyList()
 
-        val retrofitResult = runCatching { webhookApi.loadHistory(url) }
-            .onSuccess { com.example.calltrack.logging.AppLogger.log(appContext, "API", "Получено записей: ${it.size}") }
-            .onFailure {
-                Log.e("CallRepository", "Не удалось загрузить историю по телефону=$normalizedPhone", it)
-                com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки данных: ${it.message}")
-            }
-            .getOrElse { emptyList() }
+        val managerPhone = normalizePhone(prefs.getManagerPhone())
+        val apiUserPhone = normalizePhoneForHistoryApi(prefs.getManagerPhone())
+        Log.d(
+            HISTORY_LOG_TAG,
+            "Начало загрузки истории из Calltrack: rawPhone=$phone, normalizedPhone=$normalizedPhone, apiPhone=$apiPhone, " +
+                "managerPhone=$managerPhone, apiUserPhone=$apiUserPhone"
+        )
+        com.example.calltrack.logging.AppLogger.log(appContext, "API", "Запрос истории звонков из таблицы Calltrack")
 
-        if (retrofitResult.isNotEmpty()) return retrofitResult
+        val sqlUrl = buildSqlHistoryUrl(apiPhone.ifBlank { normalizedPhone }, apiUserPhone.ifBlank { managerPhone })
+        val sqlLoaded = fetchHistoryFromUrl(sqlUrl, normalizedPhone)
+        if (sqlLoaded.isNotEmpty()) {
+            Log.d(HISTORY_LOG_TAG, "Успешная загрузка истории из SQL API: url=$sqlUrl, records=${sqlLoaded.size}")
+            return sqlLoaded
+        }
 
-        return fetchHistoryFallback(url)
+        Log.d(HISTORY_LOG_TAG, "История из SQL API не найдена: rawPhone=$phone, normalizedPhone=$normalizedPhone, apiPhone=$apiPhone")
+        return emptyList()
     }
 
-    private suspend fun fetchHistoryFallback(url: String): List<CallHistoryItem> {
+    private fun buildSqlHistoryUrl(phone: String, userPhone: String): String {
+        val query = "phone=${urlEncode(phone)}&user_phone=${urlEncode(userPhone)}"
+        return sqlApiUrl("get_history.php") + "?" + query
+    }
+
+    suspend fun refreshPersonalContactsFromSql(): Int {
+        val userPhone = normalizePhone(prefs.getManagerPhone())
+        if (userPhone.isBlank()) {
+            Log.w("PERSONAL_CONTACTS", "Не загружаем личные контакты: номер пользователя не указан")
+            return 0
+        }
+
+        val url = sqlApiUrl("get_personal_contacts.php") + "?user_phone=${urlEncode(userPhone)}"
+        Log.d("PERSONAL_CONTACTS", "Загрузка списка личных контактов: url=$url")
+        com.example.calltrack.logging.AppLogger.log(appContext, "API", "Загрузка личных контактов из SQL API")
+
         return runCatching {
-            withContext(Dispatchers.IO) {
+            val body = withContext(Dispatchers.IO) {
                 val request = Request.Builder().url(url).get().build()
                 personalContactsHttpClient.newCall(request).execute().use { response ->
-                    val body = response.body?.string().orEmpty()
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "RAW history response: ${body.take(500)}")
-                    parseHistoryResponse(body)
+                    val bodyText = response.body?.string().orEmpty()
+                    Log.d(
+                        "PERSONAL_CONTACTS",
+                        "Ответ get_personal_contacts.php: code=${response.code}, body=${bodyText.take(400)}"
+                    )
+                    if (!isSqlApiAccepted(response.isSuccessful, bodyText)) {
+                        throw IllegalStateException("SQL API personal contacts rejected: code=${response.code}, body=${bodyText.take(400)}")
+                    }
+                    bodyText
                 }
             }
+            val contacts = parsePersonalContactsResponse(body)
+            personalContactDao.clearAll()
+            contactDao.findAll()
+                .filter { contact -> contact.client1c == "Личный" }
+                .forEach { contact -> contactDao.updateClient1c(contact.id, "") }
+            personalContactDao.upsertAll(contacts)
+            contacts.forEach { item ->
+                updatePersonalContactLocal(item.contactPhone, item.personalFlag == 1)
+            }
+            com.example.calltrack.logging.AppLogger.log(appContext, "API", "Личные контакты загружены: ${contacts.size}")
+            Log.d("PERSONAL_CONTACTS", "Локальный кэш личных контактов обновлён: count=${contacts.size}")
+            contacts.size
         }.onFailure {
-            Log.e("CallRepository", "Fallback загрузки истории не удался", it)
-        }.getOrElse { emptyList() }
+            Log.e("PERSONAL_CONTACTS", "Ошибка загрузки личных контактов", it)
+            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки личных контактов: ${it.message}")
+        }.getOrDefault(0)
+    }
+
+    private fun parsePersonalContactsResponse(raw: String): List<PersonalContactEntity> {
+        val token = runCatching { JSONTokener(raw.trim()).nextValue() }.getOrNull() ?: return emptyList()
+        val arr = when (token) {
+            is JSONArray -> token
+            is JSONObject -> token.firstArray("data", "items", "contacts", "personal_contacts", "result") ?: JSONArray()
+            else -> JSONArray()
+        }
+        val result = mutableListOf<PersonalContactEntity>()
+        for (i in 0 until arr.length()) {
+            val row = arr.optJSONObject(i) ?: continue
+            val contactPhone = normalizePhone(row.firstString("contact_phone", "phone", "contactPhone"))
+            if (contactPhone.isBlank()) continue
+            val flag = row.optInt("personal_flag", row.optInt("is_personal", 1)).coerceIn(0, 1)
+            result += PersonalContactEntity(contactPhone = contactPhone, personalFlag = flag)
+        }
+        return result
+    }
+
+    private suspend fun fetchHistoryFromUrl(url: String, normalizedPhone: String): List<CallHistoryItem> {
+        Log.d(HISTORY_LOG_TAG, "URL запроса истории: $url")
+        val result: Result<List<CallHistoryItem>> = runCatching {
+            withContext(Dispatchers.IO) {
+                val request = Request.Builder().url(url).get().build()
+                val response = personalContactsHttpClient.newCall(request).execute()
+                try {
+                    val body = response.body?.string().orEmpty()
+                    Log.d(HISTORY_LOG_TAG, "Код ответа истории: code=${response.code}, url=$url")
+                    Log.d(HISTORY_LOG_TAG, "Полный JSON ответа истории: $body")
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "RAW Calltrack history response: ${body.take(500)}")
+
+                    val parsed: List<CallHistoryItem> = parseHistoryResponse(body)
+                    Log.d(HISTORY_LOG_TAG, "Количество записей после парсинга: ${parsed.size}, url=$url")
+                    val filtered: List<CallHistoryItem> = parsed.filterForHistoryScreen(normalizedPhone)
+                    Log.d(HISTORY_LOG_TAG, "Количество записей после фильтрации: ${filtered.size}, url=$url")
+                    filtered
+                } finally {
+                    response.close()
+                }
+            }
+        }
+        result.onFailure {
+            Log.e(HISTORY_LOG_TAG, "Ошибка HTTP/coroutine/Gson при загрузке истории: url=$url", it)
+            Log.e("CallRepository", "Fallback загрузки истории из Calltrack не удался", it)
+            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки истории: ${it.message}")
+        }
+        return result.getOrElse { emptyList<CallHistoryItem>() }
     }
 
     private fun parseHistoryResponse(raw: String): List<CallHistoryItem> {
@@ -118,30 +217,100 @@ class CallRepository(
         val token = runCatching { JSONTokener(text).nextValue() }.getOrNull() ?: return emptyList()
         val arr = when (token) {
             is JSONArray -> token
-            is JSONObject -> token.optJSONArray("data") ?: token.optJSONArray("rows") ?: JSONArray()
+            is JSONObject -> token.firstArray("data", "rows", "history", "calls", "items", "result") ?: JSONArray()
             else -> JSONArray()
         }
 
-        return buildList {
-            for (i in 0 until arr.length()) {
-                val o = arr.optJSONObject(i) ?: continue
-                add(
-                    CallHistoryItem(
-                        date = o.optString("date"),
-                        time = o.optString("time"),
-                        phone = o.optString("phone"),
-                        type = o.optString("type"),
-                        duration = o.optString("duration"),
-                        manager = o.optString("manager"),
-                        note = o.optString("note"),
-                        tag = o.optString("tag"),
-                        reminder = o.optString("reminder"),
-                        reminderText = o.optString("reminder_text"),
-                        client = o.optString("client")
-                    )
-                )
+        val items = mutableListOf<CallHistoryItem>()
+        for (i in 0 until arr.length()) {
+            val row = arr.opt(i)
+            val item = when (row) {
+                is JSONObject -> row.toCallHistoryItem()
+                is JSONArray -> row.toCallHistoryItem()
+                else -> null
+            }
+            if (item != null) items += item
+        }
+        return items
+    }
+
+    private fun JSONObject.toCallHistoryItem(): CallHistoryItem {
+        return CallHistoryItem(
+            date = firstString("date", "call_date", "Дата"),
+            time = firstString("time", "call_time", "Время"),
+            phone = firstString("phone", "contact_phone", "Номер телефона", "Телефон"),
+            type = firstString("type", "call_type", "Тип звонка", "Тип"),
+            duration = firstString("duration", "Длительность"),
+            manager = firstString("manager", "Менеджер"),
+            note = firstString("note", "comment", "comments", "comment_text", "Комментарий", "Комментарии", "Коментарий", "Коментарии"),
+            tag = firstString("tag", "tags", "Тег", "Теги"),
+            reminder = firstString("reminder", "reminders", "Напоминание", "Напоминания"),
+            reminderText = firstString("reminder_text", "reminderText", "reminder_texts", "Текст напоминания", "Тексты напоминаний"),
+            client = firstString("client", "Клиент"),
+            callId = firstString("call_id", "ID", "id"),
+            userPhone = firstString("user_phone", "manager_phone", "Номер телефона пользователя")
+        )
+    }
+
+    private fun JSONArray.toCallHistoryItem(): CallHistoryItem? {
+        if (length() < CALL_HISTORY_MIN_ARRAY_COLUMNS) return null
+        return CallHistoryItem(
+            date = optString(0),
+            time = optString(1),
+            phone = optString(2),
+            type = optString(3),
+            duration = optString(4),
+            manager = optString(5),
+            note = optString(6),
+            tag = optString(7),
+            reminder = optString(8),
+            reminderText = optString(9),
+            client = optString(10)
+        )
+    }
+
+    private fun JSONObject.firstArray(vararg keys: String): JSONArray? {
+        keys.forEach { key -> optJSONArray(key)?.let { return it } }
+        return null
+    }
+
+    private fun JSONObject.firstString(vararg keys: String): String {
+        keys.forEach { key ->
+            if (has(key) && !isNull(key)) {
+                val value = optString(key).trim()
+                if (value.isNotBlank()) return value
             }
         }
+        return ""
+    }
+
+    private fun List<CallHistoryItem>.filterForHistoryScreen(normalizedPhone: String): List<CallHistoryItem> {
+        return filter { item ->
+            // Пустые строки появляются, когда Retrofit получил объекты с русскими названиями колонок
+            // и не смог разложить их по @SerializedName. Такие строки отбрасываем и даём fallback-парсеру
+            // прочитать колонки «Комментарии» и «Напоминания» вручную.
+            if (!item.hasHistoryContent()) return@filter false
+            if (item.isHeaderRow()) return@filter false
+
+            val itemPhone = normalizePhone(item.phone)
+            itemPhone.isBlank() || itemPhone == normalizedPhone
+        }
+    }
+
+    private fun CallHistoryItem.hasHistoryContent(): Boolean {
+        return listOf(date, time, phone, type, duration, manager, note, tag, reminder, reminderText, client, callId, userPhone)
+            .any { it.isNotBlank() }
+    }
+
+    private fun CallHistoryItem.isHeaderRow(): Boolean {
+        return normalizeHeader(date) == "дата" ||
+            normalizeHeader(phone) in setOf("номертелефона", "телефон", "phone", "contactphone") ||
+            normalizeHeader(note) in setOf("комментарий", "комментарии", "коментарий", "коментарии", "comment", "comments") ||
+            normalizeHeader(reminder) in setOf("напоминание", "напоминания", "reminder", "reminders")
+    }
+
+    private fun normalizeHeader(value: String): String {
+        return value.filter { it.isLetterOrDigit() }.lowercase(Locale.getDefault())
     }
 
     suspend fun getHistory(phone: String): List<CallHistoryEntity> {
@@ -161,6 +330,153 @@ class CallRepository(
         callHistoryDao.insertAll(remote.map { it.toEntity(normalized) })
     }
 
+    suspend fun getStoredReminders(phone: String): List<ReminderEntity> = withContext(Dispatchers.IO) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return@withContext emptyList<ReminderEntity>()
+
+        reminderDao.getAllOnce()
+            .filter { reminder -> normalizePhone(reminder.phone) == normalizedPhone && reminder.message.isNotBlank() }
+            .sortedByDescending { it.remindAt }
+    }
+
+    suspend fun refreshRemindersFromRemote(phone: String): List<ReminderEntity> = withContext(Dispatchers.IO) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return@withContext emptyList<ReminderEntity>()
+
+        Log.d(HISTORY_LOG_TAG, "Начало импорта напоминаний из Calltrack во внутреннюю память: phone=$phone, normalized=$normalizedPhone")
+        val remoteItems = loadHistoryFromRemote(phone)
+        val remoteReminders = remoteItems
+            .mapNotNull { item -> item.toReminderEntity(normalizedPhone) }
+        Log.d(HISTORY_LOG_TAG, "Напоминаний из таблицы после парсинга: ${remoteReminders.size}, phone=$phone")
+
+        val existingFingerprints = reminderDao.getAllOnce()
+            .filter { reminder -> normalizePhone(reminder.phone) == normalizedPhone }
+            .map { reminder -> reminder.reminderFingerprint() }
+            .toMutableSet()
+
+        var inserted = 0
+        remoteReminders.forEach { reminder ->
+            val fingerprint = reminder.reminderFingerprint()
+            if (fingerprint !in existingFingerprints) {
+                // Напоминания из SQL API сохраняем во внутреннюю БД,
+                // чтобы история напоминаний восстанавливалась после переустановки приложения.
+                reminderDao.insert(reminder)
+                existingFingerprints += fingerprint
+                inserted++
+            }
+        }
+        Log.d(HISTORY_LOG_TAG, "Импорт напоминаний завершён: inserted=$inserted, totalRemote=${remoteReminders.size}, phone=$phone")
+        getStoredReminders(normalizedPhone)
+    }
+
+    suspend fun getStoredComments(phone: String): List<CommentEntity> = withContext(Dispatchers.IO) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return@withContext emptyList<CommentEntity>()
+
+        commentDao.getAllOnce()
+            .filter { comment -> normalizePhone(comment.phone) == normalizedPhone && comment.text.isNotBlank() }
+            .sortedByDescending { it.createdAt }
+    }
+
+    suspend fun refreshCommentsFromRemote(phone: String): List<CommentEntity> = withContext(Dispatchers.IO) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return@withContext emptyList<CommentEntity>()
+
+        Log.d(HISTORY_LOG_TAG, "Начало импорта комментариев из Calltrack во внутреннюю память: phone=$phone, normalized=$normalizedPhone")
+        val remoteItems = loadHistoryFromRemote(phone)
+        val remoteComments = remoteItems
+            .filter { item -> item.note.isNotBlank() }
+            .map { item ->
+                CommentEntity(
+                    phone = normalizedPhone,
+                    text = item.note.trim(),
+                    createdAt = parseHistoryTimestamp(item.date, item.time)
+                )
+            }
+        Log.d(HISTORY_LOG_TAG, "Комментариев из таблицы после парсинга: ${remoteComments.size}, phone=$phone")
+
+        val existingFingerprints = commentDao.getAllOnce()
+            .filter { comment -> normalizePhone(comment.phone) == normalizedPhone }
+            .map { comment -> comment.commentFingerprint() }
+            .toMutableSet()
+
+        var inserted = 0
+        remoteComments.forEach { comment ->
+            val fingerprint = comment.commentFingerprint()
+            if (fingerprint !in existingFingerprints) {
+                // Комментарии из SQL API сохраняем во внутреннюю БД, чтобы экран истории
+                // открывался из памяти приложения даже без повторного сетевого запроса.
+                commentDao.insert(comment)
+                existingFingerprints += fingerprint
+                inserted++
+            }
+        }
+        Log.d(HISTORY_LOG_TAG, "Импорт комментариев завершён: inserted=$inserted, totalRemote=${remoteComments.size}, phone=$phone")
+        getStoredComments(normalizedPhone)
+    }
+
+    suspend fun getDeviceCallHistory(phone: String, limit: Int = DEVICE_CONTACT_HISTORY_LIMIT): List<CallHistoryEntity> =
+        withContext(Dispatchers.IO) {
+            val normalizedPhone = normalizePhone(phone)
+            if (normalizedPhone.isBlank()) return@withContext emptyList()
+            if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+                Log.w("CallRepository", "Нет разрешения READ_CALL_LOG для истории звонков карточки контакта")
+                return@withContext emptyList()
+            }
+
+            val projection = arrayOf(
+                CallLog.Calls.NUMBER,
+                CallLog.Calls.TYPE,
+                CallLog.Calls.DURATION,
+                CallLog.Calls.DATE
+            )
+            val result = mutableListOf<CallHistoryEntity>()
+
+            runCatching {
+                appContext.contentResolver.query(
+                    CallLog.Calls.CONTENT_URI,
+                    projection,
+                    null,
+                    null,
+                    "${CallLog.Calls.DATE} DESC"
+                )?.use { cursor ->
+                    val numberIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)
+                    val typeIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE)
+                    val durationIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.DURATION)
+                    val dateIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.DATE)
+
+                    while (cursor.moveToNext() && result.size < limit) {
+                        val rawPhone = cursor.getString(numberIdx).orEmpty()
+                        if (normalizePhone(rawPhone) != normalizedPhone) continue
+
+                        val duration = cursor.getLong(durationIdx)
+                        val timestamp = cursor.getLong(dateIdx)
+                        val (type, note) = mapDeviceCallType(cursor.getInt(typeIdx), duration)
+                        // Карточка контакта должна показывать историю из стандартной звонилки Android,
+                        // поэтому формируем элементы экрана напрямую из CallLog, без чтения SQL API.
+                        result += CallHistoryEntity(
+                            phone = normalizedPhone,
+                            date = dateFormat.format(Date(timestamp)),
+                            time = timeFormat.format(Date(timestamp)),
+                            type = type,
+                            duration = duration.toString(),
+                            manager = "",
+                            note = note,
+                            tag = "",
+                            reminder = "",
+                            reminderText = "",
+                            client = "",
+                            updatedAt = timestamp
+                        )
+                    }
+                }
+            }.onFailure {
+                Log.e("CallRepository", "Не удалось загрузить историю звонков контакта из стандартной звонилки", it)
+            }
+
+            result
+        }
+
     suspend fun saveCall(call: CallEntity): Long {
         ensureContact(call.phone)
         val duplicate = callDao.findRecentDuplicate(
@@ -170,10 +486,77 @@ class CallRepository(
             timestamp = call.timestamp
         )
         if (duplicate != null) {
-            Log.d("CallRepository", "Пропускаем дубль звонка, используем id=${duplicate.id}")
+            // Если дубль был заранее подтянут из системной звонилки как историческая запись,
+            // он мог быть помечен uploaded=true. При реальном завершении звонка возвращаем его в очередь,
+            // чтобы syncPending отправил запись в SQL API.
+            callDao.markPending(duplicate.id)
+            Log.d("CallRepository", "Пропускаем дубль звонка, используем id=${duplicate.id} и ставим его в очередь отправки")
             return duplicate.id
         }
         return callDao.insert(call)
+    }
+
+    suspend fun importRecentCallsFromDevice(limit: Int = DEVICE_RECENT_CALLS_LIMIT): Int = withContext(Dispatchers.IO) {
+        if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+            Log.w("CallRepository", "Нет разрешения READ_CALL_LOG для загрузки экрана Последние из звонилки")
+            return@withContext 0
+        }
+
+        val projection = arrayOf(
+            CallLog.Calls.NUMBER,
+            CallLog.Calls.TYPE,
+            CallLog.Calls.DURATION,
+            CallLog.Calls.DATE
+        )
+        var scanned = 0
+
+        runCatching {
+            appContext.contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                projection,
+                null,
+                null,
+                "${CallLog.Calls.DATE} DESC"
+            )?.use { cursor ->
+                val numberIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)
+                val typeIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE)
+                val durationIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.DURATION)
+                val dateIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.DATE)
+
+                while (cursor.moveToNext() && scanned < limit) {
+                    val phone = cursor.getString(numberIdx).orEmpty().ifBlank { "Неизвестно" }
+                    val duration = cursor.getLong(durationIdx)
+                    val timestamp = cursor.getLong(dateIdx)
+                    val (type, note) = mapDeviceCallType(cursor.getInt(typeIdx), duration)
+                    val call = CallEntity(
+                        phone = phone,
+                        type = type,
+                        duration = duration,
+                        note = note,
+                        timestamp = timestamp,
+                        // Исторические записи из звонилки нужны для отображения на экране «Последние».
+                        // Не отправляем их пачкой в SQL API, пока пользователь не изменит заметку/напоминание.
+                        uploaded = true
+                    )
+                    val duplicate = callDao.findRecentDuplicate(
+                        phone = call.phone,
+                        type = call.type,
+                        duration = call.duration,
+                        timestamp = call.timestamp
+                    )
+                    if (duplicate == null) {
+                        // Экран «Последние» должен брать звонки из системной звонилки,
+                        // поэтому не прогреваем справочник клиентов из SQL API при импорте.
+                        callDao.insert(call)
+                    }
+                    scanned++
+                }
+            }
+        }.onFailure {
+            Log.e("CallRepository", "Не удалось загрузить последние звонки из системной звонилки", it)
+        }
+
+        scanned
     }
 
     suspend fun getLatestSavedCallTimestamp(): Long = callDao.getLatestTimestamp() ?: 0L
@@ -209,7 +592,7 @@ class CallRepository(
                 )
             )
         }
-        syncPending()
+        syncCallById(callId)
     }
 
 
@@ -217,6 +600,17 @@ class CallRepository(
         if (phone.isBlank() || text.isBlank()) return
         ensureContact(phone)
         commentDao.insert(CommentEntity(phone = phone, text = text))
+
+        val latestCall = findLatestCallForPhone(phone)
+        if (latestCall == null) {
+            Log.w("CallRepository", "Комментарий сохранён локально, но звонок для отправки в таблицу не найден: phone=$phone")
+            return
+        }
+
+        // Комментарий из карточки контакта привязываем к последнему звонку этого номера,
+        // чтобы в таблице обновилась колонка «Комментарий» в строке с конкретным call_id.
+        callDao.updateOutcome(latestCall.id, text, latestCall.tag, latestCall.reminder)
+        syncCallById(latestCall.id)
     }
 
     suspend fun addReminder(phone: String, contactName: String, text: String, remindAt: Long) {
@@ -231,28 +625,63 @@ class CallRepository(
                 status = "Активно"
             )
         )
+
+        val latestCall = findLatestCallForPhone(phone)
+        if (latestCall == null) {
+            Log.w("CallRepository", "Напоминание сохранено локально, но звонок для отправки в таблицу не найден: phone=$phone")
+            return
+        }
+
+        val reminderValue = "${dateFormat.format(Date(remindAt))} ${timeFormat.format(Date(remindAt))} | $text"
+        // Напоминание из карточки контакта привязываем к последнему звонку этого номера,
+        // чтобы в таблице обновились колонки «Напоминание»/«Текст напоминания» по call_id.
+        callDao.updateOutcome(latestCall.id, latestCall.note, latestCall.tag, reminderValue)
+        syncCallById(latestCall.id)
     }
 
-    suspend fun markAsPersonalContact(phone: String) {
-        if (phone.isBlank() || phone == "Неизвестно") return
+    suspend fun markAsPersonalContact(phone: String): Boolean {
+        if (phone.isBlank() || phone == "Неизвестно") return false
         ensureContact(phone)
-        contactDao.updateClient1cByPhone(phone, "Личный")
-        syncPersonalContactToRemote(phone, true, enqueueOnFailure = true)
+        if (!syncPersonalContactToRemote(phone, true, enqueueOnFailure = true)) return false
+        val pendingCount = markCallsPendingForNormalizedPhone(phone)
+        Log.d("CallRepository", "Личный контакт: поставили в очередь $pendingCount звонков для обновления колонки Клиент")
+        syncPending()
         flushPendingPersonalContactsSync()
+        return true
     }
 
     suspend fun markCallsPendingForPhoneResync(phone: String) {
         if (phone.isBlank() || phone == "Неизвестно") return
-        callDao.markPendingByPhone(phone)
+        markCallsPendingForNormalizedPhone(phone)
         syncPending()
     }
 
-    suspend fun unmarkPersonalContact(phone: String) {
-        if (phone.isBlank() || phone == "Неизвестно") return
+    suspend fun unmarkPersonalContact(phone: String): Boolean {
+        if (phone.isBlank() || phone == "Неизвестно") return false
         ensureContact(phone)
-        contactDao.updateClient1cByPhone(phone, "")
-        syncPersonalContactToRemote(phone, false, enqueueOnFailure = true)
+        if (!syncPersonalContactToRemote(phone, false, enqueueOnFailure = true)) return false
+        val pendingCount = markCallsPendingForNormalizedPhone(phone)
+        Log.d("CallRepository", "Личный контакт снят: поставили в очередь $pendingCount звонков для очистки колонки Клиент")
+        syncPending()
         flushPendingPersonalContactsSync()
+        return true
+    }
+
+    private suspend fun updatePersonalContactLocal(phone: String, isPersonal: Boolean) {
+        val normalizedPhone = normalizePhone(phone)
+        val value = if (isPersonal) "Личный" else ""
+        contactDao.updateClient1cByPhone(phone, value)
+        contactDao.findAll()
+            .filter { contact -> normalizePhone(contact.phone) == normalizedPhone }
+            .forEach { contact -> contactDao.updateClient1c(contact.id, value) }
+    }
+
+    private suspend fun markCallsPendingForNormalizedPhone(phone: String): Int {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return 0
+        val calls = callDao.getAllOnce().filter { call -> normalizePhone(call.phone) == normalizedPhone }
+        calls.forEach { call -> callDao.markPending(call.id) }
+        return calls.size
     }
 
     private suspend fun syncPersonalContactToRemote(phone: String, isPersonal: Boolean, enqueueOnFailure: Boolean): Boolean {
@@ -260,27 +689,44 @@ class CallRepository(
         val managerName = prefs.getManagerName().ifBlank { "Не указан" }
         val normalizedManagerPhone = normalizePhone(managerPhone)
         val normalizedContactPhone = normalizePhone(phone)
+        val personalFlag = if (isPersonal) 1 else 0
+        if (normalizedManagerPhone.isBlank() || normalizedContactPhone.isBlank()) return false
+
         val payload = JSONObject().apply {
-            put("manager_phone", normalizedManagerPhone)
-            put("manager_name", managerName)
+            put("user_phone", normalizedManagerPhone)
+            put("manager", managerName)
             put("contact_phone", normalizedContactPhone)
-            put("is_personal", if (isPersonal) "1" else "0")
+            put("personal_flag", personalFlag)
         }
-        val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-        val request = Request.Builder()
-            .url(BuildConfig.PERSONAL_CONTACTS_WEBHOOK_URL)
-            .post(body)
-            .build()
-        return runCatching {
+        Log.d("PERSONAL_CONTACTS", "Изменение признака личного контакта: $payload")
+        com.example.calltrack.logging.AppLogger.log(
+            appContext,
+            "API",
+            "Отправка личного контакта: phone=$normalizedContactPhone, flag=$personalFlag"
+        )
+
+        val ok = runCatching {
             withContext(Dispatchers.IO) {
+                val request = Request.Builder()
+                    .url(sqlApiUrl("personal_contact.php"))
+                    .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
                 personalContactsHttpClient.newCall(request).execute().use { response ->
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: ${response.code}")
-                    response.isSuccessful
+                    val bodyText = response.body?.string().orEmpty()
+                    val accepted = isSqlApiAccepted(response.isSuccessful, bodyText)
+                    Log.d(
+                        "PERSONAL_CONTACTS",
+                        "Ответ personal_contact.php: code=${response.code}, accepted=$accepted, body=${bodyText.take(400)}"
+                    )
+                    if (!accepted) {
+                        throw IllegalStateException("SQL API personal_contact rejected: code=${response.code}, body=${bodyText.take(400)}")
+                    }
+                    true
                 }
             }
-        }.getOrElse {
-            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
-            Log.e("CallRepository", "Не удалось отправить личный контакт в Calltrack_mop", it)
+        }.onFailure {
+            Log.e("PERSONAL_CONTACTS", "Ошибка сети при изменении личного контакта", it)
+            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка личного контакта: ${it.message}")
             if (enqueueOnFailure) {
                 enqueuePendingPersonalSync(
                     PersonalSyncItem(
@@ -291,8 +737,14 @@ class CallRepository(
                     )
                 )
             }
-            false
+        }.getOrDefault(false)
+
+        if (ok) {
+            personalContactDao.upsert(PersonalContactEntity(normalizedContactPhone, personalFlag))
+            updatePersonalContactLocal(normalizedContactPhone, isPersonal)
+            com.example.calltrack.logging.AppLogger.log(appContext, "API", "Личный контакт сохранён: flag=$personalFlag")
         }
+        return ok
     }
 
     private suspend fun flushPendingPersonalContactsSync() {
@@ -318,20 +770,18 @@ class CallRepository(
         if (raw.isBlank()) return emptyList()
         return runCatching {
             val arr = JSONArray(raw)
-            buildList {
-                for (i in 0 until arr.length()) {
-                    val o = arr.optJSONObject(i) ?: continue
-                    add(
-                        PersonalSyncItem(
-                            managerPhone = o.optString("manager_phone"),
-                            managerName = o.optString("manager_name"),
-                            contactPhone = o.optString("contact_phone"),
-                            isPersonal = o.optBoolean("is_personal", true)
-                        )
-                    )
-                }
+            val items = mutableListOf<PersonalSyncItem>()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                items += PersonalSyncItem(
+                    managerPhone = o.optString("manager_phone"),
+                    managerName = o.optString("manager_name"),
+                    contactPhone = o.optString("contact_phone"),
+                    isPersonal = o.optBoolean("is_personal", true)
+                )
             }
-        }.getOrElse { emptyList() }
+            items
+        }.getOrElse { emptyList<PersonalSyncItem>() }
     }
 
     private suspend fun writePendingPersonalSync(items: List<PersonalSyncItem>) {
@@ -350,12 +800,20 @@ class CallRepository(
     }
 
 
+    private suspend fun findLatestCallForPhone(phone: String): CallEntity? {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return null
+        return callDao.getAllOnce().firstOrNull { call -> normalizePhone(call.phone) == normalizedPhone }
+    }
+
     suspend fun saveCommentForCall(callId: Long, phone: String, text: String) {
-        if (text.isBlank()) return
         val call = callDao.getById(callId) ?: return
         callDao.updateOutcome(callId, text, call.tag, call.reminder)
-        commentDao.insert(CommentEntity(phone = phone, text = text))
-        syncPending()
+        if (text.isNotBlank()) {
+            commentDao.insert(CommentEntity(phone = phone, text = text))
+        }
+        // Комментарий меняет конкретный звонок, поэтому отправляем в таблицу строку с тем же call_id.
+        syncCallById(callId)
     }
 
     suspend fun saveReminderForCall(callId: Long, phone: String, contactName: String, text: String, remindAt: Long) {
@@ -372,7 +830,20 @@ class CallRepository(
                 status = "Активно"
             )
         )
-        syncPending()
+        // Напоминание меняет конкретный звонок, поэтому отправляем в таблицу строку с тем же call_id.
+        syncCallById(callId)
+    }
+
+    suspend fun syncCallById(callId: Long) {
+        syncMutex.withLock {
+            val entity = callDao.getById(callId) ?: return@withLock
+            val managerName = prefs.getManagerName().ifBlank { "Не указан" }
+            val managerPhone = prefs.getManagerPhone().ifBlank { "Не указан" }
+            if (sendCallToWebhook(entity, managerName, managerPhone)) {
+                callDao.markUploaded(entity.id)
+                com.example.calltrack.logging.AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED BY ID: id=${entity.id}")
+            }
+        }
     }
 
     suspend fun syncPending() {
@@ -396,57 +867,110 @@ class CallRepository(
 
             groupedPending.values.forEach { duplicates ->
                 val entity = duplicates.first()
-                Log.d("WEBHOOK", "Отправка webhook: $entity")
-                runCatching {
-                    val personalMarked = contactDao.findByPhone(entity.phone)?.client1c == "Личный"
-                    val clientName = if (personalMarked) "Личный звонок" else findClientName(entity.phone)
-                    val reminderText = extractReminderText(entity.reminder)
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Отправка данных в таблицу: id=${entity.id}, phone=${entity.phone}, type=${entity.type}")
-                    val response = webhookApi.sendCall(
-                        BuildConfig.WEBHOOK_URL,
-                        WebhookRequest(
-                            callId = "${entity.id}_${entity.timestamp}",
-                            date = dateFormat.format(Date(entity.timestamp)),
-                            time = timeFormat.format(Date(entity.timestamp)),
-                            phone = normalizePhone(entity.phone),
-                            type = entity.type,
-                            duration = entity.duration,
-                            manager = managerName,
-                            userPhone = managerPhone,
-                            note = entity.note,
-                            tag = entity.tag,
-                            reminder = entity.reminder,
-                            reminderText = reminderText,
-                            client = clientName
-                        )
-                    )
-                    val bodyText = response.body()?.string().orEmpty()
-                    if (!isWebhookAccepted(response.isSuccessful, bodyText)) {
-                        throw IllegalStateException(
-                            "Calltrack webhook rejected: code=${response.code()}, body=${bodyText.take(400)}"
-                        )
-                    }
-
+                if (sendCallToWebhook(entity, managerName, managerPhone)) {
                     callDao.markUploaded(duplicates.map { it.id })
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ сервера: code=${response.code()}")
                     com.example.calltrack.logging.AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED: ids=${duplicates.joinToString { it.id.toString() }}")
                     Log.d(
                         "CallRepository",
                         "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
                     )
-                }.onSuccess {
-                    Log.d("WEBHOOK", "Отправлено: phone=${entity.phone}, id=${entity.id}")
-                }.onFailure {
-                    Log.e("WEBHOOK", "Ошибка при вызове webhookApi.sendCall", it)
-                    Log.e("WEBHOOK", "Ошибка отправки: id=${entity.id}", it)
-                    Log.e("CallRepository", "Webhook send failed for id=${entity.id}", it)
-                    com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка отправки: ${it.message}")
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Повторная отправка данных")
                 }
             }
         }
     }
 
+    private suspend fun sendCallToWebhook(entity: CallEntity, managerName: String, managerPhone: String): Boolean {
+        Log.d("WEBHOOK", "Отправка звонка в SQL API: $entity")
+        val personalMarked = isPersonalContact(entity.phone)
+        val clientName = if (personalMarked) PERSONAL_CALL_CLIENT_VALUE else findClientName(entity.phone)
+        val reminderText = extractReminderText(entity.reminder)
+        val callId = buildWebhookCallId(entity)
+
+        val sent = sendCallToSqlApi(entity, managerName, managerPhone, clientName, reminderText, callId)
+        if (!sent) {
+            Log.w("WEBHOOK", "SQL API не принял звонок id=${entity.id}; запись остаётся pending для повторной отправки")
+        }
+        return sent
+    }
+
+    private suspend fun sendCallToSqlApi(
+        entity: CallEntity,
+        managerName: String,
+        managerPhone: String,
+        clientName: String,
+        reminderText: String,
+        callId: String
+    ): Boolean {
+        return runCatching {
+            val callDate = Date(entity.timestamp)
+            val sqlDate = sqlDateFormat.format(callDate)
+            val sqlTime = sqlTimeFormat.format(callDate)
+            Log.d("SQL_API", "Sending call: date=$sqlDate, time=$sqlTime, callId=$callId")
+
+            val payload = JSONObject().apply {
+                put("date", sqlDate)
+                put("time", sqlTime)
+                put("phone", normalizePhone(entity.phone))
+                put("type", entity.type)
+                put("duration", entity.duration)
+                put("manager", managerName)
+                put("comment", entity.note)
+                put("tag", entity.tag)
+                put("reminder", if (entity.reminder.isBlank()) JSONObject.NULL else entity.reminder)
+                put("reminder_text", reminderText)
+                put("client", clientName)
+                put("call_id", callId)
+                put("user_phone", normalizePhone(managerPhone))
+            }
+            com.example.calltrack.logging.AppLogger.log(
+                appContext,
+                "API",
+                "Отправка данных в SQL API: call_id=$callId, phone=${entity.phone}, type=${entity.type}"
+            )
+            withContext(Dispatchers.IO) {
+                val request = Request.Builder()
+                    .url(sqlApiUrl("add_call.php"))
+                    .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
+                personalContactsHttpClient.newCall(request).execute().use { response ->
+                    val bodyText = response.body?.string().orEmpty()
+                    if (!isSqlApiAccepted(response.isSuccessful, bodyText)) {
+                        throw IllegalStateException(
+                            "SQL API rejected: code=${response.code}, body=${bodyText.take(400)}"
+                        )
+                    }
+                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ SQL API: code=${response.code}")
+                    Log.d("WEBHOOK", "Отправлено в SQL API: phone=${entity.phone}, id=${entity.id}, call_id=$callId")
+                    true
+                }
+            }
+        }.onFailure {
+            Log.e("WEBHOOK", "Ошибка отправки в SQL API: id=${entity.id}", it)
+            Log.e("CallRepository", "SQL API send failed for id=${entity.id}", it)
+            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка SQL API: ${it.message}")
+        }.getOrDefault(false)
+    }
+
+
+    private fun buildWebhookCallId(entity: CallEntity): String = "${entity.id}_${entity.timestamp}"
+
+    private fun sqlApiUrl(endpoint: String): String {
+        return BuildConfig.SQL_API_BASE_URL.trimEnd('/') + "/" + endpoint.trimStart('/')
+    }
+
+    private fun urlEncode(value: String): String {
+        return URLEncoder.encode(value, "UTF-8")
+    }
+
+    private fun isSqlApiAccepted(isSuccessful: Boolean, bodyText: String): Boolean {
+        if (!isSuccessful) return false
+        val token = runCatching { JSONTokener(bodyText.trim()).nextValue() }.getOrNull()
+        if (token is JSONObject) {
+            return token.optString("status").equals("success", ignoreCase = true)
+        }
+        val normalized = bodyText.lowercase(Locale.getDefault())
+        return normalized.contains("\"status\":\"success\"") || normalized.contains("'status':'success")
+    }
 
     private fun isWebhookAccepted(isSuccessful: Boolean, bodyText: String): Boolean {
         if (!isSuccessful) return false
@@ -481,7 +1005,99 @@ class CallRepository(
         return reminderValue.substringAfter("|", reminderValue).trim()
     }
 
+    private fun parseHistoryTimestamp(date: String, time: String): Long {
+        return parseHistoryTimestampOrNull(date, time) ?: System.currentTimeMillis()
+    }
+
+    private fun parseHistoryTimestampOrNull(date: String, time: String): Long? {
+        val datePart = date.trim()
+        val timePart = time.trim()
+        if (datePart.isBlank() && timePart.isBlank()) return null
+
+        val rawDateTime = listOf(datePart, timePart).filter { it.isNotBlank() }.joinToString(" ")
+        val formats = listOf(
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yyyy HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "dd.MM.yy HH:mm",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yy",
+            "yyyy-MM-dd"
+        )
+
+        formats.forEach { pattern ->
+            val parsed = runCatching {
+                SimpleDateFormat(pattern, Locale.getDefault()).parse(rawDateTime)?.time
+            }.getOrNull()
+            if (parsed != null) return parsed
+        }
+        return null
+    }
+
+    private fun CallHistoryItem.toReminderEntity(normalizedPhone: String): ReminderEntity? {
+        val rawReminder = reminder.trim()
+        val rawReminderText = reminderText.trim()
+        if (rawReminder.isBlank() && rawReminderText.isBlank()) return null
+
+        val message = when {
+            rawReminderText.isNotBlank() -> rawReminderText
+            rawReminder.contains("|") -> rawReminder.substringAfter("|").trim()
+            else -> rawReminder
+        }.ifBlank { return null }
+
+        val remindAt = parseReminderTimestamp(rawReminder, date, time)
+        return ReminderEntity(
+            phone = normalizedPhone,
+            contactName = client,
+            message = message,
+            remindAt = remindAt,
+            status = "Активно",
+            createdAt = parseHistoryTimestamp(date, time)
+        )
+    }
+
+    private fun parseReminderTimestamp(reminderValue: String, fallbackDate: String, fallbackTime: String): Long {
+        val reminderDateTime = reminderValue.substringBefore("|").trim()
+        if (reminderDateTime.any { it.isDigit() }) {
+            parseHistoryTimestampOrNull(reminderDateTime, "")?.let { return it }
+        }
+        return parseHistoryTimestamp(fallbackDate, fallbackTime)
+    }
+
+    private fun ReminderEntity.reminderFingerprint(): String {
+        return "${normalizePhone(phone)}|${message.trim()}|$remindAt"
+    }
+
+    private fun CommentEntity.commentFingerprint(): String {
+        return "${normalizePhone(phone)}|${text.trim()}|$createdAt"
+    }
+
+    private fun mapDeviceCallType(typeInt: Int, duration: Long): Pair<String, String> {
+        val callTypeString = when (typeInt) {
+            CallLog.Calls.INCOMING_TYPE -> if (duration < 2L) "Пропущенный" else "Входящий"
+            CallLog.Calls.OUTGOING_TYPE -> if (duration < 2L) "Неотвеченный" else "Исходящий"
+            CallLog.Calls.MISSED_TYPE -> "Пропущенный"
+            CallLog.Calls.REJECTED_TYPE -> "Сброшенный"
+            else -> "Неотвеченный"
+        }
+        return callTypeString to ""
+    }
+
     fun normalizePhone(phone: String): String = phone.filter { it.isDigit() }.takeLast(10)
+
+    private fun normalizePhoneForHistoryApi(phone: String): String {
+        val digits = phone.filter { it.isDigit() }
+        return when {
+            digits.length == 10 -> "7$digits"
+            digits.length == 11 && digits.startsWith("8") -> "7${digits.drop(1)}"
+            digits.length == 11 && digits.startsWith("7") -> digits
+            digits.length > 11 -> normalizePhoneForHistoryApi(digits.takeLast(11))
+            else -> digits
+        }
+    }
 
     private fun CallHistoryItem.toEntity(phone: String): CallHistoryEntity {
         return CallHistoryEntity(
@@ -498,6 +1114,14 @@ class CallRepository(
             client = client,
             updatedAt = System.currentTimeMillis()
         )
+    }
+
+    private companion object {
+        private const val HISTORY_LOG_TAG = "COMMENT_HISTORY"
+        private const val DEVICE_RECENT_CALLS_LIMIT = 100
+        private const val DEVICE_CONTACT_HISTORY_LIMIT = 100
+        private const val CALL_HISTORY_MIN_ARRAY_COLUMNS = 5
+        private const val PERSONAL_CALL_CLIENT_VALUE = "Личный звонок"
     }
 
     private data class SyncFingerprint(

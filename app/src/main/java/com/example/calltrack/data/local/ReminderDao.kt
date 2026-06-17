@@ -16,4 +16,7 @@ interface ReminderDao {
 
     @Query("UPDATE reminders SET status = :status WHERE id = :id")
     suspend fun updateStatus(id: Long, status: String)
+
+    @Query("SELECT * FROM reminders ORDER BY remindAt DESC")
+    suspend fun getAllOnce(): List<ReminderEntity>
 }
