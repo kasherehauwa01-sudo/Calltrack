@@ -101,6 +101,7 @@ class MainActivity : BaseActivity() {
             } else {
                 binding.bottomNav.visibility = android.view.View.VISIBLE
                 if (savedInstanceState == null) binding.bottomNav.selectedItemId = R.id.nav_dial
+                refreshPersonalContactsAfterAuthorization()
                 startTrackingService()
             }
             updateWarningState()
@@ -372,6 +373,14 @@ class MainActivity : BaseActivity() {
         }
     }
 
+    private fun refreshPersonalContactsAfterAuthorization() {
+        lifecycleScope.launch {
+            runCatching { viewModel.refreshPersonalContacts() }
+                .onSuccess { count -> AppLogger.log(this@MainActivity, "API", "Личные контакты загружены: $count") }
+                .onFailure { error -> AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки личных контактов: ${error.message}") }
+        }
+    }
+
     fun requestRequiredPermissions() {
         permissionsLauncher.launch(requiredPermissions())
     }
@@ -381,6 +390,7 @@ class MainActivity : BaseActivity() {
             managerName?.let { viewModel.setManagerName(it) }
             managerPhone?.let { viewModel.setManagerPhone(it) }
             viewModel.markOnboardingCompleted()
+            refreshPersonalContactsAfterAuthorization()
         }
     }
 

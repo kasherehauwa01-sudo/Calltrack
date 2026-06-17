@@ -59,6 +59,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     suspend fun markOnboardingCompleted() = repository.prefs.setOnboardingCompleted(true)
     suspend fun setManagerName(name: String) = repository.prefs.setManagerName(name)
     suspend fun setManagerPhone(phone: String) = repository.prefs.setManagerPhone(phone)
+    suspend fun refreshPersonalContacts() = repository.refreshPersonalContactsFromSql()
     // Фоновая синхронизация с SQL API (с последующим сохранением статусов во внутреннем кэше БД).
     suspend fun sync() = repository.syncPending()
 

@@ -15,9 +15,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ReminderEntity::class,
         CommentEntity::class,
         CallHistoryEntity::class,
-        NotificationEntity::class
+        NotificationEntity::class,
+        PersonalContactEntity::class
     ],
-    version = 6
+    version = 7
 )
 @TypeConverters(NotificationTypeConverter::class)
 abstract class CallDatabase : RoomDatabase() {
@@ -27,6 +28,7 @@ abstract class CallDatabase : RoomDatabase() {
     abstract fun commentDao(): CommentDao
     abstract fun callHistoryDao(): CallHistoryDao
     abstract fun notificationDao(): NotificationDao
+    abstract fun personalContactDao(): PersonalContactDao
 
     companion object {
         @Volatile
@@ -130,13 +132,34 @@ abstract class CallDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS personal_contacts (
+                        contactPhone TEXT PRIMARY KEY NOT NULL,
+                        personalFlag INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getInstance(context: Context): CallDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     CallDatabase::class.java,
                     "calltrack.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                ).addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6,
+                        MIGRATION_6_7
+                    )
                     .fallbackToDestructiveMigration()
                     .build().also { INSTANCE = it }
             }

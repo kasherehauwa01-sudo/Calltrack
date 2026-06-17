@@ -89,15 +89,51 @@ const DB_PASS = 'strong_password';
 - `manager`
 - `phone`
 - `user_phone`
+- `period` (`today`, `yesterday`, `week`, `month`, `year`; по умолчанию `today`)
 - `date_from`
 - `date_to`
 - `limit`
 - `offset`
 
+Если `date_from` или `date_to` переданы явно, они имеют приоритет над `period`.
+Реестр возвращает колонку `client` сразу после `manager`.
+
 Пример:
 
 ```text
-/api/get_calls.php?manager=Иван%20Иванов&date_from=2026-06-01&date_to=2026-06-15
+/api/get_calls.php?manager=Иван%20Иванов&period=week
+```
+
+
+### `POST /api/personal_contact.php`
+
+Сохраняет или обновляет признак личного контакта для конкретного пользователя приложения.
+
+```json
+{
+  "user_phone": "79998887766",
+  "manager": "Иван Иванов",
+  "contact_phone": "79001234567",
+  "personal_flag": 1
+}
+```
+
+Для снятия признака отправьте `"personal_flag": 0`.
+
+### `GET /api/get_personal_contacts.php?user_phone=...`
+
+Возвращает локальный для пользователя список личных контактов:
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "contact_phone": "79001234567",
+      "personal_flag": 1
+    }
+  ]
+}
 ```
 
 ### `GET /api/dashboard.php`

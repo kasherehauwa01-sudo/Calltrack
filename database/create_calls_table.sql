@@ -24,3 +24,18 @@ CREATE TABLE IF NOT EXISTS calls (
     INDEX idx_call_date (call_date),
     INDEX idx_manager (manager)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS personal_contacts (
+    id_db BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_phone VARCHAR(30) NOT NULL,
+    manager VARCHAR(255),
+    contact_phone VARCHAR(30) NOT NULL,
+    personal_flag TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE KEY uk_user_contact (user_phone, contact_phone),
+    INDEX idx_personal_user_phone (user_phone),
+    INDEX idx_personal_contact_phone (contact_phone),
+    INDEX idx_personal_flag (personal_flag)
+);

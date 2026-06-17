@@ -17,6 +17,8 @@ import com.example.calltrack.data.local.ContactDao
 import com.example.calltrack.data.local.ContactEntity
 import com.example.calltrack.data.local.ReminderDao
 import com.example.calltrack.data.local.ReminderEntity
+import com.example.calltrack.data.local.PersonalContactDao
+import com.example.calltrack.data.local.PersonalContactEntity
 import com.example.calltrack.data.remote.WebhookApi
 import com.example.calltrack.data.remote.CallHistoryItem
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +44,7 @@ class CallRepository(
     private val reminderDao: ReminderDao,
     private val commentDao: CommentDao,
     private val callHistoryDao: CallHistoryDao,
+    private val personalContactDao: PersonalContactDao,
     private val webhookApi: WebhookApi,
     context: Context
 ) {
@@ -70,11 +73,14 @@ class CallRepository(
     suspend fun isPersonalContact(phone: String): Boolean {
         if (phone.isBlank() || phone == "Неизвестно") return false
 
-        val direct = contactDao.findByPhone(phone)
-        if (direct?.client1c == "Личный") return true
-
         val normalized = normalizePhone(phone)
         if (normalized.isBlank()) return false
+
+        val cachedFlag = personalContactDao.getFlag(normalized)
+        if (cachedFlag != null) return cachedFlag == 1
+
+        val direct = contactDao.findByPhone(phone)
+        if (direct?.client1c == "Личный") return true
 
         return contactDao.findAll().any { contact ->
             contact.client1c == "Личный" && normalizePhone(contact.phone) == normalized
@@ -109,6 +115,68 @@ class CallRepository(
     private fun buildSqlHistoryUrl(phone: String, userPhone: String): String {
         val query = "phone=${urlEncode(phone)}&user_phone=${urlEncode(userPhone)}"
         return sqlApiUrl("get_history.php") + "?" + query
+    }
+
+    suspend fun refreshPersonalContactsFromSql(): Int {
+        val userPhone = normalizePhone(prefs.getManagerPhone())
+        if (userPhone.isBlank()) {
+            Log.w("PERSONAL_CONTACTS", "Не загружаем личные контакты: номер пользователя не указан")
+            return 0
+        }
+
+        val url = sqlApiUrl("get_personal_contacts.php") + "?user_phone=${urlEncode(userPhone)}"
+        Log.d("PERSONAL_CONTACTS", "Загрузка списка личных контактов: url=$url")
+        com.example.calltrack.logging.AppLogger.log(appContext, "API", "Загрузка личных контактов из SQL API")
+
+        return runCatching {
+            val body = withContext(Dispatchers.IO) {
+                val request = Request.Builder().url(url).get().build()
+                personalContactsHttpClient.newCall(request).execute().use { response ->
+                    val bodyText = response.body?.string().orEmpty()
+                    Log.d(
+                        "PERSONAL_CONTACTS",
+                        "Ответ get_personal_contacts.php: code=${response.code}, body=${bodyText.take(400)}"
+                    )
+                    if (!isSqlApiAccepted(response.isSuccessful, bodyText)) {
+                        throw IllegalStateException("SQL API personal contacts rejected: code=${response.code}, body=${bodyText.take(400)}")
+                    }
+                    bodyText
+                }
+            }
+            val contacts = parsePersonalContactsResponse(body)
+            personalContactDao.clearAll()
+            contactDao.findAll()
+                .filter { contact -> contact.client1c == "Личный" }
+                .forEach { contact -> contactDao.updateClient1c(contact.id, "") }
+            personalContactDao.upsertAll(contacts)
+            contacts.forEach { item ->
+                updatePersonalContactLocal(item.contactPhone, item.personalFlag == 1)
+            }
+            com.example.calltrack.logging.AppLogger.log(appContext, "API", "Личные контакты загружены: ${contacts.size}")
+            Log.d("PERSONAL_CONTACTS", "Локальный кэш личных контактов обновлён: count=${contacts.size}")
+            contacts.size
+        }.onFailure {
+            Log.e("PERSONAL_CONTACTS", "Ошибка загрузки личных контактов", it)
+            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки личных контактов: ${it.message}")
+        }.getOrDefault(0)
+    }
+
+    private fun parsePersonalContactsResponse(raw: String): List<PersonalContactEntity> {
+        val token = runCatching { JSONTokener(raw.trim()).nextValue() }.getOrNull() ?: return emptyList()
+        val arr = when (token) {
+            is JSONArray -> token
+            is JSONObject -> token.firstArray("data", "items", "contacts", "personal_contacts", "result") ?: JSONArray()
+            else -> JSONArray()
+        }
+        val result = mutableListOf<PersonalContactEntity>()
+        for (i in 0 until arr.length()) {
+            val row = arr.optJSONObject(i) ?: continue
+            val contactPhone = normalizePhone(row.firstString("contact_phone", "phone", "contactPhone"))
+            if (contactPhone.isBlank()) continue
+            val flag = row.optInt("personal_flag", row.optInt("is_personal", 1)).coerceIn(0, 1)
+            result += PersonalContactEntity(contactPhone = contactPhone, personalFlag = flag)
+        }
+        return result
     }
 
     private suspend fun fetchHistoryFromUrl(url: String, normalizedPhone: String): List<CallHistoryItem> {
@@ -227,6 +295,86 @@ class CallRepository(
             val itemPhone = normalizePhone(item.phone)
             itemPhone.isBlank() || itemPhone == normalizedPhone
         }
+        return items
+    }
+
+    private fun JSONObject.toCallHistoryItem(): CallHistoryItem {
+        return CallHistoryItem(
+            date = firstString("date", "call_date", "Дата"),
+            time = firstString("time", "call_time", "Время"),
+            phone = firstString("phone", "contact_phone", "Номер телефона", "Телефон"),
+            type = firstString("type", "call_type", "Тип звонка", "Тип"),
+            duration = firstString("duration", "Длительность"),
+            manager = firstString("manager", "Менеджер"),
+            note = firstString("note", "comment", "comments", "comment_text", "Комментарий", "Комментарии", "Коментарий", "Коментарии"),
+            tag = firstString("tag", "tags", "Тег", "Теги"),
+            reminder = firstString("reminder", "reminders", "Напоминание", "Напоминания"),
+            reminderText = firstString("reminder_text", "reminderText", "reminder_texts", "Текст напоминания", "Тексты напоминаний"),
+            client = firstString("client", "Клиент"),
+            callId = firstString("call_id", "ID", "id"),
+            userPhone = firstString("user_phone", "manager_phone", "Номер телефона пользователя")
+        )
+    }
+
+    private fun JSONArray.toCallHistoryItem(): CallHistoryItem? {
+        if (length() < CALL_HISTORY_MIN_ARRAY_COLUMNS) return null
+        return CallHistoryItem(
+            date = optString(0),
+            time = optString(1),
+            phone = optString(2),
+            type = optString(3),
+            duration = optString(4),
+            manager = optString(5),
+            note = optString(6),
+            tag = optString(7),
+            reminder = optString(8),
+            reminderText = optString(9),
+            client = optString(10)
+        )
+    }
+
+    private fun JSONObject.firstArray(vararg keys: String): JSONArray? {
+        keys.forEach { key -> optJSONArray(key)?.let { return it } }
+        return null
+    }
+
+    private fun JSONObject.firstString(vararg keys: String): String {
+        keys.forEach { key ->
+            if (has(key) && !isNull(key)) {
+                val value = optString(key).trim()
+                if (value.isNotBlank()) return value
+            }
+        }
+        return ""
+    }
+
+    private fun List<CallHistoryItem>.filterForHistoryScreen(normalizedPhone: String): List<CallHistoryItem> {
+        return filter { item ->
+            // Пустые строки появляются, когда Retrofit получил объекты с русскими названиями колонок
+            // и не смог разложить их по @SerializedName. Такие строки отбрасываем и даём fallback-парсеру
+            // прочитать колонки «Комментарии» и «Напоминания» вручную.
+            if (!item.hasHistoryContent()) return@filter false
+            if (item.isHeaderRow()) return@filter false
+
+            val itemPhone = normalizePhone(item.phone)
+            itemPhone.isBlank() || itemPhone == normalizedPhone
+        }
+    }
+
+    private fun CallHistoryItem.hasHistoryContent(): Boolean {
+        return listOf(date, time, phone, type, duration, manager, note, tag, reminder, reminderText, client, callId, userPhone)
+            .any { it.isNotBlank() }
+    }
+
+    private fun CallHistoryItem.isHeaderRow(): Boolean {
+        return normalizeHeader(date) == "дата" ||
+            normalizeHeader(phone) in setOf("номертелефона", "телефон", "phone", "contactphone") ||
+            normalizeHeader(note) in setOf("комментарий", "комментарии", "коментарий", "коментарии", "comment", "comments") ||
+            normalizeHeader(reminder) in setOf("напоминание", "напоминания", "reminder", "reminders")
+    }
+
+    private fun normalizeHeader(value: String): String {
+        return value.filter { it.isLetterOrDigit() }.lowercase(Locale.getDefault())
     }
 
     private fun CallHistoryItem.hasHistoryContent(): Boolean {
@@ -571,15 +719,15 @@ class CallRepository(
         syncCallById(latestCall.id)
     }
 
-    suspend fun markAsPersonalContact(phone: String) {
-        if (phone.isBlank() || phone == "Неизвестно") return
+    suspend fun markAsPersonalContact(phone: String): Boolean {
+        if (phone.isBlank() || phone == "Неизвестно") return false
         ensureContact(phone)
-        updatePersonalContactLocal(phone, isPersonal = true)
-        syncPersonalContactToRemote(phone, true, enqueueOnFailure = true)
+        if (!syncPersonalContactToRemote(phone, true, enqueueOnFailure = true)) return false
         val pendingCount = markCallsPendingForNormalizedPhone(phone)
         Log.d("CallRepository", "Личный контакт: поставили в очередь $pendingCount звонков для обновления колонки Клиент")
         syncPending()
         flushPendingPersonalContactsSync()
+        return true
     }
 
     suspend fun markCallsPendingForPhoneResync(phone: String) {
@@ -588,15 +736,32 @@ class CallRepository(
         syncPending()
     }
 
-    suspend fun unmarkPersonalContact(phone: String) {
-        if (phone.isBlank() || phone == "Неизвестно") return
+    suspend fun unmarkPersonalContact(phone: String): Boolean {
+        if (phone.isBlank() || phone == "Неизвестно") return false
         ensureContact(phone)
-        updatePersonalContactLocal(phone, isPersonal = false)
-        syncPersonalContactToRemote(phone, false, enqueueOnFailure = true)
+        if (!syncPersonalContactToRemote(phone, false, enqueueOnFailure = true)) return false
         val pendingCount = markCallsPendingForNormalizedPhone(phone)
         Log.d("CallRepository", "Личный контакт снят: поставили в очередь $pendingCount звонков для очистки колонки Клиент")
         syncPending()
         flushPendingPersonalContactsSync()
+        return true
+    }
+
+    private suspend fun updatePersonalContactLocal(phone: String, isPersonal: Boolean) {
+        val normalizedPhone = normalizePhone(phone)
+        val value = if (isPersonal) "Личный" else ""
+        contactDao.updateClient1cByPhone(phone, value)
+        contactDao.findAll()
+            .filter { contact -> normalizePhone(contact.phone) == normalizedPhone }
+            .forEach { contact -> contactDao.updateClient1c(contact.id, value) }
+    }
+
+    private suspend fun markCallsPendingForNormalizedPhone(phone: String): Int {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return 0
+        val calls = callDao.getAllOnce().filter { call -> normalizePhone(call.phone) == normalizedPhone }
+        calls.forEach { call -> callDao.markPending(call.id) }
+        return calls.size
     }
 
     private suspend fun updatePersonalContactLocal(phone: String, isPersonal: Boolean) {
@@ -618,16 +783,62 @@ class CallRepository(
 
     private suspend fun syncPersonalContactToRemote(phone: String, isPersonal: Boolean, enqueueOnFailure: Boolean): Boolean {
         val normalizedContactPhone = normalizePhone(phone)
-        val clientValue = if (isPersonal) PERSONAL_CALL_CLIENT_VALUE else ""
-        Log.d(
-            "CallRepository",
-            "Запись личного контакта в таблицы Google отключена: phone=$normalizedContactPhone, " +
-                "client='$clientValue'. Связанные звонки отправляются только в SQL API через syncPending."
-        )
-        if (enqueueOnFailure) {
-            writePendingPersonalSync(emptyList())
+        val personalFlag = if (isPersonal) 1 else 0
+        if (normalizedManagerPhone.isBlank() || normalizedContactPhone.isBlank()) return false
+
+        val payload = JSONObject().apply {
+            put("user_phone", normalizedManagerPhone)
+            put("manager", managerName)
+            put("contact_phone", normalizedContactPhone)
+            put("personal_flag", personalFlag)
         }
-        return true
+        Log.d("PERSONAL_CONTACTS", "Изменение признака личного контакта: $payload")
+        com.example.calltrack.logging.AppLogger.log(
+            appContext,
+            "API",
+            "Отправка личного контакта: phone=$normalizedContactPhone, flag=$personalFlag"
+        )
+
+        val ok = runCatching {
+            withContext(Dispatchers.IO) {
+                val request = Request.Builder()
+                    .url(sqlApiUrl("personal_contact.php"))
+                    .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
+                personalContactsHttpClient.newCall(request).execute().use { response ->
+                    val bodyText = response.body?.string().orEmpty()
+                    val accepted = isSqlApiAccepted(response.isSuccessful, bodyText)
+                    Log.d(
+                        "PERSONAL_CONTACTS",
+                        "Ответ personal_contact.php: code=${response.code}, accepted=$accepted, body=${bodyText.take(400)}"
+                    )
+                    if (!accepted) {
+                        throw IllegalStateException("SQL API personal_contact rejected: code=${response.code}, body=${bodyText.take(400)}")
+                    }
+                    true
+                }
+            }
+        }.onFailure {
+            Log.e("PERSONAL_CONTACTS", "Ошибка сети при изменении личного контакта", it)
+            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка личного контакта: ${it.message}")
+            if (enqueueOnFailure) {
+                enqueuePendingPersonalSync(
+                    PersonalSyncItem(
+                        managerPhone = normalizedManagerPhone,
+                        managerName = managerName,
+                        contactPhone = normalizedContactPhone,
+                        isPersonal = isPersonal
+                    )
+                )
+            }
+        }.getOrDefault(false)
+
+        if (ok) {
+            personalContactDao.upsert(PersonalContactEntity(normalizedContactPhone, personalFlag))
+            updatePersonalContactLocal(normalizedContactPhone, isPersonal)
+            com.example.calltrack.logging.AppLogger.log(appContext, "API", "Личный контакт сохранён: flag=$personalFlag")
+        }
+        return ok
     }
 
     private suspend fun flushPendingPersonalContactsSync() {

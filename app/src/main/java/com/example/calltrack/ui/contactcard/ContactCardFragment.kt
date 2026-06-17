@@ -67,17 +67,23 @@ class ContactCardFragment : Fragment() {
         binding.btnMarkPersonal.setOnClickListener {
             viewLifecycleOwner.lifecycleScope.launch {
                 if (isPersonalContact) {
-                    viewModel.unmarkPersonalContact(phone)
-                    binding.tvClient1c.text = "—"
-                    isPersonalContact = false
-                    renderPersonalButtonState()
-                    Toast.makeText(requireContext(), "Пометка личного контакта убрана", Toast.LENGTH_SHORT).show()
+                    if (viewModel.unmarkPersonalContact(phone)) {
+                        binding.tvClient1c.text = "—"
+                        isPersonalContact = false
+                        renderPersonalButtonState()
+                        Toast.makeText(requireContext(), "Пометка личного контакта убрана", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(requireContext(), "Не удалось убрать пометку личного контакта", Toast.LENGTH_SHORT).show()
+                    }
                 } else {
-                    viewModel.markAsPersonalContact(phone)
-                    binding.tvClient1c.text = "Личный"
-                    isPersonalContact = true
-                    renderPersonalButtonState()
-                    Toast.makeText(requireContext(), "Контакт помечен как личный", Toast.LENGTH_SHORT).show()
+                    if (viewModel.markAsPersonalContact(phone)) {
+                        binding.tvClient1c.text = "Личный"
+                        isPersonalContact = true
+                        renderPersonalButtonState()
+                        Toast.makeText(requireContext(), "Контакт помечен как личный", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(requireContext(), "Не удалось пометить контакт как личный", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
