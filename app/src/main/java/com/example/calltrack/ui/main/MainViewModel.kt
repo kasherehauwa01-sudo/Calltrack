@@ -59,11 +59,19 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     suspend fun markOnboardingCompleted() = repository.prefs.setOnboardingCompleted(true)
     suspend fun setManagerName(name: String) = repository.prefs.setManagerName(name)
     suspend fun setManagerPhone(phone: String) = repository.prefs.setManagerPhone(phone)
-    // Фоновая синхронизация с Google Sheets (с последующим сохранением статусов во внутреннем кэше БД).
+    // Фоновая синхронизация с SQL API (с последующим сохранением статусов во внутреннем кэше БД).
     suspend fun sync() = repository.syncPending()
+
+    // Экран «Последние» обновляем из стандартной звонилки Android, а не из SQL API.
+    suspend fun refreshRecentCallsFromDevice() = repository.importRecentCallsFromDevice()
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> = repository.loadHistoryFromRemote(phone)
+    suspend fun getDeviceCallHistory(phone: String): List<CallHistoryEntity> = repository.getDeviceCallHistory(phone)
     suspend fun getHistory(phone: String): List<CallHistoryEntity> = repository.getHistory(phone)
     suspend fun refreshHistory(phone: String) = repository.refreshHistory(phone)
+    suspend fun getStoredReminders(phone: String): List<ReminderEntity> = repository.getStoredReminders(phone)
+    suspend fun refreshRemindersFromRemote(phone: String): List<ReminderEntity> = repository.refreshRemindersFromRemote(phone)
+    suspend fun getStoredComments(phone: String): List<CommentEntity> = repository.getStoredComments(phone)
+    suspend fun refreshCommentsFromRemote(phone: String): List<CommentEntity> = repository.refreshCommentsFromRemote(phone)
 
     class Factory(private val repository: CallRepository) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
