@@ -165,13 +165,13 @@ class CallRepository(
         val token = runCatching { JSONTokener(raw.trim()).nextValue() }.getOrNull() ?: return emptyList()
         val arr = when (token) {
             is JSONArray -> token
-            is JSONObject -> token.firstArray("data", "items", "contacts", "personal_contacts", "result") ?: JSONArray()
+            is JSONObject -> firstJsonArray(token, "data", "items", "contacts", "personal_contacts", "result") ?: JSONArray()
             else -> JSONArray()
         }
         val result = mutableListOf<PersonalContactEntity>()
         for (i in 0 until arr.length()) {
             val row = arr.optJSONObject(i) ?: continue
-            val contactPhone = normalizePhone(row.firstString("contact_phone", "phone", "contactPhone"))
+            val contactPhone = normalizePhone(firstJsonString(row, "contact_phone", "phone", "contactPhone"))
             if (contactPhone.isBlank()) continue
             val flag = row.optInt("personal_flag", row.optInt("is_personal", 1)).coerceIn(0, 1)
             result += PersonalContactEntity(contactPhone = contactPhone, personalFlag = flag)
@@ -217,7 +217,7 @@ class CallRepository(
         val token = runCatching { JSONTokener(text).nextValue() }.getOrNull() ?: return emptyList()
         val arr = when (token) {
             is JSONArray -> token
-            is JSONObject -> token.firstArray("data", "rows", "history", "calls", "items", "result") ?: JSONArray()
+            is JSONObject -> firstJsonArray(token, "data", "rows", "history", "calls", "items", "result") ?: JSONArray()
             else -> JSONArray()
         }
 
@@ -225,8 +225,8 @@ class CallRepository(
         for (i in 0 until arr.length()) {
             val row = arr.opt(i)
             val item = when (row) {
-                is JSONObject -> row.toCallHistoryItem()
-                is JSONArray -> row.toCallHistoryItem()
+                is JSONObject -> jsonObjectToCallHistoryItem(row)
+                is JSONArray -> jsonArrayToCallHistoryItem(row)
                 else -> null
             }
             if (item != null) items += item
@@ -234,6 +234,70 @@ class CallRepository(
         return items
     }
 
+    private fun jsonObjectToCallHistoryItem(json: JSONObject): CallHistoryItem {
+        return CallHistoryItem(
+            date = firstJsonString(json, "date", "call_date", "Дата"),
+            time = firstJsonString(json, "time", "call_time", "Время"),
+            phone = firstJsonString(json, "phone", "contact_phone", "Номер телефона", "Телефон"),
+            type = firstJsonString(json, "type", "call_type", "Тип звонка", "Тип"),
+            duration = firstJsonString(json, "duration", "Длительность"),
+            manager = firstJsonString(json, "manager", "Менеджер"),
+            note = firstJsonString(json, "note", "comment", "comments", "comment_text", "Комментарий", "Комментарии", "Коментарий", "Коментарии"),
+            tag = firstJsonString(json, "tag", "tags", "Тег", "Теги"),
+            reminder = firstJsonString(json, "reminder", "reminders", "Напоминание", "Напоминания"),
+            reminderText = firstJsonString(json, "reminder_text", "reminderText", "reminder_texts", "Текст напоминания", "Тексты напоминаний"),
+            client = firstJsonString(json, "client", "Клиент"),
+            callId = firstJsonString(json, "call_id", "ID", "id"),
+            userPhone = firstJsonString(json, "user_phone", "manager_phone", "Номер телефона пользователя")
+        )
+    }
+
+    private fun jsonArrayToCallHistoryItem(array: JSONArray): CallHistoryItem? {
+        if (array.length() < CALL_HISTORY_MIN_ARRAY_COLUMNS) return null
+        return CallHistoryItem(
+            date = array.optString(0),
+            time = array.optString(1),
+            phone = array.optString(2),
+            type = array.optString(3),
+            duration = array.optString(4),
+            manager = array.optString(5),
+            note = array.optString(6),
+            tag = array.optString(7),
+            reminder = array.optString(8),
+            reminderText = array.optString(9),
+            client = array.optString(10)
+        )
+    }
+
+    private fun firstJsonArray(json: JSONObject, vararg keys: String): JSONArray? {
+        keys.forEach { key -> json.optJSONArray(key)?.let { return it } }
+        return null
+    }
+
+    private fun firstJsonString(json: JSONObject, vararg keys: String): String {
+        keys.forEach { key ->
+            if (json.has(key) && !json.isNull(key)) {
+                val value = json.optString(key).trim()
+                if (value.isNotBlank()) return value
+            }
+        }
+        return ""
+    }
+
+    private fun List<CallHistoryItem>.filterForHistoryScreen(normalizedPhone: String): List<CallHistoryItem> {
+        return filter { item ->
+            // Пустые строки появляются, когда Retrofit получил объекты с русскими названиями колонок
+            // и не смог разложить их по @SerializedName. Такие строки отбрасываем и даём fallback-парсеру
+            // прочитать колонки «Комментарии» и «Напоминания» вручную.
+            if (!item.hasHistoryContent()) return@filter false
+            if (item.isHeaderRow()) return@filter false
+
+            val itemPhone = normalizePhone(item.phone)
+            itemPhone.isBlank() || itemPhone == normalizedPhone
+        }
+        return items
+    }
+
     private fun JSONObject.toCallHistoryItem(): CallHistoryItem {
         return CallHistoryItem(
             date = firstString("date", "call_date", "Дата"),
@@ -359,6 +423,22 @@ class CallRepository(
             val itemPhone = normalizePhone(item.phone)
             itemPhone.isBlank() || itemPhone == normalizedPhone
         }
+    }
+
+    private fun CallHistoryItem.hasHistoryContent(): Boolean {
+        return listOf(date, time, phone, type, duration, manager, note, tag, reminder, reminderText, client, callId, userPhone)
+            .any { it.isNotBlank() }
+    }
+
+    private fun CallHistoryItem.isHeaderRow(): Boolean {
+        return normalizeHeader(date) == "дата" ||
+            normalizeHeader(phone) in setOf("номертелефона", "телефон", "phone", "contactphone") ||
+            normalizeHeader(note) in setOf("комментарий", "комментарии", "коментарий", "коментарии", "comment", "comments") ||
+            normalizeHeader(reminder) in setOf("напоминание", "напоминания", "reminder", "reminders")
+    }
+
+    private fun normalizeHeader(value: String): String {
+        return value.filter { it.isLetterOrDigit() }.lowercase(Locale.getDefault())
     }
 
     private fun CallHistoryItem.hasHistoryContent(): Boolean {
@@ -745,23 +825,6 @@ class CallRepository(
         syncPending()
         flushPendingPersonalContactsSync()
         return true
-    }
-
-    private suspend fun updatePersonalContactLocal(phone: String, isPersonal: Boolean) {
-        val normalizedPhone = normalizePhone(phone)
-        val value = if (isPersonal) "Личный" else ""
-        contactDao.updateClient1cByPhone(phone, value)
-        contactDao.findAll()
-            .filter { contact -> normalizePhone(contact.phone) == normalizedPhone }
-            .forEach { contact -> contactDao.updateClient1c(contact.id, value) }
-    }
-
-    private suspend fun markCallsPendingForNormalizedPhone(phone: String): Int {
-        val normalizedPhone = normalizePhone(phone)
-        if (normalizedPhone.isBlank()) return 0
-        val calls = callDao.getAllOnce().filter { call -> normalizePhone(call.phone) == normalizedPhone }
-        calls.forEach { call -> callDao.markPending(call.id) }
-        return calls.size
     }
 
     private suspend fun updatePersonalContactLocal(phone: String, isPersonal: Boolean) {
