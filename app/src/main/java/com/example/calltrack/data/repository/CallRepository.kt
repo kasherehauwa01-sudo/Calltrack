@@ -51,6 +51,8 @@ class CallRepository(
 
     private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val sqlDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private val sqlTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
     private val syncMutex = Mutex()
     private val personalContactsHttpClient = OkHttpClient()
 
@@ -783,9 +785,14 @@ class CallRepository(
         callId: String
     ): Boolean {
         return runCatching {
+            val callDate = Date(entity.timestamp)
+            val sqlDate = sqlDateFormat.format(callDate)
+            val sqlTime = sqlTimeFormat.format(callDate)
+            Log.d("SQL_API", "Sending call: date=$sqlDate, time=$sqlTime, callId=$callId")
+
             val payload = JSONObject().apply {
-                put("date", dateFormat.format(Date(entity.timestamp)))
-                put("time", timeFormat.format(Date(entity.timestamp)))
+                put("date", sqlDate)
+                put("time", sqlTime)
                 put("phone", normalizePhone(entity.phone))
                 put("type", entity.type)
                 put("duration", entity.duration)
