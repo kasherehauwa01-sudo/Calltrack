@@ -453,35 +453,7 @@ class CallRepository(
             normalizeHeader(reminder) in setOf("напоминание", "напоминания", "reminder", "reminders")
     }
 
-    private fun normalizeHeader(value: String): String {
-        return value.filter { it.isLetterOrDigit() }.lowercase(Locale.getDefault())
-    }
-
-    private fun CallHistoryItem.hasHistoryContent(): Boolean {
-        return listOf(date, time, phone, type, duration, manager, note, tag, reminder, reminderText, client, callId, userPhone)
-            .any { it.isNotBlank() }
-    }
-
-    private fun CallHistoryItem.isHeaderRow(): Boolean {
-        return normalizeHeader(date) == "дата" ||
-            normalizeHeader(phone) in setOf("номертелефона", "телефон", "phone", "contactphone") ||
-            normalizeHeader(note) in setOf("комментарий", "комментарии", "коментарий", "коментарии", "comment", "comments") ||
-            normalizeHeader(reminder) in setOf("напоминание", "напоминания", "reminder", "reminders")
-    }
-
-    private fun normalizeHeader(value: String): String {
-        return value.filter { it.isLetterOrDigit() }.lowercase(Locale.getDefault())
-    }
-
-    suspend fun getHistory(phone: String): List<CallHistoryEntity> {
-        val normalized = normalizePhone(phone)
-        val cached = callHistoryDao.getByPhone(normalized)
-        if (cached.isNotEmpty()) return cached
-
-        val remote = loadHistoryFromRemote(normalized)
-        callHistoryDao.insertAll(remote.map { it.toEntity(normalized) })
-        return callHistoryDao.getByPhone(normalized)
-    }
+   
 
     suspend fun refreshHistory(phone: String) {
         val normalized = normalizePhone(phone)
