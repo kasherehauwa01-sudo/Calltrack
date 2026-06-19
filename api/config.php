@@ -5,11 +5,25 @@
 
 declare(strict_types=1);
 
-const DB_HOST = 'localhost';       // пример Timeweb: localhost или mysqlXX.timeweb.ru
-const DB_NAME = 'calltrack_db';    // имя базы данных из панели Timeweb
-const DB_USER = 'calltrack_user';  // пользователь базы данных
-const DB_PASS = 'change_me';       // пароль пользователя базы данных
-const DB_CHARSET = 'utf8mb4';
+if (file_exists(__DIR__ . '/config.local.php')) {
+    require_once __DIR__ . '/config.local.php';
+}
+
+if (!defined('DB_HOST')) {
+    define('DB_HOST', 'localhost');       // пример Timeweb: localhost или mysqlXX.timeweb.ru
+}
+if (!defined('DB_NAME')) {
+    define('DB_NAME', 'calltrack_db');    // имя базы данных из панели Timeweb
+}
+if (!defined('DB_USER')) {
+    define('DB_USER', 'calltrack_user');  // пользователь базы данных
+}
+if (!defined('DB_PASS')) {
+    define('DB_PASS', 'change_me');       // пароль пользователя базы данных
+}
+if (!defined('DB_CHARSET')) {
+    define('DB_CHARSET', 'utf8mb4');
+}
 
 function getPdo(): PDO
 {
