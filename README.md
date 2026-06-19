@@ -812,3 +812,66 @@ function doGet(e) {
   }
 }
 ```
+
+---
+
+## 5. Веб-дашборд и серверный API
+
+Веб-часть теперь хранится внутри этого репозитория и не требует отдельного `Calltrack_dashboard1`:
+
+- `dashboard/index.html` — страница реестра звонков.
+- `dashboard/api.js` — клиентские запросы к PHP API.
+- `api/get_calls.php` — получение списка звонков для дашборда.
+- `api/delete_call.php` — удаление одного звонка.
+- `api/delete_calls.php` — массовое удаление звонков.
+
+Относительные пути рассчитаны на размещение каталогов `dashboard` и `api` на одном уровне в корне сайта:
+
+```text
+public_html/
+├── api/
+│   ├── config.php
+│   ├── get_calls.php
+│   ├── delete_call.php
+│   └── delete_calls.php
+└── dashboard/
+    ├── index.html
+    └── api.js
+```
+
+`dashboard/index.html` подключает скрипт как `api.js`, а `dashboard/api.js` обращается к API через `../api/`.
+
+### Изменённые файлы после объединения
+
+- `dashboard/index.html`
+- `dashboard/api.js`
+- `api/get_calls.php`
+- `api/delete_call.php`
+- `api/delete_calls.php`
+- `README.md`
+
+### Инструкция по деплою на сервер
+
+1. Соберите актуальную версию репозитория локально или на CI:
+   ```bash
+   git pull
+   ./gradlew :app:assembleDebug
+   ```
+2. Скопируйте на сервер каталог `dashboard` в корень сайта, например в `public_html/dashboard`.
+3. Скопируйте на сервер каталог `api` в корень сайта, например в `public_html/api`.
+4. Настройте подключение к MySQL/MariaDB в `api/config.php` через переменные окружения хостинга:
+   - `CALLTRACK_DB_HOST`
+   - `CALLTRACK_DB_NAME`
+   - `CALLTRACK_DB_USER`
+   - `CALLTRACK_DB_PASS`
+   - `CALLTRACK_DB_CHARSET` при необходимости
+5. Создайте или обновите таблицы базы данных SQL-скриптами из каталога `database`.
+6. Проверьте доступность API в браузере или через `curl`:
+   ```bash
+   curl 'https://your-domain.example/api/get_calls.php?period=today'
+   ```
+7. Откройте дашборд:
+   ```text
+   https://your-domain.example/dashboard/index.html
+   ```
+8. Если сервер отдаёт дашборд из подкаталога, сохраните структуру `dashboard` и `api` как соседние каталоги. Иначе относительный путь `../api/` в `dashboard/api.js` нужно будет заменить на фактический URL API.
