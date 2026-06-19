@@ -1,12 +1,15 @@
 const API_BASE = '../api/';
-const state = { rows: [], chart: null, selected: new Set() };
+const state = { rows: [], personalContacts: [], chart: null, selected: new Set(), personalContactsLoaded: false };
 
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
 const bodyEl = $('callsBody');
 const deleteSelectedBtn = $('deleteSelectedBtn');
+const personalContactsBodyEl = $('personalContactsBody');
+const personalContactsStatusEl = $('personalContactsStatus');
 
 function setStatus(message) { statusEl.textContent = message || ''; }
+function setPersonalContactsStatus(message) { personalContactsStatusEl.textContent = message || ''; }
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
 }
@@ -28,6 +31,10 @@ async function requestJson(endpoint, options = {}) {
 
 async function getCalls(filters) {
   const payload = await requestJson(`get_calls.php?${query(filters)}`);
+  return Array.isArray(payload.data) ? payload.data : [];
+}
+async function getPersonalContacts() {
+  const payload = await requestJson('get_personal_contacts.php');
   return Array.isArray(payload.data) ? payload.data : [];
 }
 async function deleteCall(idDb) {
@@ -93,11 +100,61 @@ function renderTable(rows) {
   bodyEl.innerHTML = rows.map((row) => `
     <tr data-id="${esc(row.id_db)}">
       <td><input type="checkbox" class="rowCheck" value="${esc(row.id_db)}" /></td>
-      <td>${esc(row.id_db)}</td><td>${esc(row.call_date)}</td><td>${esc(row.call_time)}</td><td>${esc(row.phone)}</td><td>${esc(row.call_type)}</td><td>${esc(row.duration)}</td><td>${esc(row.manager)}</td><td>${esc(row.client)}</td><td>${esc(row.comment)}</td><td>${esc(row.tag)}</td><td>${esc(row.reminder)}</td><td>${esc(row.reminder_text)}</td><td>${esc(row.call_id)}</td><td>${esc(row.user_phone)}</td>
+      <td>${esc(row.id_db)}</td>
+      <td>${esc(row.call_date)}</td>
+      <td>${esc(row.call_time)}</td>
+      <td>${esc(row.phone)}</td>
+      <td>${esc(row.call_type)}</td>
+      <td>${esc(row.duration)}</td>
+      <td>${esc(row.manager)}</td>
+      <td>${esc(row.client)}</td>
+      <td>${esc(row.comment)}</td>
+      <td>${esc(row.tag)}</td>
+      <td>${esc(row.reminder)}</td>
+      <td>${esc(row.reminder_text)}</td>
+      <td>${esc(row.call_id)}</td>
+      <td>${esc(row.user_phone)}</td>
       <td><button class="danger deleteOne" data-id="${esc(row.id_db)}">Удалить</button></td>
     </tr>`).join('');
 }
 function render(rows) { renderKpi(rows); renderChart(rows); renderTable(rows); }
+function renderPersonalContacts(rows) {
+  if (!rows.length) {
+    personalContactsBodyEl.innerHTML = '<tr><td colspan="7" class="empty">Нет данных</td></tr>';
+    return;
+  }
+
+  personalContactsBodyEl.innerHTML = rows.map((row) => {
+    const isPersonal = Number(row.personal_flag) === 1;
+    return `
+      <tr>
+        <td>${esc(row.id_db)}</td><td>${esc(row.user_phone)}</td><td>${esc(row.manager)}</td><td>${esc(row.contact_phone)}</td>
+        <td><span class="badge ${isPersonal ? 'yes' : 'no'}">${isPersonal ? 'Личный' : 'Рабочий'}</span></td>
+        <td>${esc(row.created_at)}</td><td>${esc(row.updated_at)}</td>
+      </tr>`;
+  }).join('');
+}
+
+async function loadPersonalContacts() {
+  setPersonalContactsStatus('Загрузка...');
+  const rows = await getPersonalContacts();
+  state.personalContacts = rows;
+  state.personalContactsLoaded = true;
+  renderPersonalContacts(rows);
+  setPersonalContactsStatus(`Загружено: ${rows.length}`);
+}
+
+function showTab(tabName) {
+  const isRegistry = tabName === 'registry';
+  $('registryPanel').hidden = !isRegistry;
+  $('personalContactsPanel').hidden = isRegistry;
+  document.querySelectorAll('.tabBtn').forEach((button) => {
+    button.classList.toggle('active', button.dataset.tab === tabName);
+  });
+  if (!isRegistry && !state.personalContactsLoaded) {
+    loadPersonalContacts().catch((error) => { console.error(error); setPersonalContactsStatus(`Ошибка: ${error.message}`); alert(error.message); });
+  }
+}
 
 async function loadData() {
   setStatus('Загрузка...');
@@ -108,7 +165,11 @@ async function loadData() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.tabBtn').forEach((button) => {
+    button.addEventListener('click', () => showTab(button.dataset.tab));
+  });
   $('loadBtn').addEventListener('click', () => loadData().catch((error) => { console.error(error); setStatus(`Ошибка: ${error.message}`); alert(error.message); }));
+  $('loadPersonalContactsBtn').addEventListener('click', () => loadPersonalContacts().catch((error) => { console.error(error); setPersonalContactsStatus(`Ошибка: ${error.message}`); alert(error.message); }));
   $('selectAll').addEventListener('change', (event) => {
     document.querySelectorAll('.rowCheck').forEach((checkbox) => {
       checkbox.checked = event.target.checked;
