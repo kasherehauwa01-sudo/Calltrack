@@ -100,7 +100,20 @@ function renderTable(rows) {
   bodyEl.innerHTML = rows.map((row) => `
     <tr data-id="${esc(row.id_db)}">
       <td><input type="checkbox" class="rowCheck" value="${esc(row.id_db)}" /></td>
-      <td>${esc(row.id_db)}</td><td>${esc(row.call_date)}</td><td>${esc(row.call_time)}</td><td>${esc(row.phone)}</td><td>${esc(row.call_type)}</td><td>${esc(row.duration)}</td><td>${esc(row.manager)}</td><td>${esc(row.client)}</td><td>${esc(row.comment)}</td><td>${esc(row.tag)}</td><td>${esc(row.reminder)}</td><td>${esc(row.reminder_text)}</td><td>${esc(row.call_id)}</td><td>${esc(row.user_phone)}</td>
+      <td>${esc(row.id_db)}</td>
+      <td>${esc(row.call_date)}</td>
+      <td>${esc(row.call_time)}</td>
+      <td>${esc(row.phone)}</td>
+      <td>${esc(row.call_type)}</td>
+      <td>${esc(row.duration)}</td>
+      <td>${esc(row.manager)}</td>
+      <td>${esc(row.client)}</td>
+      <td>${esc(row.comment)}</td>
+      <td>${esc(row.tag)}</td>
+      <td>${esc(row.reminder)}</td>
+      <td>${esc(row.reminder_text)}</td>
+      <td>${esc(row.call_id)}</td>
+      <td>${esc(row.user_phone)}</td>
       <td><button class="danger deleteOne" data-id="${esc(row.id_db)}">Удалить</button></td>
     </tr>`).join('');
 }
