@@ -824,6 +824,7 @@ function doGet(e) {
 - `api/get_calls.php` — получение списка звонков для дашборда.
 - `api/delete_call.php` — удаление одного звонка.
 - `api/delete_calls.php` — массовое удаление звонков.
+- `api/get_personal_contacts.php` — получение SQL-таблицы `personal_contacts` для вкладки «Признаки контакта».
 
 Относительные пути рассчитаны на размещение каталогов `dashboard` и `api` на одном уровне в корне сайта:
 
@@ -833,7 +834,8 @@ public_html/
 │   ├── config.php
 │   ├── get_calls.php
 │   ├── delete_call.php
-│   └── delete_calls.php
+│   ├── delete_calls.php
+│   └── get_personal_contacts.php
 └── dashboard/
     ├── index.html
     └── api.js
@@ -848,6 +850,7 @@ public_html/
 - `api/get_calls.php`
 - `api/delete_call.php`
 - `api/delete_calls.php`
+- `api/get_personal_contacts.php`
 - `README.md`
 
 ### Инструкция по деплою на сервер
