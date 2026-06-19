@@ -27,6 +27,26 @@ function getPdo(): PDO
     ]);
 }
 
+
+function ensurePersonalContactsTable(PDO $pdo): void
+{
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS personal_contacts (
+    id_db BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_phone VARCHAR(30) NOT NULL,
+    manager VARCHAR(255),
+    contact_phone VARCHAR(30) NOT NULL,
+    personal_flag TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_contact (user_phone, contact_phone),
+    INDEX idx_personal_user_phone (user_phone),
+    INDEX idx_personal_contact_phone (contact_phone),
+    INDEX idx_personal_flag (personal_flag)
+)
+SQL);
+}
+
 function sendJson(array $payload, int $statusCode = 200): void
 {
     http_response_code($statusCode);

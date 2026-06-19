@@ -3,6 +3,9 @@ declare(strict_types=1);
 require_once __DIR__ . '/config.php';
 
 try {
+    $pdo = getPdo();
+    ensurePersonalContactsTable($pdo);
+
     $data = readJsonBody();
     $userPhone = valueOrNull($data, 'user_phone');
     $contactPhone = valueOrNull($data, 'contact_phone');
@@ -26,7 +29,7 @@ ON DUPLICATE KEY UPDATE
     personal_flag = VALUES(personal_flag),
     updated_at = CURRENT_TIMESTAMP
 SQL;
-    $stmt = getPdo()->prepare($sql);
+    $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
 
     sendJson(['status' => 'success']);
