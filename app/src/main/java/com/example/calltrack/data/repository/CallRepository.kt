@@ -484,6 +484,153 @@ class CallRepository(
 
 
 
+    suspend fun getStoredReminders(phone: String): List<ReminderEntity> = withContext(Dispatchers.IO) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return@withContext emptyList<ReminderEntity>()
+
+        reminderDao.getAllOnce()
+            .filter { reminder -> normalizePhone(reminder.phone) == normalizedPhone && reminder.message.isNotBlank() }
+            .sortedByDescending { it.remindAt }
+    }
+
+    suspend fun refreshRemindersFromRemote(phone: String): List<ReminderEntity> = withContext(Dispatchers.IO) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return@withContext emptyList<ReminderEntity>()
+
+        Log.d(HISTORY_LOG_TAG, "Начало импорта напоминаний из Calltrack во внутреннюю память: phone=$phone, normalized=$normalizedPhone")
+        val remoteItems = loadHistoryFromRemote(phone)
+        val remoteReminders = remoteItems
+            .mapNotNull { item -> item.toReminderEntity(normalizedPhone) }
+        Log.d(HISTORY_LOG_TAG, "Напоминаний из таблицы после парсинга: ${remoteReminders.size}, phone=$phone")
+
+        val existingFingerprints = reminderDao.getAllOnce()
+            .filter { reminder -> normalizePhone(reminder.phone) == normalizedPhone }
+            .map { reminder -> reminder.reminderFingerprint() }
+            .toMutableSet()
+
+        var inserted = 0
+        remoteReminders.forEach { reminder ->
+            val fingerprint = reminder.reminderFingerprint()
+            if (fingerprint !in existingFingerprints) {
+                // Напоминания из SQL API сохраняем во внутреннюю БД,
+                // чтобы история напоминаний восстанавливалась после переустановки приложения.
+                reminderDao.insert(reminder)
+                existingFingerprints += fingerprint
+                inserted++
+            }
+        }
+        Log.d(HISTORY_LOG_TAG, "Импорт напоминаний завершён: inserted=$inserted, totalRemote=${remoteReminders.size}, phone=$phone")
+        getStoredReminders(normalizedPhone)
+    }
+
+    suspend fun getStoredComments(phone: String): List<CommentEntity> = withContext(Dispatchers.IO) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return@withContext emptyList<CommentEntity>()
+
+        commentDao.getAllOnce()
+            .filter { comment -> normalizePhone(comment.phone) == normalizedPhone && comment.text.isNotBlank() }
+            .sortedByDescending { it.createdAt }
+    }
+
+    suspend fun refreshCommentsFromRemote(phone: String): List<CommentEntity> = withContext(Dispatchers.IO) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return@withContext emptyList<CommentEntity>()
+
+        Log.d(HISTORY_LOG_TAG, "Начало импорта комментариев из Calltrack во внутреннюю память: phone=$phone, normalized=$normalizedPhone")
+        val remoteItems = loadHistoryFromRemote(phone)
+        val remoteComments = remoteItems
+            .filter { item -> item.note.isNotBlank() }
+            .map { item ->
+                CommentEntity(
+                    phone = normalizedPhone,
+                    text = item.note.trim(),
+                    createdAt = parseHistoryTimestamp(item.date, item.time)
+                )
+            }
+        Log.d(HISTORY_LOG_TAG, "Комментариев из таблицы после парсинга: ${remoteComments.size}, phone=$phone")
+
+        val existingFingerprints = commentDao.getAllOnce()
+            .filter { comment -> normalizePhone(comment.phone) == normalizedPhone }
+            .map { comment -> comment.commentFingerprint() }
+            .toMutableSet()
+
+        var inserted = 0
+        remoteComments.forEach { comment ->
+            val fingerprint = comment.commentFingerprint()
+            if (fingerprint !in existingFingerprints) {
+                // Комментарии из SQL API сохраняем во внутреннюю БД, чтобы экран истории
+                // открывался из памяти приложения даже без повторного сетевого запроса.
+                commentDao.insert(comment)
+                existingFingerprints += fingerprint
+                inserted++
+            }
+        }
+        Log.d(HISTORY_LOG_TAG, "Импорт комментариев завершён: inserted=$inserted, totalRemote=${remoteComments.size}, phone=$phone")
+        getStoredComments(normalizedPhone)
+    }
+
+    suspend fun getDeviceCallHistory(phone: String, limit: Int = DEVICE_CONTACT_HISTORY_LIMIT): List<CallHistoryEntity> =
+        withContext(Dispatchers.IO) {
+            val normalizedPhone = normalizePhone(phone)
+            if (normalizedPhone.isBlank()) return@withContext emptyList()
+            if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+                Log.w("CallRepository", "Нет разрешения READ_CALL_LOG для истории звонков карточки контакта")
+                return@withContext emptyList()
+            }
+
+            val projection = arrayOf(
+                CallLog.Calls.NUMBER,
+                CallLog.Calls.TYPE,
+                CallLog.Calls.DURATION,
+                CallLog.Calls.DATE
+            )
+            val result = mutableListOf<CallHistoryEntity>()
+
+            runCatching {
+                appContext.contentResolver.query(
+                    CallLog.Calls.CONTENT_URI,
+                    projection,
+                    null,
+                    null,
+                    "${CallLog.Calls.DATE} DESC"
+                )?.use { cursor ->
+                    val numberIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.NUMBER)
+                    val typeIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.TYPE)
+                    val durationIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.DURATION)
+                    val dateIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.DATE)
+
+                    while (cursor.moveToNext() && result.size < limit) {
+                        val rawPhone = cursor.getString(numberIdx).orEmpty()
+                        if (normalizePhone(rawPhone) != normalizedPhone) continue
+
+                        val duration = cursor.getLong(durationIdx)
+                        val timestamp = cursor.getLong(dateIdx)
+                        val (type, note) = mapDeviceCallType(cursor.getInt(typeIdx), duration)
+                        // Карточка контакта должна показывать историю из стандартной звонилки Android,
+                        // поэтому формируем элементы экрана напрямую из CallLog, без чтения SQL API.
+                        result += CallHistoryEntity(
+                            phone = normalizedPhone,
+                            date = dateFormat.format(Date(timestamp)),
+                            time = timeFormat.format(Date(timestamp)),
+                            type = type,
+                            duration = duration.toString(),
+                            manager = "",
+                            note = note,
+                            tag = "",
+                            reminder = "",
+                            reminderText = "",
+                            client = "",
+                            updatedAt = timestamp
+                        )
+                    }
+                }
+            }.onFailure {
+                Log.e("CallRepository", "Не удалось загрузить историю звонков контакта из стандартной звонилки", it)
+            }
+
+            result
+        }
+
     suspend fun saveCall(call: CallEntity): Long {
         ensureContact(call.phone)
         val duplicate = callDao.findRecentDuplicate(
