@@ -106,6 +106,11 @@ function renderTable(rows) {
 }
 function render(rows) { renderKpi(rows); renderChart(rows); renderTable(rows); }
 function renderPersonalContacts(rows) {
+  if (!rows.length) {
+    personalContactsBodyEl.innerHTML = '<tr><td colspan="7" class="empty">Нет данных</td></tr>';
+    return;
+  }
+
   personalContactsBodyEl.innerHTML = rows.map((row) => {
     const isPersonal = Number(row.personal_flag) === 1;
     return `
