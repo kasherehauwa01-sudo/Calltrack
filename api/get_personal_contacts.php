@@ -7,14 +7,17 @@ try {
     ensurePersonalContactsTable($pdo);
 
     $userPhone = valueOrNull($_GET, 'user_phone');
-    if ($userPhone === null) {
-        sendJson(['status' => 'error', 'message' => 'Поле user_phone обязательно'], 400);
+    if ($userPhone !== null) {
+        $stmt = $pdo->prepare(
+            'SELECT contact_phone, personal_flag FROM personal_contacts WHERE user_phone = :user_phone ORDER BY updated_at DESC'
+        );
+        $stmt->execute([':user_phone' => $userPhone]);
+        sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
     }
 
-    $stmt = $pdo->prepare(
-        'SELECT contact_phone, personal_flag FROM personal_contacts WHERE user_phone = :user_phone ORDER BY updated_at DESC'
+    $stmt = $pdo->query(
+        'SELECT id_db, user_phone, manager, contact_phone, personal_flag, created_at, updated_at FROM personal_contacts ORDER BY updated_at DESC, id_db DESC'
     );
-    $stmt->execute([':user_phone' => $userPhone]);
 
     sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
 } catch (Throwable $e) {

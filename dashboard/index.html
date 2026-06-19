@@ -15,13 +15,19 @@
     button.secondary{background:var(--accent)} button.danger{background:var(--danger)} button:disabled{opacity:.55;cursor:not-allowed}
     .grid{display:grid;gap:12px}.kpi{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.kpi .val{font-size:26px;font-weight:700}.label{color:var(--muted);font-size:13px}
     .tableWrap{overflow:auto} table{width:100%;border-collapse:collapse;font-size:14px} th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;white-space:nowrap} th{background:#f9fafb;position:sticky;top:0} tr:hover{background:#f8fafc}
-    .chartBox{height:280px}.status{color:var(--muted);font-size:13px;margin-top:8px}
+    .chartBox{height:280px}.status{color:var(--muted);font-size:13px;margin-top:8px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}.tabBtn{background:#e5e7eb;color:#111827}.tabBtn.active{background:var(--accent);color:#fff}.tabPanel[hidden]{display:none}.badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:600}.badge.yes{background:#dcfce7;color:#166534}.badge.no{background:#fee2e2;color:#991b1b}.empty{text-align:center;color:var(--muted);padding:24px}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>📞 CallTrack — реестр звонков</h1>
 
+    <nav class="tabs" aria-label="Разделы админ-панели">
+      <button class="tabBtn active" data-tab="registry" type="button">Реестр</button>
+      <button class="tabBtn" data-tab="personalContacts" type="button">Признаки контакта</button>
+    </nav>
+
+    <div id="registryPanel" class="tabPanel">
     <section class="card toolbar">
       <div class="field">
         <label for="period">Период</label>
@@ -59,6 +65,25 @@
         <tbody id="callsBody"></tbody>
       </table>
     </section>
+    </div>
+
+    <div id="personalContactsPanel" class="tabPanel" hidden>
+      <section class="card toolbar">
+        <button id="loadPersonalContactsBtn" class="secondary" type="button">Обновить</button>
+        <div id="personalContactsStatus" class="status"></div>
+      </section>
+
+      <section class="card tableWrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Номер пользователя</th><th>Менеджер</th><th>Номер контакта</th><th>Признак личного</th><th>Создано</th><th>Обновлено</th>
+            </tr>
+          </thead>
+          <tbody id="personalContactsBody"></tbody>
+        </table>
+      </section>
+    </div>
   </div>
 
   <script src="api.js"></script>
