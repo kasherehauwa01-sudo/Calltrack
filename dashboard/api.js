@@ -3,7 +3,9 @@
 window.calltrackApi = window.calltrackApi || {};
 window.calltrackApi.endpoints = Object.assign({
   calls: '/vr/calltrack/api/get_calls.php',
-  personalContacts: '/vr/calltrack/api/get_personal_contacts.php'
+  personalContacts: '/vr/calltrack/api/get_personal_contacts.php',
+  personalContact: '/vr/calltrack/api/personal_contact.php',
+  deletePersonalContacts: '/vr/calltrack/api/delete_personal_contacts.php'
 }, window.calltrackApi.endpoints || {});
 window.calltrackApi.requestJson = window.calltrackApi.requestJson || (async function requestDashboardJson(url, options = {}) {
   const response = await fetch(url, options);
@@ -24,6 +26,21 @@ window.calltrackApi.getPersonalContacts = window.calltrackApi.getPersonalContact
     personal_flag: row.personal_flag ?? '',
     updated_at: row.updated_at || ''
   }));
+});
+
+window.calltrackApi.updatePersonalContactFlag = window.calltrackApi.updatePersonalContactFlag || (async function updateDashboardPersonalContactFlag(idDb, personalFlag) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.personalContact, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ id_db: idDb, personal_flag: personalFlag })
+  });
+});
+window.calltrackApi.deletePersonalContacts = window.calltrackApi.deletePersonalContacts || (async function deleteDashboardPersonalContacts(ids) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.deletePersonalContacts, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ ids })
+  });
 });
 
 const API_BASE = '../api/';
@@ -74,6 +91,20 @@ async function deleteCall(idDb) {
 }
 async function deleteCalls(ids) {
   return requestJson('delete_calls.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ ids })
+  });
+}
+async function updatePersonalContactFlag(idDb, personalFlag) {
+  return requestJson('personal_contact.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ id_db: idDb, personal_flag: personalFlag })
+  });
+}
+async function deletePersonalContacts(ids) {
+  return requestJson('delete_personal_contacts.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: JSON.stringify({ ids })
