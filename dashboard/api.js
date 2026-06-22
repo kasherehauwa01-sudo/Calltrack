@@ -1,3 +1,31 @@
+
+// Общие API-методы дашборда используются встроенным скриптом админ-панели.
+window.calltrackApi = window.calltrackApi || {};
+window.calltrackApi.endpoints = Object.assign({
+  calls: '/vr/calltrack/api/get_calls.php',
+  personalContacts: '/vr/calltrack/api/get_personal_contacts.php'
+}, window.calltrackApi.endpoints || {});
+window.calltrackApi.requestJson = window.calltrackApi.requestJson || (async function requestDashboardJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const text = await response.text();
+  let payload;
+  try { payload = text ? JSON.parse(text) : {}; } catch (error) { throw new Error(`Некорректный JSON от ${url}: ${text.slice(0, 200)}`); }
+  if (!response.ok || payload.status === 'error') throw new Error(payload.message || `HTTP ${response.status}`);
+  return payload;
+});
+window.calltrackApi.getPersonalContacts = window.calltrackApi.getPersonalContacts || (async function getDashboardPersonalContacts() {
+  const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.personalContacts);
+  const rows = Array.isArray(payload.data) ? payload.data : [];
+  return rows.map((row) => ({
+    id_db: row.id_db || row.id || '',
+    user_phone: row.user_phone || '',
+    manager: row.manager || '',
+    contact_phone: row.contact_phone || '',
+    personal_flag: row.personal_flag ?? '',
+    updated_at: row.updated_at || ''
+  }));
+});
+
 const API_BASE = '../api/';
 const state = { rows: [], personalContacts: [], chart: null, selected: new Set(), personalContactsLoaded: false };
 
@@ -120,7 +148,7 @@ function renderTable(rows) {
 function render(rows) { renderKpi(rows); renderChart(rows); renderTable(rows); }
 function renderPersonalContacts(rows) {
   if (!rows.length) {
-    personalContactsBodyEl.innerHTML = '<tr><td colspan="7" class="empty">Нет данных</td></tr>';
+    personalContactsBodyEl.innerHTML = '<tr><td colspan="6" class="empty">Нет данных</td></tr>';
     return;
   }
 
@@ -130,7 +158,7 @@ function renderPersonalContacts(rows) {
       <tr>
         <td>${esc(row.id_db)}</td><td>${esc(row.user_phone)}</td><td>${esc(row.manager)}</td><td>${esc(row.contact_phone)}</td>
         <td><span class="badge ${isPersonal ? 'yes' : 'no'}">${isPersonal ? 'Личный' : 'Рабочий'}</span></td>
-        <td>${esc(row.created_at)}</td><td>${esc(row.updated_at)}</td>
+        <td>${esc(row.updated_at)}</td>
       </tr>`;
   }).join('');
 }
@@ -165,11 +193,16 @@ async function loadData() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Старый standalone-экран админки может отсутствовать на новой странице дашборда.
+  if (!$('loadBtn') || !$('selectAll') || !bodyEl || !deleteSelectedBtn) return;
   document.querySelectorAll('.tabBtn').forEach((button) => {
     button.addEventListener('click', () => showTab(button.dataset.tab));
   });
   $('loadBtn').addEventListener('click', () => loadData().catch((error) => { console.error(error); setStatus(`Ошибка: ${error.message}`); alert(error.message); }));
-  $('loadPersonalContactsBtn').addEventListener('click', () => loadPersonalContacts().catch((error) => { console.error(error); setPersonalContactsStatus(`Ошибка: ${error.message}`); alert(error.message); }));
+  const loadPersonalContactsBtn = $('loadPersonalContactsBtn');
+  if (loadPersonalContactsBtn) {
+    loadPersonalContactsBtn.addEventListener('click', () => loadPersonalContacts().catch((error) => { console.error(error); setPersonalContactsStatus(`Ошибка: ${error.message}`); alert(error.message); }));
+  }
   $('selectAll').addEventListener('change', (event) => {
     document.querySelectorAll('.rowCheck').forEach((checkbox) => {
       checkbox.checked = event.target.checked;
