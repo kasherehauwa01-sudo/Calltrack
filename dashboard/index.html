@@ -495,7 +495,6 @@ function mapPersonalContactRecord(obj){
     manager: obj.manager || '',
     contact_phone: obj.contact_phone || '',
     personal_flag: obj.personal_flag ?? '',
-    created_at: obj.created_at || '',
     updated_at: obj.updated_at || ''
   };
 }
@@ -524,7 +523,7 @@ async function loadPersonalContacts(){
   }
 }
 function renderPersonalContacts(){
-  const columns=['id_db','user_phone','manager','contact_phone','personal_flag','created_at','updated_at'];
+  const columns=['id_db','user_phone','manager','contact_phone','personal_flag','updated_at'];
   if(!personalContacts.length){adminEls.personalContactsTable.innerHTML='<div class="registry-empty">Нет данных</div>';return;}
   const head=columns.map((column)=>`<th>${escapeHtml(column)}</th>`).join('');
   const body=personalContacts.map((row)=>`<tr>${columns.map((column)=>`<td>${escapeHtml(row[column]??'')}</td>`).join('')}</tr>`).join('');

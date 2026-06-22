@@ -22,7 +22,6 @@ window.calltrackApi.getPersonalContacts = window.calltrackApi.getPersonalContact
     manager: row.manager || '',
     contact_phone: row.contact_phone || '',
     personal_flag: row.personal_flag ?? '',
-    created_at: row.created_at || '',
     updated_at: row.updated_at || ''
   }));
 });
@@ -149,7 +148,7 @@ function renderTable(rows) {
 function render(rows) { renderKpi(rows); renderChart(rows); renderTable(rows); }
 function renderPersonalContacts(rows) {
   if (!rows.length) {
-    personalContactsBodyEl.innerHTML = '<tr><td colspan="7" class="empty">Нет данных</td></tr>';
+    personalContactsBodyEl.innerHTML = '<tr><td colspan="6" class="empty">Нет данных</td></tr>';
     return;
   }
 
@@ -159,7 +158,7 @@ function renderPersonalContacts(rows) {
       <tr>
         <td>${esc(row.id_db)}</td><td>${esc(row.user_phone)}</td><td>${esc(row.manager)}</td><td>${esc(row.contact_phone)}</td>
         <td><span class="badge ${isPersonal ? 'yes' : 'no'}">${isPersonal ? 'Личный' : 'Рабочий'}</span></td>
-        <td>${esc(row.created_at)}</td><td>${esc(row.updated_at)}</td>
+        <td>${esc(row.updated_at)}</td>
       </tr>`;
   }).join('');
 }
