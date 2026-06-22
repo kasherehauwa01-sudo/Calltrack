@@ -42,6 +42,7 @@
     .registry-filter input,.registry-filter select{border:1px solid #d1d5db;border-radius:12px;padding:9px 10px;background:#fff;color:#111827;min-width:0}
     .registry-delete-btn{border:0;border-radius:999px;background:#dc2626;color:#fff;padding:10px 16px;cursor:pointer;transition:.2s ease;white-space:nowrap}
     .registry-delete-btn:hover{background:#b91c1c}.registry-delete-btn[hidden]{display:none}
+    .registry-refresh-btn{border:0;border-radius:999px;background:#111827;color:#fff;padding:10px 16px;cursor:pointer;transition:.2s ease;white-space:nowrap}.registry-refresh-btn:hover{background:#374151}.registry-refresh-btn:disabled{opacity:.6;cursor:wait}
     .registry-empty{padding:18px;color:var(--muted)}
 
     .filter-card{background:var(--card);box-shadow:var(--shadow);border-radius:var(--radius);padding:14px;border:1px solid #e5e7eb;display:grid;gap:10px}
@@ -247,6 +248,7 @@
                 <label for="registryClientSearch">Поиск по клиенту</label>
                 <input id="registryClientSearch" type="search" placeholder="Введите клиента" />
               </div>
+              <button class="registry-refresh-btn" id="registryRefreshBtn" type="button">Обновить</button>
               <button class="registry-delete-btn" id="registryDeleteSelectedBtn" type="button" hidden>Удалить выделенные</button>
             </div>
             <div class="registry-wrap" id="adminRegistryTable"><div class="registry-empty">Данные загружаются...</div></div>
@@ -258,6 +260,7 @@
                 <label for="personalContactsManagerFilter">Менеджер</label>
                 <select id="personalContactsManagerFilter"><option value="">Все менеджеры</option></select>
               </div>
+              <button class="registry-refresh-btn" id="personalContactsRefreshBtn" type="button">Обновить</button>
               <button class="registry-delete-btn" id="personalContactsDeleteSelectedBtn" type="button" hidden>Удалить выделенные</button>
               <div class="registry-empty" id="personalContactsStatus" aria-live="polite"></div>
             </div>
@@ -313,7 +316,7 @@ console.log('calltrackApi', window.calltrackApi);
 console.log('SQL_CALLS_API_URL', SQL_CALLS_API_URL);
 const chartInstances=[]; let allCalls=[]; let activePeriod='month'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let activeGroupBy='day'; let adminRegistrySort={key:'call_date',direction:'desc'}; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные']); const selectedRegistryRows=new Set();
 const els={dashboardView:document.getElementById('dashboardView'),clientCallsView:document.getElementById('clientCallsView'),adminView:document.getElementById('adminView'),managerTags:document.getElementById('managerTags'),groupByFilter:document.getElementById('groupByFilter'),periodShell:document.getElementById('periodShell'),dateFrom:document.getElementById('dateFrom'),dateTo:document.getElementById('dateTo'),applyCustomRangeBtn:document.getElementById('applyCustomRangeBtn'),trendTitle:document.getElementById('trendTitle'),kpiTotal:document.getElementById('kpiTotal'),kpiIncoming:document.getElementById('kpiIncoming'),kpiOutgoing:document.getElementById('kpiOutgoing'),kpiMissed:document.getElementById('kpiMissed'),kpiUnanswered:document.getElementById('kpiUnanswered'),kpiDropped:document.getElementById('kpiDropped'),emptyState:document.getElementById('emptyState'),chartsGrid:document.getElementById('chartsGrid'),callTypeTags:document.getElementById('callTypeTags'),clientManagerTags:document.getElementById('clientManagerTags'),clientPeriodShell:document.getElementById('clientPeriodShell'),clientDateFrom:document.getElementById('clientDateFrom'),clientDateTo:document.getElementById('clientDateTo'),clientApplyRangeBtn:document.getElementById('clientApplyRangeBtn'),clientCallsList:document.getElementById('clientCallsList'),commentModal:document.getElementById('commentModal'),commentInfo:document.getElementById('commentInfo'),commentText:document.getElementById('commentText'),reminderText:document.getElementById('reminderText'),reminderAt:document.getElementById('reminderAt'),commentSaveStatus:document.getElementById('commentSaveStatus'),commentCancelBtn:document.getElementById('commentCancelBtn'),commentSaveBtn:document.getElementById('commentSaveBtn'),clientHistoryModal:document.getElementById('clientHistoryModal'),clientHistoryInfo:document.getElementById('clientHistoryInfo'),clientHistoryList:document.getElementById('clientHistoryList'),clientHistoryCloseBtn:document.getElementById('clientHistoryCloseBtn')};
-const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),registryTable:document.getElementById('adminRegistryTable'),registryDateFilter:document.getElementById('registryDateFilter'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryClientFilter:document.getElementById('registryClientFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
+const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsRefreshBtn:document.getElementById('personalContactsRefreshBtn'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),registryRefreshBtn:document.getElementById('registryRefreshBtn'),registryTable:document.getElementById('adminRegistryTable'),registryDateFilter:document.getElementById('registryDateFilter'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryClientFilter:document.getElementById('registryClientFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
 const createLocalDate=(year, monthIndex, day, hours=0, minutes=0, seconds=0)=>new Date(year, monthIndex, day, hours, minutes, seconds, 0);
 const startOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
 const endOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
@@ -404,6 +407,7 @@ function bindAdminPanel(){
     renderAdminRegistry();
   });
   adminEls.registryDeleteSelectedBtn.addEventListener('click',deleteSelectedRegistryRows);
+  adminEls.registryRefreshBtn.addEventListener('click',refreshRegistryData);
   adminEls.personalContactsManagerFilter.addEventListener('change',renderPersonalContacts);
   adminEls.personalContactsTable.addEventListener('click',(e)=>{
     const sortBtn=e.target.closest('.personal-contacts-sort');
@@ -427,6 +431,7 @@ function bindAdminPanel(){
     if(flagSelect) updatePersonalContactFlagValue(flagSelect);
   });
   adminEls.personalContactsDeleteSelectedBtn.addEventListener('click',deleteSelectedPersonalContactsRows);
+  adminEls.personalContactsRefreshBtn.addEventListener('click',loadPersonalContacts);
 }
 
 
@@ -544,6 +549,9 @@ async function fetchPersonalContacts(){
   return parsePersonalContactsPayload(payload);
 }
 async function loadPersonalContacts(){
+  adminEls.personalContactsRefreshBtn.disabled=true;
+  const previousText=adminEls.personalContactsRefreshBtn.textContent;
+  adminEls.personalContactsRefreshBtn.textContent='Обновление...';
   adminEls.personalContactsStatus.textContent='Загрузка...';
   adminEls.personalContactsTable.innerHTML='<div class="registry-empty">Данные загружаются...</div>';
   try{
@@ -557,6 +565,9 @@ async function loadPersonalContacts(){
     console.error(error);
     adminEls.personalContactsStatus.textContent='';
     adminEls.personalContactsTable.innerHTML=`<div class="registry-empty">Ошибка загрузки: ${escapeHtml(error.message)}</div>`;
+  }finally{
+    adminEls.personalContactsRefreshBtn.disabled=false;
+    adminEls.personalContactsRefreshBtn.textContent=previousText;
   }
 }
 function getPersonalContactRowKey(row){return String(row.id_db||'')}
@@ -984,12 +995,15 @@ function setActivePeriodPill(p){activePeriod=p;[...els.periodShell.querySelector
 }
 function applyFilters(){const g=activeGroupBy,p=activePeriod,range=getPeriodRange(p);let from=null,to=null;if(p==='custom'){from=els.dateFrom.value?startOfDay(parseLocalDate(els.dateFrom.value)):null;to=els.dateTo.value?endOfDay(parseLocalDate(els.dateTo.value)):null;if(!from||!to){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();return;}}else if(range){from=range.from;to=range.to;}const filtered=allCalls.filter((c)=>{const client=String(c?.client||'').trim().toLowerCase();if(client==='личный звонок') return false; const type=normalizeCallTypeLabel(c?.type); const isMissed=type==='Неотвеченный'; const isDropped=type==='Сброшенный'; const mappedType=isMissed?'Пропущенные':(isDropped?'Сброшенные':type); const mappedUnanswered=isMissed?'Неотвеченные':mappedType; if(!(activeCallTypes.has(mappedType)||activeCallTypes.has(mappedUnanswered))) return false;const m=(c?.manager||'Не указан').trim()||'Не указан';if(!activeManagers.has(m))return false;if(!from||!to)return true;const norm=normalizeDate(c?.date);const dt=normalizeDateTime(c?.date,c?.time)||(norm?parseLocalDate(norm):null);if(!dt&&norm){const dObj=parseLocalDate(norm);if(!dObj) return false;const dayPoint=createLocalDate(dObj.getFullYear(),dObj.getMonth(),dObj.getDate(),12,0,0);return inDateRange(dayPoint,from,to);}return inDateRange(dt,from,to)});if(!filtered.length){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();return;}hideNoData();const gg=['hour','day','week','month'].includes(g)?g:'day';const s=analyzeCalls(filtered,gg);renderKpi(s);renderCharts(s,gg);}
 function bindFilters(){renderCallTypeTags();els.callTypeTags.addEventListener('click',(e)=>{const tag=e.target.closest('.type-tag'); if(!tag) return; const t=tag.dataset.type; if(activeCallTypes.has(t)) activeCallTypes.delete(t); else activeCallTypes.add(t); renderCallTypeTags(); applyFilters();});els.periodShell.addEventListener('click',(e)=>{const btn=e.target.closest('.period-pill');if(!btn||!btn.dataset.period)return;setActivePeriodPill(btn.dataset.period);applyFilters();});els.applyCustomRangeBtn.addEventListener('click',()=>{setActivePeriodPill('custom');applyFilters();});els.groupByFilter.addEventListener('click',(e)=>{const btn=e.target.closest('.detail-pill'); if(!btn||btn.disabled) return; setActiveGroupBy(btn.dataset.group); applyFilters();});els.managerTags.addEventListener('click',(e)=>{const tag=e.target.closest('.manager-tag');if(!tag)return;const m=tag.dataset.manager;if(activeManagers.has(m)){activeManagers.delete(m);tag.classList.remove('active');}else{activeManagers.add(m);tag.classList.add('active');}applyFilters();});}
-async function initDashboard(){try{
-  const callsPayload=window.calltrackApi?.loadCalls
-    ? await window.calltrackApi.loadCalls()
-    : await fetch(SQL_CALLS_API_URL).then((response)=>{if(!response.ok) throw new Error(`API ${response.status}: ${SQL_CALLS_API_URL}`); return response.json();});
+async function fetchCallsPayload(){
+  return window.calltrackApi?.loadCalls
+    ? window.calltrackApi.loadCalls()
+    : fetch(SQL_CALLS_API_URL).then((response)=>{if(!response.ok) throw new Error(`API ${response.status}: ${SQL_CALLS_API_URL}`); return response.json();});
+}
+function applyCallsPayload(callsPayload){
   allCalls=parseCallsPayload(callsPayload);
   allCalls.forEach((call,index)=>{call.__index=index;});
+  activeManagers.clear();
   console.log('Loaded calls:', allCalls.length);
   console.log(allCalls.slice(0,3));
   console.log('Field check:', {
@@ -997,7 +1011,39 @@ async function initDashboard(){try{
     nonEmptyDate: allCalls.filter((c)=>String(c.date||'').trim()!=='').length,
     nonEmptyTime: allCalls.filter((c)=>String(c.time||'').trim()!=='').length,
     nonEmptyManager: allCalls.filter((c)=>String(c.manager||'').trim()!=='').length
-  });if(!allCalls.length){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();return;}populateManagers(allCalls);populateClientManagers(allCalls);renderClientCalls();renderAdminRegistry(allCalls);bindFilters();bindClientCalls();updateGroupByAvailability(activePeriod);setGroupByForPeriod(activePeriod);hideNoData();applyFilters();}catch(error){console.error('Ошибка загрузки/обработки данных:',error);els.emptyState.textContent='Не удалось загрузить данные с сервера';renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();}}
+  });
+  if(!allCalls.length){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();renderAdminRegistry();renderClientCalls();return;}
+  populateManagers(allCalls);
+  populateClientManagers(allCalls);
+  renderClientCalls();
+  renderAdminRegistry();
+  updateGroupByAvailability(activePeriod);
+  setGroupByForPeriod(activePeriod);
+  hideNoData();
+  applyFilters();
+}
+async function refreshRegistryData(){
+  adminEls.registryRefreshBtn.disabled=true;
+  const previousText=adminEls.registryRefreshBtn.textContent;
+  adminEls.registryRefreshBtn.textContent='Обновление...';
+  try{
+    selectedRegistryRows.clear();
+    const callsPayload=await fetchCallsPayload();
+    applyCallsPayload(callsPayload);
+  }catch(error){
+    console.error('Ошибка обновления реестра:',error);
+    adminEls.registryTable.innerHTML=`<div class="registry-empty">Ошибка обновления: ${escapeHtml(error.message)}</div>`;
+  }finally{
+    adminEls.registryRefreshBtn.disabled=false;
+    adminEls.registryRefreshBtn.textContent=previousText;
+  }
+}
+async function initDashboard(){try{
+  const callsPayload=await fetchCallsPayload();
+  applyCallsPayload(callsPayload);
+  bindFilters();
+  bindClientCalls();
+}catch(error){console.error('Ошибка загрузки/обработки данных:',error);els.emptyState.textContent='Не удалось загрузить данные с сервера';renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();}}
 bindAdminPanel();
 initDashboard();
 </script>
