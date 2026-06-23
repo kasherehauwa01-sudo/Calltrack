@@ -5,7 +5,8 @@ window.calltrackApi.endpoints = Object.assign({
   calls: '/vr/calltrack/api/get_calls.php',
   personalContacts: '/vr/calltrack/api/get_personal_contacts.php',
   personalContact: '/vr/calltrack/api/personal_contact.php',
-  deletePersonalContacts: '/vr/calltrack/api/delete_personal_contacts.php'
+  deletePersonalContacts: '/vr/calltrack/api/delete_personal_contacts.php',
+  users: '/vr/calltrack/api/get_users.php'
 }, window.calltrackApi.endpoints || {});
 window.calltrackApi.requestJson = window.calltrackApi.requestJson || (async function requestDashboardJson(url, options = {}) {
   const response = await fetch(url, options);
@@ -41,6 +42,11 @@ window.calltrackApi.deletePersonalContacts = window.calltrackApi.deletePersonalC
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: JSON.stringify({ ids })
   });
+});
+
+window.calltrackApi.getUsers = window.calltrackApi.getUsers || (async function getDashboardUsers() {
+  const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.users);
+  return Array.isArray(payload.data) ? payload.data : [];
 });
 
 const API_BASE = '../api/';
