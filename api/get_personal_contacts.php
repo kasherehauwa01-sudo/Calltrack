@@ -4,7 +4,6 @@ require_once __DIR__ . '/config.php';
 
 try {
     $pdo = getPdo();
-    ensurePersonalContactsTable($pdo);
 
     $userPhone = valueOrNull($_GET, 'user_phone');
     if ($userPhone !== null) {
@@ -16,7 +15,7 @@ try {
     }
 
     $stmt = $pdo->query(
-        'SELECT id_db, user_phone, manager, contact_phone, personal_flag, created_at, updated_at FROM personal_contacts ORDER BY updated_at DESC, id_db DESC'
+        'SELECT id AS id_db, user_phone, manager, contact_phone, personal_flag, updated_at FROM personal_contacts ORDER BY updated_at DESC, id DESC'
     );
 
     sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
