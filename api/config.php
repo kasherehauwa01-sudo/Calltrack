@@ -19,7 +19,7 @@ if (!defined('DB_USER')) {
     define('DB_USER', 'calltrack_user');  // пользователь MariaDB на Timeweb
 }
 if (!defined('DB_PASS')) {
-    define('DB_PASS', '9963396');   // задайте реальный пароль в config.local.php или CALLTRACK_DB_PASS
+    define('DB_PASS', 'YOUR_PASSWORD');   // задайте реальный пароль в config.local.php или CALLTRACK_DB_PASS
 }
 if (!defined('DB_CHARSET')) {
     define('DB_CHARSET', 'utf8mb4');
