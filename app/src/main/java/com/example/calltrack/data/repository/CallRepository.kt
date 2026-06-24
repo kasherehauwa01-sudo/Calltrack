@@ -1,6 +1,11 @@
 package com.example.calltrack.data.repository
 
 import android.Manifest
+import android.app.ActivityManager
+import android.os.Build
+import android.os.Environment
+import android.os.StatFs
+import java.util.TimeZone
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.CallLog
@@ -21,6 +26,7 @@ import com.example.calltrack.data.local.PersonalContactDao
 import com.example.calltrack.data.local.PersonalContactEntity
 import com.example.calltrack.data.remote.WebhookApi
 import com.example.calltrack.data.remote.CallHistoryItem
+import com.example.calltrack.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -58,6 +64,111 @@ class CallRepository(
     private val sqlTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
     private val syncMutex = Mutex()
     private val personalContactsHttpClient = OkHttpClient()
+
+
+    suspend fun sendUserTelemetry() {
+        val managerPhone = normalizePhone(prefs.getManagerPhone())
+        if (managerPhone.isBlank()) return
+        val payload = buildUserTelemetryPayload(managerPhone)
+        runCatching {
+            withContext(Dispatchers.IO) {
+                val request = Request.Builder()
+                    .url(sqlApiUrl("user_report.php"))
+                    .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
+                personalContactsHttpClient.newCall(request).execute().use { response ->
+                    val bodyText = response.body?.string().orEmpty()
+                    if (!isSqlApiAccepted(response.isSuccessful, bodyText)) {
+                        throw IllegalStateException("user_report.php rejected: code=${response.code}, body=${bodyText.take(300)}")
+                    }
+                    handleUserCommands(bodyText)
+                }
+            }
+        }.onFailure { AppLogger.log(appContext, "ERROR", "Ошибка отправки диагностики пользователя: ${it.message}") }
+    }
+
+    private suspend fun handleUserCommands(bodyText: String) {
+        val json = runCatching { JSONTokener(bodyText.trim()).nextValue() as? JSONObject }.getOrNull() ?: return
+        val commands = json.optJSONArray("commands") ?: return
+        for (i in 0 until commands.length()) {
+            val command = commands.optJSONObject(i) ?: continue
+            if (command.optString("command") == "force_sync") {
+                AppLogger.log(appContext, "SYNC", "Получена команда принудительной синхронизации")
+                syncPending()
+                markUserCommandDone(command.optInt("id"))
+            }
+        }
+    }
+
+    private suspend fun markUserCommandDone(id: Int) {
+        if (id <= 0) return
+        withContext(Dispatchers.IO) {
+            val payload = JSONObject().put("id", id)
+            val request = Request.Builder()
+                .url(sqlApiUrl("user_command_done.php"))
+                .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .build()
+            personalContactsHttpClient.newCall(request).execute().close()
+        }
+    }
+
+    private suspend fun buildUserTelemetryPayload(managerPhone: String): JSONObject {
+        val pm = appContext.packageManager
+        val pkg = appContext.packageName
+        val packageInfo = pm.getPackageInfo(pkg, 0)
+        val activityManager = appContext.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val memoryInfo = ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo)
+        val statFs = StatFs(Environment.getDataDirectory().path)
+        val metrics = appContext.resources.displayMetrics
+        val logs = parseLogsForServer(AppLogger.readLogs(appContext))
+        return JSONObject().apply {
+            put("user_phone", managerPhone)
+            put("manager", prefs.getManagerName())
+            put("last_activity", sqlDateTime(System.currentTimeMillis()))
+            put("app_version", BuildConfig.VERSION_NAME)
+            put("installed_at", sqlDateTime(packageInfo.firstInstallTime))
+            put("app_updated_at", sqlDateTime(packageInfo.lastUpdateTime))
+            put("last_launch_at", sqlDateTime(System.currentTimeMillis()))
+            put("launch_count", JSONObject.NULL)
+            put("device_manufacturer", Build.MANUFACTURER)
+            put("device_model", Build.MODEL)
+            put("android_version", Build.VERSION.RELEASE)
+            put("api_level", Build.VERSION.SDK_INT)
+            put("ram_total", formatBytes(memoryInfo.totalMem))
+            put("storage_free", formatBytes(statFs.availableBytes))
+            put("screen_resolution", "${metrics.widthPixels}x${metrics.heightPixels}")
+            put("device_language", Locale.getDefault().toLanguageTag())
+            put("timezone", TimeZone.getDefault().id)
+            put("calls_permission", permissionStatus(Manifest.permission.READ_CALL_LOG))
+            put("notifications_permission", if (Build.VERSION.SDK_INT >= 33) permissionStatus(Manifest.permission.POST_NOTIFICATIONS) else "Да")
+            put("contacts_permission", permissionStatus(Manifest.permission.READ_CONTACTS))
+            put("background_permission", "Да")
+            put("battery_optimization_ignored", "Нет данных")
+            put("google_play_services", "Нет данных")
+            put("sync_errors_count", logs.count { it.optString("level") == "ERROR" })
+            put("local_db_size", "Нет данных")
+            put("last_error", logs.lastOrNull { it.optString("level") == "ERROR" }?.optString("message") ?: JSONObject.NULL)
+            put("last_server_response", JSONObject.NULL)
+            put("logs", JSONArray(logs))
+        }
+    }
+
+    private fun parseLogsForServer(text: String): List<JSONObject> = text.lines().takeLast(500).mapNotNull { line ->
+        val match = Regex("^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\.\\d{3} \\[(.+?)] (.*)$").find(line) ?: return@mapNotNull null
+        JSONObject().apply {
+            put("logged_at", match.groupValues[1])
+            put("level", match.groupValues[2])
+            put("category", match.groupValues[2])
+            put("message", match.groupValues[3])
+        }
+    }
+
+    private fun permissionStatus(permission: String): String = if (ContextCompat.checkSelfPermission(appContext, permission) == PackageManager.PERMISSION_GRANTED) "Да" else "Нет"
+    private fun sqlDateTime(ms: Long): String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(ms))
+    private fun formatBytes(bytes: Long): String {
+        val mb = bytes / 1024.0 / 1024.0
+        return if (mb >= 1024) String.format(Locale.US, "%.1f ГБ", mb / 1024.0) else String.format(Locale.US, "%.0f МБ", mb)
+    }
 
     fun observeCalls(): Flow<List<CallEntity>> = callDao.observeAll()
     fun observeCallsByPhone(phone: String): Flow<List<CallEntity>> = callDao.observeByPhone(phone)
@@ -99,7 +210,7 @@ class CallRepository(
             "Начало загрузки истории из Calltrack: rawPhone=$phone, normalizedPhone=$normalizedPhone, apiPhone=$apiPhone, " +
                 "managerPhone=$managerPhone, apiUserPhone=$apiUserPhone"
         )
-        com.example.calltrack.logging.AppLogger.log(appContext, "API", "Запрос истории звонков из таблицы Calltrack")
+        AppLogger.log(appContext, "API", "Запрос истории звонков из таблицы Calltrack")
 
         val sqlUrl = buildSqlHistoryUrl(apiPhone.ifBlank { normalizedPhone }, apiUserPhone.ifBlank { managerPhone })
         val sqlLoaded = fetchHistoryFromUrl(sqlUrl, normalizedPhone)
@@ -126,7 +237,7 @@ class CallRepository(
 
         val url = sqlApiUrl("get_personal_contacts.php") + "?user_phone=${urlEncode(userPhone)}"
         Log.d("PERSONAL_CONTACTS", "Загрузка списка личных контактов: url=$url")
-        com.example.calltrack.logging.AppLogger.log(appContext, "API", "Загрузка личных контактов из SQL API")
+        AppLogger.log(appContext, "API", "Загрузка личных контактов из SQL API")
 
         return runCatching {
             val body = withContext(Dispatchers.IO) {
@@ -152,12 +263,12 @@ class CallRepository(
             contacts.forEach { item ->
                 updatePersonalContactLocal(item.contactPhone, item.personalFlag == 1)
             }
-            com.example.calltrack.logging.AppLogger.log(appContext, "API", "Личные контакты загружены: ${contacts.size}")
+            AppLogger.log(appContext, "API", "Личные контакты загружены: ${contacts.size}")
             Log.d("PERSONAL_CONTACTS", "Локальный кэш личных контактов обновлён: count=${contacts.size}")
             contacts.size
         }.onFailure {
             Log.e("PERSONAL_CONTACTS", "Ошибка загрузки личных контактов", it)
-            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки личных контактов: ${it.message}")
+            AppLogger.log(appContext, "ERROR", "Ошибка загрузки личных контактов: ${it.message}")
         }.getOrDefault(0)
     }
 
@@ -189,7 +300,7 @@ class CallRepository(
                     val body = response.body?.string().orEmpty()
                     Log.d(HISTORY_LOG_TAG, "Код ответа истории: code=${response.code}, url=$url")
                     Log.d(HISTORY_LOG_TAG, "Полный JSON ответа истории: $body")
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "RAW Calltrack history response: ${body.take(500)}")
+                    AppLogger.log(appContext, "API", "RAW Calltrack history response: ${body.take(500)}")
 
                     val parsed: List<CallHistoryItem> = parseHistoryResponse(body)
                     Log.d(HISTORY_LOG_TAG, "Количество записей после парсинга: ${parsed.size}, url=$url")
@@ -204,7 +315,7 @@ class CallRepository(
         result.onFailure {
             Log.e(HISTORY_LOG_TAG, "Ошибка HTTP/coroutine/Gson при загрузке истории: url=$url", it)
             Log.e("CallRepository", "Fallback загрузки истории из Calltrack не удался", it)
-            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка загрузки истории: ${it.message}")
+            AppLogger.log(appContext, "ERROR", "Ошибка загрузки истории: ${it.message}")
         }
         return result.getOrElse { emptyList<CallHistoryItem>() }
     }
@@ -852,7 +963,7 @@ class CallRepository(
             put("personal_flag", personalFlag)
         }
         Log.d("PERSONAL_CONTACTS", "Изменение признака личного контакта: $payload")
-        com.example.calltrack.logging.AppLogger.log(
+        AppLogger.log(
             appContext,
             "API",
             "Отправка личного контакта: phone=$normalizedContactPhone, flag=$personalFlag"
@@ -879,7 +990,7 @@ class CallRepository(
             }
         }.onFailure {
             Log.e("PERSONAL_CONTACTS", "Ошибка сети при изменении личного контакта", it)
-            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка личного контакта: ${it.message}")
+            AppLogger.log(appContext, "ERROR", "Ошибка личного контакта: ${it.message}")
             if (enqueueOnFailure) {
                 enqueuePendingPersonalSync(
                     PersonalSyncItem(
@@ -895,7 +1006,7 @@ class CallRepository(
         if (ok) {
             personalContactDao.upsert(PersonalContactEntity(normalizedContactPhone, personalFlag))
             updatePersonalContactLocal(normalizedContactPhone, isPersonal)
-            com.example.calltrack.logging.AppLogger.log(appContext, "API", "Личный контакт сохранён: flag=$personalFlag")
+            AppLogger.log(appContext, "API", "Личный контакт сохранён: flag=$personalFlag")
         }
         return ok
     }
@@ -994,7 +1105,7 @@ class CallRepository(
             val managerPhone = prefs.getManagerPhone().ifBlank { "Не указан" }
             if (sendCallToWebhook(entity, managerName, managerPhone)) {
                 callDao.markUploaded(entity.id)
-                com.example.calltrack.logging.AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED BY ID: id=${entity.id}")
+                AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED BY ID: id=${entity.id}")
             }
         }
     }
@@ -1022,7 +1133,7 @@ class CallRepository(
                 val entity = duplicates.first()
                 if (sendCallToWebhook(entity, managerName, managerPhone)) {
                     callDao.markUploaded(duplicates.map { it.id })
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED: ids=${duplicates.joinToString { it.id.toString() }}")
+                    AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED: ids=${duplicates.joinToString { it.id.toString() }}")
                     Log.d(
                         "CallRepository",
                         "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
@@ -1075,7 +1186,7 @@ class CallRepository(
                 put("call_id", callId)
                 put("user_phone", normalizePhone(managerPhone))
             }
-            com.example.calltrack.logging.AppLogger.log(
+            AppLogger.log(
                 appContext,
                 "API",
                 "Отправка данных в SQL API: call_id=$callId, phone=${entity.phone}, type=${entity.type}"
@@ -1092,7 +1203,7 @@ class CallRepository(
                             "SQL API rejected: code=${response.code}, body=${bodyText.take(400)}"
                         )
                     }
-                    com.example.calltrack.logging.AppLogger.log(appContext, "API", "Ответ SQL API: code=${response.code}")
+                    AppLogger.log(appContext, "API", "Ответ SQL API: code=${response.code}")
                     Log.d("WEBHOOK", "Отправлено в SQL API: phone=${entity.phone}, id=${entity.id}, call_id=$callId")
                     true
                 }
@@ -1100,7 +1211,7 @@ class CallRepository(
         }.onFailure {
             Log.e("WEBHOOK", "Ошибка отправки в SQL API: id=${entity.id}", it)
             Log.e("CallRepository", "SQL API send failed for id=${entity.id}", it)
-            com.example.calltrack.logging.AppLogger.log(appContext, "ERROR", "Ошибка SQL API: ${it.message}")
+            AppLogger.log(appContext, "ERROR", "Ошибка SQL API: ${it.message}")
         }.getOrDefault(false)
     }
 
