@@ -102,6 +102,7 @@ class MainActivity : BaseActivity() {
                 binding.bottomNav.visibility = android.view.View.VISIBLE
                 if (savedInstanceState == null) binding.bottomNav.selectedItemId = R.id.nav_dial
                 refreshPersonalContactsAfterAuthorization()
+                lifecycleScope.launch { viewModel.sendUserTelemetry() }
                 startTrackingService()
             }
             updateWarningState()
@@ -116,6 +117,7 @@ class MainActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         AppLogger.log(this, "APP", "Приложение на экране")
+        lifecycleScope.launch { viewModel.sendUserTelemetry() }
     }
 
     override fun onPause() {
