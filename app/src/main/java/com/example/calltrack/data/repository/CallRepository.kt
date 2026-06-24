@@ -112,7 +112,7 @@ class CallRepository(
         }
     }
 
-    private fun buildUserTelemetryPayload(managerPhone: String): JSONObject {
+    private suspend fun buildUserTelemetryPayload(managerPhone: String): JSONObject {
         val pm = appContext.packageManager
         val pkg = appContext.packageName
         val packageInfo = pm.getPackageInfo(pkg, 0)
