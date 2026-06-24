@@ -60,7 +60,7 @@ window.calltrackApi.sendUserCommand = window.calltrackApi.sendUserCommand || (as
 
 
 const API_BASE = '../api/';
-const state = { rows: [], personalContacts: [], chart: null, selected: new Set(), personalContactsLoaded: false };
+const state = { rows: [], total: null, personalContacts: [], chart: null, selected: new Set(), personalContactsLoaded: false };
 
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
@@ -73,6 +73,19 @@ function setStatus(message) { statusEl.textContent = message || ''; }
 function setPersonalContactsStatus(message) { personalContactsStatusEl.textContent = message || ''; }
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
+}
+function formatDateDisplay(value) {
+  if (!value) return '';
+  const raw = String(value).trim();
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return raw;
+  return `${match[3]}.${match[2]}.${match[1]}`;
+}
+function formatDateTimeDisplay(value) {
+  if (!value) return '';
+  const date = formatDateDisplay(value);
+  const time = String(value).match(/(?:T|\s)(\d{1,2}:\d{2}(?::\d{2})?)/);
+  return time ? `${date} ${time[1]}` : date;
 }
 function query(params) {
   const sp = new URLSearchParams();
@@ -92,6 +105,7 @@ async function requestJson(endpoint, options = {}) {
 
 async function getCalls(filters) {
   const payload = await requestJson(`get_calls.php?${query(filters)}`);
+  state.total = Number.isFinite(Number(payload.total)) ? Number(payload.total) : null;
   return Array.isArray(payload.data) ? payload.data : [];
 }
 async function getPersonalContacts() {
@@ -159,7 +173,7 @@ function renderKpi(rows) {
 }
 function renderChart(rows) {
   const byDay = {};
-  rows.forEach((row) => { byDay[row.call_date || 'Без даты'] = (byDay[row.call_date || 'Без даты'] || 0) + 1; });
+  rows.forEach((row) => { byDay[formatDateDisplay(row.call_date) || 'Без даты'] = (byDay[formatDateDisplay(row.call_date) || 'Без даты'] || 0) + 1; });
   const labels = Object.keys(byDay).sort();
   if (state.chart) state.chart.destroy();
   state.chart = new Chart($('callsByDay'), {
@@ -176,7 +190,7 @@ function renderTable(rows) {
     <tr data-id="${esc(row.id_db)}">
       <td><input type="checkbox" class="rowCheck" value="${esc(row.id_db)}" /></td>
       <td>${esc(row.id_db)}</td>
-      <td>${esc(row.call_date)}</td>
+      <td>${esc(formatDateDisplay(row.call_date))}</td>
       <td>${esc(row.call_time)}</td>
       <td>${esc(row.phone)}</td>
       <td>${esc(row.call_type)}</td>
@@ -205,7 +219,7 @@ function renderPersonalContacts(rows) {
       <tr>
         <td>${esc(row.id_db)}</td><td>${esc(row.user_phone)}</td><td>${esc(row.manager)}</td><td>${esc(row.contact_phone)}</td>
         <td><span class="badge ${isPersonal ? 'yes' : 'no'}">${isPersonal ? 'Личный' : 'Рабочий'}</span></td>
-        <td>${esc(row.updated_at)}</td>
+        <td>${esc(formatDateTimeDisplay(row.updated_at))}</td>
       </tr>`;
   }).join('');
 }
@@ -236,7 +250,7 @@ async function loadData() {
   const rows = await getCalls({ period: $('period').value, manager: $('manager').value, phone: $('phone').value, user_phone: $('userPhone').value });
   state.rows = rows;
   render(rows);
-  setStatus(`Загружено: ${rows.length}`);
+  setStatus(state.total && state.total > rows.length ? `Всего: ${state.total}. Загружено: ${rows.length}` : `Загружено: ${rows.length}`);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
