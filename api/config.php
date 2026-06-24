@@ -16,22 +16,46 @@ if (!defined('DB_NAME')) {
     define('DB_NAME', 'calltrack');       // имя базы данных проекта
 }
 if (!defined('DB_USER')) {
-    define('DB_USER', 'calltrack');     // пользователь базы данных
+    define('DB_USER', 'calltrack_user');  // пользователь MariaDB на Timeweb
 }
 if (!defined('DB_PASS')) {
-    define('DB_PASS', '');              // пароль задавайте через config.local.php или CALLTRACK_DB_PASS
+    define('DB_PASS', 'YOUR_PASSWORD');   // задайте реальный пароль в config.local.php или CALLTRACK_DB_PASS
 }
 if (!defined('DB_CHARSET')) {
     define('DB_CHARSET', 'utf8mb4');
 }
 
+function dbConfigValue(string $envName, string $constantName): string
+{
+    $envValue = getenv($envName);
+    if ($envValue !== false && trim((string)$envValue) !== '') {
+        return trim((string)$envValue);
+    }
+    return (string)constant($constantName);
+}
+
+function getDbConfig(): array
+{
+    return [
+        'host' => dbConfigValue('CALLTRACK_DB_HOST', 'DB_HOST'),
+        'db' => dbConfigValue('CALLTRACK_DB_NAME', 'DB_NAME'),
+        'user' => dbConfigValue('CALLTRACK_DB_USER', 'DB_USER'),
+        'pass' => dbConfigValue('CALLTRACK_DB_PASS', 'DB_PASS'),
+        'charset' => dbConfigValue('CALLTRACK_DB_CHARSET', 'DB_CHARSET'),
+    ];
+}
+
 function getPdo(): PDO
 {
-    $host = getenv('CALLTRACK_DB_HOST') ?: DB_HOST;
-    $db = getenv('CALLTRACK_DB_NAME') ?: DB_NAME;
-    $user = getenv('CALLTRACK_DB_USER') ?: DB_USER;
-    $pass = getenv('CALLTRACK_DB_PASS') ?: DB_PASS;
-    $charset = getenv('CALLTRACK_DB_CHARSET') ?: DB_CHARSET;
+    $config = getDbConfig();
+    $host = $config['host'];
+    $db = $config['db'];
+    $user = $config['user'];
+    $pass = $config['pass'];
+    $charset = $config['charset'];
+
+    error_log('DB HOST: ' . $host);
+    error_log('DB USER: ' . $user);
 
     $dsn = "mysql:host={$host};dbname={$db};charset={$charset}";
     return new PDO($dsn, $user, $pass, [
