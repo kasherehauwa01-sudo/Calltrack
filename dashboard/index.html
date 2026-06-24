@@ -43,7 +43,8 @@
     .registry-sort{border:0;background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
     .registry-select-col{width:42px;text-align:center!important}.registry-checkbox{width:16px;height:16px;accent-color:#111827;cursor:pointer}
     .registry-toolbar{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr)) auto;gap:10px;align-items:end}
-    .registry-period-shell{display:flex;gap:8px;flex-wrap:wrap;background:#eceff4;border-radius:16px;padding:8px;width:max-content;max-width:100%}
+    .registry-period-shell{display:flex;gap:8px;flex-wrap:wrap;background:#eceff4;border-radius:16px;padding:8px;width:max-content;max-width:100%;align-items:center}
+    .registry-custom-period{display:flex;gap:8px;align-items:center}.registry-custom-period[hidden]{display:none}.registry-custom-period label{display:flex;gap:6px;align-items:center;font-size:.82rem;color:var(--muted)}.registry-custom-period input{border:1px solid #d1d5db;border-radius:12px;padding:8px 10px;background:#fff;color:#111827}
     .registry-filter{display:grid;gap:5px}.registry-filter label{font-size:.82rem;color:var(--muted)}
     .registry-filter input,.registry-filter select{border:1px solid #d1d5db;border-radius:12px;padding:9px 10px;background:#fff;color:#111827;min-width:0}
     .registry-delete-btn{border:0;border-radius:999px;background:#dc2626;color:#fff;padding:10px 16px;cursor:pointer;transition:.2s ease;white-space:nowrap}
@@ -258,6 +259,10 @@
               <button class="period-pill" data-registry-period="year" type="button">Год</button>
               <button class="period-pill" data-registry-period="all" type="button">Все</button>
               <button class="period-pill" data-registry-period="custom" type="button">Выбор периода</button>
+              <div class="registry-custom-period" id="registryCustomPeriodFields" hidden>
+                <label for="registryDateFrom">От <input id="registryDateFrom" type="date" /></label>
+                <label for="registryDateTo">До <input id="registryDateTo" type="date" /></label>
+              </div>
             </div>
             <div class="registry-toolbar">
               <div class="registry-filter">
@@ -356,9 +361,9 @@ const USERS_API_URL=window.calltrackApi?.endpoints?.users||'/vr/calltrack/api/ge
 const USER_COMMAND_API_URL=window.calltrackApi?.endpoints?.userCommand||'/vr/calltrack/api/user_command.php';
 console.log('calltrackApi', window.calltrackApi);
 console.log('SQL_CALLS_API_URL', SQL_CALLS_API_URL);
-const chartInstances=[]; let allCalls=[]; let activePeriod='month'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let activeGroupBy='day'; let adminRegistrySort={key:'call_date',direction:'desc'}; let adminRegistryPeriod='week'; let adminRegistryCustomRange={from:'',to:''}; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; let users=[]; let usersLoaded=false; let activeUserId=''; const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные']); const selectedRegistryRows=new Set();
+const chartInstances=[]; let allCalls=[]; let activePeriod='month'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let activeGroupBy='day'; let adminRegistrySort={key:'call_date',direction:'desc'}; let adminRegistryPeriod='week'; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; let users=[]; let usersLoaded=false; let activeUserId=''; const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные']); const selectedRegistryRows=new Set();
 const els={dashboardView:document.getElementById('dashboardView'),clientCallsView:document.getElementById('clientCallsView'),adminView:document.getElementById('adminView'),managerTags:document.getElementById('managerTags'),groupByFilter:document.getElementById('groupByFilter'),periodShell:document.getElementById('periodShell'),dateFrom:document.getElementById('dateFrom'),dateTo:document.getElementById('dateTo'),applyCustomRangeBtn:document.getElementById('applyCustomRangeBtn'),trendTitle:document.getElementById('trendTitle'),kpiTotal:document.getElementById('kpiTotal'),kpiIncoming:document.getElementById('kpiIncoming'),kpiOutgoing:document.getElementById('kpiOutgoing'),kpiMissed:document.getElementById('kpiMissed'),kpiUnanswered:document.getElementById('kpiUnanswered'),kpiDropped:document.getElementById('kpiDropped'),emptyState:document.getElementById('emptyState'),chartsGrid:document.getElementById('chartsGrid'),callTypeTags:document.getElementById('callTypeTags'),clientManagerTags:document.getElementById('clientManagerTags'),clientPeriodShell:document.getElementById('clientPeriodShell'),clientDateFrom:document.getElementById('clientDateFrom'),clientDateTo:document.getElementById('clientDateTo'),clientApplyRangeBtn:document.getElementById('clientApplyRangeBtn'),clientCallsList:document.getElementById('clientCallsList'),commentModal:document.getElementById('commentModal'),commentInfo:document.getElementById('commentInfo'),commentText:document.getElementById('commentText'),reminderText:document.getElementById('reminderText'),reminderAt:document.getElementById('reminderAt'),commentSaveStatus:document.getElementById('commentSaveStatus'),commentCancelBtn:document.getElementById('commentCancelBtn'),commentSaveBtn:document.getElementById('commentSaveBtn'),clientHistoryModal:document.getElementById('clientHistoryModal'),clientHistoryInfo:document.getElementById('clientHistoryInfo'),clientHistoryList:document.getElementById('clientHistoryList'),clientHistoryCloseBtn:document.getElementById('clientHistoryCloseBtn')};
-const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),updateCommand:document.getElementById('adminUpdateCommand'),updateCommandCopyBtn:document.getElementById('adminUpdateCommandCopyBtn'),updateCommandStatus:document.getElementById('adminUpdateCommandStatus'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsRefreshBtn:document.getElementById('personalContactsRefreshBtn'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),usersPanel:document.getElementById('adminUsersPanel'),usersSearch:document.getElementById('usersSearch'),usersRefreshBtn:document.getElementById('usersRefreshBtn'),usersStatus:document.getElementById('usersStatus'),usersList:document.getElementById('usersList'),userCard:document.getElementById('userCard'),registryRefreshBtn:document.getElementById('registryRefreshBtn'),registryTable:document.getElementById('adminRegistryTable'),registryRowsCount:document.getElementById('registryRowsCount'),registryPeriodShell:document.getElementById('registryPeriodShell'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
+const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),updateCommand:document.getElementById('adminUpdateCommand'),updateCommandCopyBtn:document.getElementById('adminUpdateCommandCopyBtn'),updateCommandStatus:document.getElementById('adminUpdateCommandStatus'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsRefreshBtn:document.getElementById('personalContactsRefreshBtn'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),usersPanel:document.getElementById('adminUsersPanel'),usersSearch:document.getElementById('usersSearch'),usersRefreshBtn:document.getElementById('usersRefreshBtn'),usersStatus:document.getElementById('usersStatus'),usersList:document.getElementById('usersList'),userCard:document.getElementById('userCard'),registryRefreshBtn:document.getElementById('registryRefreshBtn'),registryTable:document.getElementById('adminRegistryTable'),registryRowsCount:document.getElementById('registryRowsCount'),registryPeriodShell:document.getElementById('registryPeriodShell'),registryCustomPeriodFields:document.getElementById('registryCustomPeriodFields'),registryDateFrom:document.getElementById('registryDateFrom'),registryDateTo:document.getElementById('registryDateTo'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
 const createLocalDate=(year, monthIndex, day, hours=0, minutes=0, seconds=0)=>new Date(year, monthIndex, day, hours, minutes, seconds, 0);
 const startOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
 const endOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
@@ -446,7 +451,7 @@ function bindAdminPanel(){
   adminEls.password.addEventListener('keydown',(e)=>{if(e.key==='Enter') unlockAdminPanel();});
   adminEls.updateCommandCopyBtn.addEventListener('click',copyAdminUpdateCommand);
   adminEls.subtabs.forEach((btn)=>btn.addEventListener('click',()=>setActiveAdminTab(btn.dataset.adminTab)));
-  [adminEls.registryManagerFilter,adminEls.registryTypeFilter,adminEls.registryClientSearch].forEach((control)=>{
+  [adminEls.registryDateFrom,adminEls.registryDateTo,adminEls.registryManagerFilter,adminEls.registryTypeFilter,adminEls.registryClientSearch].forEach((control)=>{
     control.addEventListener('input',()=>renderAdminRegistry());
     control.addEventListener('change',()=>renderAdminRegistry());
   });
@@ -544,31 +549,22 @@ function updateRegistryFilterOptions(){
 function getAdminRegistryDateRange(){
   if(adminRegistryPeriod==='all') return null;
   if(adminRegistryPeriod==='custom'){
-    const from=adminRegistryCustomRange.from?startOfDay(parseLocalDate(adminRegistryCustomRange.from)):null;
-    const to=adminRegistryCustomRange.to?endOfDay(parseLocalDate(adminRegistryCustomRange.to)):null;
+    const from=adminEls.registryDateFrom.value?startOfDay(parseLocalDate(adminEls.registryDateFrom.value)):null;
+    const to=adminEls.registryDateTo.value?endOfDay(parseLocalDate(adminEls.registryDateTo.value)):null;
     return from&&to?{from,to}:null;
   }
   return getPeriodRange(adminRegistryPeriod);
 }
-function requestAdminRegistryCustomPeriod(){
-  const defaultFrom=adminRegistryCustomRange.from||formatDateLocal(startOfDay(new Date()));
-  const rawFrom=window.prompt('Введите дату начала периода в формате ГГГГ-ММ-ДД', defaultFrom);
-  if(rawFrom===null) return false;
-  const fromDate=parseLocalDate(rawFrom);
-  if(!fromDate){window.alert('Дата начала указана некорректно. Используйте формат ГГГГ-ММ-ДД.');return false;}
-  const defaultTo=adminRegistryCustomRange.to||formatDateLocal(endOfDay(new Date()));
-  const rawTo=window.prompt('Введите дату окончания периода в формате ГГГГ-ММ-ДД', defaultTo);
-  if(rawTo===null) return false;
-  const toDate=parseLocalDate(rawTo);
-  if(!toDate){window.alert('Дата окончания указана некорректно. Используйте формат ГГГГ-ММ-ДД.');return false;}
-  if(startOfDay(fromDate)>endOfDay(toDate)){window.alert('Дата начала не может быть позже даты окончания.');return false;}
-  adminRegistryCustomRange={from:formatDateLocal(fromDate),to:formatDateLocal(toDate)};
-  return true;
-}
 function setAdminRegistryPeriod(period){
-  if(period==='custom'&&!requestAdminRegistryCustomPeriod()) return;
   adminRegistryPeriod=period;
   [...adminEls.registryPeriodShell.querySelectorAll('[data-registry-period]')].forEach((btn)=>btn.classList.toggle('active',btn.dataset.registryPeriod===period));
+  adminEls.registryCustomPeriodFields.hidden=period!=='custom';
+  if(period==='custom'){
+    const fallback=getPeriodRange('week');
+    if(!adminEls.registryDateFrom.value&&fallback?.from) adminEls.registryDateFrom.value=formatDateLocal(fallback.from);
+    if(!adminEls.registryDateTo.value&&fallback?.to) adminEls.registryDateTo.value=formatDateLocal(fallback.to);
+    adminEls.registryDateFrom.focus();
+  }
   renderAdminRegistry();
 }
 function getAdminFilteredCalls(){
