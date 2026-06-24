@@ -13,13 +13,13 @@ if (!defined('DB_HOST')) {
     define('DB_HOST', 'localhost');       // пример Timeweb: localhost или mysqlXX.timeweb.ru
 }
 if (!defined('DB_NAME')) {
-    define('DB_NAME', 'calltrack_db');    // имя базы данных из панели Timeweb
+    define('DB_NAME', 'calltrack');       // имя базы данных проекта
 }
 if (!defined('DB_USER')) {
-    define('DB_USER', 'calltrack_user');  // пользователь базы данных
+    define('DB_USER', 'calltrack');     // пользователь базы данных
 }
 if (!defined('DB_PASS')) {
-    define('DB_PASS', 'change_me');       // пароль пользователя базы данных
+    define('DB_PASS', '');              // пароль задавайте через config.local.php или CALLTRACK_DB_PASS
 }
 if (!defined('DB_CHARSET')) {
     define('DB_CHARSET', 'utf8mb4');
