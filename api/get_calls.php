@@ -8,7 +8,11 @@ function applyRegistryPeriod(array $source): array
         return $source;
     }
 
-    $period = strtolower(trim((string)($source['period'] ?? 'today')));
+    if (!array_key_exists('period', $source) || trim((string)$source['period']) === '') {
+        return $source;
+    }
+
+    $period = strtolower(trim((string)$source['period']));
     $today = new DateTimeImmutable('today');
     $from = $today;
     $to = $today;
