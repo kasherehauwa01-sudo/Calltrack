@@ -62,6 +62,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     suspend fun refreshPersonalContacts() = repository.refreshPersonalContactsFromSql()
     // Фоновая синхронизация с SQL API (с последующим сохранением статусов во внутреннем кэше БД).
     suspend fun sync() = repository.syncPending()
+    suspend fun sendUserTelemetry() = repository.sendUserTelemetry()
 
     // Экран «Последние» обновляем из стандартной звонилки Android, а не из SQL API.
     suspend fun refreshRecentCallsFromDevice() = repository.importRecentCallsFromDevice()
