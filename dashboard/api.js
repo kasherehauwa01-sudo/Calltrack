@@ -9,14 +9,29 @@ window.calltrackApi.endpoints = Object.assign({
   users: '/vr/calltrack/api/get_users.php',
   userCommand: '/vr/calltrack/api/user_command.php'
 }, window.calltrackApi.endpoints || {});
-window.calltrackApi.requestJson = window.calltrackApi.requestJson || (async function requestDashboardJson(url, options = {}) {
+window.calltrackApi.requestJson = async function requestJson(url, options = {}) {
   const response = await fetch(url, options);
   const text = await response.text();
-  let payload;
-  try { payload = text ? JSON.parse(text) : {}; } catch (error) { throw new Error(`Некорректный JSON от ${url}: ${text.slice(0, 200)}`); }
-  if (!response.ok || payload.status === 'error') throw new Error(payload.message || `HTTP ${response.status}`);
+
+  let payload = {};
+
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch (e) {
+    console.error("BAD JSON:", text);
+    throw new Error('API вернул некорректный JSON');
+  }
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  if (payload && payload.status === 'error') {
+    throw new Error(payload.message || 'API error');
+  }
+
   return payload;
-});
+};
 window.calltrackApi.getPersonalContacts = window.calltrackApi.getPersonalContacts || (async function getDashboardPersonalContacts() {
   const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.personalContacts);
   const rows = Array.isArray(payload.data) ? payload.data : [];
@@ -105,13 +120,7 @@ async function requestJson(endpoint, options = {}) {
 
 async function getCalls(filters) {
   const payload = await requestJson(`get_calls.php?${query(filters)}`);
-
-  if (payload.status !== 'success') {
-    throw new Error(payload.message || 'API error');
-  }
-
-  state.total = Number(payload.total || 0);
-
+  state.total = Number.isFinite(Number(payload.total)) ? Number(payload.total) : null;
   return Array.isArray(payload.data) ? payload.data : [];
 }
 async function getPersonalContacts() {
