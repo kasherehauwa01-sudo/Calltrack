@@ -1,5 +1,81 @@
+
+// Общие API-методы дашборда используются встроенным скриптом админ-панели.
+window.calltrackApi = window.calltrackApi || {};
+window.calltrackApi.endpoints = Object.assign({
+  calls: '/vr/calltrack/api/get_calls.php',
+  personalContacts: '/vr/calltrack/api/get_personal_contacts.php',
+  personalContact: '/vr/calltrack/api/personal_contact.php',
+  deletePersonalContacts: '/vr/calltrack/api/delete_personal_contacts.php',
+  users: '/vr/calltrack/api/get_users.php',
+  userCommand: '/vr/calltrack/api/user_command.php'
+}, window.calltrackApi.endpoints || {});
+window.calltrackApi.requestJson = async function requestJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const text = await response.text();
+
+  let payload = {};
+
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch (e) {
+    console.error("BAD JSON:", text);
+    throw new Error('API вернул некорректный JSON');
+  }
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  if (payload && payload.status === 'error') {
+    throw new Error(payload.message || 'API error');
+  }
+
+  return payload;
+};
+window.calltrackApi.getPersonalContacts = window.calltrackApi.getPersonalContacts || (async function getDashboardPersonalContacts() {
+  const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.personalContacts);
+  const rows = Array.isArray(payload.data) ? payload.data : [];
+  return rows.map((row) => ({
+    id_db: row.id_db || row.id || '',
+    user_phone: row.user_phone || '',
+    manager: row.manager || '',
+    contact_phone: row.contact_phone || '',
+    personal_flag: row.personal_flag ?? '',
+    updated_at: row.updated_at || ''
+  }));
+});
+
+window.calltrackApi.updatePersonalContactFlag = window.calltrackApi.updatePersonalContactFlag || (async function updateDashboardPersonalContactFlag(idDb, personalFlag) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.personalContact, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ id_db: idDb, personal_flag: personalFlag })
+  });
+});
+window.calltrackApi.deletePersonalContacts = window.calltrackApi.deletePersonalContacts || (async function deleteDashboardPersonalContacts(ids) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.deletePersonalContacts, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ ids })
+  });
+});
+
+window.calltrackApi.getUsers = window.calltrackApi.getUsers || (async function getDashboardUsers() {
+  const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.users);
+  return Array.isArray(payload.data) ? payload.data : [];
+});
+
+window.calltrackApi.sendUserCommand = window.calltrackApi.sendUserCommand || (async function sendDashboardUserCommand(userPhone, command, meta = {}) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.userCommand, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ user_phone: userPhone, command, ...meta })
+  });
+});
+
+
 const API_BASE = '../api/';
-const state = { rows: [], personalContacts: [], chart: null, selected: new Set(), personalContactsLoaded: false };
+const state = { rows: [], total: null, personalContacts: [], chart: null, selected: new Set(), personalContactsLoaded: false };
 
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
@@ -12,6 +88,19 @@ function setStatus(message) { statusEl.textContent = message || ''; }
 function setPersonalContactsStatus(message) { personalContactsStatusEl.textContent = message || ''; }
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
+}
+function formatDateDisplay(value) {
+  if (!value) return '';
+  const raw = String(value).trim();
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return raw;
+  return `${match[3]}.${match[2]}.${match[1]}`;
+}
+function formatDateTimeDisplay(value) {
+  if (!value) return '';
+  const date = formatDateDisplay(value);
+  const time = String(value).match(/(?:T|\s)(\d{1,2}:\d{2}(?::\d{2})?)/);
+  return time ? `${date} ${time[1]}` : date;
 }
 function query(params) {
   const sp = new URLSearchParams();
@@ -31,6 +120,7 @@ async function requestJson(endpoint, options = {}) {
 
 async function getCalls(filters) {
   const payload = await requestJson(`get_calls.php?${query(filters)}`);
+  state.total = Number.isFinite(Number(payload.total)) ? Number(payload.total) : null;
   return Array.isArray(payload.data) ? payload.data : [];
 }
 async function getPersonalContacts() {
@@ -46,6 +136,20 @@ async function deleteCall(idDb) {
 }
 async function deleteCalls(ids) {
   return requestJson('delete_calls.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ ids })
+  });
+}
+async function updatePersonalContactFlag(idDb, personalFlag) {
+  return requestJson('personal_contact.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ id_db: idDb, personal_flag: personalFlag })
+  });
+}
+async function deletePersonalContacts(ids) {
+  return requestJson('delete_personal_contacts.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: JSON.stringify({ ids })
@@ -84,7 +188,7 @@ function renderKpi(rows) {
 }
 function renderChart(rows) {
   const byDay = {};
-  rows.forEach((row) => { byDay[row.call_date || 'Без даты'] = (byDay[row.call_date || 'Без даты'] || 0) + 1; });
+  rows.forEach((row) => { byDay[formatDateDisplay(row.call_date) || 'Без даты'] = (byDay[formatDateDisplay(row.call_date) || 'Без даты'] || 0) + 1; });
   const labels = Object.keys(byDay).sort();
   if (state.chart) state.chart.destroy();
   state.chart = new Chart($('callsByDay'), {
@@ -101,7 +205,7 @@ function renderTable(rows) {
     <tr data-id="${esc(row.id_db)}">
       <td><input type="checkbox" class="rowCheck" value="${esc(row.id_db)}" /></td>
       <td>${esc(row.id_db)}</td>
-      <td>${esc(row.call_date)}</td>
+      <td>${esc(formatDateDisplay(row.call_date))}</td>
       <td>${esc(row.call_time)}</td>
       <td>${esc(row.phone)}</td>
       <td>${esc(row.call_type)}</td>
@@ -120,7 +224,7 @@ function renderTable(rows) {
 function render(rows) { renderKpi(rows); renderChart(rows); renderTable(rows); }
 function renderPersonalContacts(rows) {
   if (!rows.length) {
-    personalContactsBodyEl.innerHTML = '<tr><td colspan="7" class="empty">Нет данных</td></tr>';
+    personalContactsBodyEl.innerHTML = '<tr><td colspan="6" class="empty">Нет данных</td></tr>';
     return;
   }
 
@@ -130,7 +234,7 @@ function renderPersonalContacts(rows) {
       <tr>
         <td>${esc(row.id_db)}</td><td>${esc(row.user_phone)}</td><td>${esc(row.manager)}</td><td>${esc(row.contact_phone)}</td>
         <td><span class="badge ${isPersonal ? 'yes' : 'no'}">${isPersonal ? 'Личный' : 'Рабочий'}</span></td>
-        <td>${esc(row.created_at)}</td><td>${esc(row.updated_at)}</td>
+        <td>${esc(formatDateTimeDisplay(row.updated_at))}</td>
       </tr>`;
   }).join('');
 }
@@ -161,15 +265,20 @@ async function loadData() {
   const rows = await getCalls({ period: $('period').value, manager: $('manager').value, phone: $('phone').value, user_phone: $('userPhone').value });
   state.rows = rows;
   render(rows);
-  setStatus(`Загружено: ${rows.length}`);
+  setStatus(state.total && state.total > rows.length ? `Всего: ${state.total}. Загружено: ${rows.length}` : `Загружено: ${rows.length}`);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Старый standalone-экран админки может отсутствовать на новой странице дашборда.
+  if (!$('loadBtn') || !$('selectAll') || !bodyEl || !deleteSelectedBtn) return;
   document.querySelectorAll('.tabBtn').forEach((button) => {
     button.addEventListener('click', () => showTab(button.dataset.tab));
   });
   $('loadBtn').addEventListener('click', () => loadData().catch((error) => { console.error(error); setStatus(`Ошибка: ${error.message}`); alert(error.message); }));
-  $('loadPersonalContactsBtn').addEventListener('click', () => loadPersonalContacts().catch((error) => { console.error(error); setPersonalContactsStatus(`Ошибка: ${error.message}`); alert(error.message); }));
+  const loadPersonalContactsBtn = $('loadPersonalContactsBtn');
+  if (loadPersonalContactsBtn) {
+    loadPersonalContactsBtn.addEventListener('click', () => loadPersonalContacts().catch((error) => { console.error(error); setPersonalContactsStatus(`Ошибка: ${error.message}`); alert(error.message); }));
+  }
   $('selectAll').addEventListener('change', (event) => {
     document.querySelectorAll('.rowCheck').forEach((checkbox) => {
       checkbox.checked = event.target.checked;

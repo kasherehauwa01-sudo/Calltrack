@@ -13,6 +13,11 @@ try {
     // При отсутствии значения передаём NULL.
     $reminder = empty($data['reminder'] ?? null) ? null : normalizeDateTime($data['reminder']);
 
+    $pdo = getPdo();
+    if (isUserBlocked($pdo, valueOrNull($data, 'user_phone'), valueOrNull($data, 'manager'))) {
+        sendJson(['status' => 'success', 'skipped' => true, 'message' => 'Пользователь заблокирован']);
+    }
+
     $params = [
         ':call_date' => normalizeDate(valueOrNull($data, 'date')),
         ':call_time' => normalizeTime(valueOrNull($data, 'time')),
@@ -52,7 +57,7 @@ ON DUPLICATE KEY UPDATE
     user_phone = VALUES(user_phone)
 SQL;
 
-    $stmt = getPdo()->prepare($sql);
+    $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     sendJson(['status' => 'success']);
 } catch (Throwable $e) {
