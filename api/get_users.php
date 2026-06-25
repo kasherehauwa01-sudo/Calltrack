@@ -134,7 +134,21 @@ SQL);
         // Телеметрия появится после первого отчёта приложения; без неё возвращаем пользователей из calls/personal_contacts.
     }
 
-    $data = array_values($users);
+    try {
+        $statesStmt = $pdo->query('SELECT user_phone, is_deleted, is_blocked FROM app_user_states');
+        foreach ($statesStmt->fetchAll() as $row) {
+            $key = normalizeUserKey($row['user_phone'] ?? '', '');
+            if (!isset($users[$key])) {
+                continue;
+            }
+            $users[$key]['is_deleted'] = (int)($row['is_deleted'] ?? 0);
+            $users[$key]['is_blocked'] = (int)($row['is_blocked'] ?? 0);
+        }
+    } catch (Throwable $e) {
+        // Таблица состояний появится после первого действия с пользователем.
+    }
+
+    $data = array_values(array_filter($users, static fn(array $user): bool => (int)($user['is_deleted'] ?? 0) !== 1));
     usort($data, static fn(array $a, array $b): int => strcmp((string)($b['last_activity'] ?? ''), (string)($a['last_activity'] ?? '')));
 
     sendJson(['status' => 'success', 'data' => $data]);

@@ -92,10 +92,20 @@ class CallRepository(
         val commands = json.optJSONArray("commands") ?: return
         for (i in 0 until commands.length()) {
             val command = commands.optJSONObject(i) ?: continue
-            if (command.optString("command") == "force_sync") {
-                AppLogger.log(appContext, "SYNC", "Получена команда принудительной синхронизации")
-                syncPending()
-                markUserCommandDone(command.optInt("id"))
+            when (command.optString("command")) {
+                "force_sync" -> {
+                    AppLogger.log(appContext, "SYNC", "Получена команда принудительной синхронизации")
+                    syncPending()
+                    markUserCommandDone(command.optInt("id"))
+                }
+                "block_user" -> {
+                    AppLogger.log(appContext, "USER", "Пользователь заблокирован в админ-панели")
+                    markUserCommandDone(command.optInt("id"))
+                }
+                "unblock_user" -> {
+                    AppLogger.log(appContext, "USER", "Пользователь разблокирован в админ-панели")
+                    markUserCommandDone(command.optInt("id"))
+                }
             }
         }
     }

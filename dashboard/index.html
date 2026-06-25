@@ -766,6 +766,7 @@ async function fetchUsers(){
 }
 function emptyValue(value){return value===null||value===undefined||String(value).trim()===''?'Нет данных':String(value);}
 function getUserStatus(user){
+  if(Number(user?.is_blocked)===1) return 'Заблокирован';
   const raw=user?.last_activity;
   if(!raw) return 'Нет данных';
   const date=new Date(String(raw).replace(' ','T'));
@@ -826,23 +827,25 @@ function renderUserLogs(filter='Все'){
   logBox.textContent=logs.length?logs.map((log)=>`${emptyValue(log.logged_at)} [${emptyValue(log.level||log.category)}] ${emptyValue(log.message)}`).join('\n'):'Логи пользователя пока не переданы приложением на сервер.';
   document.querySelectorAll('.user-log-filter').forEach((btn)=>btn.classList.toggle('active',btn.dataset.filter===filter));
 }
-function hideActiveUserFromList(){
+function removeActiveUserFromList(){
   const user=getActiveUser();
   if(!user) return;
   users=users.filter((item)=>item.id!==user.id);
   activeUserId=users[0]?.id||'';
   renderUsersList();
   renderUserCard();
-  adminEls.usersStatus.textContent='Пользователь удалён из списка. Данные в SQL таблицах не изменялись';
 }
 async function sendUserAction(command){
   const user=getActiveUser();
-  if(command==='hide_user'){hideActiveUserFromList();return;}
+  if(!command) return;
   if(!user?.user_phone){adminEls.usersStatus.textContent='Нет номера пользователя для отправки команды';return;}
-  if(command!=='force_sync'){adminEls.usersStatus.textContent='Команда будет доступна после добавления обработчика в приложении';return;}
+  if(command==='delete_user'&&!window.confirm('Удалить пользователя из списка безвозвратно?')) return;
   try{
     if(window.calltrackApi?.sendUserCommand) await window.calltrackApi.sendUserCommand(user.user_phone,command);
     else await fetch(USER_COMMAND_API_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({user_phone:user.user_phone,command})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
+    if(command==='delete_user'){removeActiveUserFromList();adminEls.usersStatus.textContent='Пользователь удалён безвозвратно из списка';return;}
+    if(command==='block_user'){user.is_blocked=1;renderUsersList();renderUserCard();adminEls.usersStatus.textContent='Пользователь заблокирован';return;}
+    if(command==='unblock_user'){user.is_blocked=0;renderUsersList();renderUserCard();adminEls.usersStatus.textContent='Пользователь разблокирован';return;}
     adminEls.usersStatus.textContent='Команда принудительной синхронизации отправлена';
   }catch(error){console.error(error);adminEls.usersStatus.textContent=`Ошибка отправки команды: ${error.message}`;}
 }
@@ -862,7 +865,7 @@ function renderUserCard(){
       ${infoBlock('Диагностика', [['API доступен','Да'],['Сервер отвечает','Да'],['Последняя успешная синхронизация',user.last_sync_at],['Последняя ошибка',user.last_error||unavailable],['Последний отправленный звонок',user.last_call_at],['Последний ответ сервера',user.last_server_response||unavailable]])}
     </div>
     <section class="user-info-block"><h3>Логи</h3><div class="user-log-filters"><button class="user-log-filter active" data-filter="Все" type="button">Все</button><button class="user-log-filter" data-filter="Ошибки" type="button">Ошибки</button><button class="user-log-filter" data-filter="Синхронизация" type="button">Синхронизация</button><button class="user-log-filter" data-filter="Уведомления" type="button">Уведомления</button><button class="user-log-filter" data-filter="Действия пользователя" type="button">Действия пользователя</button></div><div class="user-logs" id="userLogsBox"></div></section>
-    <section class="user-info-block"><h3>Управление пользователем</h3><div class="user-actions"><button class="user-action-btn" data-command="force_sync" type="button">Запросить принудительную синхронизацию</button><button class="user-action-btn" type="button">Очистить локальный кэш</button><button class="user-action-btn" type="button">Отправить тестовое уведомление</button><button class="user-action-btn danger" data-command="hide_user" type="button">Удалить пользователя из списка</button><button class="user-action-btn danger" type="button">Заблокировать пользователя</button><button class="user-action-btn" type="button">Разблокировать пользователя</button></div></section>`;
+    <section class="user-info-block"><h3>Управление пользователем</h3><div class="user-actions"><button class="user-action-btn" data-command="force_sync" type="button">Запросить принудительную синхронизацию</button><button class="user-action-btn danger" data-command="delete_user" type="button">Удалить пользователя</button><button class="user-action-btn danger" data-command="block_user" type="button">Заблокировать пользователя</button><button class="user-action-btn" data-command="unblock_user" type="button">Разблокировать пользователя</button></div></section>`;
   renderUserLogs('Все');
 }
 

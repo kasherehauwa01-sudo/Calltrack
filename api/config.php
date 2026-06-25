@@ -144,6 +144,15 @@ CREATE TABLE IF NOT EXISTS app_user_commands (
     INDEX idx_user_commands_phone_status (user_phone, status)
 )
 SQL);
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS app_user_states (
+    user_phone VARCHAR(30) PRIMARY KEY,
+    manager VARCHAR(255),
+    is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+    is_blocked TINYINT(1) NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)
+SQL);
 }
 
 function sendJson(array $payload, int $statusCode = 200): void
