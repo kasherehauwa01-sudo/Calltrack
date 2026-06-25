@@ -105,7 +105,13 @@ async function requestJson(endpoint, options = {}) {
 
 async function getCalls(filters) {
   const payload = await requestJson(`get_calls.php?${query(filters)}`);
-  state.total = Number.isFinite(Number(payload.total)) ? Number(payload.total) : null;
+
+  if (payload.status !== 'success') {
+    throw new Error(payload.message || 'API error');
+  }
+
+  state.total = Number(payload.total || 0);
+
   return Array.isArray(payload.data) ? payload.data : [];
 }
 async function getPersonalContacts() {
