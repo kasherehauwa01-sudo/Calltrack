@@ -65,11 +65,11 @@ window.calltrackApi.getUsers = window.calltrackApi.getUsers || (async function g
   return Array.isArray(payload.data) ? payload.data : [];
 });
 
-window.calltrackApi.sendUserCommand = window.calltrackApi.sendUserCommand || (async function sendDashboardUserCommand(userPhone, command) {
+window.calltrackApi.sendUserCommand = window.calltrackApi.sendUserCommand || (async function sendDashboardUserCommand(userPhone, command, meta = {}) {
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.userCommand, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
-    body: JSON.stringify({ user_phone: userPhone, command })
+    body: JSON.stringify({ user_phone: userPhone, command, ...meta })
   });
 });
 

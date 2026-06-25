@@ -135,9 +135,12 @@ SQL);
     }
 
     try {
-        $statesStmt = $pdo->query('SELECT user_phone, is_deleted, is_blocked FROM app_user_states');
+        $statesStmt = $pdo->query('SELECT user_phone, user_key, is_deleted, is_blocked FROM app_user_states');
         foreach ($statesStmt->fetchAll() as $row) {
-            $key = normalizeUserKey($row['user_phone'] ?? '', '');
+            $key = trim((string)($row['user_key'] ?? ''));
+            if ($key === '') {
+                $key = normalizeUserKey($row['user_phone'] ?? '', '');
+            }
             if (!isset($users[$key])) {
                 continue;
             }

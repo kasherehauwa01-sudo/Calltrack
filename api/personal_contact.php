@@ -26,6 +26,10 @@ try {
         sendJson(['status' => 'error', 'message' => 'Поля user_phone и contact_phone обязательны'], 400);
     }
 
+    if (isUserBlocked($pdo, $userPhone, valueOrNull($data, 'manager'))) {
+        sendJson(['status' => 'success', 'skipped' => true, 'message' => 'Пользователь заблокирован']);
+    }
+
     $personalFlag = (int)($data['personal_flag'] ?? 0) === 1 ? 1 : 0;
     $params = [
         ':user_phone' => $userPhone,

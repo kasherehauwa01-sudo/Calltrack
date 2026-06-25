@@ -506,7 +506,7 @@ function bindAdminPanel(){
   adminEls.usersRefreshBtn.addEventListener('click',loadUsers);
   adminEls.usersSearch.addEventListener('input',renderUsersList);
   adminEls.usersList.addEventListener('click',(e)=>{const btn=e.target.closest('.user-list-btn'); if(btn) selectUser(btn.dataset.userId);});
-  adminEls.userCard.addEventListener('click',(e)=>{const action=e.target.closest('.user-action-btn'); const logFilter=e.target.closest('.user-log-filter'); if(action) sendUserAction(action.dataset.command); if(logFilter) renderUserLogs(logFilter.dataset.filter);});
+  adminEls.userCard.addEventListener('click',(e)=>{const action=e.target.closest('.user-action-btn'); const logFilter=e.target.closest('.user-log-filter'); if(action) sendUserAction(action.dataset.command, action); if(logFilter) renderUserLogs(logFilter.dataset.filter);});
 }
 
 
@@ -835,19 +835,23 @@ function removeActiveUserFromList(){
   renderUsersList();
   renderUserCard();
 }
-async function sendUserAction(command){
+async function sendUserAction(command, button){
   const user=getActiveUser();
-  if(!command) return;
-  if(!user?.user_phone){adminEls.usersStatus.textContent='Нет номера пользователя для отправки команды';return;}
+  if(!command||!user) return;
   if(command==='delete_user'&&!window.confirm('Удалить пользователя из списка безвозвратно?')) return;
+  const originalText=button?.textContent||'';
+  if(button){button.disabled=true;button.textContent='Выполняется...';}
+  adminEls.usersStatus.textContent='Выполняется команда...';
   try{
-    if(window.calltrackApi?.sendUserCommand) await window.calltrackApi.sendUserCommand(user.user_phone,command);
-    else await fetch(USER_COMMAND_API_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({user_phone:user.user_phone,command})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
+    const meta={user_id:user.id||'',manager:user.manager||''};
+    if(window.calltrackApi?.sendUserCommand) await window.calltrackApi.sendUserCommand(user.user_phone||'',command,meta);
+    else await fetch(USER_COMMAND_API_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({user_phone:user.user_phone||'',command,...meta})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
     if(command==='delete_user'){removeActiveUserFromList();adminEls.usersStatus.textContent='Пользователь удалён безвозвратно из списка';return;}
-    if(command==='block_user'){user.is_blocked=1;renderUsersList();renderUserCard();adminEls.usersStatus.textContent='Пользователь заблокирован';return;}
-    if(command==='unblock_user'){user.is_blocked=0;renderUsersList();renderUserCard();adminEls.usersStatus.textContent='Пользователь разблокирован';return;}
+    if(command==='block_user'){user.is_blocked=1;renderUsersList();renderUserCard();adminEls.usersStatus.textContent='Пользователь заблокирован. Новые данные от него не будут записываться в SQL';return;}
+    if(command==='unblock_user'){user.is_blocked=0;renderUsersList();renderUserCard();adminEls.usersStatus.textContent='Пользователь разблокирован. Новые данные снова будут записываться в SQL';return;}
     adminEls.usersStatus.textContent='Команда принудительной синхронизации отправлена';
   }catch(error){console.error(error);adminEls.usersStatus.textContent=`Ошибка отправки команды: ${error.message}`;}
+  finally{if(button){button.disabled=false;button.textContent=originalText;}}
 }
 
 function renderUserCard(){

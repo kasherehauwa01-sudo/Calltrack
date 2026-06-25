@@ -147,13 +147,51 @@ SQL);
     $pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS app_user_states (
     user_phone VARCHAR(30) PRIMARY KEY,
+    user_key VARCHAR(255) UNIQUE,
     manager VARCHAR(255),
     is_deleted TINYINT(1) NOT NULL DEFAULT 0,
     is_blocked TINYINT(1) NOT NULL DEFAULT 0,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 )
 SQL);
+    try {
+        $pdo->exec('ALTER TABLE app_user_states ADD COLUMN user_key VARCHAR(255) NULL');
+    } catch (Throwable $e) {
+        // Колонка уже существует на обновлённой базе.
+    }
+    try {
+        $pdo->exec('ALTER TABLE app_user_states ADD UNIQUE KEY uk_app_user_states_user_key (user_key)');
+    } catch (Throwable $e) {
+        // Индекс уже существует или БД не разрешила повторное добавление.
+    }
 }
+
+function normalizeUserStateKey(?string $phone, ?string $manager = null, ?string $userId = null): string
+{
+    $userId = trim((string)$userId);
+    if ($userId !== '') {
+        return $userId;
+    }
+    $phone = trim((string)$phone);
+    if ($phone !== '') {
+        return 'phone:' . $phone;
+    }
+    return 'manager:' . trim((string)$manager);
+}
+
+function isUserBlocked(PDO $pdo, ?string $phone, ?string $manager = null, ?string $userId = null): bool
+{
+    try {
+        ensureUserTelemetryTables($pdo);
+        $userKey = normalizeUserStateKey($phone, $manager, $userId);
+        $stmt = $pdo->prepare('SELECT is_blocked FROM app_user_states WHERE user_key = :user_key OR user_phone = :user_phone LIMIT 1');
+        $stmt->execute([':user_key' => $userKey, ':user_phone' => trim((string)$phone)]);
+        return (int)($stmt->fetchColumn() ?: 0) === 1;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 
 function sendJson(array $payload, int $statusCode = 200): void
 {

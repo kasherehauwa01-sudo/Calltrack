@@ -10,6 +10,9 @@ try {
     if ($userPhone === '') {
         sendJson(['status' => 'error', 'message' => 'Поле user_phone обязательно'], 400);
     }
+    if (isUserBlocked($pdo, $userPhone, valueOrNull($data, 'manager'))) {
+        sendJson(['status' => 'success', 'blocked' => true, 'commands' => []]);
+    }
 
     $fields = [
         'manager','last_activity','app_version','installed_at','app_updated_at','last_launch_at','launch_count',
