@@ -1,6 +1,9 @@
 package com.example.calltrack.ui.analytics
 
 import android.graphics.Color
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -32,11 +35,13 @@ class AnalyticsActivity : BaseActivity() {
     private lateinit var tabRow: LinearLayout
     private lateinit var periodRow: LinearLayout
     private lateinit var typeRow: LinearLayout
+    private lateinit var detailRow: LinearLayout
     private lateinit var content: LinearLayout
     private var allCalls: List<CallEntity> = emptyList()
     private var clientNames: Map<String, String> = emptyMap()
     private var activeTab: AnalyticsTab = AnalyticsTab.DASHBOARD
     private var activePeriod: AnalyticsPeriod = AnalyticsPeriod.WEEK
+    private var activeDetail: AnalyticsDetail = AnalyticsDetail.DAY
     private val activeTypes = mutableSetOf("Входящий", "Исходящий", "Пропущенный", "Неотвеченный", "Сброшенный")
     private val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale("ru"))
 
@@ -80,6 +85,8 @@ class AnalyticsActivity : BaseActivity() {
         root.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(periodRow) })
         typeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(typeRow) })
+        detailRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        root.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(detailRow) })
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(content)
         renderControls()
@@ -112,6 +119,7 @@ class AnalyticsActivity : BaseActivity() {
                 setTextColor(if (period == activePeriod) Color.WHITE else getColor(R.color.textPrimary))
                 setOnClickListener {
                     activePeriod = period
+                    normalizeDetailForPeriod()
                     renderControls()
                     renderContent()
                 }
@@ -128,6 +136,23 @@ class AnalyticsActivity : BaseActivity() {
                     setTextColor(if (activeTypes.contains(type)) Color.WHITE else getColor(R.color.textPrimary))
                     setOnClickListener {
                         if (activeTypes.contains(type)) activeTypes.remove(type) else activeTypes.add(type)
+                        renderControls()
+                        renderContent()
+                    }
+                }, pillParams())
+            }
+        }
+
+        detailRow.removeAllViews()
+        detailRow.visibility = if (activeTab == AnalyticsTab.DASHBOARD && activePeriod.hasDetail) View.VISIBLE else View.GONE
+        if (detailRow.visibility == View.VISIBLE) {
+            AnalyticsDetail.entries.forEach { detail ->
+                detailRow.addView(Button(this).apply {
+                    text = detail.title
+                    background = rounded(if (detail == activeDetail) getColor(R.color.primary) else Color.WHITE, dp(18))
+                    setTextColor(if (detail == activeDetail) Color.WHITE else getColor(R.color.textPrimary))
+                    setOnClickListener {
+                        activeDetail = detail
                         renderControls()
                         renderContent()
                     }
@@ -152,7 +177,7 @@ class AnalyticsActivity : BaseActivity() {
 
     private fun renderContent() {
         content.removeAllViews()
-        val filtered = allCalls.filter { call -> inPeriod(call.timestamp) }
+        val filtered = allCalls.filter { call -> inPeriod(call.timestamp) && !isPersonalCall(call) }
         if (activeTab == AnalyticsTab.DASHBOARD) renderDashboard(filtered.filter { activeTypes.contains(it.type) }) else renderContacts(filtered)
     }
 
@@ -162,13 +187,13 @@ class AnalyticsActivity : BaseActivity() {
         addCard("Входящие", calls.count { it.type == "Входящий" }.toString())
         addCard("Исходящие", calls.count { it.type == "Исходящий" }.toString())
         addCard("Средняя длительность", formatDuration(if (calls.isEmpty()) 0 else totalDuration / calls.size))
-        addSectionTitle("Звонки по дням")
+        addSectionTitle("Звонки по периодам")
         addLegend()
-        val byDay = calls.groupBy { dateFormat.format(Date(it.timestamp)) }.toSortedMap(compareBy { parseDateKey(it) })
-        val maxDay = max(1, byDay.values.maxOfOrNull { it.size } ?: 1)
-        byDay.forEach { (day, dayCalls) -> addStackedBar(day, dayCalls.groupingBy { it.type }.eachCount(), maxDay) }
+        val grouped = groupCallsByDetail(calls)
+        val maxBucket = max(1, grouped.maxOfOrNull { it.second.size } ?: 1)
+        grouped.forEach { (label, bucketCalls) -> addStackedBar(label, bucketCalls.groupingBy { it.type }.eachCount(), maxBucket) }
         addSectionTitle("Типы звонков")
-        calls.groupBy { it.type }.forEach { (type, rows) -> addBar(type, rows.size, max(1, calls.size), typeColor(type)) }
+        addPieChart(calls.groupingBy { it.type }.eachCount())
     }
 
     private fun renderContacts(calls: List<CallEntity>) {
@@ -235,6 +260,42 @@ class AnalyticsActivity : BaseActivity() {
         row.addView(bar, LinearLayout.LayoutParams(barWidth, dp(14)))
         row.addView(TextView(this).apply { text = values.entries.joinToString("  ") { "${shortType(it.key)}: ${it.value}" }; textSize = 12f; setTextColor(getColor(R.color.textSecondary)) })
         content.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, dp(6), 0, dp(10)) })
+    }
+
+    private fun addPieChart(values: Map<String, Int>) {
+        val ordered = listOf("Входящий", "Исходящий", "Пропущенный", "Неотвеченный", "Сброшенный")
+            .mapNotNull { type -> values[type]?.takeIf { it > 0 }?.let { type to it } }
+        if (ordered.isEmpty()) {
+            addText("Нет данных для круговой диаграммы")
+            return
+        }
+        val total = ordered.sumOf { it.second }.toFloat()
+        content.addView(object : View(this) {
+            private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+            private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = getColor(R.color.textPrimary)
+                textSize = dp(12).toFloat()
+                typeface = Typeface.DEFAULT_BOLD
+            }
+
+            override fun onDraw(canvas: Canvas) {
+                super.onDraw(canvas)
+                val size = minOf(width, height) - dp(32)
+                val left = (width - size) / 2f
+                val oval = RectF(left, dp(8).toFloat(), left + size, dp(8).toFloat() + size)
+                var startAngle = -90f
+                ordered.forEach { (type, count) ->
+                    val sweep = 360f * count / total
+                    paint.color = typeColor(type)
+                    canvas.drawArc(oval, startAngle, sweep, true, paint)
+                    startAngle += sweep
+                }
+                paint.color = Color.WHITE
+                canvas.drawCircle(width / 2f, dp(8) + size / 2f, size * 0.27f, paint)
+                canvas.drawText("Всего ${total.toInt()}", width / 2f - dp(34), dp(8) + size / 2f + dp(5), textPaint)
+            }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(220)).apply { setMargins(0, dp(6), 0, dp(10)) })
+        ordered.forEach { (type, count) -> addBar("$type (${(count * 100 / total).toInt()}%)", count, total.toInt(), typeColor(type)) }
     }
 
     private fun addLegend() {
@@ -318,6 +379,41 @@ class AnalyticsActivity : BaseActivity() {
         return timestamp >= from
     }
 
+    private fun isPersonalCall(call: CallEntity): Boolean = clientNames[call.phone]?.trim()?.equals("Личный звонок", ignoreCase = true) == true
+
+    private fun normalizeDetailForPeriod() {
+        if (!activePeriod.hasDetail) activeDetail = AnalyticsDetail.DAY
+    }
+
+    private fun groupCallsByDetail(calls: List<CallEntity>): List<Pair<String, List<CallEntity>>> {
+        return calls.groupBy { bucketStart(it.timestamp) }
+            .toSortedMap()
+            .map { (start, rows) -> bucketLabel(start) to rows }
+    }
+
+    private fun bucketStart(timestamp: Long): Long {
+        val calendar = Calendar.getInstance().apply { timeInMillis = timestamp }
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        when (activeDetail) {
+            AnalyticsDetail.DAY -> Unit
+            AnalyticsDetail.WEEK -> {
+                calendar.firstDayOfWeek = Calendar.MONDAY
+                calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+            }
+            AnalyticsDetail.MONTH -> calendar.set(Calendar.DAY_OF_MONTH, 1)
+        }
+        return calendar.timeInMillis
+    }
+
+    private fun bucketLabel(timestamp: Long): String = when (activeDetail) {
+        AnalyticsDetail.DAY -> dateFormat.format(Date(timestamp))
+        AnalyticsDetail.WEEK -> "Неделя с ${dateFormat.format(Date(timestamp))}"
+        AnalyticsDetail.MONTH -> SimpleDateFormat("MM.yyyy", Locale("ru")).format(Date(timestamp))
+    }
+
     private fun pillParams(): LinearLayout.LayoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(42)).apply { setMargins(0, dp(6), dp(8), dp(6)) }
 
     private fun typeColor(type: String): Int = when (type) {
@@ -341,9 +437,9 @@ class AnalyticsActivity : BaseActivity() {
     private fun rounded(color: Int, radius: Int): GradientDrawable = GradientDrawable().apply { setColor(color); cornerRadius = radius.toFloat() }
     private fun statusBarHeight(): Int = resources.getIdentifier("status_bar_height", "dimen", "android").takeIf { it > 0 }?.let { resources.getDimensionPixelSize(it) } ?: 0
     private fun formatDuration(seconds: Long): String = "${seconds / 60}:${String.format(Locale.US, "%02d", seconds % 60)}"
-    private fun parseDateKey(value: String): Long = runCatching { dateFormat.parse(value)?.time ?: 0L }.getOrDefault(0L)
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 }
 
 private enum class AnalyticsTab { DASHBOARD, CONTACTS }
-private enum class AnalyticsPeriod(val title: String) { TODAY("Сегодня"), WEEK("Неделя"), MONTH("Месяц"), YEAR("Год"), ALL("Все") }
+private enum class AnalyticsPeriod(val title: String, val hasDetail: Boolean = false) { TODAY("Сегодня"), WEEK("Неделя", true), MONTH("Месяц", true), YEAR("Год", true), ALL("Все") }
+private enum class AnalyticsDetail(val title: String) { DAY("Дни"), WEEK("Недели"), MONTH("Месяцы") }
