@@ -28,6 +28,11 @@
     .admin-login-btn:hover{background:#374151}.admin-error{color:#dc2626;font-size:.9rem;min-height:20px}
     .admin-content{display:grid;gap:14px}.admin-content[hidden],.admin-lock[hidden]{display:none}
     .admin-subtabs{display:flex;gap:8px;flex-wrap:wrap;background:#eceff4;border-radius:16px;padding:6px;width:max-content;max-width:100%}
+    .admin-command-row{display:flex;gap:8px;align-items:end;flex-wrap:wrap;background:#f8fafc;border:1px solid #e5e7eb;border-radius:14px;padding:12px}
+    .admin-command-field{display:grid;gap:5px;min-width:min(520px,100%);flex:1}.admin-command-field label{font-size:.82rem;color:var(--muted)}
+    .admin-command-input{width:100%;border:1px solid #d1d5db;border-radius:12px;padding:10px 12px;background:#fff;color:#111827;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    .admin-command-copy{border:0;border-radius:12px;background:#111827;color:#fff;padding:10px 14px;cursor:pointer;transition:.2s ease;display:inline-flex;gap:6px;align-items:center}.admin-command-copy:hover{background:#374151}
+    .admin-command-status{min-height:20px;color:var(--muted);font-size:.86rem}
     .admin-subtab{border:0;border-radius:999px;background:transparent;color:#4b5563;padding:9px 16px;cursor:pointer;transition:.2s ease}
     .admin-subtab:hover{background:#dfe4ec;color:#111827}.admin-subtab.active{background:#fff;color:#111827;font-weight:600;box-shadow:0 4px 14px rgba(15,23,42,.11)}
     .admin-panel{display:grid;gap:12px}.admin-panel[hidden]{display:none}
@@ -38,11 +43,22 @@
     .registry-sort{border:0;background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
     .registry-select-col{width:42px;text-align:center!important}.registry-checkbox{width:16px;height:16px;accent-color:#111827;cursor:pointer}
     .registry-toolbar{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr)) auto;gap:10px;align-items:end}
+    .registry-period-shell{display:flex;gap:8px;flex-wrap:wrap;background:#eceff4;border-radius:16px;padding:8px;width:max-content;max-width:100%;align-items:center}
+    .registry-custom-period{display:flex;gap:8px;align-items:center}.registry-custom-period[hidden]{display:none}.registry-custom-period label{display:flex;gap:6px;align-items:center;font-size:.82rem;color:var(--muted)}.registry-custom-period input{border:1px solid #d1d5db;border-radius:12px;padding:8px 10px;background:#fff;color:#111827}
     .registry-filter{display:grid;gap:5px}.registry-filter label{font-size:.82rem;color:var(--muted)}
     .registry-filter input,.registry-filter select{border:1px solid #d1d5db;border-radius:12px;padding:9px 10px;background:#fff;color:#111827;min-width:0}
     .registry-delete-btn{border:0;border-radius:999px;background:#dc2626;color:#fff;padding:10px 16px;cursor:pointer;transition:.2s ease;white-space:nowrap}
     .registry-delete-btn:hover{background:#b91c1c}.registry-delete-btn[hidden]{display:none}
+    .registry-refresh-btn{border:0;border-radius:999px;background:#111827;color:#fff;padding:10px 16px;cursor:pointer;transition:.2s ease;white-space:nowrap}.registry-refresh-btn:hover{background:#374151}.registry-refresh-btn:disabled{opacity:.6;cursor:wait}
     .registry-empty{padding:18px;color:var(--muted)}
+
+    .users-layout{display:grid;grid-template-columns:minmax(240px,340px) minmax(0,1fr);gap:16px;align-items:start}
+    .users-list{display:grid;gap:8px;max-height:62vh;overflow:auto;border:1px solid #e5e7eb;border-radius:14px;background:#fff;padding:8px}
+    .user-list-btn{border:1px solid #e5e7eb;background:#f8fafc;border-radius:12px;padding:10px;text-align:left;cursor:pointer;display:grid;gap:4px;color:#111827}
+    .user-list-btn:hover,.user-list-btn.active{background:#eef2ff;border-color:#c7d2fe}.user-list-name{font-weight:700}.user-list-meta{font-size:.82rem;color:var(--muted)}
+    .user-card{border:1px solid #e5e7eb;border-radius:14px;background:#fff;padding:16px;display:grid;gap:14px;min-height:220px}
+    .user-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.user-info-block{border:1px solid #eef2f7;border-radius:12px;background:#f8fafc;padding:12px;display:grid;gap:8px}.user-info-block h3{font-size:1rem;color:#111827}.user-field{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed #e5e7eb;padding-bottom:5px}.user-field span:first-child{color:var(--muted)}.user-field span:last-child{text-align:right;font-weight:600}
+    .user-actions{display:flex;gap:8px;flex-wrap:wrap}.user-action-btn{border:0;border-radius:999px;background:#e5e7eb;color:#374151;padding:9px 13px;cursor:pointer}.user-action-btn.danger{background:#fee2e2;color:#991b1b}.user-log-filters{display:flex;gap:8px;flex-wrap:wrap}.user-log-filter{border:1px solid #d1d5db;border-radius:999px;background:#fff;padding:7px 12px;cursor:pointer}.user-log-filter.active{background:#111827;color:#fff}.user-logs{background:#0f172a;color:#e5e7eb;border-radius:12px;padding:12px;min-height:140px;max-height:260px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;white-space:pre-wrap}
 
     .filter-card{background:var(--card);box-shadow:var(--shadow);border-radius:var(--radius);padding:14px;border:1px solid #e5e7eb;display:grid;gap:10px}
     .filter-title{color:var(--muted);font-size:.9rem}
@@ -222,21 +238,36 @@
           <h2>Админ панель</h2>
           <div class="admin-subtabs" role="tablist" aria-label="Разделы админ панели">
             <button class="admin-subtab active" data-admin-tab="registry" type="button">Реестр</button>
+            <button class="admin-subtab" data-admin-tab="personalContacts" type="button">Признаки контакта</button>
+            <button class="admin-subtab" data-admin-tab="users" type="button">Пользователи</button>
+          </div>
+          <div class="admin-command-row" aria-label="Команда обновления Calltrack">
+            <div class="admin-command-field">
+              <label for="adminUpdateCommand">Команда обновления</label>
+              <input class="admin-command-input" id="adminUpdateCommand" type="text" value="bash /var/www/html/vr/update_calltrack.sh" readonly />
+            </div>
+            <button class="admin-command-copy" id="adminUpdateCommandCopyBtn" type="button" aria-label="Скопировать команду">📋 <span>Копировать</span></button>
+            <div class="admin-command-status" id="adminUpdateCommandStatus" aria-live="polite"></div>
           </div>
           <section class="admin-panel" id="adminRegistryPanel">
             <p>Полный список звонков из SQL таблицы calls.</p>
-            <div class="registry-toolbar">
-              <div class="registry-filter">
-                <label for="registryDateFilter">Дата</label>
-                <input id="registryDateFilter" type="date" />
+            <div class="registry-period-shell" id="registryPeriodShell" aria-label="Период реестра">
+              <button class="period-pill" data-registry-period="yesterday" type="button">Вчера</button>
+              <button class="period-pill" data-registry-period="today" type="button">Сегодня</button>
+              <button class="period-pill active" data-registry-period="week" type="button">Неделя</button>
+              <button class="period-pill" data-registry-period="month" type="button">Месяц</button>
+              <button class="period-pill" data-registry-period="year" type="button">Год</button>
+              <button class="period-pill" data-registry-period="all" type="button">Все</button>
+              <button class="period-pill" data-registry-period="custom" type="button">Выбор периода</button>
+              <div class="registry-custom-period" id="registryCustomPeriodFields" hidden>
+                <label for="registryDateFrom">От <input id="registryDateFrom" type="date" /></label>
+                <label for="registryDateTo">До <input id="registryDateTo" type="date" /></label>
               </div>
+            </div>
+            <div class="registry-toolbar">
               <div class="registry-filter">
                 <label for="registryManagerFilter">Менеджер</label>
                 <select id="registryManagerFilter"><option value="">Все менеджеры</option></select>
-              </div>
-              <div class="registry-filter">
-                <label for="registryClientFilter">Клиент</label>
-                <select id="registryClientFilter"><option value="">Все клиенты</option></select>
               </div>
               <div class="registry-filter">
                 <label for="registryTypeFilter">Тип звонка</label>
@@ -246,9 +277,39 @@
                 <label for="registryClientSearch">Поиск по клиенту</label>
                 <input id="registryClientSearch" type="search" placeholder="Введите клиента" />
               </div>
+              <button class="registry-refresh-btn" id="registryRefreshBtn" type="button">Обновить</button>
               <button class="registry-delete-btn" id="registryDeleteSelectedBtn" type="button" hidden>Удалить выделенные</button>
             </div>
+            <div class="registry-empty" id="registryRowsCount" aria-live="polite"></div>
             <div class="registry-wrap" id="adminRegistryTable"><div class="registry-empty">Данные загружаются...</div></div>
+          </section>
+          <section class="admin-panel" id="adminPersonalContactsPanel" hidden>
+            <p>Список признаков контакта из SQL таблицы personal_contacts.</p>
+            <div class="registry-toolbar">
+              <div class="registry-filter">
+                <label for="personalContactsManagerFilter">Менеджер</label>
+                <select id="personalContactsManagerFilter"><option value="">Все менеджеры</option></select>
+              </div>
+              <button class="registry-refresh-btn" id="personalContactsRefreshBtn" type="button">Обновить</button>
+              <button class="registry-delete-btn" id="personalContactsDeleteSelectedBtn" type="button" hidden>Удалить выделенные</button>
+              <div class="registry-empty" id="personalContactsStatus" aria-live="polite"></div>
+            </div>
+            <div class="registry-wrap" id="adminPersonalContactsTable"><div class="registry-empty">Данные загружаются...</div></div>
+          </section>
+          <section class="admin-panel" id="adminUsersPanel" hidden>
+            <p>Все пользователи, найденные по звонкам и признакам контактов.</p>
+            <div class="registry-toolbar">
+              <div class="registry-filter">
+                <label for="usersSearch">Поиск</label>
+                <input id="usersSearch" type="search" placeholder="Имя или номер" />
+              </div>
+              <button class="registry-refresh-btn" id="usersRefreshBtn" type="button">Обновить</button>
+              <div class="registry-empty" id="usersStatus" aria-live="polite"></div>
+            </div>
+            <div class="users-layout">
+              <div class="users-list" id="usersList"><div class="registry-empty">Данные загружаются...</div></div>
+              <div class="user-card" id="userCard"><div class="registry-empty">Выберите пользователя</div></div>
+            </div>
           </section>
         </div>
       </article>
@@ -295,17 +356,23 @@ const ADMIN_PASSWORD='8852285';
 window.calltrackApi=window.calltrackApi||{};
 window.calltrackApi.endpoints=window.calltrackApi.endpoints||{};
 const SQL_CALLS_API_URL=window.calltrackApi?.endpoints?.calls||'/vr/calltrack/api/get_calls.php';
+const PERSONAL_CONTACTS_API_URL=window.calltrackApi?.endpoints?.personalContacts||'/vr/calltrack/api/get_personal_contacts.php';
+const USERS_API_URL=window.calltrackApi?.endpoints?.users||'/vr/calltrack/api/get_users.php';
+const USER_COMMAND_API_URL=window.calltrackApi?.endpoints?.userCommand||'/vr/calltrack/api/user_command.php';
 console.log('calltrackApi', window.calltrackApi);
 console.log('SQL_CALLS_API_URL', SQL_CALLS_API_URL);
-const chartInstances=[]; let allCalls=[]; let activePeriod='month'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let activeGroupBy='day'; let adminRegistrySort={key:'call_date',direction:'desc'}; const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные']); const selectedRegistryRows=new Set();
+const chartInstances=[]; let allCalls=[]; let activePeriod='month'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let activeGroupBy='day'; let adminRegistrySort={key:'call_date',direction:'desc'}; let adminRegistryPeriod='week'; let registryTotalRows=null; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; let users=[]; let usersLoaded=false; let activeUserId=''; const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные']); const selectedRegistryRows=new Set();
 const els={dashboardView:document.getElementById('dashboardView'),clientCallsView:document.getElementById('clientCallsView'),adminView:document.getElementById('adminView'),managerTags:document.getElementById('managerTags'),groupByFilter:document.getElementById('groupByFilter'),periodShell:document.getElementById('periodShell'),dateFrom:document.getElementById('dateFrom'),dateTo:document.getElementById('dateTo'),applyCustomRangeBtn:document.getElementById('applyCustomRangeBtn'),trendTitle:document.getElementById('trendTitle'),kpiTotal:document.getElementById('kpiTotal'),kpiIncoming:document.getElementById('kpiIncoming'),kpiOutgoing:document.getElementById('kpiOutgoing'),kpiMissed:document.getElementById('kpiMissed'),kpiUnanswered:document.getElementById('kpiUnanswered'),kpiDropped:document.getElementById('kpiDropped'),emptyState:document.getElementById('emptyState'),chartsGrid:document.getElementById('chartsGrid'),callTypeTags:document.getElementById('callTypeTags'),clientManagerTags:document.getElementById('clientManagerTags'),clientPeriodShell:document.getElementById('clientPeriodShell'),clientDateFrom:document.getElementById('clientDateFrom'),clientDateTo:document.getElementById('clientDateTo'),clientApplyRangeBtn:document.getElementById('clientApplyRangeBtn'),clientCallsList:document.getElementById('clientCallsList'),commentModal:document.getElementById('commentModal'),commentInfo:document.getElementById('commentInfo'),commentText:document.getElementById('commentText'),reminderText:document.getElementById('reminderText'),reminderAt:document.getElementById('reminderAt'),commentSaveStatus:document.getElementById('commentSaveStatus'),commentCancelBtn:document.getElementById('commentCancelBtn'),commentSaveBtn:document.getElementById('commentSaveBtn'),clientHistoryModal:document.getElementById('clientHistoryModal'),clientHistoryInfo:document.getElementById('clientHistoryInfo'),clientHistoryList:document.getElementById('clientHistoryList'),clientHistoryCloseBtn:document.getElementById('clientHistoryCloseBtn')};
-const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),registryTable:document.getElementById('adminRegistryTable'),registryDateFilter:document.getElementById('registryDateFilter'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryClientFilter:document.getElementById('registryClientFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
+const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),updateCommand:document.getElementById('adminUpdateCommand'),updateCommandCopyBtn:document.getElementById('adminUpdateCommandCopyBtn'),updateCommandStatus:document.getElementById('adminUpdateCommandStatus'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsRefreshBtn:document.getElementById('personalContactsRefreshBtn'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),usersPanel:document.getElementById('adminUsersPanel'),usersSearch:document.getElementById('usersSearch'),usersRefreshBtn:document.getElementById('usersRefreshBtn'),usersStatus:document.getElementById('usersStatus'),usersList:document.getElementById('usersList'),userCard:document.getElementById('userCard'),registryRefreshBtn:document.getElementById('registryRefreshBtn'),registryTable:document.getElementById('adminRegistryTable'),registryRowsCount:document.getElementById('registryRowsCount'),registryPeriodShell:document.getElementById('registryPeriodShell'),registryCustomPeriodFields:document.getElementById('registryCustomPeriodFields'),registryDateFrom:document.getElementById('registryDateFrom'),registryDateTo:document.getElementById('registryDateTo'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
 const createLocalDate=(year, monthIndex, day, hours=0, minutes=0, seconds=0)=>new Date(year, monthIndex, day, hours, minutes, seconds, 0);
 const startOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
 const endOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
 const formatDateLocal=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const parseLocalDate=(v)=>{if(!v)return null;const raw=String(v).trim();let dateCtor=raw.match(/^Date\((\d{4}),(\d{1,2}),(\d{1,2})(?:,\d{1,2},\d{1,2},\d{1,2})?\)$/);if(dateCtor){const y=Number(dateCtor[1]),mo=Number(dateCtor[2]),d=Number(dateCtor[3]);return createLocalDate(y,mo,d,0,0,0);}const isoAtStart=raw.slice(0,10);let m=isoAtStart.match(/^(\d{4})-(\d{2})-(\d{2})$/);if(m){const y=Number(m[1]),mo=Number(m[2]),d=Number(m[3]);const parsed=createLocalDate(y,mo-1,d,0,0,0);if(/[tT].*[zZ]|[+-]\d{2}:?\d{2}/.test(raw)){parsed.setDate(parsed.getDate()+1);}return parsed;}m=raw.match(/(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);if(m){const y=Number(m[1]),mo=Number(m[2]),d=Number(m[3]);return createLocalDate(y,mo-1,d,0,0,0);}m=raw.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{2}|\d{4})/);if(m){const d=Number(m[1]),mo=Number(m[2]),yRaw=String(m[3]);const y=Number(yRaw.length===2?`20${yRaw}`:yRaw);return createLocalDate(y,mo-1,d,0,0,0);}return null;};
 const normalizeDate=(v)=>{const d=parseLocalDate(v);return d?formatDateLocal(d):null};
+function formatDateDisplay(value){const date=parseLocalDate(value);if(!date)return value?String(value):'';return `${String(date.getDate()).padStart(2,'0')}.${String(date.getMonth()+1).padStart(2,'0')}.${date.getFullYear()}`}
+function formatDateTimeDisplay(value){if(!value)return '';const dateText=formatDateDisplay(value);const timeMatch=String(value).match(/(?:T|\s)(\d{1,2}:\d{2}(?::\d{2})?)/);return timeMatch?`${dateText} ${timeMatch[1]}`:dateText}
+function formatPeriodLabelDisplay(value){const raw=String(value||'');if(/^\d{4}-\d{2}-\d{2}(?: \d{2}:00)?$/.test(raw)){const [datePart,timePart]=raw.split(' ');return `${formatDateDisplay(datePart)}${timePart?` ${timePart}`:''}`;}const week=raw.match(/^Неделя с (\d{4}-\d{2}-\d{2})$/);if(week)return `Неделя с ${formatDateDisplay(week[1])}`;const month=raw.match(/^(\d{4})-(\d{2})$/);if(month)return `01.${month[2]}.${month[1]}`;return raw}
 const parseTimeParts=(t)=>{const raw=String(t??'').trim();if(!raw)return null;const arrayTime=raw.match(/^\[(\d{1,2}),(\d{1,2})(?:,(\d{1,2}))?\]$/);if(arrayTime){const hh=Math.min(23,Math.max(0,Number(arrayTime[1])));const mm=Math.min(59,Math.max(0,Number(arrayTime[2])));const ss=Math.min(59,Math.max(0,Number(arrayTime[3]||0)));return {hh,mm,ss};}const tzMatch=raw.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})/);if(tzMatch){const y=Number(tzMatch[1]);const mo=Number(tzMatch[2]);const d=Number(tzMatch[3]);const hh=Number(tzMatch[4]);const mm=Number(tzMatch[5]);const ss=Number(tzMatch[6]||0);const tz=tzMatch[7];let offsetMin=0;if(tz!=='Z'){const sign=tz[0]==='-'?-1:1;const tzh=Number(tz.slice(1,3));const tzm=Number(tz.replace(':','').slice(3,5));offsetMin=sign*(tzh*60+tzm);}const utcMs=Date.UTC(y,mo-1,d,hh,mm,ss)-offsetMin*60000;const local=new Date(utcMs);return {hh:local.getHours(),mm:local.getMinutes(),ss:local.getSeconds()};}let m=raw.match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);if(!m)m=raw.match(/(\d{1,2})\.(\d{1,2})(?:\.(\d{1,2}))?/);if(!m)return null;const ph=Math.min(23,Math.max(0,Number(m[1])));const pm=Math.min(59,Math.max(0,Number(m[2])));const ps=Math.min(59,Math.max(0,Number(m[3]||0)));return {hh:ph,mm:pm,ss:ps};};
 const normalizeDateTime=(d,t)=>{const dateObj=parseLocalDate(d);if(!dateObj)return null;const parts=parseTimeParts(t);if(!parts)return null;return createLocalDate(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), parts.hh, parts.mm, parts.ss);};
 const getWeekStartISO=(x)=>{const d=createLocalDate(x.getFullYear(), x.getMonth(), x.getDate(),0,0,0);const day=d.getDay()||7;d.setDate(d.getDate()-day+1);return formatDateLocal(d)};
@@ -334,6 +401,7 @@ function mapCallRecord(obj){
   };
 }
 function parseCallsPayload(payload){
+  registryTotalRows=Number.isFinite(Number(payload?.total))?Number(payload.total):null;
   const raw=Array.isArray(payload)?payload:(Array.isArray(payload?.data)?payload.data:(Array.isArray(payload?.calls)?payload.calls:[]));
   return raw.map(mapCallRecord);
 }
@@ -348,6 +416,24 @@ function setActiveTab(tab){
   els.adminView.classList.toggle('active',isAdmin);
   if(isAdmin&&!isAdminUnlocked) setTimeout(()=>adminEls.password.focus(),0);
 }
+
+async function copyAdminUpdateCommand(){
+  const text=adminEls.updateCommand.value;
+  try{
+    if(navigator.clipboard?.writeText){
+      await navigator.clipboard.writeText(text);
+    }else{
+      adminEls.updateCommand.select();
+      document.execCommand('copy');
+      adminEls.updateCommand.blur();
+    }
+    adminEls.updateCommandStatus.textContent='Команда скопирована';
+  }catch(error){
+    console.error(error);
+    adminEls.updateCommandStatus.textContent='Не удалось скопировать команду';
+  }
+}
+
 function unlockAdminPanel(){
   const value=adminEls.password.value.trim();
   if(value!==ADMIN_PASSWORD){
@@ -367,8 +453,9 @@ function bindAdminPanel(){
   adminEls.tabs.forEach((btn)=>btn.addEventListener('click',()=>setActiveTab(btn.dataset.tab)));
   adminEls.loginBtn.addEventListener('click',unlockAdminPanel);
   adminEls.password.addEventListener('keydown',(e)=>{if(e.key==='Enter') unlockAdminPanel();});
+  adminEls.updateCommandCopyBtn.addEventListener('click',copyAdminUpdateCommand);
   adminEls.subtabs.forEach((btn)=>btn.addEventListener('click',()=>setActiveAdminTab(btn.dataset.adminTab)));
-  [adminEls.registryDateFilter,adminEls.registryManagerFilter,adminEls.registryClientFilter,adminEls.registryTypeFilter,adminEls.registryClientSearch].forEach((control)=>{
+  [adminEls.registryDateFrom,adminEls.registryDateTo,adminEls.registryManagerFilter,adminEls.registryTypeFilter,adminEls.registryClientSearch].forEach((control)=>{
     control.addEventListener('input',()=>renderAdminRegistry());
     control.addEventListener('change',()=>renderAdminRegistry());
   });
@@ -389,56 +476,113 @@ function bindAdminPanel(){
     updateRegistryDeleteButton();
     renderAdminRegistry();
   });
+  adminEls.registryPeriodShell.addEventListener('click',(e)=>{const btn=e.target.closest('[data-registry-period]'); if(!btn) return; setAdminRegistryPeriod(btn.dataset.registryPeriod);});
   adminEls.registryDeleteSelectedBtn.addEventListener('click',deleteSelectedRegistryRows);
+  adminEls.registryRefreshBtn.addEventListener('click',refreshRegistryData);
+  adminEls.personalContactsManagerFilter.addEventListener('change',renderPersonalContacts);
+  adminEls.personalContactsTable.addEventListener('click',(e)=>{
+    const sortBtn=e.target.closest('.personal-contacts-sort');
+    if(sortBtn){setPersonalContactsSort(sortBtn.dataset.key);return;}
+  });
+  adminEls.personalContactsTable.addEventListener('change',(e)=>{
+    const checkbox=e.target.closest('.personal-contact-checkbox');
+    const flagSelect=e.target.closest('.personal-flag-select');
+    if(checkbox){
+      if(checkbox.dataset.selectAll){
+        getFilteredPersonalContacts().forEach((row)=>{const key=getPersonalContactRowKey(row); if(checkbox.checked) selectedPersonalContactsRows.add(key); else selectedPersonalContactsRows.delete(key);});
+      }else if(checkbox.checked){
+        selectedPersonalContactsRows.add(checkbox.value);
+      }else{
+        selectedPersonalContactsRows.delete(checkbox.value);
+      }
+      updatePersonalContactsDeleteButton();
+      renderPersonalContacts();
+      return;
+    }
+    if(flagSelect) updatePersonalContactFlagValue(flagSelect);
+  });
+  adminEls.personalContactsDeleteSelectedBtn.addEventListener('click',deleteSelectedPersonalContactsRows);
+  adminEls.personalContactsRefreshBtn.addEventListener('click',loadPersonalContacts);
+  adminEls.usersRefreshBtn.addEventListener('click',loadUsers);
+  adminEls.usersSearch.addEventListener('input',renderUsersList);
+  adminEls.usersList.addEventListener('click',(e)=>{const btn=e.target.closest('.user-list-btn'); if(btn) selectUser(btn.dataset.userId);});
+  adminEls.userCard.addEventListener('click',(e)=>{const action=e.target.closest('.user-action-btn'); const logFilter=e.target.closest('.user-log-filter'); if(action) sendUserAction(action.dataset.command, action); if(logFilter) renderUserLogs(logFilter.dataset.filter);});
 }
+
+
 
 function setActiveAdminTab(tab){
   adminEls.subtabs.forEach((btn)=>btn.classList.toggle('active',btn.dataset.adminTab===tab));
   adminEls.registryPanel.hidden=tab!=='registry';
+  adminEls.personalContactsPanel.hidden=tab!=='personalContacts';
+  adminEls.usersPanel.hidden=tab!=='users';
+  if(tab==='personalContacts'&&!personalContactsLoaded) loadPersonalContacts();
+  if(tab==='users'&&!usersLoaded) loadUsers();
 }
+
 const registryColumns=[
   ['id',(call)=>call.sqlId],
-  ['call_date',(call)=>call.date],
+  ['call_date',(call)=>formatDateDisplay(call.date)],
   ['call_time',(call)=>call.time],
   ['phone',(call)=>formatPhoneForDisplay(call.phone)||call.phone],
   ['call_type',(call)=>call.type],
   ['duration',(call)=>call.duration],
   ['manager',(call)=>call.manager],
+  ['client',(call)=>call.client],
   ['comment',(call)=>call.note],
   ['tag',(call)=>call.tag],
   ['reminder',(call)=>call.reminder],
   ['reminder_text',(call)=>call.reminderText],
-  ['client',(call)=>call.client],
   ['call_id',(call)=>call.id],
   ['user_phone',(call)=>formatPhoneForDisplay(call.userPhone)||call.userPhone],
-  ['created_at',(call)=>call.createdAt],
-  ['updated_at',(call)=>call.updatedAt]
+  ['created_at',(call)=>formatDateTimeDisplay(call.createdAt)],
+  ['updated_at',(call)=>formatDateTimeDisplay(call.updatedAt)]
 ];
 function getRegistryRowKey(call){return String(call.sqlId||call.id||call.__index||'')}
 function updateRegistryDeleteButton(){adminEls.registryDeleteSelectedBtn.hidden=selectedRegistryRows.size===0;}
 function updateRegistryFilterOptions(){
-  const keep={manager:adminEls.registryManagerFilter.value,client:adminEls.registryClientFilter.value,type:adminEls.registryTypeFilter.value};
+  const keep={manager:adminEls.registryManagerFilter.value,type:adminEls.registryTypeFilter.value};
   const makeOptions=(values,empty)=>`<option value="">${empty}</option>${values.map((value)=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}`;
   const managers=[...new Set(allCalls.map((call)=>String(call.manager||'').trim()).filter(Boolean))].sort();
-  const clients=[...new Set(allCalls.map((call)=>String(call.client||'').trim()).filter(Boolean))].sort();
   const types=[...new Set(allCalls.map((call)=>String(call.type||'').trim()).filter(Boolean))].sort();
   adminEls.registryManagerFilter.innerHTML=makeOptions(managers,'Все менеджеры');
-  adminEls.registryClientFilter.innerHTML=makeOptions(clients,'Все клиенты');
   adminEls.registryTypeFilter.innerHTML=makeOptions(types,'Все типы');
   adminEls.registryManagerFilter.value=managers.includes(keep.manager)?keep.manager:'';
-  adminEls.registryClientFilter.value=clients.includes(keep.client)?keep.client:'';
   adminEls.registryTypeFilter.value=types.includes(keep.type)?keep.type:'';
 }
+function getAdminRegistryDateRange(){
+  if(adminRegistryPeriod==='all') return null;
+  if(adminRegistryPeriod==='custom'){
+    const from=adminEls.registryDateFrom.value?startOfDay(parseLocalDate(adminEls.registryDateFrom.value)):null;
+    const to=adminEls.registryDateTo.value?endOfDay(parseLocalDate(adminEls.registryDateTo.value)):null;
+    return from&&to?{from,to}:null;
+  }
+  return getPeriodRange(adminRegistryPeriod);
+}
+function setAdminRegistryPeriod(period){
+  adminRegistryPeriod=period;
+  [...adminEls.registryPeriodShell.querySelectorAll('[data-registry-period]')].forEach((btn)=>btn.classList.toggle('active',btn.dataset.registryPeriod===period));
+  adminEls.registryCustomPeriodFields.hidden=period!=='custom';
+  if(period==='custom'){
+    const fallback=getPeriodRange('week');
+    if(!adminEls.registryDateFrom.value&&fallback?.from) adminEls.registryDateFrom.value=formatDateLocal(fallback.from);
+    if(!adminEls.registryDateTo.value&&fallback?.to) adminEls.registryDateTo.value=formatDateLocal(fallback.to);
+    adminEls.registryDateFrom.focus();
+  }
+  renderAdminRegistry();
+}
 function getAdminFilteredCalls(){
-  const date=adminEls.registryDateFilter.value;
+  const range=getAdminRegistryDateRange();
   const manager=adminEls.registryManagerFilter.value;
-  const client=adminEls.registryClientFilter.value;
   const type=adminEls.registryTypeFilter.value;
   const search=adminEls.registryClientSearch.value.trim().toLowerCase();
   return allCalls.filter((call)=>{
-    if(date&&(normalizeDate(call.date)||'')!==date) return false;
+    if(range){
+      const norm=normalizeDate(call.date);
+      const dt=normalizeDateTime(call.date,call.time)||(norm?parseLocalDate(norm):null);
+      if(!dt||!inDateRange(dt,range.from,range.to)) return false;
+    }
     if(manager&&String(call.manager||'')!==manager) return false;
-    if(client&&String(call.client||'')!==client) return false;
     if(type&&String(call.type||'')!==type) return false;
     if(search&&!String(call.client||'').toLowerCase().includes(search)) return false;
     return true;
@@ -469,14 +613,264 @@ function deleteSelectedRegistryRows(){
 }
 function renderAdminRegistry(){
   updateRegistryFilterOptions();
-  const calls=sortRegistryCalls(getAdminFilteredCalls());
+  const filteredCalls=getAdminFilteredCalls();
+  const calls=sortRegistryCalls(filteredCalls);
   updateRegistryDeleteButton();
+  adminEls.registryRowsCount.textContent=registryTotalRows&&registryTotalRows>calls.length?`Всего: ${registryTotalRows}. Выведено строк после фильтров: ${calls.length}`:`Выведено строк: ${calls.length}`;
   if(!calls.length){adminEls.registryTable.innerHTML='<div class="registry-empty">В реестре пока нет данных</div>';return;}
   const allChecked=calls.every((call)=>selectedRegistryRows.has(getRegistryRowKey(call)));
   const sortMark=(key)=>adminRegistrySort.key===key?(adminRegistrySort.direction==='asc'?'↑':'↓'):'↕';
   const head=`<th class="registry-select-col"><input class="registry-checkbox" data-select-all="1" type="checkbox" ${allChecked?'checked':''} aria-label="Выбрать все строки" /></th>${registryColumns.map(([label])=>`<th><button class="registry-sort" data-key="${escapeHtml(label)}" type="button">${escapeHtml(label)} <span>${sortMark(label)}</span></button></th>`).join('')}`;
   const body=calls.map((call)=>{const key=getRegistryRowKey(call);return `<tr><td class="registry-select-col"><input class="registry-checkbox" type="checkbox" value="${escapeHtml(key)}" ${selectedRegistryRows.has(key)?'checked':''} aria-label="Выбрать строку" /></td>${registryColumns.map(([,getter])=>`<td>${escapeHtml(getter(call)||'')}</td>`).join('')}</tr>`;}).join('');
   adminEls.registryTable.innerHTML=`<table class="registry-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function mapPersonalContactRecord(obj){
+  return {
+    id_db: obj.id_db || obj.id || '',
+    user_phone: obj.user_phone || '',
+    manager: obj.manager || '',
+    contact_phone: obj.contact_phone || '',
+    personal_flag: obj.personal_flag ?? '',
+    updated_at: obj.updated_at || ''
+  };
+}
+function parsePersonalContactsPayload(payload){
+  const raw=Array.isArray(payload)?payload:(Array.isArray(payload?.data)?payload.data:[]);
+  return raw.map(mapPersonalContactRecord);
+}
+async function fetchPersonalContacts(){
+  if(window.calltrackApi?.getPersonalContacts) return window.calltrackApi.getPersonalContacts();
+  const response=await fetch(PERSONAL_CONTACTS_API_URL);
+  const text=await response.text();
+  let payload;
+  try{payload=text?JSON.parse(text):{};}catch(error){throw new Error(`Некорректный JSON API признаков контакта: ${text.slice(0,200)}`);}
+  if(!response.ok||payload.status==='error') throw new Error(payload.message||`HTTP ${response.status}`);
+  return parsePersonalContactsPayload(payload);
+}
+async function loadPersonalContacts(){
+  adminEls.personalContactsRefreshBtn.disabled=true;
+  const previousText=adminEls.personalContactsRefreshBtn.textContent;
+  adminEls.personalContactsRefreshBtn.textContent='Обновление...';
+  adminEls.personalContactsStatus.textContent='Загрузка...';
+  adminEls.personalContactsTable.innerHTML='<div class="registry-empty">Данные загружаются...</div>';
+  try{
+    personalContacts=await fetchPersonalContacts();
+    selectedPersonalContactsRows.clear();
+    personalContactsLoaded=true;
+    updatePersonalContactsFilterOptions();
+    renderPersonalContacts();
+    adminEls.personalContactsStatus.textContent=`Загружено: ${personalContacts.length}`;
+  }catch(error){
+    console.error(error);
+    adminEls.personalContactsStatus.textContent='';
+    adminEls.personalContactsTable.innerHTML=`<div class="registry-empty">Ошибка загрузки: ${escapeHtml(error.message)}</div>`;
+  }finally{
+    adminEls.personalContactsRefreshBtn.disabled=false;
+    adminEls.personalContactsRefreshBtn.textContent=previousText;
+  }
+}
+function getPersonalContactRowKey(row){return String(row.id_db||'')}
+function updatePersonalContactsDeleteButton(){adminEls.personalContactsDeleteSelectedBtn.hidden=selectedPersonalContactsRows.size===0;}
+function updatePersonalContactsFilterOptions(){
+  const keep=adminEls.personalContactsManagerFilter.value;
+  const managers=[...new Set(personalContacts.map((row)=>String(row.manager||'').trim()).filter(Boolean))].sort();
+  adminEls.personalContactsManagerFilter.innerHTML=`<option value="">Все менеджеры</option>${managers.map((manager)=>`<option value="${escapeHtml(manager)}">${escapeHtml(manager)}</option>`).join('')}`;
+  adminEls.personalContactsManagerFilter.value=managers.includes(keep)?keep:'';
+}
+function getFilteredPersonalContacts(){
+  const manager=adminEls.personalContactsManagerFilter.value;
+  return personalContacts.filter((row)=>!manager||String(row.manager||'')===manager);
+}
+function setPersonalContactsSort(key){
+  personalContactsSort=personalContactsSort.key===key?{key,direction:personalContactsSort.direction==='asc'?'desc':'asc'}:{key,direction:'asc'};
+  renderPersonalContacts();
+}
+function sortPersonalContactsRows(rows){
+  const dir=personalContactsSort.direction==='asc'?1:-1;
+  return [...rows].sort((a,b)=>{
+    const av=String(a[personalContactsSort.key]??'').toLowerCase();
+    const bv=String(b[personalContactsSort.key]??'').toLowerCase();
+    const an=Number(av),bn=Number(bv);
+    if(!Number.isNaN(an)&&!Number.isNaN(bn)) return (an-bn)*dir;
+    return av.localeCompare(bv,'ru',{numeric:true})*dir;
+  });
+}
+async function updatePersonalContactFlagValue(select){
+  const id=select.dataset.id;
+  const value=Number(select.value)===1?1:0;
+  const row=personalContacts.find((item)=>getPersonalContactRowKey(item)===String(id));
+  const oldValue=row?Number(row.personal_flag)===1?1:0:0;
+  select.disabled=true;
+  adminEls.personalContactsStatus.textContent='Сохранение признака...';
+  try{
+    if(window.calltrackApi?.updatePersonalContactFlag) await window.calltrackApi.updatePersonalContactFlag(id,value);
+    else await fetch('/vr/calltrack/api/personal_contact.php',{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({id_db:id,personal_flag:value})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
+    if(row) row.personal_flag=value;
+    adminEls.personalContactsStatus.textContent='Признак сохранён';
+  }catch(error){
+    console.error(error);
+    if(row) row.personal_flag=oldValue;
+    select.value=String(oldValue);
+    adminEls.personalContactsStatus.textContent=`Ошибка сохранения: ${error.message}`;
+  }finally{
+    select.disabled=false;
+    renderPersonalContacts();
+  }
+}
+async function deleteSelectedPersonalContactsRows(){
+  const ids=[...selectedPersonalContactsRows];
+  if(!ids.length) return;
+  if(!confirm(`Удалить выбранные признаки контакта: ${ids.length}?`)) return;
+  adminEls.personalContactsStatus.textContent='Удаление...';
+  try{
+    if(window.calltrackApi?.deletePersonalContacts) await window.calltrackApi.deletePersonalContacts(ids);
+    else await fetch('/vr/calltrack/api/delete_personal_contacts.php',{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({ids})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
+    personalContacts=personalContacts.filter((row)=>!selectedPersonalContactsRows.has(getPersonalContactRowKey(row)));
+    selectedPersonalContactsRows.clear();
+    updatePersonalContactsFilterOptions();
+    renderPersonalContacts();
+    adminEls.personalContactsStatus.textContent='Выбранные строки удалены';
+  }catch(error){
+    console.error(error);
+    adminEls.personalContactsStatus.textContent=`Ошибка удаления: ${error.message}`;
+  }
+}
+function renderPersonalContacts(){
+  const columns=['id_db','user_phone','manager','contact_phone','personal_flag','updated_at'];
+  const rows=sortPersonalContactsRows(getFilteredPersonalContacts());
+  updatePersonalContactsDeleteButton();
+  if(!rows.length){adminEls.personalContactsTable.innerHTML='<div class="registry-empty">Нет данных</div>';return;}
+  const allChecked=rows.every((row)=>selectedPersonalContactsRows.has(getPersonalContactRowKey(row)));
+  const sortMark=(key)=>personalContactsSort.key===key?(personalContactsSort.direction==='asc'?'↑':'↓'):'↕';
+  const head=`<th class="registry-select-col"><input class="personal-contact-checkbox" data-select-all="1" type="checkbox" ${allChecked?'checked':''} aria-label="Выбрать все строки" /></th>${columns.map((column)=>`<th><button class="registry-sort personal-contacts-sort" data-key="${escapeHtml(column)}" type="button">${escapeHtml(column)} <span>${sortMark(column)}</span></button></th>`).join('')}`;
+  const body=rows.map((row)=>{
+    const key=getPersonalContactRowKey(row);
+    const flag=Number(row.personal_flag)===1?1:0;
+    return `<tr><td class="registry-select-col"><input class="personal-contact-checkbox" type="checkbox" value="${escapeHtml(key)}" ${selectedPersonalContactsRows.has(key)?'checked':''} aria-label="Выбрать строку" /></td>${columns.map((column)=>{
+      if(column==='personal_flag') return `<td><select class="personal-flag-select" data-id="${escapeHtml(key)}"><option value="0" ${flag===0?'selected':''}>Рабочий</option><option value="1" ${flag===1?'selected':''}>Личный</option></select></td>`;
+      return `<td>${escapeHtml(column==='updated_at'?formatDateTimeDisplay(row[column]):(row[column]??''))}</td>`;
+    }).join('')}</tr>`;
+  }).join('');
+  adminEls.personalContactsTable.innerHTML=`<table class="registry-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+async function fetchUsers(){
+  if(window.calltrackApi?.getUsers) return window.calltrackApi.getUsers();
+  const response=await fetch(USERS_API_URL);
+  const text=await response.text();
+  let payload;
+  try{payload=text?JSON.parse(text):{};}catch(error){throw new Error(`Некорректный JSON API пользователей: ${text.slice(0,200)}`);}
+  if(!response.ok||payload.status==='error') throw new Error(payload.message||`HTTP ${response.status}`);
+  return Array.isArray(payload.data)?payload.data:[];
+}
+function emptyValue(value){return value===null||value===undefined||String(value).trim()===''?'Нет данных':String(value);}
+function getUserStatus(user){
+  if(Number(user?.is_blocked)===1) return 'Заблокирован';
+  const raw=user?.last_activity;
+  if(!raw) return 'Нет данных';
+  const date=new Date(String(raw).replace(' ','T'));
+  if(Number.isNaN(date.getTime())) return 'Нет данных';
+  const diffMin=Math.max(0,Math.round((Date.now()-date.getTime())/60000));
+  if(diffMin<=5) return 'Онлайн';
+  if(diffMin<1440) return `Был в сети ${diffMin} минут назад`;
+  return `Неактивен более ${Math.floor(diffMin/1440)} дней`;
+}
+async function loadUsers(){
+  adminEls.usersRefreshBtn.disabled=true;
+  const previousText=adminEls.usersRefreshBtn.textContent;
+  adminEls.usersRefreshBtn.textContent='Обновление...';
+  adminEls.usersStatus.textContent='Загрузка...';
+  try{
+    users=await fetchUsers();
+    usersLoaded=true;
+    if(!activeUserId&&users.length) activeUserId=users[0].id;
+    renderUsersList();
+    renderUserCard();
+    adminEls.usersStatus.textContent=`Загружено: ${users.length}`;
+  }catch(error){
+    console.error(error);
+    adminEls.usersStatus.textContent='';
+    adminEls.usersList.innerHTML=`<div class="registry-empty">Ошибка загрузки: ${escapeHtml(error.message)}</div>`;
+    adminEls.userCard.innerHTML='<div class="registry-empty">Нет данных пользователя</div>';
+  }finally{
+    adminEls.usersRefreshBtn.disabled=false;
+    adminEls.usersRefreshBtn.textContent=previousText;
+  }
+}
+function getFilteredUsers(){
+  const search=adminEls.usersSearch.value.trim().toLowerCase();
+  return users.filter((user)=>!search||String(user.manager||'').toLowerCase().includes(search)||String(user.user_phone||'').toLowerCase().includes(search));
+}
+function selectUser(userId){activeUserId=userId;renderUsersList();renderUserCard();}
+function renderUsersList(){
+  const rows=getFilteredUsers();
+  if(!rows.length){adminEls.usersList.innerHTML='<div class="registry-empty">Пользователи не найдены</div>';return;}
+  adminEls.usersList.innerHTML=rows.map((user)=>`<button class="user-list-btn ${user.id===activeUserId?'active':''}" data-user-id="${escapeHtml(user.id)}" type="button"><span class="user-list-name">${escapeHtml(emptyValue(user.manager))}</span><span class="user-list-meta">${escapeHtml(emptyValue(user.user_phone))}</span><span class="user-list-meta">${escapeHtml(getUserStatus(user))}</span></button>`).join('');
+}
+function infoBlock(title, rows){return `<section class="user-info-block"><h3>${escapeHtml(title)}</h3>${rows.map(([label,value])=>{const display=/дата|активность|синхронизация|запуск|звонок/i.test(label)?formatDateTimeDisplay(value)||value:value;return `<div class="user-field"><span>${escapeHtml(label)}</span><span>${escapeHtml(emptyValue(display))}</span></div>`;}).join('')}</section>`;}
+
+function getActiveUser(){return users.find((item)=>item.id===activeUserId);}
+function getUserLogs(user, filter='Все'){
+  const logs=Array.isArray(user?.logs)?user.logs:[];
+  if(filter==='Ошибки') return logs.filter((log)=>String(log.level||'').toUpperCase().includes('ERROR'));
+  if(filter==='Синхронизация') return logs.filter((log)=>String(log.category||log.level||log.message||'').toLowerCase().includes('sync')||String(log.message||'').toLowerCase().includes('синх'));
+  if(filter==='Уведомления') return logs.filter((log)=>String(log.category||log.message||'').toLowerCase().includes('notify')||String(log.message||'').toLowerCase().includes('уведом'));
+  if(filter==='Действия пользователя') return logs.filter((log)=>String(log.category||log.message||'').toLowerCase().includes('ui'));
+  return logs;
+}
+function renderUserLogs(filter='Все'){
+  const user=getActiveUser();
+  const logs=getUserLogs(user,filter).slice(0,500);
+  const logBox=document.getElementById('userLogsBox');
+  if(!logBox) return;
+  logBox.textContent=logs.length?logs.map((log)=>`${emptyValue(log.logged_at)} [${emptyValue(log.level||log.category)}] ${emptyValue(log.message)}`).join('\n'):'Логи пользователя пока не переданы приложением на сервер.';
+  document.querySelectorAll('.user-log-filter').forEach((btn)=>btn.classList.toggle('active',btn.dataset.filter===filter));
+}
+function removeActiveUserFromList(){
+  const user=getActiveUser();
+  if(!user) return;
+  users=users.filter((item)=>item.id!==user.id);
+  activeUserId=users[0]?.id||'';
+  renderUsersList();
+  renderUserCard();
+}
+async function sendUserAction(command, button){
+  const user=getActiveUser();
+  if(!command||!user) return;
+  if(command==='delete_user'&&!window.confirm('Удалить пользователя из списка безвозвратно?')) return;
+  const originalText=button?.textContent||'';
+  if(button){button.disabled=true;button.textContent='Выполняется...';}
+  adminEls.usersStatus.textContent='Выполняется команда...';
+  try{
+    const meta={user_id:user.id||'',manager:user.manager||''};
+    if(window.calltrackApi?.sendUserCommand) await window.calltrackApi.sendUserCommand(user.user_phone||'',command,meta);
+    else await fetch(USER_COMMAND_API_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({user_phone:user.user_phone||'',command,...meta})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
+    if(command==='delete_user'){removeActiveUserFromList();adminEls.usersStatus.textContent='Пользователь удалён безвозвратно из списка';return;}
+    if(command==='block_user'){user.is_blocked=1;renderUsersList();renderUserCard();adminEls.usersStatus.textContent='Пользователь заблокирован. Новые данные от него не будут записываться в SQL';return;}
+    if(command==='unblock_user'){user.is_blocked=0;renderUsersList();renderUserCard();adminEls.usersStatus.textContent='Пользователь разблокирован. Новые данные снова будут записываться в SQL';return;}
+    adminEls.usersStatus.textContent='Команда принудительной синхронизации отправлена';
+  }catch(error){console.error(error);adminEls.usersStatus.textContent=`Ошибка отправки команды: ${error.message}`;}
+  finally{if(button){button.disabled=false;button.textContent=originalText;}}
+}
+
+function renderUserCard(){
+  const user=getActiveUser();
+  if(!user){adminEls.userCard.innerHTML='<div class="registry-empty">Выберите пользователя</div>';return;}
+  const unavailable='Нет данных';
+  adminEls.userCard.innerHTML=`
+    <h2>${escapeHtml(emptyValue(user.manager))}</h2>
+    <div class="user-card-grid">
+      ${infoBlock('Основная информация', [['Имя менеджера',user.manager],['Номер пользователя',user.user_phone],['Последняя активность',user.last_activity],['Статус',getUserStatus(user)]])}
+      ${infoBlock('Приложение', [['Версия приложения',user.app_version||unavailable],['Дата установки',user.installed_at||unavailable],['Дата последнего обновления',user.app_updated_at||unavailable],['Дата последнего запуска',user.last_launch_at||unavailable],['Количество запусков приложения',user.launch_count||unavailable]])}
+      ${infoBlock('Устройство', [['Производитель',user.device_manufacturer||unavailable],['Модель',user.device_model||unavailable],['Версия Android',user.android_version||unavailable],['API Level',user.api_level||unavailable],['Объем оперативной памяти',user.ram_total||unavailable],['Свободная память устройства',user.storage_free||unavailable],['Разрешение экрана',user.screen_resolution||unavailable],['Язык устройства',user.device_language||unavailable],['Часовой пояс',user.timezone||unavailable]])}
+      ${infoBlock('Состояние приложения', [['Разрешение на звонки',user.calls_permission||unavailable],['Разрешение на уведомления',user.notifications_permission||unavailable],['Разрешение на контакты',user.contacts_permission||unavailable],['Разрешение на работу в фоне',user.background_permission||unavailable],['Исключено из оптимизации батареи',user.battery_optimization_ignored||unavailable],['Google Play Services',user.google_play_services||unavailable]])}
+      ${infoBlock('Статистика использования', [['Всего звонков загружено',user.total_calls],['Звонков за сегодня',user.calls_today],['Последняя синхронизация',user.last_sync_at],['Количество ошибок синхронизации',user.sync_errors_count],['Размер локальной базы данных',user.local_db_size||unavailable],['Количество контактов',user.contacts_count]])}
+      ${infoBlock('Диагностика', [['API доступен','Да'],['Сервер отвечает','Да'],['Последняя успешная синхронизация',user.last_sync_at],['Последняя ошибка',user.last_error||unavailable],['Последний отправленный звонок',user.last_call_at],['Последний ответ сервера',user.last_server_response||unavailable]])}
+    </div>
+    <section class="user-info-block"><h3>Логи</h3><div class="user-log-filters"><button class="user-log-filter active" data-filter="Все" type="button">Все</button><button class="user-log-filter" data-filter="Ошибки" type="button">Ошибки</button><button class="user-log-filter" data-filter="Синхронизация" type="button">Синхронизация</button><button class="user-log-filter" data-filter="Уведомления" type="button">Уведомления</button><button class="user-log-filter" data-filter="Действия пользователя" type="button">Действия пользователя</button></div><div class="user-logs" id="userLogsBox"></div></section>
+    <section class="user-info-block"><h3>Управление пользователем</h3><div class="user-actions"><button class="user-action-btn" data-command="force_sync" type="button">Запросить принудительную синхронизацию</button><button class="user-action-btn danger" data-command="delete_user" type="button">Удалить пользователя</button><button class="user-action-btn danger" data-command="block_user" type="button">Заблокировать пользователя</button><button class="user-action-btn" data-command="unblock_user" type="button">Разблокировать пользователя</button></div></section>`;
+  renderUserLogs('Все');
 }
 
 
@@ -560,7 +954,7 @@ function groupCallsByClient(calls){
 }
 function renderClientRow(group){
   const segments=group.calls.map((call)=>{
-    const date=formatDateLocal(call.__dt);
+    const date=formatDateDisplay(formatDateLocal(call.__dt));
     const time=`${String(call.__dt.getHours()).padStart(2,'0')}:${String(call.__dt.getMinutes()).padStart(2,'0')}`;
     const hasNote=callHasHistoryDetails(call);
     const cls=call.__type==='Входящий'?'incoming':'outgoing';
@@ -583,7 +977,7 @@ function openClientHistoryModal(clientKey){
   els.clientHistoryInfo.innerHTML=`<div><span>Клиент</span>${escapeHtml(clientKey)}</div><div><span>Всего звонков</span>${calls.length}</div><div><span>Общая длительность</span>${escapeHtml(formatCallDurationDot(totalDuration))}</div>`;
   els.clientHistoryList.innerHTML=calls.length?calls.map((call)=>{
     const dt=call.__dt;
-    const date=dt?formatDateLocal(dt):(normalizeDate(call.date)||'—');
+    const date=dt?formatDateDisplay(formatDateLocal(dt)):(formatDateDisplay(normalizeDate(call.date))||'—');
     const time=dt?`${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`:(call.time||'—');
     const note=String(call.note||'').trim();
     const reminder=getReminderText(call);
@@ -603,7 +997,7 @@ function openCommentModal(index){
   if(!call) return;
   editingCallIndex=index;
   const dt=getCallDateTime(call);
-  const date=dt?formatDateLocal(dt):(normalizeDate(call.date)||'—');
+  const date=dt?formatDateDisplay(formatDateLocal(dt)):(formatDateDisplay(normalizeDate(call.date))||'—');
   const time=dt?`${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`:(call.time||'—');
   const type=normalizeCallTypeLabel(call.type)||'—';
   els.commentInfo.innerHTML=`<div><span>Дата звонка</span>${escapeHtml(date)}</div><div><span>Время звонка</span>${escapeHtml(time)}</div><div><span>Тип звонка</span>${escapeHtml(type)}</div><div><span>Клиент</span>${escapeHtml(call.client||'—')}</div><div><span>Телефон</span>${escapeHtml(formatPhoneForDisplay(call.phone)||'—')}</div>`;
@@ -774,7 +1168,7 @@ function renderCallTypeTags(){
 
 function renderKpi(s){const totalCalculated=(s.incoming||0)+(s.outgoing||0)+(s.missed||0)+(s.unanswered||0)+(s.dropped||0);els.kpiTotal.textContent=totalCalculated;els.kpiIncoming.textContent=s.incoming;els.kpiOutgoing.textContent=s.outgoing;els.kpiMissed.textContent=s.missed;els.kpiUnanswered.textContent=s.unanswered;els.kpiDropped.textContent=s.dropped||0}
 function renderCharts(s,g){destroyCharts();let labels=Object.keys(s.byPeriod).sort(),values=labels.map((d)=>s.byPeriod[d]);
-      let incomingData=labels.map((k)=>s.byPeriodType?.[k]?.incoming||0); let outgoingData=labels.map((k)=>s.byPeriodType?.[k]?.outgoing||0); let missedData=labels.map((k)=>s.byPeriodType?.[k]?.missed||0); let unansweredData=labels.map((k)=>s.byPeriodType?.[k]?.unanswered||0); let droppedData=labels.map((k)=>s.byPeriodType?.[k]?.dropped||0); if(g==='hour'){ const hourly=buildHourlySeries(s); labels=hourly.labels; incomingData=hourly.incoming; outgoingData=hourly.outgoing; missedData=hourly.missed; unansweredData=hourly.unanswered; droppedData=hourly.dropped; values=hourly.incoming.map((_,i)=>hourly.incoming[i]+hourly.outgoing[i]+hourly.missed[i]+hourly.unanswered[i]+hourly.dropped[i]); }els.trendTitle.textContent={hour:'Звонки по часам',day:'Звонки',week:'Звонки по неделям',month:'Звонки по месяцам'}[g]||'Звонки'; const callsDatasets=[{type:'Входящий',label:'Входящие',data:incomingData,backgroundColor:'#10b981'},{type:'Исходящий',label:'Исходящие',data:outgoingData,backgroundColor:'#3b82f6'},{type:'Пропущенные',label:'Пропущенные',data:missedData,backgroundColor:'#f59e0b'},{type:'Неотвеченные',label:'Неотвеченные',data:unansweredData,backgroundColor:'#ef4444'},{type:'Сброшенные',label:'Сброшенные',data:droppedData,backgroundColor:'#8b5cf6'}].map((d)=>({label:d.label,data:activeCallTypes.has(d.type)?d.data:d.data.map(()=>0),backgroundColor:d.backgroundColor})); chartInstances.push(new Chart(document.getElementById('callsByDayChart'),{type:'bar',data:{labels,datasets:callsDatasets},options:{maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom'}},scales:{x:{stacked:true},y:{beginAtZero:true,stacked:true,suggestedMax:Math.max(...values,0)+1,ticks:{precision:0,padding:6}}}},plugins:[totalsLabelPlugin]}));chartInstances.push(new Chart(document.getElementById('callTypesChart'),{type:'pie',data:{labels:['Входящий','Исходящий','Неотвеченный','Пропущенные'],datasets:[{data:[activeCallTypes.has('Входящий')?(s.typeMap['Входящий']||0):0,activeCallTypes.has('Исходящий')?(s.typeMap['Исходящий']||0):0,activeCallTypes.has('Неотвеченные')?(s.typeMap['Неотвеченный']||0):0,activeCallTypes.has('Пропущенные')?(s.missed||0):0],backgroundColor:['#10b981','#3b82f6','#ef4444','#f59e0b']}]},options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}}));const ml=Object.keys(s.byManager).sort((a,b)=>s.byManager[b]-s.byManager[a]); const managerIncoming=ml.map((n)=>s.byManagerType?.[n]?.incoming||0); const managerOutgoing=ml.map((n)=>s.byManagerType?.[n]?.outgoing||0); const managerMissed=ml.map((n)=>s.byManagerType?.[n]?.missed||0); const managerUnanswered=ml.map((n)=>s.byManagerType?.[n]?.unanswered||0); const managerDropped=ml.map((n)=>s.byManagerType?.[n]?.dropped||0); chartInstances.push(new Chart(document.getElementById('managerCallsChart'),{type:'bar',data:{labels:ml,datasets:[{label:'Входящие',data:activeCallTypes.has('Входящий')?managerIncoming:managerIncoming.map(()=>0),backgroundColor:'#10b981'},{label:'Исходящие',data:activeCallTypes.has('Исходящий')?managerOutgoing:managerOutgoing.map(()=>0),backgroundColor:'#3b82f6'},{label:'Пропущенные',data:activeCallTypes.has('Пропущенные')?managerMissed:managerMissed.map(()=>0),backgroundColor:'#f59e0b'},{label:'Неотвеченные',data:activeCallTypes.has('Неотвеченные')?managerUnanswered:managerUnanswered.map(()=>0),backgroundColor:'#ef4444'},{label:'Сброшенные',data:activeCallTypes.has('Сброшенные')?managerDropped:managerDropped.map(()=>0),backgroundColor:'#8b5cf6'}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom'}},scales:{x:{beginAtZero:true,stacked:true,ticks:{precision:0}},y:{stacked:true}}}}));}
+      let incomingData=labels.map((k)=>s.byPeriodType?.[k]?.incoming||0); let outgoingData=labels.map((k)=>s.byPeriodType?.[k]?.outgoing||0); let missedData=labels.map((k)=>s.byPeriodType?.[k]?.missed||0); let unansweredData=labels.map((k)=>s.byPeriodType?.[k]?.unanswered||0); let droppedData=labels.map((k)=>s.byPeriodType?.[k]?.dropped||0); if(g==='hour'){ const hourly=buildHourlySeries(s); labels=hourly.labels; incomingData=hourly.incoming; outgoingData=hourly.outgoing; missedData=hourly.missed; unansweredData=hourly.unanswered; droppedData=hourly.dropped; values=hourly.incoming.map((_,i)=>hourly.incoming[i]+hourly.outgoing[i]+hourly.missed[i]+hourly.unanswered[i]+hourly.dropped[i]); }els.trendTitle.textContent={hour:'Звонки по часам',day:'Звонки',week:'Звонки по неделям',month:'Звонки по месяцам'}[g]||'Звонки'; const callsDatasets=[{type:'Входящий',label:'Входящие',data:incomingData,backgroundColor:'#10b981'},{type:'Исходящий',label:'Исходящие',data:outgoingData,backgroundColor:'#3b82f6'},{type:'Пропущенные',label:'Пропущенные',data:missedData,backgroundColor:'#f59e0b'},{type:'Неотвеченные',label:'Неотвеченные',data:unansweredData,backgroundColor:'#ef4444'},{type:'Сброшенные',label:'Сброшенные',data:droppedData,backgroundColor:'#8b5cf6'}].map((d)=>({label:d.label,data:activeCallTypes.has(d.type)?d.data:d.data.map(()=>0),backgroundColor:d.backgroundColor})); chartInstances.push(new Chart(document.getElementById('callsByDayChart'),{type:'bar',data:{labels:labels.map(formatPeriodLabelDisplay),datasets:callsDatasets},options:{maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom'}},scales:{x:{stacked:true},y:{beginAtZero:true,stacked:true,suggestedMax:Math.max(...values,0)+1,ticks:{precision:0,padding:6}}}},plugins:[totalsLabelPlugin]}));chartInstances.push(new Chart(document.getElementById('callTypesChart'),{type:'pie',data:{labels:['Входящий','Исходящий','Неотвеченный','Пропущенные'],datasets:[{data:[activeCallTypes.has('Входящий')?(s.typeMap['Входящий']||0):0,activeCallTypes.has('Исходящий')?(s.typeMap['Исходящий']||0):0,activeCallTypes.has('Неотвеченные')?(s.typeMap['Неотвеченный']||0):0,activeCallTypes.has('Пропущенные')?(s.missed||0):0],backgroundColor:['#10b981','#3b82f6','#ef4444','#f59e0b']}]},options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}}));const ml=Object.keys(s.byManager).sort((a,b)=>s.byManager[b]-s.byManager[a]); const managerIncoming=ml.map((n)=>s.byManagerType?.[n]?.incoming||0); const managerOutgoing=ml.map((n)=>s.byManagerType?.[n]?.outgoing||0); const managerMissed=ml.map((n)=>s.byManagerType?.[n]?.missed||0); const managerUnanswered=ml.map((n)=>s.byManagerType?.[n]?.unanswered||0); const managerDropped=ml.map((n)=>s.byManagerType?.[n]?.dropped||0); chartInstances.push(new Chart(document.getElementById('managerCallsChart'),{type:'bar',data:{labels:ml,datasets:[{label:'Входящие',data:activeCallTypes.has('Входящий')?managerIncoming:managerIncoming.map(()=>0),backgroundColor:'#10b981'},{label:'Исходящие',data:activeCallTypes.has('Исходящий')?managerOutgoing:managerOutgoing.map(()=>0),backgroundColor:'#3b82f6'},{label:'Пропущенные',data:activeCallTypes.has('Пропущенные')?managerMissed:managerMissed.map(()=>0),backgroundColor:'#f59e0b'},{label:'Неотвеченные',data:activeCallTypes.has('Неотвеченные')?managerUnanswered:managerUnanswered.map(()=>0),backgroundColor:'#ef4444'},{label:'Сброшенные',data:activeCallTypes.has('Сброшенные')?managerDropped:managerDropped.map(()=>0),backgroundColor:'#8b5cf6'}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom'}},scales:{x:{beginAtZero:true,stacked:true,ticks:{precision:0}},y:{stacked:true}}}}));}
 const showNoData=()=>{els.emptyState.style.display='block';els.chartsGrid.style.display='none'}; const hideNoData=()=>{els.emptyState.style.display='none';els.chartsGrid.style.display='grid'};
 function populateManagers(calls){const managers=[...new Set(calls.map((c)=>((c?.manager||'Не указан').trim()||'Не указан')))].sort();els.managerTags.innerHTML=managers.map((m)=>`<button class="manager-tag active" data-manager="${m}">${m}</button>`).join('');managers.forEach((m)=>activeManagers.add(m));}
 
@@ -820,12 +1214,15 @@ function setActivePeriodPill(p){activePeriod=p;[...els.periodShell.querySelector
 }
 function applyFilters(){const g=activeGroupBy,p=activePeriod,range=getPeriodRange(p);let from=null,to=null;if(p==='custom'){from=els.dateFrom.value?startOfDay(parseLocalDate(els.dateFrom.value)):null;to=els.dateTo.value?endOfDay(parseLocalDate(els.dateTo.value)):null;if(!from||!to){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();return;}}else if(range){from=range.from;to=range.to;}const filtered=allCalls.filter((c)=>{const client=String(c?.client||'').trim().toLowerCase();if(client==='личный звонок') return false; const type=normalizeCallTypeLabel(c?.type); const isMissed=type==='Неотвеченный'; const isDropped=type==='Сброшенный'; const mappedType=isMissed?'Пропущенные':(isDropped?'Сброшенные':type); const mappedUnanswered=isMissed?'Неотвеченные':mappedType; if(!(activeCallTypes.has(mappedType)||activeCallTypes.has(mappedUnanswered))) return false;const m=(c?.manager||'Не указан').trim()||'Не указан';if(!activeManagers.has(m))return false;if(!from||!to)return true;const norm=normalizeDate(c?.date);const dt=normalizeDateTime(c?.date,c?.time)||(norm?parseLocalDate(norm):null);if(!dt&&norm){const dObj=parseLocalDate(norm);if(!dObj) return false;const dayPoint=createLocalDate(dObj.getFullYear(),dObj.getMonth(),dObj.getDate(),12,0,0);return inDateRange(dayPoint,from,to);}return inDateRange(dt,from,to)});if(!filtered.length){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();return;}hideNoData();const gg=['hour','day','week','month'].includes(g)?g:'day';const s=analyzeCalls(filtered,gg);renderKpi(s);renderCharts(s,gg);}
 function bindFilters(){renderCallTypeTags();els.callTypeTags.addEventListener('click',(e)=>{const tag=e.target.closest('.type-tag'); if(!tag) return; const t=tag.dataset.type; if(activeCallTypes.has(t)) activeCallTypes.delete(t); else activeCallTypes.add(t); renderCallTypeTags(); applyFilters();});els.periodShell.addEventListener('click',(e)=>{const btn=e.target.closest('.period-pill');if(!btn||!btn.dataset.period)return;setActivePeriodPill(btn.dataset.period);applyFilters();});els.applyCustomRangeBtn.addEventListener('click',()=>{setActivePeriodPill('custom');applyFilters();});els.groupByFilter.addEventListener('click',(e)=>{const btn=e.target.closest('.detail-pill'); if(!btn||btn.disabled) return; setActiveGroupBy(btn.dataset.group); applyFilters();});els.managerTags.addEventListener('click',(e)=>{const tag=e.target.closest('.manager-tag');if(!tag)return;const m=tag.dataset.manager;if(activeManagers.has(m)){activeManagers.delete(m);tag.classList.remove('active');}else{activeManagers.add(m);tag.classList.add('active');}applyFilters();});}
-async function initDashboard(){try{
-  const callsPayload=window.calltrackApi?.loadCalls
-    ? await window.calltrackApi.loadCalls()
-    : await fetch(SQL_CALLS_API_URL).then((response)=>{if(!response.ok) throw new Error(`API ${response.status}: ${SQL_CALLS_API_URL}`); return response.json();});
+async function fetchCallsPayload(){
+  return window.calltrackApi?.loadCalls
+    ? window.calltrackApi.loadCalls()
+    : fetch(`${SQL_CALLS_API_URL}?period=all&limit=0`).then((response)=>{if(!response.ok) throw new Error(`API ${response.status}: ${SQL_CALLS_API_URL}`); return response.json();});
+}
+function applyCallsPayload(callsPayload){
   allCalls=parseCallsPayload(callsPayload);
   allCalls.forEach((call,index)=>{call.__index=index;});
+  activeManagers.clear();
   console.log('Loaded calls:', allCalls.length);
   console.log(allCalls.slice(0,3));
   console.log('Field check:', {
@@ -833,7 +1230,39 @@ async function initDashboard(){try{
     nonEmptyDate: allCalls.filter((c)=>String(c.date||'').trim()!=='').length,
     nonEmptyTime: allCalls.filter((c)=>String(c.time||'').trim()!=='').length,
     nonEmptyManager: allCalls.filter((c)=>String(c.manager||'').trim()!=='').length
-  });if(!allCalls.length){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();return;}populateManagers(allCalls);populateClientManagers(allCalls);renderClientCalls();renderAdminRegistry(allCalls);bindFilters();bindClientCalls();updateGroupByAvailability(activePeriod);setGroupByForPeriod(activePeriod);hideNoData();applyFilters();}catch(error){console.error('Ошибка загрузки/обработки данных:',error);els.emptyState.textContent='Не удалось загрузить данные с сервера';renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();}}
+  });
+  if(!allCalls.length){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();renderAdminRegistry();renderClientCalls();return;}
+  populateManagers(allCalls);
+  populateClientManagers(allCalls);
+  renderClientCalls();
+  renderAdminRegistry();
+  updateGroupByAvailability(activePeriod);
+  setGroupByForPeriod(activePeriod);
+  hideNoData();
+  applyFilters();
+}
+async function refreshRegistryData(){
+  adminEls.registryRefreshBtn.disabled=true;
+  const previousText=adminEls.registryRefreshBtn.textContent;
+  adminEls.registryRefreshBtn.textContent='Обновление...';
+  try{
+    selectedRegistryRows.clear();
+    const callsPayload=await fetchCallsPayload();
+    applyCallsPayload(callsPayload);
+  }catch(error){
+    console.error('Ошибка обновления реестра:',error);
+    adminEls.registryTable.innerHTML=`<div class="registry-empty">Ошибка обновления: ${escapeHtml(error.message)}</div>`;
+  }finally{
+    adminEls.registryRefreshBtn.disabled=false;
+    adminEls.registryRefreshBtn.textContent=previousText;
+  }
+}
+async function initDashboard(){try{
+  const callsPayload=await fetchCallsPayload();
+  applyCallsPayload(callsPayload);
+  bindFilters();
+  bindClientCalls();
+}catch(error){console.error('Ошибка загрузки/обработки данных:',error);els.emptyState.textContent='Не удалось загрузить данные с сервера';renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();}}
 bindAdminPanel();
 initDashboard();
 </script>
