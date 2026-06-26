@@ -35,7 +35,6 @@ class AnalyticsActivity : BaseActivity() {
     private lateinit var tabRow: LinearLayout
     private lateinit var periodRow: LinearLayout
     private lateinit var typeRow: LinearLayout
-    private lateinit var detailRow: LinearLayout
     private lateinit var content: LinearLayout
     private var allCalls: List<CallEntity> = emptyList()
     private var clientNames: Map<String, String> = emptyMap()
@@ -77,16 +76,18 @@ class AnalyticsActivity : BaseActivity() {
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(header)
 
-        tabRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        root.addView(tabRow)
+        tabRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = rounded(Color.rgb(229, 234, 243), dp(22))
+            setPadding(dp(4))
+        }
+        root.addView(tabRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(54)).apply { setMargins(0, dp(14), 0, dp(10)) })
         renderTabs()
 
         periodRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(periodRow) })
         typeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         root.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(typeRow) })
-        detailRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        root.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(detailRow) })
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(content)
         renderControls()
@@ -94,14 +95,17 @@ class AnalyticsActivity : BaseActivity() {
 
     private fun renderTabs() {
         tabRow.removeAllViews()
-        tabRow.addView(tabButton("Дашборд", AnalyticsTab.DASHBOARD), pillParams())
-        tabRow.addView(tabButton("Контакты", AnalyticsTab.CONTACTS), pillParams())
+        tabRow.addView(tabButton("Дашборд", AnalyticsTab.DASHBOARD), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply { setMargins(0, 0, dp(4), 0) })
+        tabRow.addView(tabButton("Контакты", AnalyticsTab.CONTACTS), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply { setMargins(dp(4), 0, 0, 0) })
     }
 
     private fun tabButton(label: String, tab: AnalyticsTab) = Button(this).apply {
         text = label
-        background = rounded(if (tab == activeTab) getColor(R.color.primary) else Color.WHITE, dp(18))
-        setTextColor(if (tab == activeTab) Color.WHITE else getColor(R.color.textPrimary))
+        textSize = 16f
+        typeface = if (tab == activeTab) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+        background = rounded(if (tab == activeTab) Color.WHITE else Color.TRANSPARENT, dp(18))
+        elevation = if (tab == activeTab) dp(2).toFloat() else 0f
+        setTextColor(if (tab == activeTab) getColor(R.color.primary) else getColor(R.color.textSecondary))
         setOnClickListener {
             activeTab = tab
             renderTabs()
@@ -142,23 +146,6 @@ class AnalyticsActivity : BaseActivity() {
                 }, pillParams())
             }
         }
-
-        detailRow.removeAllViews()
-        detailRow.visibility = if (activeTab == AnalyticsTab.DASHBOARD && activePeriod.hasDetail) View.VISIBLE else View.GONE
-        if (detailRow.visibility == View.VISIBLE) {
-            AnalyticsDetail.entries.forEach { detail ->
-                detailRow.addView(Button(this).apply {
-                    text = detail.title
-                    background = rounded(if (detail == activeDetail) getColor(R.color.primary) else Color.WHITE, dp(18))
-                    setTextColor(if (detail == activeDetail) Color.WHITE else getColor(R.color.textPrimary))
-                    setOnClickListener {
-                        activeDetail = detail
-                        renderControls()
-                        renderContent()
-                    }
-                }, pillParams())
-            }
-        }
     }
 
     private fun loadData() {
@@ -187,6 +174,7 @@ class AnalyticsActivity : BaseActivity() {
         addCard("Входящие", calls.count { it.type == "Входящий" }.toString())
         addCard("Исходящие", calls.count { it.type == "Исходящий" }.toString())
         addCard("Средняя длительность", formatDuration(if (calls.isEmpty()) 0 else totalDuration / calls.size))
+        addDetailControls()
         addSectionTitle("Звонки по периодам")
         addLegend()
         val grouped = groupCallsByDetail(calls)
@@ -237,6 +225,33 @@ class AnalyticsActivity : BaseActivity() {
             setTextColor(getColor(R.color.textPrimary))
             setPadding(0, dp(14), 0, dp(8))
         })
+    }
+
+    private fun addDetailControls() {
+        if (!activePeriod.hasDetail) return
+        content.addView(TextView(this).apply {
+            text = "Детализация графика"
+            textSize = 14f
+            setTextColor(getColor(R.color.textSecondary))
+            setPadding(0, dp(12), 0, dp(4))
+        })
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = rounded(Color.WHITE, dp(20))
+            setPadding(dp(6))
+        }
+        AnalyticsDetail.entries.forEach { detail ->
+            row.addView(Button(this).apply {
+                text = detail.title
+                background = rounded(if (detail == activeDetail) getColor(R.color.primary) else Color.rgb(243, 246, 250), dp(16))
+                setTextColor(if (detail == activeDetail) Color.WHITE else getColor(R.color.textPrimary))
+                setOnClickListener {
+                    activeDetail = detail
+                    renderContent()
+                }
+            }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { setMargins(dp(3), 0, dp(3), 0) })
+        }
+        content.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, dp(4), 0, dp(4)) })
     }
 
     private fun addBar(label: String, value: Int, maxValue: Int, color: Int = getColor(R.color.primary)) {
