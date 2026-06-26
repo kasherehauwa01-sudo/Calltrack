@@ -6,9 +6,12 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.core.view.setPadding
 import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.R
@@ -74,9 +77,9 @@ class AnalyticsActivity : BaseActivity() {
         renderTabs()
 
         periodRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        root.addView(periodRow)
+        root.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(periodRow) })
         typeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        root.addView(typeRow)
+        root.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(typeRow) })
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(content)
         renderControls()
@@ -84,8 +87,8 @@ class AnalyticsActivity : BaseActivity() {
 
     private fun renderTabs() {
         tabRow.removeAllViews()
-        tabRow.addView(tabButton("Дашборд", AnalyticsTab.DASHBOARD), LinearLayout.LayoutParams(0, dp(44), 1f))
-        tabRow.addView(tabButton("Контакты", AnalyticsTab.CONTACTS), LinearLayout.LayoutParams(0, dp(44), 1f))
+        tabRow.addView(tabButton("Дашборд", AnalyticsTab.DASHBOARD), pillParams())
+        tabRow.addView(tabButton("Контакты", AnalyticsTab.CONTACTS), pillParams())
     }
 
     private fun tabButton(label: String, tab: AnalyticsTab) = Button(this).apply {
@@ -112,7 +115,7 @@ class AnalyticsActivity : BaseActivity() {
                     renderControls()
                     renderContent()
                 }
-            }, LinearLayout.LayoutParams(0, dp(42), 1f))
+            }, pillParams())
         }
 
         typeRow.removeAllViews()
@@ -128,7 +131,7 @@ class AnalyticsActivity : BaseActivity() {
                         renderControls()
                         renderContent()
                     }
-                }, LinearLayout.LayoutParams(0, dp(42), 1f))
+                }, pillParams())
             }
         }
     }
@@ -179,14 +182,14 @@ class AnalyticsActivity : BaseActivity() {
         }
         grouped.forEach { (client, rows) ->
             val duration = rows.sumOf { it.duration }
-            addCard(client, "Звонков: ${rows.size} • Длительность: ${formatDuration(duration)}")
+            addCard(client, "Звонков: ${rows.size} • Длительность: ${formatDuration(duration)}", onClick = { showClientHistory(client, rows) })
             rows.sortedByDescending { it.timestamp }.take(5).forEach { call ->
-                addText("${dateFormat.format(Date(call.timestamp))} • ${call.type} • ${formatDuration(call.duration)} • ${call.phone}")
+                addCallEvent(call)
             }
         }
     }
 
-    private fun addCard(title: String, value: String) {
+    private fun addCard(title: String, value: String, onClick: (() -> Unit)? = null) {
         content.addView(TextView(this).apply {
             text = "$title\n$value"
             textSize = 18f
@@ -195,6 +198,10 @@ class AnalyticsActivity : BaseActivity() {
             background = rounded(Color.WHITE, dp(22))
             elevation = dp(2).toFloat()
             setPadding(dp(16))
+            if (onClick != null) {
+                setOnClickListener { onClick() }
+                text = "$title ↗\n$value"
+            }
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, dp(8), 0, dp(8)) })
     }
 
@@ -247,6 +254,55 @@ class AnalyticsActivity : BaseActivity() {
         })
     }
 
+    private fun addCallEvent(call: CallEntity) {
+        val hasDetails = call.note.isNotBlank() || call.reminder.isNotBlank()
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = rounded(Color.WHITE, dp(14))
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            setOnClickListener { showCallEditor(call) }
+        }
+        row.addView(TextView(this).apply {
+            text = "${dateFormat.format(Date(call.timestamp))} • ${call.type} • ${formatDuration(call.duration)} • ${call.phone}"
+            textSize = 14f
+            setTextColor(if (hasDetails) getColor(R.color.textPrimary) else getColor(R.color.textSecondary))
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        if (hasDetails) {
+            row.addView(View(this).apply {
+                background = rounded(Color.rgb(239, 68, 68), dp(5))
+            }, LinearLayout.LayoutParams(dp(10), dp(10)).apply { setMargins(dp(8), dp(5), 0, 0) })
+        }
+        content.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, dp(4), 0, dp(4)) })
+    }
+
+    private fun showClientHistory(client: String, rows: List<CallEntity>) {
+        val events = rows.filter { it.note.isNotBlank() || it.reminder.isNotBlank() }.sortedByDescending { it.timestamp }
+        val message = if (events.isEmpty()) "Событий с комментариями или напоминаниями нет" else events.joinToString("\n\n") {
+            "${dateFormat.format(Date(it.timestamp))} • ${it.type} • ${it.phone}\nКомментарий: ${it.note.ifBlank { "—" }}\nНапоминание: ${it.reminder.ifBlank { "—" }}"
+        }
+        AlertDialog.Builder(this).setTitle(client).setMessage(message).setPositiveButton("Закрыть", null).show()
+    }
+
+    private fun showCallEditor(call: CallEntity) {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20)) }
+        val comment = EditText(this).apply { hint = "Комментарий"; setText(call.note) }
+        val reminder = EditText(this).apply { hint = "Напоминание"; setText(call.reminder) }
+        box.addView(comment)
+        box.addView(reminder)
+        AlertDialog.Builder(this)
+            .setTitle("${dateFormat.format(Date(call.timestamp))} • ${call.phone}")
+            .setView(box)
+            .setNegativeButton("Отмена", null)
+            .setPositiveButton("Сохранить") { _, _ ->
+                lifecycleScope.launch {
+                    val db = CallDatabase.getInstance(this@AnalyticsActivity)
+                    withContext(Dispatchers.IO) { db.callDao().updateOutcome(call.id, comment.text.toString(), call.tag, reminder.text.toString()) }
+                    loadData()
+                }
+            }
+            .show()
+    }
+
     private fun inPeriod(timestamp: Long): Boolean {
         if (activePeriod == AnalyticsPeriod.ALL) return true
         val from = Calendar.getInstance().apply {
@@ -261,6 +317,8 @@ class AnalyticsActivity : BaseActivity() {
         }.timeInMillis
         return timestamp >= from
     }
+
+    private fun pillParams(): LinearLayout.LayoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(42)).apply { setMargins(0, dp(6), dp(8), dp(6)) }
 
     private fun typeColor(type: String): Int = when (type) {
         "Входящий" -> Color.rgb(16, 185, 129)
