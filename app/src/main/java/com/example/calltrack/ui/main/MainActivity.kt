@@ -33,6 +33,7 @@ import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.service.CallTrackingService
 import com.example.calltrack.ui.calls.CallListFragment
+import com.example.calltrack.ui.analytics.AnalyticsActivity
 import com.example.calltrack.ui.base.BaseActivity
 import com.example.calltrack.ui.contacts.ContactsFragment
 import com.example.calltrack.ui.contactcard.ContactCardFragment
@@ -86,6 +87,7 @@ class MainActivity : BaseActivity() {
         applyWindowInsets()
         setupBottomNav()
         setupSettingsButton()
+        setupAnalyticsButton()
         setupNotificationButton()
         registerDownloadReceiver()
         handleExternalNavigation(intent)
@@ -144,6 +146,13 @@ class MainActivity : BaseActivity() {
 
     private fun applySavedTheme() {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+    }
+
+    private fun setupAnalyticsButton() {
+        binding.btnAnalytics.setOnClickListener {
+            AppLogger.log(this, "UI", "Открыт экран: Аналитика")
+            startActivity(Intent(this, AnalyticsActivity::class.java))
+        }
     }
 
     private fun setupNotificationButton() {
