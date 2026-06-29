@@ -5,6 +5,7 @@ window.calltrackApi.endpoints = Object.assign({
   calls: '/vr/calltrack/api/get_calls.php',
   personalContacts: '/vr/calltrack/api/get_personal_contacts.php',
   personalContact: '/vr/calltrack/api/personal_contact.php',
+  deleteCalls: '/vr/calltrack/api/delete_calls.php',
   deletePersonalContacts: '/vr/calltrack/api/delete_personal_contacts.php',
   users: '/vr/calltrack/api/get_users.php',
   userCommand: '/vr/calltrack/api/user_command.php'
@@ -57,6 +58,14 @@ window.calltrackApi.deletePersonalContacts = window.calltrackApi.deletePersonalC
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: JSON.stringify({ ids })
+  });
+});
+
+window.calltrackApi.deleteCalls = window.calltrackApi.deleteCalls || (async function deleteDashboardCalls({ ids = [], call_ids = [] } = {}) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.deleteCalls, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ ids, call_ids })
   });
 });
 

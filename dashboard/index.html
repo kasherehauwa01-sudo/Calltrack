@@ -356,6 +356,7 @@ const ADMIN_PASSWORD='8852285';
 window.calltrackApi=window.calltrackApi||{};
 window.calltrackApi.endpoints=window.calltrackApi.endpoints||{};
 const SQL_CALLS_API_URL=window.calltrackApi?.endpoints?.calls||'/vr/calltrack/api/get_calls.php';
+const DELETE_CALLS_API_URL=window.calltrackApi?.endpoints?.deleteCalls||'/vr/calltrack/api/delete_calls.php';
 const PERSONAL_CONTACTS_API_URL=window.calltrackApi?.endpoints?.personalContacts||'/vr/calltrack/api/get_personal_contacts.php';
 const USERS_API_URL=window.calltrackApi?.endpoints?.users||'/vr/calltrack/api/get_users.php';
 const USER_COMMAND_API_URL=window.calltrackApi?.endpoints?.userCommand||'/vr/calltrack/api/user_command.php';
@@ -381,7 +382,7 @@ const inDateRange=(c,f,t)=>!!(c&&f&&t&&c>=f&&c<=t);
 const formatRangeLabel=(f,t)=>{const m=['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];return `${f.getDate()} — ${t.getDate()} ${m[t.getMonth()]}`};
 function mapCallRecord(obj){
   return {
-    sqlId: obj.id || '',
+    sqlId: obj.id_db || obj.id || '',
     date: obj.call_date || obj.date || obj.Date || obj['Дата'] || '',
     time: obj.call_time || obj.time || obj.Time || obj['Время'] || '',
     phone: obj.phone || obj.Phone || obj['Номер телефона'] || obj['Телефон'] || '',
@@ -394,7 +395,7 @@ function mapCallRecord(obj){
     reminderText: obj.reminderText || obj.reminder_text || obj.ReminderText || obj['Текст напоминания'] || '',
     reminderAt: obj.reminderAt || obj.reminder_at || obj['Дата напоминания'] || '',
     client: obj.client || obj.Client || obj['Клиент'] || '',
-    id: obj.call_id || obj.id || obj.ID || obj['ID'] || '',
+    id: obj.call_id || obj.ID || obj['ID'] || '',
     userPhone: obj.user_phone || obj.userPhone || obj['Номер телефона пользователя'] || '',
     createdAt: obj.created_at || '',
     updatedAt: obj.updated_at || ''
@@ -603,13 +604,32 @@ function sortRegistryCalls(calls){
     return av.localeCompare(bv,'ru',{numeric:true})*dir;
   });
 }
-function deleteSelectedRegistryRows(){
+async function deleteSelectedRegistryRows(){
   if(!selectedRegistryRows.size) return;
-  allCalls=allCalls.filter((call)=>!selectedRegistryRows.has(getRegistryRowKey(call)));
-  selectedRegistryRows.clear();
-  renderAdminRegistry();
-  renderClientCalls();
-  applyFilters();
+  const selectedKeys=new Set(selectedRegistryRows);
+  const rowsToDelete=allCalls.filter((call)=>selectedKeys.has(getRegistryRowKey(call)));
+  const ids=rowsToDelete.map((call)=>Number(call.sqlId)).filter((id)=>Number.isInteger(id)&&id>0);
+  const call_ids=rowsToDelete.map((call)=>String(call.id||'').trim()).filter(Boolean);
+  if(!ids.length&&!call_ids.length) return;
+  if(!window.confirm(`Удалить выбранные строки из SQL таблицы calls? Количество: ${rowsToDelete.length}`)) return;
+  const previousText=adminEls.registryDeleteSelectedBtn.textContent;
+  adminEls.registryDeleteSelectedBtn.disabled=true;
+  adminEls.registryDeleteSelectedBtn.textContent='Удаление...';
+  try{
+    if(window.calltrackApi?.deleteCalls) await window.calltrackApi.deleteCalls({ids,call_ids});
+    else await fetch(DELETE_CALLS_API_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({ids,call_ids})}).then(async(response)=>{const payload=await response.json().catch(()=>({}));if(!response.ok||payload.status==='error') throw new Error(payload.message||`HTTP ${response.status}`);return payload;});
+    selectedRegistryRows.clear();
+    await refreshRegistryData();
+    adminEls.registryRowsCount.textContent=`Удалено строк: ${rowsToDelete.length}`;
+  }catch(error){
+    console.error('Ошибка удаления строк реестра:',error);
+    adminEls.registryRowsCount.textContent=`Ошибка удаления: ${error.message}`;
+    renderAdminRegistry();
+  }finally{
+    adminEls.registryDeleteSelectedBtn.disabled=false;
+    adminEls.registryDeleteSelectedBtn.textContent=previousText;
+    updateRegistryDeleteButton();
+  }
 }
 function renderAdminRegistry(){
   updateRegistryFilterOptions();
