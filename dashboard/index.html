@@ -691,15 +691,28 @@ function setRegistrySort(key){
   adminRegistrySort=adminRegistrySort.key===key?{key,direction:adminRegistrySort.direction==='asc'?'desc':'asc'}:{key,direction:'asc'};
   renderAdminRegistry();
 }
+function registrySortValue(call,key,column){
+  if(key==='id'||key==='duration') return Number(column[1](call)||0);
+  if(key==='call_date'){
+    const dt=normalizeDateTime(call.date,call.time);
+    if(dt) return dt.getTime();
+    const d=parseLocalDate(call.date);
+    return d?d.getTime():0;
+  }
+  if(key==='call_time'){
+    const parts=parseTimeParts(call.time);
+    return parts?parts.hh*3600+parts.mm*60+parts.ss:0;
+  }
+  return String(column[1](call)??'').toLowerCase();
+}
 function sortRegistryCalls(calls){
   const column=registryColumns.find(([key])=>key===adminRegistrySort.key)||registryColumns[0];
   const dir=adminRegistrySort.direction==='asc'?1:-1;
   return [...calls].sort((a,b)=>{
-    const av=String(column[1](a)??'').toLowerCase();
-    const bv=String(column[1](b)??'').toLowerCase();
-    const an=Number(av),bn=Number(bv);
-    if(!Number.isNaN(an)&&!Number.isNaN(bn)) return (an-bn)*dir;
-    return av.localeCompare(bv,'ru',{numeric:true})*dir;
+    const av=registrySortValue(a,adminRegistrySort.key,column);
+    const bv=registrySortValue(b,adminRegistrySort.key,column);
+    if(typeof av==='number'&&typeof bv==='number') return (av-bv)*dir;
+    return String(av).localeCompare(String(bv),'ru',{numeric:true})*dir;
   });
 }
 async function deleteSelectedRegistryRows(){
