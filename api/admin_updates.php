@@ -24,9 +24,22 @@ function deleteUpdateFile(?string $filename): void
     $path = updatesDir() . '/' . $filename;
     $realDir = realpath(updatesDir());
     $realFile = realpath($path);
-    if ($realDir !== false && $realFile !== false && str_starts_with($realFile, $realDir) && is_file($realFile)) {
+    if ($realDir !== false && $realFile !== false && strpos($realFile, $realDir) === 0 && is_file($realFile)) {
         @unlink($realFile);
     }
+}
+
+function nextUpdateVersion(PDO $pdo): array
+{
+    $row = $pdo->query('SELECT version_name, version_code FROM app_updates ORDER BY version_code DESC, uploaded_at DESC, id DESC LIMIT 1')->fetch();
+    $nextCode = (int)($row['version_code'] ?? 0) + 1;
+    $previousName = (string)($row['version_name'] ?? '');
+    if (preg_match('/^(\d+)\.(\d+)\.(\d+)$/', $previousName, $matches)) {
+        $versionName = $matches[1] . '.' . $matches[2] . '.' . ((int)$matches[3] + 1);
+    } else {
+        $versionName = '1.0.' . $nextCode;
+    }
+    return ['version_name' => $versionName, 'version_code' => $nextCode];
 }
 
 function generateUpdateJson(PDO $pdo): void
@@ -65,7 +78,7 @@ try {
     $pdo = getPdo();
     ensureAppUpdatesTable($pdo);
     $dir = updatesDir();
-    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+    if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
         throw new RuntimeException('Не удалось создать каталог updates');
     }
 
@@ -73,7 +86,7 @@ try {
         listUpdates($pdo);
     }
 
-    $isJson = str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/json');
+    $isJson = strpos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== false;
     $data = $isJson ? readJsonBody() : $_POST;
     $action = (string)($data['action'] ?? 'save');
 
@@ -96,13 +109,11 @@ try {
     }
 
     $id = (int)($data['id'] ?? 0);
+    $autoVersion = nextUpdateVersion($pdo);
     $versionName = trim((string)($data['version_name'] ?? ''));
     $versionCode = (int)($data['version_code'] ?? 0);
     $releaseNotes = trim((string)($data['release_notes'] ?? ''));
-    $mandatory = !empty($data['mandatory']) ? 1 : 0;
-    if ($versionName === '' || $versionCode <= 0) {
-        sendJson(['status' => 'error', 'message' => 'Заполните версию и VersionCode'], 400);
-    }
+    $mandatory = 0;
 
     $current = null;
     if ($id > 0) {
@@ -112,6 +123,13 @@ try {
         if (!$current) {
             sendJson(['status' => 'error', 'message' => 'Обновление не найдено'], 404);
         }
+    }
+    if ($current) {
+        $versionName = $versionName !== '' ? $versionName : (string)$current['version_name'];
+        $versionCode = $versionCode > 0 ? $versionCode : (int)$current['version_code'];
+    } else {
+        $versionName = $autoVersion['version_name'];
+        $versionCode = $autoVersion['version_code'];
     }
 
     $filename = $current['filename'] ?? '';
