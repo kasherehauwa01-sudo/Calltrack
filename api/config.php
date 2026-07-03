@@ -24,6 +24,29 @@ if (!defined('DB_PASS')) {
 if (!defined('DB_CHARSET')) {
     define('DB_CHARSET', 'utf8mb4');
 }
+if (!defined('UPDATE_PUBLIC_BASE')) {
+    define('UPDATE_PUBLIC_BASE', 'https://kvasmix.ru/vr/calltrack/updates/');
+}
+
+function dbConfigValue(string $envName, string $constantName): string
+{
+    $envValue = getenv($envName);
+    if ($envValue !== false && trim((string)$envValue) !== '') {
+        return trim((string)$envValue);
+    }
+    return (string)constant($constantName);
+}
+
+function getDbConfig(): array
+{
+    return [
+        'host' => dbConfigValue('CALLTRACK_DB_HOST', 'DB_HOST'),
+        'db' => dbConfigValue('CALLTRACK_DB_NAME', 'DB_NAME'),
+        'user' => dbConfigValue('CALLTRACK_DB_USER', 'DB_USER'),
+        'pass' => dbConfigValue('CALLTRACK_DB_PASS', 'DB_PASS'),
+        'charset' => dbConfigValue('CALLTRACK_DB_CHARSET', 'DB_CHARSET'),
+    ];
+}
 
 function dbConfigValue(string $envName, string $constantName): string
 {
@@ -164,6 +187,24 @@ SQL);
     } catch (Throwable $e) {
         // Индекс уже существует или БД не разрешила повторное добавление.
     }
+}
+
+function ensureAppUpdatesTable(PDO $pdo): void
+{
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS app_updates (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    filename VARCHAR(255) NOT NULL,
+    version_name VARCHAR(50) NOT NULL,
+    version_code INT NOT NULL,
+    release_notes TEXT,
+    mandatory TINYINT(1) NOT NULL DEFAULT 0,
+    file_size BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    uploaded_at DATETIME NOT NULL,
+    INDEX idx_app_updates_version_code (version_code),
+    INDEX idx_app_updates_uploaded_at (uploaded_at)
+)
+SQL);
 }
 
 function normalizeUserStateKey(?string $phone, ?string $manager = null, ?string $userId = null): string

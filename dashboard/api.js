@@ -7,6 +7,8 @@ window.calltrackApi.endpoints = Object.assign({
   personalContact: '/vr/calltrack/api/personal_contact.php',
   deleteCalls: '/vr/calltrack/api/delete_calls.php',
   deletePersonalContacts: '/vr/calltrack/api/delete_personal_contacts.php',
+  updates: '/vr/calltrack/api/admin_updates.php',
+  update: '/vr/calltrack/api/update.php',
   users: '/vr/calltrack/api/get_users.php',
   userCommand: '/vr/calltrack/api/user_command.php'
 }, window.calltrackApi.endpoints || {});
@@ -66,6 +68,26 @@ window.calltrackApi.deleteCalls = window.calltrackApi.deleteCalls || (async func
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: JSON.stringify({ ids, call_ids })
+  });
+});
+
+window.calltrackApi.getUpdates = window.calltrackApi.getUpdates || (async function getDashboardUpdates() {
+  const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.updates);
+  return Array.isArray(payload.data) ? payload.data : [];
+});
+
+window.calltrackApi.saveUpdate = window.calltrackApi.saveUpdate || (async function saveDashboardUpdate(formData) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.updates, {
+    method: 'POST',
+    body: formData
+  });
+});
+
+window.calltrackApi.deleteUpdate = window.calltrackApi.deleteUpdate || (async function deleteDashboardUpdate(id) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.updates, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ action: 'delete', id })
   });
 });
 
