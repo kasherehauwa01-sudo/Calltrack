@@ -310,7 +310,24 @@ class AnalyticsActivity : BaseActivity() {
                 canvas.drawText("Всего ${total.toInt()}", width / 2f - dp(34), dp(8) + size / 2f + dp(5), textPaint)
             }
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(220)).apply { setMargins(0, dp(6), 0, dp(10)) })
-        ordered.forEach { (type, count) -> addBar("$type (${(count * 100 / total).toInt()}%)", count, total.toInt(), typeColor(type)) }
+        addPieLegend(ordered, total)
+    }
+
+    private fun addPieLegend(values: List<Pair<String, Int>>, total: Float) {
+        val legend = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(Color.WHITE, dp(16))
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+        }
+        values.forEach { (type, count) ->
+            legend.addView(TextView(this).apply {
+                text = "■ $type — $count (${(count * 100 / total).toInt()}%)"
+                textSize = 13f
+                setTextColor(typeColor(type))
+                setPadding(0, dp(3), 0, dp(3))
+            })
+        }
+        content.addView(legend, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { setMargins(0, 0, 0, dp(8)) })
     }
 
     private fun addLegend() {

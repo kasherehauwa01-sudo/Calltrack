@@ -204,9 +204,25 @@ function isUserBlocked(PDO $pdo, ?string $phone, ?string $manager = null, ?strin
 {
     try {
         ensureUserTelemetryTables($pdo);
-        $userKey = normalizeUserStateKey($phone, $manager, $userId);
-        $stmt = $pdo->prepare('SELECT is_blocked FROM app_user_states WHERE user_key = :user_key OR user_phone = :user_phone LIMIT 1');
-        $stmt->execute([':user_key' => $userKey, ':user_phone' => trim((string)$phone)]);
+        $phone = trim((string)$phone);
+        $manager = trim((string)$manager);
+        $userId = trim((string)$userId);
+        if ($phone === '' && $manager === '' && $userId === '') {
+            return false;
+        }
+
+        $where = [];
+        $params = [];
+        if ($userId !== '' || $phone !== '' || $manager !== '') {
+            $where[] = 'user_key = :user_key';
+            $params[':user_key'] = normalizeUserStateKey($phone, $manager, $userId);
+        }
+        if ($phone !== '') {
+            $where[] = 'user_phone = :user_phone';
+            $params[':user_phone'] = $phone;
+        }
+        $stmt = $pdo->prepare('SELECT is_blocked FROM app_user_states WHERE ' . implode(' OR ', $where) . ' LIMIT 1');
+        $stmt->execute($params);
         return (int)($stmt->fetchColumn() ?: 0) === 1;
     } catch (Throwable $e) {
         return false;
