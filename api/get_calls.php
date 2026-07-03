@@ -8,7 +8,11 @@ function applyRegistryPeriod(array $source): array
         return $source;
     }
 
-    $period = strtolower(trim((string)($source['period'] ?? 'today')));
+    if (!array_key_exists('period', $source) || trim((string)$source['period']) === '') {
+        return $source;
+    }
+
+    $period = strtolower(trim((string)$source['period']));
     $today = new DateTimeImmutable('today');
     $from = $today;
     $to = $today;
@@ -35,6 +39,10 @@ function applyRegistryPeriod(array $source): array
         case 'Год':
             $from = $today->setDate((int)$today->format('Y'), 1, 1);
             break;
+        case 'all':
+        case 'все':
+        case 'Все':
+            return $source;
         case 'today':
         case 'сегодня':
         case 'Сегодня':
@@ -53,25 +61,41 @@ try {
     $params = [];
     $filters = applyRegistryPeriod($_GET);
     $where = buildFilters($filters, $params);
-    $limit = min(max((int)($_GET['limit'] ?? 500), 1), 1000);
+    $rawLimit = $_GET['limit'] ?? null;
+    $period = strtolower(trim((string)($_GET['period'] ?? '')));
+    $loadAll = $period === 'all' || $rawLimit === null || (int)$rawLimit === 0;
+    $limit = $loadAll ? null : min(max((int)$rawLimit, 1), 1000);
     $offset = max((int)($_GET['offset'] ?? 0), 0);
+    $pdo = getPdo();
+
+    $countStmt = $pdo->prepare("SELECT COUNT(*) AS total FROM calls{$where}");
+    foreach ($params as $key => $value) {
+        $countStmt->bindValue($key, $value);
+    }
+    $countStmt->execute();
+    $total = (int)$countStmt->fetchColumn();
 
     $sql = <<<SQL
 SELECT id_db, call_date, call_time, phone, call_type, duration, manager, client,
        comment, tag, reminder, reminder_text, call_id, user_phone, created_at
 FROM calls{$where}
 ORDER BY call_date DESC, call_time DESC, id_db DESC
-LIMIT :limit OFFSET :offset
 SQL;
-    $stmt = getPdo()->prepare($sql);
+    if (!$loadAll) {
+        $sql .= "\nLIMIT :limit OFFSET :offset";
+    }
+
+    $stmt = $pdo->prepare($sql);
     foreach ($params as $key => $value) {
         $stmt->bindValue($key, $value);
     }
-    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    if (!$loadAll) {
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    }
     $stmt->execute();
 
-    sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
+    sendJson(['status' => 'success', 'data' => $stmt->fetchAll(), 'total' => $total]);
 } catch (Throwable $e) {
     sendJson(['status' => 'error', 'message' => $e->getMessage()], 500);
 }
