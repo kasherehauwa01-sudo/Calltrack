@@ -63,7 +63,7 @@ function generateUpdateJson(PDO $pdo): void
         'releaseNotes' => $notes,
     ];
     $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-    if ($encoded === false || file_put_contents($jsonPath, $encoded . PHP_EOL, LOCK_EX) === false) {
+    if ($encoded === false || @file_put_contents($jsonPath, $encoded . PHP_EOL, LOCK_EX) === false) {
         throw new RuntimeException('Не удалось сформировать update.json');
     }
 }
@@ -150,7 +150,7 @@ try {
         }
         $newFilename = safeApkFilename($versionName, $versionCode, $originalName);
         $target = $dir . '/' . $newFilename;
-        if (!move_uploaded_file($tmp, $target)) {
+        if (!@move_uploaded_file($tmp, $target)) {
             sendJson(['status' => 'error', 'message' => 'Не удалось сохранить APK'], 500);
         }
         @chmod($target, 0644);
@@ -158,10 +158,10 @@ try {
             deleteUpdateFile($filename);
         }
         $filename = $newFilename;
-        $fileSize = filesize($target) ?: 0;
+        $fileSize = @filesize($target) ?: 0;
         $uploadedAt = date('Y-m-d H:i:s');
     } elseif ($id <= 0) {
-        sendJson(['status' => 'error', 'message' => 'Загрузите APK файл'], 400);
+        sendJson(['status' => 'error', 'message' => 'Загрузите APK файл. Если файл выбран, проверьте upload_max_filesize и post_max_size на сервере'], 400);
     }
 
     if ($id > 0) {

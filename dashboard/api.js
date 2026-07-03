@@ -22,6 +22,9 @@ window.calltrackApi.requestJson = async function requestJson(url, options = {}) 
     payload = text ? JSON.parse(text) : {};
   } catch (e) {
     console.error("BAD JSON:", text);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
     throw new Error('API вернул некорректный JSON');
   }
 
