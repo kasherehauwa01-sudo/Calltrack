@@ -13,25 +13,52 @@ if (!defined('DB_HOST')) {
     define('DB_HOST', 'localhost');       // пример Timeweb: localhost или mysqlXX.timeweb.ru
 }
 if (!defined('DB_NAME')) {
-    define('DB_NAME', 'calltrack_db');    // имя базы данных из панели Timeweb
+    define('DB_NAME', 'calltrack');       // имя базы данных проекта
 }
 if (!defined('DB_USER')) {
-    define('DB_USER', 'calltrack_user');  // пользователь базы данных
+    define('DB_USER', 'calltrack_user');  // пользователь MariaDB на Timeweb
 }
 if (!defined('DB_PASS')) {
-    define('DB_PASS', 'change_me');       // пароль пользователя базы данных
+    define('DB_PASS', 'YOUR_PASSWORD');   // задайте реальный пароль в config.local.php или CALLTRACK_DB_PASS
 }
 if (!defined('DB_CHARSET')) {
     define('DB_CHARSET', 'utf8mb4');
 }
+if (!defined('UPDATE_PUBLIC_BASE')) {
+    define('UPDATE_PUBLIC_BASE', 'https://kvasmix.ru/vr/calltrack/updates/');
+}
+
+function dbConfigValue(string $envName, string $constantName): string
+{
+    $envValue = getenv($envName);
+    if ($envValue !== false && trim((string)$envValue) !== '') {
+        return trim((string)$envValue);
+    }
+    return (string)constant($constantName);
+}
+
+function getDbConfig(): array
+{
+    return [
+        'host' => dbConfigValue('CALLTRACK_DB_HOST', 'DB_HOST'),
+        'db' => dbConfigValue('CALLTRACK_DB_NAME', 'DB_NAME'),
+        'user' => dbConfigValue('CALLTRACK_DB_USER', 'DB_USER'),
+        'pass' => dbConfigValue('CALLTRACK_DB_PASS', 'DB_PASS'),
+        'charset' => dbConfigValue('CALLTRACK_DB_CHARSET', 'DB_CHARSET'),
+    ];
+}
 
 function getPdo(): PDO
 {
-    $host = getenv('CALLTRACK_DB_HOST') ?: DB_HOST;
-    $db = getenv('CALLTRACK_DB_NAME') ?: DB_NAME;
-    $user = getenv('CALLTRACK_DB_USER') ?: DB_USER;
-    $pass = getenv('CALLTRACK_DB_PASS') ?: DB_PASS;
-    $charset = getenv('CALLTRACK_DB_CHARSET') ?: DB_CHARSET;
+    $config = getDbConfig();
+    $host = $config['host'];
+    $db = $config['db'];
+    $user = $config['user'];
+    $pass = $config['pass'];
+    $charset = $config['charset'];
+
+    error_log('DB HOST: ' . $host);
+    error_log('DB USER: ' . $user);
 
     $dsn = "mysql:host={$host};dbname={$db};charset={$charset}";
     return new PDO($dsn, $user, $pass, [
@@ -46,13 +73,12 @@ function ensurePersonalContactsTable(PDO $pdo): void
 {
     $pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS personal_contacts (
-    id_db BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_phone VARCHAR(30) NOT NULL,
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_phone VARCHAR(20),
     manager VARCHAR(255),
-    contact_phone VARCHAR(30) NOT NULL,
-    personal_flag TINYINT(1) NOT NULL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    contact_phone VARCHAR(20),
+    updated_at DATETIME,
+    personal_flag TINYINT(1),
     UNIQUE KEY uk_user_contact (user_phone, contact_phone),
     INDEX idx_personal_user_phone (user_phone),
     INDEX idx_personal_contact_phone (contact_phone),
@@ -60,6 +86,149 @@ CREATE TABLE IF NOT EXISTS personal_contacts (
 )
 SQL);
 }
+
+
+function ensureUserTelemetryTables(PDO $pdo): void
+{
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS app_user_reports (
+    user_phone VARCHAR(30) PRIMARY KEY,
+    manager VARCHAR(255),
+    last_activity DATETIME,
+    app_version VARCHAR(50),
+    installed_at DATETIME NULL,
+    app_updated_at DATETIME NULL,
+    last_launch_at DATETIME NULL,
+    launch_count INT DEFAULT 0,
+    device_manufacturer VARCHAR(100),
+    device_model VARCHAR(100),
+    android_version VARCHAR(50),
+    api_level INT NULL,
+    ram_total VARCHAR(50),
+    storage_free VARCHAR(50),
+    screen_resolution VARCHAR(50),
+    device_language VARCHAR(50),
+    timezone VARCHAR(100),
+    calls_permission VARCHAR(20),
+    notifications_permission VARCHAR(20),
+    contacts_permission VARCHAR(20),
+    background_permission VARCHAR(20),
+    battery_optimization_ignored VARCHAR(20),
+    google_play_services VARCHAR(50),
+    sync_errors_count INT DEFAULT 0,
+    local_db_size VARCHAR(50),
+    last_error TEXT,
+    last_server_response TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)
+SQL);
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS app_user_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_phone VARCHAR(30) NOT NULL,
+    manager VARCHAR(255),
+    level VARCHAR(30),
+    category VARCHAR(50),
+    message TEXT,
+    logged_at DATETIME,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_logs_phone_time (user_phone, logged_at)
+)
+SQL);
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS app_user_commands (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_phone VARCHAR(30) NOT NULL,
+    command VARCHAR(100) NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    executed_at DATETIME NULL,
+    INDEX idx_user_commands_phone_status (user_phone, status)
+)
+SQL);
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS app_user_states (
+    user_phone VARCHAR(30) PRIMARY KEY,
+    user_key VARCHAR(255) UNIQUE,
+    manager VARCHAR(255),
+    is_deleted TINYINT(1) NOT NULL DEFAULT 0,
+    is_blocked TINYINT(1) NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)
+SQL);
+    try {
+        $pdo->exec('ALTER TABLE app_user_states ADD COLUMN user_key VARCHAR(255) NULL');
+    } catch (Throwable $e) {
+        // Колонка уже существует на обновлённой базе.
+    }
+    try {
+        $pdo->exec('ALTER TABLE app_user_states ADD UNIQUE KEY uk_app_user_states_user_key (user_key)');
+    } catch (Throwable $e) {
+        // Индекс уже существует или БД не разрешила повторное добавление.
+    }
+}
+
+function ensureAppUpdatesTable(PDO $pdo): void
+{
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS app_updates (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    filename VARCHAR(255) NOT NULL,
+    version_name VARCHAR(50) NOT NULL,
+    version_code INT NOT NULL,
+    release_notes TEXT,
+    mandatory TINYINT(1) NOT NULL DEFAULT 0,
+    file_size BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    uploaded_at DATETIME NOT NULL,
+    INDEX idx_app_updates_version_code (version_code),
+    INDEX idx_app_updates_uploaded_at (uploaded_at)
+)
+SQL);
+}
+
+function normalizeUserStateKey(?string $phone, ?string $manager = null, ?string $userId = null): string
+{
+    $userId = trim((string)$userId);
+    if ($userId !== '') {
+        return $userId;
+    }
+    $phone = trim((string)$phone);
+    if ($phone !== '') {
+        return 'phone:' . $phone;
+    }
+    return 'manager:' . trim((string)$manager);
+}
+
+function isUserBlocked(PDO $pdo, ?string $phone, ?string $manager = null, ?string $userId = null): bool
+{
+    try {
+        ensureUserTelemetryTables($pdo);
+        $phone = trim((string)$phone);
+        $manager = trim((string)$manager);
+        $userId = trim((string)$userId);
+        if ($phone === '' && $manager === '' && $userId === '') {
+            return false;
+        }
+
+        $where = [];
+        $params = [];
+        if ($userId !== '' || $phone !== '' || $manager !== '') {
+            $where[] = 'user_key = :user_key';
+            $params[':user_key'] = normalizeUserStateKey($phone, $manager, $userId);
+        }
+        if ($phone !== '') {
+            $where[] = 'user_phone = :user_phone';
+            $params[':user_phone'] = $phone;
+        }
+        $stmt = $pdo->prepare('SELECT is_blocked FROM app_user_states WHERE ' . implode(' OR ', $where) . ' LIMIT 1');
+        $stmt->execute($params);
+        return (int)($stmt->fetchColumn() ?: 0) === 1;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 
 function sendJson(array $payload, int $statusCode = 200): void
 {
