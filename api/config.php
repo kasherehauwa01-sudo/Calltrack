@@ -48,26 +48,6 @@ function getDbConfig(): array
     ];
 }
 
-function dbConfigValue(string $envName, string $constantName): string
-{
-    $envValue = getenv($envName);
-    if ($envValue !== false && trim((string)$envValue) !== '') {
-        return trim((string)$envValue);
-    }
-    return (string)constant($constantName);
-}
-
-function getDbConfig(): array
-{
-    return [
-        'host' => dbConfigValue('CALLTRACK_DB_HOST', 'DB_HOST'),
-        'db' => dbConfigValue('CALLTRACK_DB_NAME', 'DB_NAME'),
-        'user' => dbConfigValue('CALLTRACK_DB_USER', 'DB_USER'),
-        'pass' => dbConfigValue('CALLTRACK_DB_PASS', 'DB_PASS'),
-        'charset' => dbConfigValue('CALLTRACK_DB_CHARSET', 'DB_CHARSET'),
-    ];
-}
-
 function getPdo(): PDO
 {
     $config = getDbConfig();

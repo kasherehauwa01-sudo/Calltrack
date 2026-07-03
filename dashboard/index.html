@@ -67,14 +67,6 @@
     .user-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.user-info-block{border:1px solid #eef2f7;border-radius:12px;background:#f8fafc;padding:12px;display:grid;gap:8px}.user-info-block h3{font-size:1rem;color:#111827}.user-field{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed #e5e7eb;padding-bottom:5px}.user-field span:first-child{color:var(--muted)}.user-field span:last-child{text-align:right;font-weight:600}
     .user-actions{display:flex;gap:8px;flex-wrap:wrap}.user-action-btn{border:0;border-radius:999px;background:#e5e7eb;color:#374151;padding:9px 13px;cursor:pointer}.user-action-btn.danger{background:#fee2e2;color:#991b1b}.user-log-filters{display:flex;gap:8px;flex-wrap:wrap}.user-log-filter{border:1px solid #d1d5db;border-radius:999px;background:#fff;padding:7px 12px;cursor:pointer}.user-log-filter.active{background:#111827;color:#fff}.user-logs{background:#0f172a;color:#e5e7eb;border-radius:12px;padding:12px;min-height:140px;max-height:260px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;white-space:pre-wrap}
 
-    .users-layout{display:grid;grid-template-columns:minmax(240px,340px) minmax(0,1fr);gap:16px;align-items:start}
-    .users-list{display:grid;gap:8px;max-height:62vh;overflow:auto;border:1px solid #e5e7eb;border-radius:14px;background:#fff;padding:8px}
-    .user-list-btn{border:1px solid #e5e7eb;background:#f8fafc;border-radius:12px;padding:10px;text-align:left;cursor:pointer;display:grid;gap:4px;color:#111827}
-    .user-list-btn:hover,.user-list-btn.active{background:#eef2ff;border-color:#c7d2fe}.user-list-name{font-weight:700}.user-list-meta{font-size:.82rem;color:var(--muted)}
-    .user-card{border:1px solid #e5e7eb;border-radius:14px;background:#fff;padding:16px;display:grid;gap:14px;min-height:220px}
-    .user-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.user-info-block{border:1px solid #eef2f7;border-radius:12px;background:#f8fafc;padding:12px;display:grid;gap:8px}.user-info-block h3{font-size:1rem;color:#111827}.user-field{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed #e5e7eb;padding-bottom:5px}.user-field span:first-child{color:var(--muted)}.user-field span:last-child{text-align:right;font-weight:600}
-    .user-actions{display:flex;gap:8px;flex-wrap:wrap}.user-action-btn{border:0;border-radius:999px;background:#e5e7eb;color:#374151;padding:9px 13px;cursor:pointer}.user-action-btn.danger{background:#fee2e2;color:#991b1b}.user-log-filters{display:flex;gap:8px;flex-wrap:wrap}.user-log-filter{border:1px solid #d1d5db;border-radius:999px;background:#fff;padding:7px 12px;cursor:pointer}.user-log-filter.active{background:#111827;color:#fff}.user-logs{background:#0f172a;color:#e5e7eb;border-radius:12px;padding:12px;min-height:140px;max-height:260px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;white-space:pre-wrap}
-
     .filter-card{background:var(--card);box-shadow:var(--shadow);border-radius:var(--radius);padding:14px;border:1px solid #e5e7eb;display:grid;gap:10px}
     .filter-title{color:var(--muted);font-size:.9rem}
 
@@ -545,9 +537,9 @@ function bindAdminPanel(){
   adminEls.usersSearch.addEventListener('input',renderUsersList);
   adminEls.usersList.addEventListener('click',(e)=>{const btn=e.target.closest('.user-list-btn'); if(btn) selectUser(btn.dataset.userId);});
   adminEls.userCard.addEventListener('click',(e)=>{const action=e.target.closest('.user-action-btn'); const logFilter=e.target.closest('.user-log-filter'); if(action) sendUserAction(action.dataset.command, action); if(logFilter) renderUserLogs(logFilter.dataset.filter);});
-  adminEls.updateForm.addEventListener('submit',saveAppUpdate);
-  adminEls.updateFormResetBtn.addEventListener('click',resetUpdateForm);
-  adminEls.updatesTable.addEventListener('click',(e)=>{const edit=e.target.closest('[data-update-edit]');const del=e.target.closest('[data-update-delete]');if(edit) editAppUpdate(edit.dataset.updateEdit);if(del) deleteAppUpdate(del.dataset.updateDelete);});
+  if(adminEls.updateForm) adminEls.updateForm.addEventListener('submit',saveAppUpdate);
+  if(adminEls.updateFormResetBtn) adminEls.updateFormResetBtn.addEventListener('click',resetUpdateForm);
+  if(adminEls.updatesTable) adminEls.updatesTable.addEventListener('click',(e)=>{const edit=e.target.closest('[data-update-edit]');const del=e.target.closest('[data-update-delete]');if(edit) editAppUpdate(edit.dataset.updateEdit);if(del) deleteAppUpdate(del.dataset.updateDelete);});
 }
 
 
@@ -557,7 +549,7 @@ function setActiveAdminTab(tab){
   adminEls.registryPanel.hidden=tab!=='registry';
   adminEls.personalContactsPanel.hidden=tab!=='personalContacts';
   adminEls.usersPanel.hidden=tab!=='users';
-  adminEls.updatesPanel.hidden=tab!=='updates';
+  if(adminEls.updatesPanel) adminEls.updatesPanel.hidden=tab!=='updates';
   if(tab==='personalContacts'&&!personalContactsLoaded) loadPersonalContacts();
   if(tab==='users'&&!usersLoaded) loadUsers();
   if(tab==='updates'&&!updatesLoaded) loadUpdates();
@@ -1351,7 +1343,7 @@ function bindFilters(){renderCallTypeTags();els.callTypeTags.addEventListener('c
 async function fetchCallsPayload(){
   return window.calltrackApi?.loadCalls
     ? window.calltrackApi.loadCalls()
-    : fetch(`${SQL_CALLS_API_URL}?period=all&limit=0`).then((response)=>{if(!response.ok) throw new Error(`API ${response.status}: ${SQL_CALLS_API_URL}`); return response.json();});
+    : fetch(`${SQL_CALLS_API_URL}?period=all&limit=0`).then(async(response)=>{const payload=await response.json().catch(()=>null);if(!response.ok||payload?.status==='error') throw new Error(payload?.message||`API ${response.status}: ${SQL_CALLS_API_URL}`);return payload;});
 }
 function applyCallsPayload(callsPayload){
   allCalls=parseCallsPayload(callsPayload);
@@ -1397,7 +1389,7 @@ async function initDashboard(){try{
   bindFilters();
   bindClientCalls();
 }catch(error){console.error('Ошибка загрузки/обработки данных:',error);els.emptyState.textContent='Не удалось загрузить данные с сервера';renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();}}
-bindAdminPanel();
+try{bindAdminPanel();}catch(error){console.error('Ошибка инициализации админ-панели:',error);}
 initDashboard();
 </script>
 </body>
