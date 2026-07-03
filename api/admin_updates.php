@@ -42,6 +42,19 @@ function nextUpdateVersion(PDO $pdo): array
     return ['version_name' => $versionName, 'version_code' => $nextCode];
 }
 
+function cleanupDir(string $dir): void
+{
+    if (!is_dir($dir)) {
+        return;
+    }
+    foreach (glob($dir . '/*') ?: [] as $file) {
+        if (is_file($file)) {
+            @unlink($file);
+        }
+    }
+    @rmdir($dir);
+}
+
 function generateUpdateJson(PDO $pdo): void
 {
     $stmt = $pdo->query('SELECT * FROM app_updates ORDER BY version_code DESC, uploaded_at DESC, id DESC LIMIT 1');
@@ -106,6 +119,90 @@ try {
         deleteUpdateFile($row['filename'] ?? '');
         generateUpdateJson($pdo);
         sendJson(['status' => 'success', 'deleted' => $delete->rowCount()]);
+    }
+
+    if ($action === 'chunk_upload') {
+        $uploadId = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string)($data['upload_id'] ?? ''));
+        $chunkIndex = (int)($data['chunk_index'] ?? -1);
+        $totalChunks = (int)($data['total_chunks'] ?? 0);
+        $originalName = (string)($data['filename'] ?? '');
+        $releaseNotes = trim((string)($data['release_notes'] ?? ''));
+        $id = (int)($data['id'] ?? 0);
+        if ($uploadId === '' || $chunkIndex < 0 || $totalChunks <= 0 || $chunkIndex >= $totalChunks) {
+            sendJson(['status' => 'error', 'message' => 'Некорректные параметры chunk upload'], 400);
+        }
+        if (strtolower(pathinfo($originalName, PATHINFO_EXTENSION)) !== 'apk') {
+            sendJson(['status' => 'error', 'message' => 'Можно загружать только .apk файлы'], 400);
+        }
+        $chunk = $_FILES['chunk'] ?? null;
+        if (!is_array($chunk) || ($chunk['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string)($chunk['tmp_name'] ?? ''))) {
+            sendJson(['status' => 'error', 'message' => 'Часть APK не была загружена'], 400);
+        }
+        $chunksRoot = $dir . '/.chunks';
+        $chunkDir = $chunksRoot . '/' . $uploadId;
+        if (!is_dir($chunkDir) && !@mkdir($chunkDir, 0775, true) && !is_dir($chunkDir)) {
+            throw new RuntimeException('Не удалось создать временный каталог загрузки');
+        }
+        $chunkPath = $chunkDir . '/' . $chunkIndex . '.part';
+        if (!@move_uploaded_file((string)$chunk['tmp_name'], $chunkPath)) {
+            sendJson(['status' => 'error', 'message' => 'Не удалось сохранить часть APK'], 500);
+        }
+        @chmod($chunkPath, 0644);
+        for ($i = 0; $i < $totalChunks; $i++) {
+            if (!is_file($chunkDir . '/' . $i . '.part')) {
+                sendJson(['status' => 'success', 'complete' => false, 'chunk' => $chunkIndex + 1, 'total' => $totalChunks]);
+            }
+        }
+
+        $current = null;
+        if ($id > 0) {
+            $stmt = $pdo->prepare('SELECT * FROM app_updates WHERE id = :id');
+            $stmt->execute([':id' => $id]);
+            $current = $stmt->fetch();
+            if (!$current) {
+                cleanupDir($chunkDir);
+                sendJson(['status' => 'error', 'message' => 'Обновление не найдено'], 404);
+            }
+        }
+        $autoVersion = nextUpdateVersion($pdo);
+        $versionName = $current ? (string)$current['version_name'] : $autoVersion['version_name'];
+        $versionCode = $current ? (int)$current['version_code'] : $autoVersion['version_code'];
+        $newFilename = safeApkFilename($versionName, $versionCode, $originalName);
+        $target = $dir . '/' . $newFilename;
+        $out = @fopen($target, 'wb');
+        if (!$out) {
+            cleanupDir($chunkDir);
+            sendJson(['status' => 'error', 'message' => 'Не удалось собрать APK на сервере'], 500);
+        }
+        for ($i = 0; $i < $totalChunks; $i++) {
+            $in = @fopen($chunkDir . '/' . $i . '.part', 'rb');
+            if (!$in) {
+                @fclose($out);
+                @unlink($target);
+                cleanupDir($chunkDir);
+                sendJson(['status' => 'error', 'message' => 'Не удалось прочитать часть APK'], 500);
+            }
+            stream_copy_to_stream($in, $out);
+            fclose($in);
+        }
+        fclose($out);
+        @chmod($target, 0644);
+        cleanupDir($chunkDir);
+        if ($current && !empty($current['filename'])) {
+            deleteUpdateFile($current['filename']);
+        }
+        $fileSize = @filesize($target) ?: 0;
+        $uploadedAt = date('Y-m-d H:i:s');
+        if ($current) {
+            $stmt = $pdo->prepare('UPDATE app_updates SET filename=:filename, release_notes=:release_notes, mandatory=0, file_size=:file_size, uploaded_at=:uploaded_at WHERE id=:id');
+            $stmt->execute([':filename' => $newFilename, ':release_notes' => $releaseNotes, ':file_size' => $fileSize, ':uploaded_at' => $uploadedAt, ':id' => $id]);
+        } else {
+            $stmt = $pdo->prepare('INSERT INTO app_updates (filename, version_name, version_code, release_notes, mandatory, file_size, uploaded_at) VALUES (:filename, :version_name, :version_code, :release_notes, 0, :file_size, :uploaded_at)');
+            $stmt->execute([':filename' => $newFilename, ':version_name' => $versionName, ':version_code' => $versionCode, ':release_notes' => $releaseNotes, ':file_size' => $fileSize, ':uploaded_at' => $uploadedAt]);
+            $id = (int)$pdo->lastInsertId();
+        }
+        generateUpdateJson($pdo);
+        sendJson(['status' => 'success', 'complete' => true, 'id' => $id]);
     }
 
     $id = (int)($data['id'] ?? 0);

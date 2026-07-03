@@ -589,17 +589,49 @@ function editAppUpdate(id){
 }
 async function saveAppUpdate(event){
   event.preventDefault();
+  const file=adminEls.updateApk.files[0];
+  if(file){
+    await uploadApkInChunks(file);
+    return;
+  }
   const formData=new FormData();
   formData.append('action','save');
   if(adminEls.updateId.value) formData.append('id',adminEls.updateId.value);
   formData.append('release_notes',adminEls.updateReleaseNotes.value);
-  if(adminEls.updateApk.files[0]) formData.append('apk',adminEls.updateApk.files[0]);
   adminEls.updatesStatus.textContent='Сохранение...';
   try{
     if(window.calltrackApi?.saveUpdate) await window.calltrackApi.saveUpdate(formData);
     else await fetch(ADMIN_UPDATES_API_URL,{method:'POST',body:formData}).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p;});
     resetUpdateForm();
     adminEls.updatesStatus.textContent='Обновление сохранено, update.json сформирован';
+    await loadUpdates();
+  }catch(error){
+    adminEls.updatesStatus.textContent=`Ошибка сохранения: ${error.message}`;
+  }
+}
+async function uploadApkInChunks(file){
+  const chunkSize=512*1024;
+  const totalChunks=Math.ceil(file.size/chunkSize);
+  const uploadId=`${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  adminEls.updatesStatus.textContent=`Загрузка APK: 0 из ${totalChunks}`;
+  try{
+    let result=null;
+    for(let index=0;index<totalChunks;index++){
+      const formData=new FormData();
+      formData.append('action','chunk_upload');
+      formData.append('upload_id',uploadId);
+      formData.append('chunk_index',String(index));
+      formData.append('total_chunks',String(totalChunks));
+      formData.append('filename',file.name);
+      if(adminEls.updateId.value) formData.append('id',adminEls.updateId.value);
+      formData.append('release_notes',adminEls.updateReleaseNotes.value);
+      formData.append('chunk',file.slice(index*chunkSize,Math.min(file.size,(index+1)*chunkSize)),file.name);
+      result=window.calltrackApi?.saveUpdate?await window.calltrackApi.saveUpdate(formData):await fetch(ADMIN_UPDATES_API_URL,{method:'POST',body:formData}).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p;});
+      adminEls.updatesStatus.textContent=`Загрузка APK: ${index+1} из ${totalChunks}`;
+    }
+    if(!result?.complete) throw new Error('APK загружен не полностью');
+    resetUpdateForm();
+    adminEls.updatesStatus.textContent='APK сохранён, update.json сформирован';
     await loadUpdates();
   }catch(error){
     adminEls.updatesStatus.textContent=`Ошибка сохранения: ${error.message}`;
