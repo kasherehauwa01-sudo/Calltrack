@@ -90,9 +90,6 @@ class MainActivity : BaseActivity() {
         setupNotificationButton()
         registerDownloadReceiver()
         handleExternalNavigation(intent)
-        if (intent.getBooleanExtra(EXTRA_RUN_UPDATE_CHECK, false)) {
-            checkForUpdatesAndPrompt()
-        }
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
@@ -202,12 +199,14 @@ class MainActivity : BaseActivity() {
             val updateResult = withContext(Dispatchers.IO) { fetchLatestUpdateInfo() }
             when (updateResult) {
                 is UpdateCheckResult.NetworkError -> {
-                    AppLogger.log(this@MainActivity, "ERROR", "Сервер обновлений недоступен")
+                    AppLogger.log(this@MainActivity, "ERROR", "Сервер обновлений недоступен: ${updateResult.reason}")
+                    syncUpdateLogsToDashboard()
                     Toast.makeText(this@MainActivity, "Не удалось проверить наличие обновлений.", Toast.LENGTH_LONG).show()
                     return@launch
                 }
                 is UpdateCheckResult.InvalidResponse -> {
-                    AppLogger.log(this@MainActivity, "ERROR", "Некорректный ответ сервера обновлений")
+                    AppLogger.log(this@MainActivity, "ERROR", "Некорректный ответ сервера обновлений: ${updateResult.reason}")
+                    syncUpdateLogsToDashboard()
                     Toast.makeText(this@MainActivity, "Некорректный ответ сервера обновлений.", Toast.LENGTH_LONG).show()
                     return@launch
                 }
@@ -216,16 +215,27 @@ class MainActivity : BaseActivity() {
                     AppLogger.log(this@MainActivity, "UPDATE", "Версия на сервере: ${update.versionCode} (${update.versionName})")
                     if (update.versionCode <= BuildConfig.VERSION_CODE) {
                         AppLogger.log(this@MainActivity, "UPDATE", "Версия актуальна")
+                        syncUpdateLogsToDashboard()
                         AlertDialog.Builder(this@MainActivity)
                             .setMessage("У вас установлена актуальная версия приложения.")
                             .setPositiveButton("OK") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
                             .show()
                         return@launch
                     }
+                    syncUpdateLogsToDashboard()
                     showUpdateDialog(update)
                 }
             }
         }
+    }
+
+    private suspend fun syncUpdateLogsToDashboard() {
+        withContext(Dispatchers.IO) {
+            runCatching { viewModel.sendUserTelemetry() }
+                .onSuccess { AppLogger.log(this@MainActivity, "UPDATE", "Логи обновления отправлены в админ-панель") }
+                .onFailure { AppLogger.log(this@MainActivity, "ERROR", "Не удалось отправить логи обновления в админ-панель: ${it.message}", it) }
+        }
+        dialogBuilder.show()
     }
 
     private fun showUpdateDialog(update: UpdateInfo) {
@@ -267,6 +277,7 @@ class MainActivity : BaseActivity() {
     }
 
     private fun fetchLatestUpdateInfo(): UpdateCheckResult {
+        AppLogger.log(this, "UPDATE", "Запрос метаданных обновления: $UPDATE_API_URL")
         val request = Request.Builder()
             .url(UPDATE_API_URL)
             .addHeader("Accept", "application/json")
@@ -274,37 +285,110 @@ class MainActivity : BaseActivity() {
 
         return try {
             updateHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return UpdateCheckResult.NetworkError
                 val body = response.body?.string().orEmpty()
-                val json = JSONObject(body)
-                if (json.optString("status") != "ok") return UpdateCheckResult.InvalidResponse
-                val versionCode = json.optInt("versionCode", -1)
-                val versionName = json.optString("versionName").orEmpty()
-                val apkUrl = json.optString("apk").orEmpty()
-                if (versionCode < 0 || versionName.isBlank() || apkUrl.isBlank()) {
-                    return UpdateCheckResult.InvalidResponse
+                val preview = body.take(MAX_UPDATE_LOG_BODY_CHARS)
+                AppLogger.log(
+                    this,
+                    "UPDATE",
+                    "Ответ сервера обновлений: code=${response.code}, contentType=${response.header("Content-Type").orEmpty()}, bodyLength=${body.length}, bodyPreview=$preview"
+                )
+                if (!response.isSuccessful) {
+                    return UpdateCheckResult.NetworkError("HTTP ${response.code}")
                 }
-                val notesJson = json.optJSONArray("releaseNotes")
-                val releaseNotes = buildList {
-                    if (notesJson != null) {
-                        for (i in 0 until notesJson.length()) add(notesJson.optString(i))
+                parseUpdateInfo(body)
+            }
+        } catch (error: JSONException) {
+            AppLogger.log(this, "ERROR", "JSON сервера обновлений поврежден: ${error.message}", error)
+            UpdateCheckResult.InvalidResponse("JSON parse error: ${error.message}")
+        } catch (error: Exception) {
+            AppLogger.log(this, "ERROR", "Ошибка запроса обновлений: ${error.message}", error)
+            UpdateCheckResult.NetworkError(error.message ?: error.javaClass.simpleName)
+        }
+    }
+
+    private fun parseUpdateInfo(body: String): UpdateCheckResult {
+        if (body.isBlank()) return UpdateCheckResult.InvalidResponse("Пустое тело ответа")
+
+        val json = JSONObject(body)
+        val status = json.optString("status").trim()
+        if (status.isNotBlank() && !status.equals("ok", ignoreCase = true) && !status.equals("success", ignoreCase = true)) {
+            return UpdateCheckResult.InvalidResponse("status=$status")
+        }
+
+        val versionCode = json.optFlexibleInt("versionCode", "version_code")
+        val versionName = json.optFlexibleString("versionName", "version_name")
+        val apkUrl = json.optFlexibleString("apk", "apkUrl", "apk_url", "url")
+        if (versionCode == null) return UpdateCheckResult.InvalidResponse("Не найден versionCode/version_code")
+        if (versionName.isBlank()) return UpdateCheckResult.InvalidResponse("Не найден versionName/version_name")
+        if (apkUrl.isBlank()) return UpdateCheckResult.InvalidResponse("Не найдена ссылка apk")
+        if (!apkUrl.startsWith("https://", ignoreCase = true) && !apkUrl.startsWith("http://", ignoreCase = true)) {
+            return UpdateCheckResult.InvalidResponse("Некорректная ссылка apk=$apkUrl")
+        }
+
+        val releaseNotes = json.optFlexibleStringList("releaseNotes", "release_notes")
+        val mandatory = json.optFlexibleBoolean("mandatory", false)
+        AppLogger.log(
+            this,
+            "UPDATE",
+            "Метаданные обновления распознаны: versionCode=$versionCode, versionName=$versionName, mandatory=$mandatory, notes=${releaseNotes.size}, apk=$apkUrl"
+        )
+        return UpdateCheckResult.Success(
+            UpdateInfo(
+                versionCode = versionCode,
+                versionName = versionName,
+                apkUrl = apkUrl,
+                releaseNotes = releaseNotes,
+                mandatory = mandatory
+            )
+        )
+    }
+
+    private fun JSONObject.optFlexibleString(vararg names: String): String {
+        for (name in names) {
+            if (has(name) && !isNull(name)) return optString(name).trim()
+        }
+        return ""
+    }
+
+    private fun JSONObject.optFlexibleInt(vararg names: String): Int? {
+        for (name in names) {
+            if (!has(name) || isNull(name)) continue
+            val raw = opt(name)
+            when (raw) {
+                is Number -> return raw.toInt()
+                is String -> raw.trim().toIntOrNull()?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun JSONObject.optFlexibleBoolean(name: String, defaultValue: Boolean): Boolean {
+        if (!has(name) || isNull(name)) return defaultValue
+        val raw = opt(name)
+        return when (raw) {
+            is Boolean -> raw
+            is Number -> raw.toInt() != 0
+            is String -> raw.equals("true", ignoreCase = true) || raw == "1" || raw.equals("yes", ignoreCase = true)
+            else -> defaultValue
+        }
+    }
+
+    private fun JSONObject.optFlexibleStringList(vararg names: String): List<String> {
+        for (name in names) {
+            if (!has(name) || isNull(name)) continue
+            val array = optJSONArray(name)
+            if (array != null) {
+                return buildList {
+                    for (i in 0 until array.length()) {
+                        val note = array.optString(i).trim()
+                        if (note.isNotBlank()) add(note)
                     }
                 }
-                UpdateCheckResult.Success(
-                    UpdateInfo(
-                        versionCode = versionCode,
-                        versionName = versionName,
-                        apkUrl = apkUrl,
-                        releaseNotes = releaseNotes,
-                        mandatory = json.optBoolean("mandatory", false)
-                    )
-                )
             }
-        } catch (_: JSONException) {
-            UpdateCheckResult.InvalidResponse
-        } catch (_: Exception) {
-            UpdateCheckResult.NetworkError
+            val text = optString(name).trim()
+            if (text.isNotBlank()) return text.lines().map { it.trim() }.filter { it.isNotBlank() }
         }
+        return emptyList()
     }
 
     private fun installDownloadedApk(downloadId: Long) {
@@ -509,12 +593,13 @@ class MainActivity : BaseActivity() {
         private const val UPDATE_API_URL = "https://kvasmix.ru/vr/calltrack/api/update.php"
         private const val APK_FILE_NAME = "calltrack-update.apk"
         private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
+        private const val MAX_UPDATE_LOG_BODY_CHARS = 1000
     }
 
     private sealed interface UpdateCheckResult {
         data class Success(val info: UpdateInfo) : UpdateCheckResult
-        data object NetworkError : UpdateCheckResult
-        data object InvalidResponse : UpdateCheckResult
+        data class NetworkError(val reason: String) : UpdateCheckResult
+        data class InvalidResponse(val reason: String) : UpdateCheckResult
     }
 
     private data class UpdateInfo(
