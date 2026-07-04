@@ -38,6 +38,12 @@ window.calltrackApi.requestJson = async function requestJson(url, options = {}) 
 
   return payload;
 };
+
+window.calltrackApi.loadCalls = window.calltrackApi.loadCalls || (async function loadDashboardCalls() {
+  const separator = window.calltrackApi.endpoints.calls.includes('?') ? '&' : '?';
+  return window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.calls}${separator}period=all&limit=0`);
+});
+
 window.calltrackApi.getPersonalContacts = window.calltrackApi.getPersonalContacts || (async function getDashboardPersonalContacts() {
   const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.personalContacts);
   const rows = Array.isArray(payload.data) ? payload.data : [];

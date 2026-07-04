@@ -51,13 +51,13 @@
     .registry-delete-btn:hover{background:#b91c1c}.registry-delete-btn[hidden]{display:none}
     .registry-refresh-btn{border:0;border-radius:999px;background:#111827;color:#fff;padding:10px 16px;cursor:pointer;transition:.2s ease;white-space:nowrap}.registry-refresh-btn:hover{background:#374151}.registry-refresh-btn:disabled{opacity:.6;cursor:wait}
     .registry-empty{padding:18px;color:var(--muted)}
-    .updates-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.8fr);gap:16px;align-items:start}
+    .updates-layout{display:flex;flex-direction:column;gap:16px;align-items:stretch}
     .updates-form{border:1px solid #e5e7eb;border-radius:14px;background:#fff;padding:16px;display:grid;gap:12px}
     .updates-form label{display:grid;gap:6px;font-size:.86rem;color:var(--muted)}
     .updates-form input,.updates-form textarea{border:1px solid #d1d5db;border-radius:12px;padding:10px 12px;background:#fff;color:#111827}
     .updates-form textarea{min-height:120px;resize:vertical}.updates-form .inline-check{display:flex;align-items:center;gap:8px;color:#111827}
     .updates-actions{display:flex;gap:8px;flex-wrap:wrap}.updates-status{min-height:20px;color:var(--muted)}
-    .updates-action-btn{border:0;border-radius:999px;background:#e5e7eb;color:#374151;padding:8px 12px;cursor:pointer}.updates-action-btn.danger{background:#fee2e2;color:#991b1b}
+    .updates-action-btn{border:0;border-radius:999px;background:#e5e7eb;color:#374151;padding:8px 12px;cursor:pointer}.updates-action-btn.danger{background:#fee2e2;color:#991b1b}.updates-comments-col{min-width:260px;white-space:pre-wrap!important}
 
     .users-layout{display:grid;grid-template-columns:minmax(240px,340px) minmax(0,1fr);gap:16px;align-items:start}
     .users-list{display:grid;gap:8px;max-height:62vh;overflow:auto;border:1px solid #e5e7eb;border-radius:14px;background:#fff;padding:8px}
@@ -247,7 +247,7 @@
             <button class="admin-subtab active" data-admin-tab="registry" type="button">Реестр</button>
             <button class="admin-subtab" data-admin-tab="personalContacts" type="button">Признаки контакта</button>
             <button class="admin-subtab" data-admin-tab="users" type="button">Пользователи</button>
-            <button class="admin-subtab" data-admin-tab="updates" type="button">Updates</button>
+            <button class="admin-subtab" data-admin-tab="updates" type="button">Обновления</button>
           </div>
           <div class="admin-command-row" aria-label="Команда обновления Calltrack">
             <div class="admin-command-field">
@@ -320,21 +320,24 @@
             </div>
           </section>
           <section class="admin-panel" id="adminUpdatesPanel" hidden>
-            <p>Загрузка APK на сервер и генерация updates/update.json для Android-приложения.</p>
+            <p>Загрузка новых APK на сервер и публикация обновлений для Android-приложения.</p>
             <div class="updates-layout">
-              <div class="registry-wrap" id="updatesTable"><div class="registry-empty">Данные загружаются...</div></div>
               <form class="updates-form" id="updateForm">
                 <input id="updateId" type="hidden" />
-                <h3>Форма редактирования</h3>
+                <h3>Загрузка APK</h3>
                 <div class="registry-empty">Версия и VersionCode будут присвоены автоматически при загрузке нового APK.</div>
-                <label>Список изменений<textarea id="updateReleaseNotes" name="release_notes" placeholder="Каждое изменение с новой строки"></textarea></label>
                 <label>Загрузить APK<input id="updateApk" name="apk" type="file" accept=".apk,application/vnd.android.package-archive" /></label>
+                <label>Комментарии<textarea id="updateReleaseNotes" name="release_notes" placeholder="Опишите изменения в версии, каждое изменение с новой строки"></textarea></label>
                 <div class="updates-actions">
                   <button class="registry-refresh-btn" type="submit">Сохранить</button>
                   <button class="updates-action-btn" id="updateFormResetBtn" type="button">Очистить форму</button>
                 </div>
                 <div class="updates-status" id="updatesStatus" aria-live="polite"></div>
               </form>
+              <div>
+                <h3>Ранее загруженные APK</h3>
+                <div class="registry-wrap" id="updatesTable"><div class="registry-empty">Данные загружаются...</div></div>
+              </div>
             </div>
           </section>
         </div>
@@ -571,8 +574,8 @@ async function loadUpdates(){
 }
 function renderUpdates(){
   if(!updates.length){adminEls.updatesTable.innerHTML='<div class="registry-empty">APK ещё не загружены</div>';return;}
-  const rows=updates.map((item)=>`<tr><td>${escapeHtml(item.filename)}</td><td>${escapeHtml(item.version_name)}</td><td>${escapeHtml(item.version_code)}</td><td>${escapeHtml(formatBytes(item.file_size))}</td><td>${escapeHtml(formatDateTimeDisplay(item.uploaded_at))}</td><td><button class="updates-action-btn" data-update-edit="${escapeHtml(item.id)}" type="button">Редактировать</button> <button class="updates-action-btn danger" data-update-delete="${escapeHtml(item.id)}" type="button">Удалить</button></td></tr>`).join('');
-  adminEls.updatesTable.innerHTML=`<table class="registry-table"><thead><tr><th>Название APK</th><th>Версия</th><th>VersionCode</th><th>Размер файла</th><th>Дата загрузки</th><th>Действия</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const rows=updates.map((item)=>`<tr><td>${escapeHtml(item.filename)}</td><td>${escapeHtml(item.version_name)}</td><td>${escapeHtml(item.version_code)}</td><td class="updates-comments-col">${escapeHtml(item.release_notes||'')}</td><td>${escapeHtml(formatBytes(item.file_size))}</td><td>${escapeHtml(formatDateTimeDisplay(item.uploaded_at))}</td><td><button class="updates-action-btn" data-update-edit="${escapeHtml(item.id)}" type="button">Редактировать</button> <button class="updates-action-btn danger" data-update-delete="${escapeHtml(item.id)}" type="button">Удалить</button></td></tr>`).join('');
+  adminEls.updatesTable.innerHTML=`<table class="registry-table"><thead><tr><th>Название APK</th><th>Версия</th><th>VersionCode</th><th>Комментарии</th><th>Размер файла</th><th>Дата загрузки</th><th>Действия</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 function resetUpdateForm(){
   adminEls.updateForm.reset();
@@ -1322,7 +1325,7 @@ function buildHourlySeries(stats){
   return {labels,incoming,outgoing,missed,unanswered,dropped};
 }
 
-const destroyCharts=()=>{while(chartInstances.length)chartInstances.pop().destroy()};
+const destroyCharts=()=>{while(chartInstances.length){const chart=chartInstances.pop(); if(chart?.destroy) chart.destroy();}};
 
 function renderCallTypeTags(){
   const items=['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные'];
@@ -1330,8 +1333,8 @@ function renderCallTypeTags(){
 }
 
 function renderKpi(s){const totalCalculated=(s.incoming||0)+(s.outgoing||0)+(s.missed||0)+(s.unanswered||0)+(s.dropped||0);els.kpiTotal.textContent=totalCalculated;els.kpiIncoming.textContent=s.incoming;els.kpiOutgoing.textContent=s.outgoing;els.kpiMissed.textContent=s.missed;els.kpiUnanswered.textContent=s.unanswered;els.kpiDropped.textContent=s.dropped||0}
-function renderCharts(s,g){destroyCharts();let labels=Object.keys(s.byPeriod).sort(),values=labels.map((d)=>s.byPeriod[d]);
-      let incomingData=labels.map((k)=>s.byPeriodType?.[k]?.incoming||0); let outgoingData=labels.map((k)=>s.byPeriodType?.[k]?.outgoing||0); let missedData=labels.map((k)=>s.byPeriodType?.[k]?.missed||0); let unansweredData=labels.map((k)=>s.byPeriodType?.[k]?.unanswered||0); let droppedData=labels.map((k)=>s.byPeriodType?.[k]?.dropped||0); if(g==='hour'){ const hourly=buildHourlySeries(s); labels=hourly.labels; incomingData=hourly.incoming; outgoingData=hourly.outgoing; missedData=hourly.missed; unansweredData=hourly.unanswered; droppedData=hourly.dropped; values=hourly.incoming.map((_,i)=>hourly.incoming[i]+hourly.outgoing[i]+hourly.missed[i]+hourly.unanswered[i]+hourly.dropped[i]); }els.trendTitle.textContent={hour:'Звонки по часам',day:'Звонки',week:'Звонки по неделям',month:'Звонки по месяцам'}[g]||'Звонки'; const callsDatasets=[{type:'Входящий',label:'Входящие',data:incomingData,backgroundColor:'#10b981'},{type:'Исходящий',label:'Исходящие',data:outgoingData,backgroundColor:'#3b82f6'},{type:'Пропущенные',label:'Пропущенные',data:missedData,backgroundColor:'#f59e0b'},{type:'Неотвеченные',label:'Неотвеченные',data:unansweredData,backgroundColor:'#ef4444'},{type:'Сброшенные',label:'Сброшенные',data:droppedData,backgroundColor:'#8b5cf6'}].map((d)=>({label:d.label,data:activeCallTypes.has(d.type)?d.data:d.data.map(()=>0),backgroundColor:d.backgroundColor})); chartInstances.push(new Chart(document.getElementById('callsByDayChart'),{type:'bar',data:{labels:labels.map(formatPeriodLabelDisplay),datasets:callsDatasets},options:{maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom'}},scales:{x:{stacked:true},y:{beginAtZero:true,stacked:true,suggestedMax:Math.max(...values,0)+1,ticks:{precision:0,padding:6}}}},plugins:[totalsLabelPlugin]}));chartInstances.push(new Chart(document.getElementById('callTypesChart'),{type:'pie',data:{labels:['Входящий','Исходящий','Неотвеченный','Пропущенные'],datasets:[{data:[activeCallTypes.has('Входящий')?(s.typeMap['Входящий']||0):0,activeCallTypes.has('Исходящий')?(s.typeMap['Исходящий']||0):0,activeCallTypes.has('Неотвеченные')?(s.typeMap['Неотвеченный']||0):0,activeCallTypes.has('Пропущенные')?(s.missed||0):0],backgroundColor:['#10b981','#3b82f6','#ef4444','#f59e0b']}]},options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}}));const ml=Object.keys(s.byManager).sort((a,b)=>s.byManager[b]-s.byManager[a]); const managerIncoming=ml.map((n)=>s.byManagerType?.[n]?.incoming||0); const managerOutgoing=ml.map((n)=>s.byManagerType?.[n]?.outgoing||0); const managerMissed=ml.map((n)=>s.byManagerType?.[n]?.missed||0); const managerUnanswered=ml.map((n)=>s.byManagerType?.[n]?.unanswered||0); const managerDropped=ml.map((n)=>s.byManagerType?.[n]?.dropped||0); chartInstances.push(new Chart(document.getElementById('managerCallsChart'),{type:'bar',data:{labels:ml,datasets:[{label:'Входящие',data:activeCallTypes.has('Входящий')?managerIncoming:managerIncoming.map(()=>0),backgroundColor:'#10b981'},{label:'Исходящие',data:activeCallTypes.has('Исходящий')?managerOutgoing:managerOutgoing.map(()=>0),backgroundColor:'#3b82f6'},{label:'Пропущенные',data:activeCallTypes.has('Пропущенные')?managerMissed:managerMissed.map(()=>0),backgroundColor:'#f59e0b'},{label:'Неотвеченные',data:activeCallTypes.has('Неотвеченные')?managerUnanswered:managerUnanswered.map(()=>0),backgroundColor:'#ef4444'},{label:'Сброшенные',data:activeCallTypes.has('Сброшенные')?managerDropped:managerDropped.map(()=>0),backgroundColor:'#8b5cf6'}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom'}},scales:{x:{beginAtZero:true,stacked:true,ticks:{precision:0}},y:{stacked:true}}}}));}
+function renderCharts(s,g){try{destroyCharts(); if(typeof Chart==='undefined'){els.emptyState.textContent='Данные загружены, но библиотека графиков недоступна';els.emptyState.style.display='block';els.chartsGrid.style.display='none';return;} let labels=Object.keys(s.byPeriod).sort(),values=labels.map((d)=>s.byPeriod[d]);
+      let incomingData=labels.map((k)=>s.byPeriodType?.[k]?.incoming||0); let outgoingData=labels.map((k)=>s.byPeriodType?.[k]?.outgoing||0); let missedData=labels.map((k)=>s.byPeriodType?.[k]?.missed||0); let unansweredData=labels.map((k)=>s.byPeriodType?.[k]?.unanswered||0); let droppedData=labels.map((k)=>s.byPeriodType?.[k]?.dropped||0); if(g==='hour'){ const hourly=buildHourlySeries(s); labels=hourly.labels; incomingData=hourly.incoming; outgoingData=hourly.outgoing; missedData=hourly.missed; unansweredData=hourly.unanswered; droppedData=hourly.dropped; values=hourly.incoming.map((_,i)=>hourly.incoming[i]+hourly.outgoing[i]+hourly.missed[i]+hourly.unanswered[i]+hourly.dropped[i]); }els.trendTitle.textContent={hour:'Звонки по часам',day:'Звонки',week:'Звонки по неделям',month:'Звонки по месяцам'}[g]||'Звонки'; const callsDatasets=[{type:'Входящий',label:'Входящие',data:incomingData,backgroundColor:'#10b981'},{type:'Исходящий',label:'Исходящие',data:outgoingData,backgroundColor:'#3b82f6'},{type:'Пропущенные',label:'Пропущенные',data:missedData,backgroundColor:'#f59e0b'},{type:'Неотвеченные',label:'Неотвеченные',data:unansweredData,backgroundColor:'#ef4444'},{type:'Сброшенные',label:'Сброшенные',data:droppedData,backgroundColor:'#8b5cf6'}].map((d)=>({label:d.label,data:activeCallTypes.has(d.type)?d.data:d.data.map(()=>0),backgroundColor:d.backgroundColor})); chartInstances.push(new Chart(document.getElementById('callsByDayChart'),{type:'bar',data:{labels:labels.map(formatPeriodLabelDisplay),datasets:callsDatasets},options:{maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom'}},scales:{x:{stacked:true},y:{beginAtZero:true,stacked:true,suggestedMax:Math.max(...values,0)+1,ticks:{precision:0,padding:6}}}},plugins:[totalsLabelPlugin]}));chartInstances.push(new Chart(document.getElementById('callTypesChart'),{type:'pie',data:{labels:['Входящий','Исходящий','Неотвеченный','Пропущенные'],datasets:[{data:[activeCallTypes.has('Входящий')?(s.typeMap['Входящий']||0):0,activeCallTypes.has('Исходящий')?(s.typeMap['Исходящий']||0):0,activeCallTypes.has('Неотвеченные')?(s.typeMap['Неотвеченный']||0):0,activeCallTypes.has('Пропущенные')?(s.missed||0):0],backgroundColor:['#10b981','#3b82f6','#ef4444','#f59e0b']}]},options:{maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}}));const ml=Object.keys(s.byManager).sort((a,b)=>s.byManager[b]-s.byManager[a]); const managerIncoming=ml.map((n)=>s.byManagerType?.[n]?.incoming||0); const managerOutgoing=ml.map((n)=>s.byManagerType?.[n]?.outgoing||0); const managerMissed=ml.map((n)=>s.byManagerType?.[n]?.missed||0); const managerUnanswered=ml.map((n)=>s.byManagerType?.[n]?.unanswered||0); const managerDropped=ml.map((n)=>s.byManagerType?.[n]?.dropped||0); chartInstances.push(new Chart(document.getElementById('managerCallsChart'),{type:'bar',data:{labels:ml,datasets:[{label:'Входящие',data:activeCallTypes.has('Входящий')?managerIncoming:managerIncoming.map(()=>0),backgroundColor:'#10b981'},{label:'Исходящие',data:activeCallTypes.has('Исходящий')?managerOutgoing:managerOutgoing.map(()=>0),backgroundColor:'#3b82f6'},{label:'Пропущенные',data:activeCallTypes.has('Пропущенные')?managerMissed:managerMissed.map(()=>0),backgroundColor:'#f59e0b'},{label:'Неотвеченные',data:activeCallTypes.has('Неотвеченные')?managerUnanswered:managerUnanswered.map(()=>0),backgroundColor:'#ef4444'},{label:'Сброшенные',data:activeCallTypes.has('Сброшенные')?managerDropped:managerDropped.map(()=>0),backgroundColor:'#8b5cf6'}]},options:{indexAxis:'y',maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom'}},scales:{x:{beginAtZero:true,stacked:true,ticks:{precision:0}},y:{stacked:true}}}}));}catch(error){console.error('Ошибка отрисовки графиков:',error);els.emptyState.textContent='Данные загружены, но графики не удалось построить';els.emptyState.style.display='block';els.chartsGrid.style.display='none';}}
 const showNoData=()=>{els.emptyState.style.display='block';els.chartsGrid.style.display='none'}; const hideNoData=()=>{els.emptyState.style.display='none';els.chartsGrid.style.display='grid'};
 function populateManagers(calls){const managers=[...new Set(calls.map((c)=>((c?.manager||'Не указан').trim()||'Не указан')))].sort();els.managerTags.innerHTML=managers.map((m)=>`<button class="manager-tag active" data-manager="${m}">${m}</button>`).join('');managers.forEach((m)=>activeManagers.add(m));}
 
