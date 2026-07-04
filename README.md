@@ -817,16 +817,16 @@ function doGet(e) {
 
 ## 5. Веб-дашборд и серверный API
 
-Веб-часть теперь хранится внутри этого репозитория и не требует отдельного `Calltrack_dashboard1`:
+Веб-часть теперь хранится внутри этого репозитория и не требует отдельного `Calltrack_analizmop1`:
 
-- `dashboard/index.html` — страница реестра звонков.
-- `dashboard/api.js` — клиентские запросы к PHP API.
+- `analizmop/index.html` — страница реестра звонков.
+- `analizmop/api.js` — клиентские запросы к PHP API.
 - `api/get_calls.php` — получение списка звонков для дашборда.
 - `api/delete_call.php` — удаление одного звонка.
 - `api/delete_calls.php` — массовое удаление звонков.
 - `api/get_personal_contacts.php` — получение SQL-таблицы `personal_contacts` для вкладки «Признаки контакта».
 
-Относительные пути рассчитаны на размещение каталогов `dashboard` и `api` на одном уровне в корне сайта:
+Относительные пути рассчитаны на размещение каталогов `analizmop` и `api` на одном уровне в корне сайта:
 
 ```text
 public_html/
@@ -836,17 +836,17 @@ public_html/
 │   ├── delete_call.php
 │   ├── delete_calls.php
 │   └── get_personal_contacts.php
-└── dashboard/
+└── analizmop/
     ├── index.html
     └── api.js
 ```
 
-`dashboard/index.html` подключает скрипт как `api.js`, а `dashboard/api.js` обращается к API через `../api/`.
+`analizmop/index.html` подключает скрипт как `api.js`, а `analizmop/api.js` обращается к API через `../api/`.
 
 ### Изменённые файлы после объединения
 
-- `dashboard/index.html`
-- `dashboard/api.js`
+- `analizmop/index.html`
+- `analizmop/api.js`
 - `api/get_calls.php`
 - `api/delete_call.php`
 - `api/delete_calls.php`
@@ -860,7 +860,7 @@ public_html/
    git pull
    ./gradlew :app:assembleDebug
    ```
-2. Скопируйте на сервер каталог `dashboard` в корень сайта, например в `public_html/dashboard`.
+2. Скопируйте на сервер каталог `analizmop` в корень сайта, например в `public_html/analizmop`.
 3. Скопируйте на сервер каталог `api` в корень сайта, например в `public_html/api`.
 4. Настройте подключение к MySQL/MariaDB в `api/config.php` через переменные окружения хостинга:
    - `CALLTRACK_DB_HOST`
@@ -875,6 +875,6 @@ public_html/
    ```
 7. Откройте дашборд:
    ```text
-   https://your-domain.example/dashboard/index.html
+   https://your-domain.example/analizmop/index.html
    ```
-8. Если сервер отдаёт дашборд из подкаталога, сохраните структуру `dashboard` и `api` как соседние каталоги. Иначе относительный путь `../api/` в `dashboard/api.js` нужно будет заменить на фактический URL API.
+8. Если сервер отдаёт дашборд из подкаталога, сохраните структуру `analizmop` и `api` как соседние каталоги. Иначе относительный путь `../api/` в `analizmop/api.js` нужно будет заменить на фактический URL API.
