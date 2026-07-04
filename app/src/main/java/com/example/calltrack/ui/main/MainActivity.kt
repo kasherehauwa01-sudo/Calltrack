@@ -33,6 +33,7 @@ import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.service.CallTrackingService
 import com.example.calltrack.ui.calls.CallListFragment
+import com.example.calltrack.ui.analytics.AnalyticsActivity
 import com.example.calltrack.ui.base.BaseActivity
 import com.example.calltrack.ui.contacts.ContactsFragment
 import com.example.calltrack.ui.contactcard.ContactCardFragment
@@ -86,6 +87,7 @@ class MainActivity : BaseActivity() {
         applyWindowInsets()
         setupBottomNav()
         setupSettingsButton()
+        setupAnalyticsButton()
         setupNotificationButton()
         registerDownloadReceiver()
         handleExternalNavigation(intent)
@@ -102,6 +104,7 @@ class MainActivity : BaseActivity() {
                 binding.bottomNav.visibility = android.view.View.VISIBLE
                 if (savedInstanceState == null) binding.bottomNav.selectedItemId = R.id.nav_dial
                 refreshPersonalContactsAfterAuthorization()
+                lifecycleScope.launch { viewModel.sendUserTelemetry() }
                 startTrackingService()
             }
             updateWarningState()
@@ -116,6 +119,7 @@ class MainActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         AppLogger.log(this, "APP", "Приложение на экране")
+        lifecycleScope.launch { viewModel.sendUserTelemetry() }
     }
 
     override fun onPause() {
@@ -142,6 +146,13 @@ class MainActivity : BaseActivity() {
 
     private fun applySavedTheme() {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+    }
+
+    private fun setupAnalyticsButton() {
+        binding.btnAnalytics.setOnClickListener {
+            AppLogger.log(this, "UI", "Открыт экран: Аналитика")
+            startActivity(Intent(this, AnalyticsActivity::class.java))
+        }
     }
 
     private fun setupNotificationButton() {
@@ -190,20 +201,19 @@ class MainActivity : BaseActivity() {
             AppLogger.log(this@MainActivity, "NOTIFY", "Показ уведомления: Проверяем обновление")
             Toast.makeText(this@MainActivity, "Проверяем наличие новой версии…", Toast.LENGTH_SHORT).show()
 
-            val latestFromApi = withContext(Dispatchers.IO) { fetchLatestReleaseInfo() }
-            if (latestFromApi == null) {
-                AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки данных: не удалось получить данные о версии с GitHub")
+            val latest = withContext(Dispatchers.IO) { fetchLatestReleaseInfo() }
+            if (latest == null) {
+                AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки данных: не удалось получить данные о версии с сервера")
                 AppLogger.log(this@MainActivity, "NOTIFY", "Показ уведомления: Ошибка сети")
                 Toast.makeText(this@MainActivity, "Не удалось проверить обновление. Повторите позже", Toast.LENGTH_LONG).show()
                 return@launch
             }
 
-            val latest = latestFromApi
-            AppLogger.log(this@MainActivity, "UPDATE", "Удаленная версия: ${latest.tag}")
-            if (!isRemoteVersionNewer(BuildConfig.VERSION_NAME, latest.tag)) {
+            AppLogger.log(this@MainActivity, "UPDATE", "Удаленная версия: ${latest.versionName} (${latest.versionCode})")
+            if (latest.versionCode <= BuildConfig.VERSION_CODE) {
                 AppLogger.log(this@MainActivity, "UPDATE", "Версия актуальна")
                 AlertDialog.Builder(this@MainActivity)
-                    .setMessage("У Вас установлена актуальная версия приложения")
+                    .setMessage("У вас установлена актуальная версия приложения.")
                     .setPositiveButton("OK") { dialog: DialogInterface, _: Int ->
                         dialog.dismiss()
                     }
@@ -212,13 +222,15 @@ class MainActivity : BaseActivity() {
             }
             AppLogger.log(this@MainActivity, "UPDATE", "Найдена новая версия")
 
+            val notes = latest.releaseNotes.takeIf { it.isNotEmpty() }?.joinToString("\n") { "• $it" }
+                ?: "Список изменений не указан."
             AlertDialog.Builder(this@MainActivity)
-                .setTitle("Найдена свежая версия")
-                .setMessage("Установить?")
-                .setPositiveButton("Да") { _: DialogInterface, _: Int ->
+                .setTitle("Доступна версия ${latest.versionName}")
+                .setMessage("Список изменений:\n$notes")
+                .setPositiveButton("Скачать и установить") { _: DialogInterface, _: Int ->
                     startApkUpdateDownload(latest.apkUrl)
                 }
-                .setNegativeButton("Нет") { dialog: DialogInterface, _: Int ->
+                .setNegativeButton(if (latest.mandatory) "Позже" else "Отмена") { dialog: DialogInterface, _: Int ->
                     dialog.dismiss()
                 }
                 .show()
@@ -250,58 +262,36 @@ class MainActivity : BaseActivity() {
 
     private fun fetchLatestReleaseInfo(): ReleaseInfo? {
         val request = Request.Builder()
-            .url(LATEST_RELEASE_API)
-            .addHeader("Accept", "application/vnd.github+json")
+            .url(UPDATE_API_URL)
+            .addHeader("Accept", "application/json")
             .build()
 
         return runCatching {
             updateHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return null
                 val body = response.body?.string().orEmpty()
-                val json = org.json.JSONObject(body)
-                val tag = json.optString("tag_name").orEmpty()
-
-                var apkUrl = ""
-                val assets = json.optJSONArray("assets")
-                if (assets != null) {
-                    for (i in 0 until assets.length()) {
-                        val asset = assets.optJSONObject(i) ?: continue
-                        val url = asset.optString("browser_download_url")
-                        if (url.endsWith(".apk", ignoreCase = true)) {
-                            apkUrl = url
-                            break
-                        }
+                val json = JSONObject(body)
+                if (json.optString("status") == "error") return null
+                val versionName = json.optString("versionName").orEmpty()
+                val versionCode = json.optInt("versionCode", 0)
+                val apkUrl = json.optString("apk").orEmpty()
+                if (versionName.isBlank() || versionCode <= 0 || apkUrl.isBlank()) return null
+                val notes = mutableListOf<String>()
+                val releaseNotes = json.optJSONArray("releaseNotes")
+                if (releaseNotes != null) {
+                    for (i in 0 until releaseNotes.length()) {
+                        releaseNotes.optString(i).takeIf { it.isNotBlank() }?.let(notes::add)
                     }
                 }
-
-                if (tag.isBlank() || apkUrl.isBlank()) return null
-                ReleaseInfo(tag = tag, apkUrl = apkUrl)
+                ReleaseInfo(
+                    versionName = versionName,
+                    versionCode = versionCode,
+                    mandatory = json.optBoolean("mandatory", false),
+                    apkUrl = apkUrl,
+                    releaseNotes = notes
+                )
             }
         }.getOrNull()
-    }
-
-    private fun isRemoteVersionNewer(current: String, remoteTag: String): Boolean {
-        val currentVersion = extractDotVersion(current)
-        val remoteVersion = extractDotVersion(remoteTag)
-
-        // Если любую из версий нельзя корректно распарсить в semver, считаем,
-        // что обновление недоступно, чтобы не запускать скачивание ошибочно.
-        if (remoteVersion == null) return false
-        if (currentVersion == null) return false
-
-        val max = maxOf(currentVersion.size, remoteVersion.size)
-        for (i in 0 until max) {
-            val c = currentVersion.getOrElse(i) { 0 }
-            val r = remoteVersion.getOrElse(i) { 0 }
-            if (r > c) return true
-            if (r < c) return false
-        }
-        return false
-    }
-
-    private fun extractDotVersion(value: String): List<Int>? {
-        val match = Regex("(\\d+(?:\\.\\d+)+)").find(value) ?: return null
-        return match.groupValues[1].split('.').mapNotNull { it.toIntOrNull() }
     }
 
     private fun installDownloadedApk(downloadId: Long) {
@@ -502,16 +492,15 @@ class MainActivity : BaseActivity() {
         const val EXTRA_RUN_UPDATE_CHECK = "extra_run_update_check"
         private const val MENU_ABOUT_ID = 1001
         private const val MENU_USER_ID = 1003
-        private const val LATEST_RELEASE_API =
-            "https://api.github.com/repos/kasherehauwa01-sudo/Calltrack/releases/latest"
-        private const val FALLBACK_RELEASE_TAG = "v05-05-26-01"
-        private const val FALLBACK_RELEASE_APK_URL =
-            "https://github.com/kasherehauwa01-sudo/Calltrack/releases/download/v05-05-26-01/app-debug.apk"
+        private val UPDATE_API_URL = BuildConfig.SQL_API_BASE_URL + "update.php"
         private const val APK_FILE_NAME = "update.apk"
     }
 
     private data class ReleaseInfo(
-        val tag: String,
-        val apkUrl: String
+        val versionName: String,
+        val versionCode: Int,
+        val mandatory: Boolean,
+        val apkUrl: String,
+        val releaseNotes: List<String>
     )
 }
