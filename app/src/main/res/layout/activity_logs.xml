@@ -34,7 +34,7 @@
             android:layout_marginStart="8dp"
             android:text="Логи"
             android:textStyle="bold"
-            android:textColor="@color/textPrimary"
+            android:textColor="@color/white"
             android:textSize="20sp" />
 
         <Button

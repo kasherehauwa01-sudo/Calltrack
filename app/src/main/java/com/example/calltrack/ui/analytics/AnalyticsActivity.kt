@@ -55,7 +55,7 @@ class AnalyticsActivity : BaseActivity() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), statusBarHeight() + dp(16), dp(16), dp(16))
-            setBackgroundColor(getColor(R.color.background))
+            setBackgroundResource(R.drawable.bg_app_gradient)
         }
         scroll.addView(root)
         setContentView(scroll)
@@ -71,7 +71,7 @@ class AnalyticsActivity : BaseActivity() {
             text = "Аналитика"
             textSize = 28f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(getColor(R.color.textPrimary))
+            setTextColor(getColor(R.color.white))
             setPadding(dp(12), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(header)
