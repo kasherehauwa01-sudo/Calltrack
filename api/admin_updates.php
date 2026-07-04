@@ -272,5 +272,13 @@ try {
     generateUpdateJson($pdo);
     sendJson(['status' => 'success', 'id' => $id]);
 } catch (Throwable $e) {
-    sendJson(['status' => 'error', 'message' => $e->getMessage()], 500);
+    error_log($e);
+    sendJson([
+        'status' => 'error',
+        'message' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString()
+    ], 500);
 }
+
