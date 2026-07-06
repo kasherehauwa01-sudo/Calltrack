@@ -235,6 +235,24 @@ class MainActivity : BaseActivity() {
                 .onSuccess { AppLogger.log(this@MainActivity, "UPDATE", "Логи обновления отправлены в админ-панель") }
                 .onFailure { AppLogger.log(this@MainActivity, "ERROR", "Не удалось отправить логи обновления в админ-панель: ${it.message}", it) }
         }
+        dialogBuilder.show()
+    }
+
+    private fun showUpdateDialog(update: UpdateInfo) {
+        val notes = update.releaseNotes
+            .filter { it.isNotBlank() }
+            .joinToString(separator = "\n") { "• $it" }
+            .ifBlank { "Список изменений не указан." }
+        val dialogBuilder = AlertDialog.Builder(this)
+            .setTitle("Доступна версия ${update.versionName}")
+            .setMessage(notes)
+            .setPositiveButton("Обновить") { _: DialogInterface, _: Int ->
+                startApkUpdateDownload(update.apkUrl)
+            }
+        if (!update.mandatory) {
+            dialogBuilder.setNegativeButton("Отмена") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
+        }
+        dialogBuilder.show()
     }
 
     private fun showUpdateDialog(update: UpdateInfo) {
