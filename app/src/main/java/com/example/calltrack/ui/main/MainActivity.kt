@@ -252,7 +252,7 @@ class MainActivity : BaseActivity() {
             Toast.makeText(this@MainActivity, "Загрузка обновления...", Toast.LENGTH_SHORT).show()
             val result = withContext(Dispatchers.IO) { downloadApkToCache(apkUrl) }
             result
-                .onSuccess { apkFile ->
+                .onSuccess { apkFile: File ->
                     AppLogger.log(this@MainActivity, "UPDATE", "APK успешно загружен в cache: ${apkFile.absolutePath}, size=${apkFile.length()}")
                     Toast.makeText(this@MainActivity, "Подготовка установки...", Toast.LENGTH_SHORT).show()
                     syncUpdateLogsToDashboard()
@@ -266,7 +266,7 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    private fun downloadApkToCache(apkUrl: String): Result<File> = runCatching {
+    private fun downloadApkToCache(apkUrl: String): Result<File> = runCatching<File> {
         val request = Request.Builder()
             .url(apkUrl)
             .addHeader("Accept", APK_MIME_TYPE)
@@ -290,7 +290,7 @@ class MainActivity : BaseActivity() {
             if (copiedBytes <= 0L || tempFile.length() <= 0L) error("APK не был записан в cache")
             if (!tempFile.renameTo(apkFile)) error("Не удалось подготовить APK файл")
             AppLogger.log(this, "UPDATE", "APK записан в cache: bytes=$copiedBytes, file=${apkFile.absolutePath}")
-            apkFile
+            return@use apkFile
         }
     }
 
