@@ -266,31 +266,36 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    private fun downloadApkToCache(apkUrl: String): Result<File> = runCatching<File> {
-        val request = Request.Builder()
-            .url(apkUrl)
-            .addHeader("Accept", APK_MIME_TYPE)
-            .build()
-        updateHttpClient.newCall(request).execute().use { response ->
-            AppLogger.log(
-                this,
-                "UPDATE",
-                "Ответ загрузки APK: code=${response.code}, contentType=${response.header("Content-Type").orEmpty()}, contentLength=${response.body?.contentLength() ?: -1}"
-            )
-            if (!response.isSuccessful) error("HTTP ${response.code}")
-            val body = response.body ?: error("Пустое тело APK")
-            val tempFile = File(cacheDir, "$APK_FILE_NAME.part").apply { delete() }
-            val apkFile = File(cacheDir, APK_FILE_NAME).apply { delete() }
-            var copiedBytes = 0L
-            body.byteStream().use { input ->
-                tempFile.outputStream().use { output ->
-                    copiedBytes = input.copyTo(output)
+    private fun downloadApkToCache(apkUrl: String): Result<File> {
+        return runCatching {
+            val request = Request.Builder()
+                .url(apkUrl)
+                .addHeader("Accept", APK_MIME_TYPE)
+                .build()
+
+            val downloadedApk: File = updateHttpClient.newCall(request).execute().use { response ->
+                AppLogger.log(
+                    this,
+                    "UPDATE",
+                    "Ответ загрузки APK: code=${response.code}, contentType=${response.header("Content-Type").orEmpty()}, contentLength=${response.body?.contentLength() ?: -1}"
+                )
+                if (!response.isSuccessful) error("HTTP ${response.code}")
+                val body = response.body ?: error("Пустое тело APK")
+                val tempFile = File(cacheDir, "$APK_FILE_NAME.part").apply { delete() }
+                val apkFile = File(cacheDir, APK_FILE_NAME).apply { delete() }
+                var copiedBytes = 0L
+                body.byteStream().use { input ->
+                    tempFile.outputStream().use { output ->
+                        copiedBytes = input.copyTo(output)
+                    }
                 }
+                if (copiedBytes <= 0L || tempFile.length() <= 0L) error("APK не был записан в cache")
+                if (!tempFile.renameTo(apkFile)) error("Не удалось подготовить APK файл")
+                AppLogger.log(this, "UPDATE", "APK записан в cache: bytes=$copiedBytes, file=${apkFile.absolutePath}")
+                apkFile
             }
-            if (copiedBytes <= 0L || tempFile.length() <= 0L) error("APK не был записан в cache")
-            if (!tempFile.renameTo(apkFile)) error("Не удалось подготовить APK файл")
-            AppLogger.log(this, "UPDATE", "APK записан в cache: bytes=$copiedBytes, file=${apkFile.absolutePath}")
-            return@use apkFile
+
+            downloadedApk
         }
     }
 
