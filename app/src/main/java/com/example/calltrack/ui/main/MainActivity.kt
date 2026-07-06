@@ -255,6 +255,23 @@ class MainActivity : BaseActivity() {
         dialogBuilder.show()
     }
 
+    private fun showUpdateDialog(update: UpdateInfo) {
+        val notes = update.releaseNotes
+            .filter { it.isNotBlank() }
+            .joinToString(separator = "\n") { "• $it" }
+            .ifBlank { "Список изменений не указан." }
+        val dialogBuilder = AlertDialog.Builder(this)
+            .setTitle("Доступна версия ${update.versionName}")
+            .setMessage(notes)
+            .setPositiveButton("Обновить") { _: DialogInterface, _: Int ->
+                startApkUpdateDownload(update.apkUrl)
+            }
+        if (!update.mandatory) {
+            dialogBuilder.setNegativeButton("Отмена") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
+        }
+        dialogBuilder.show()
+    }
+
     private fun startApkUpdateDownload(apkUrl: String) {
         lifecycleScope.launch {
             AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK с сервера kvasmix.ru")
