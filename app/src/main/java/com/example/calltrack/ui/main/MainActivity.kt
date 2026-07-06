@@ -1,12 +1,8 @@
 package com.example.calltrack.ui.main
 
 import android.Manifest
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -53,7 +49,7 @@ import java.io.File
 class MainActivity : BaseActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private var apkDownloadId: Long = -1L
+    private var pendingInstallApk: File? = null
     private var updateCheckHandled = false
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
@@ -65,14 +61,12 @@ class MainActivity : BaseActivity() {
     ) { updateWarningState() }
     private val unknownAppsLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { updateWarningState() }
-    private val downloadCompleteReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
-            val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
-            if (completedId == apkDownloadId) {
-                installDownloadedApk(completedId)
-            }
+    ) {
+        updateWarningState()
+        val apkFile = pendingInstallApk
+        if (apkFile != null && (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls())) {
+            AppLogger.log(this, "UPDATE", "Разрешение на установку APK получено, повторный запуск установки")
+            installApkFile(apkFile)
         }
     }
 
@@ -88,7 +82,6 @@ class MainActivity : BaseActivity() {
         setupSettingsButton()
         setupAnalyticsButton()
         setupNotificationButton()
-        registerDownloadReceiver()
         handleExternalNavigation(intent)
 
         viewModel.onboardingCompleted.observe(this) { completed ->
@@ -235,24 +228,6 @@ class MainActivity : BaseActivity() {
                 .onSuccess { AppLogger.log(this@MainActivity, "UPDATE", "Логи обновления отправлены в админ-панель") }
                 .onFailure { AppLogger.log(this@MainActivity, "ERROR", "Не удалось отправить логи обновления в админ-панель: ${it.message}", it) }
         }
-        dialogBuilder.show()
-    }
-
-    private fun showUpdateDialog(update: UpdateInfo) {
-        val notes = update.releaseNotes
-            .filter { it.isNotBlank() }
-            .joinToString(separator = "\n") { "• $it" }
-            .ifBlank { "Список изменений не указан." }
-        val dialogBuilder = AlertDialog.Builder(this)
-            .setTitle("Доступна версия ${update.versionName}")
-            .setMessage(notes)
-            .setPositiveButton("Обновить") { _: DialogInterface, _: Int ->
-                startApkUpdateDownload(update.apkUrl)
-            }
-        if (!update.mandatory) {
-            dialogBuilder.setNegativeButton("Отмена") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
-        }
-        dialogBuilder.show()
     }
 
     private fun showUpdateDialog(update: UpdateInfo) {
@@ -274,23 +249,119 @@ class MainActivity : BaseActivity() {
 
     private fun startApkUpdateDownload(apkUrl: String) {
         lifecycleScope.launch {
-            AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK с сервера kvasmix.ru")
+            AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK с сервера kvasmix.ru: $apkUrl")
             Toast.makeText(this@MainActivity, "Загрузка обновления...", Toast.LENGTH_SHORT).show()
-            val apkFile = File(cacheDir, APK_FILE_NAME).apply { delete() }
-            val manager = getSystemService(DownloadManager::class.java)
-            val request = DownloadManager.Request(Uri.parse(apkUrl))
-                .setTitle("Обновление Calltrack")
-                .setDescription("Загрузка новой версии приложения")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setAllowedOverMetered(true)
-                .setAllowedOverRoaming(true)
-                .setMimeType(APK_MIME_TYPE)
-                .addRequestHeader("Accept", APK_MIME_TYPE)
-                .setDestinationUri(Uri.fromFile(apkFile))
-
-            apkDownloadId = manager.enqueue(request)
-            AppLogger.log(this@MainActivity, "INFO", "Начата загрузка обновления. downloadId=$apkDownloadId, url=$apkUrl")
+            val result = withContext(Dispatchers.IO) { downloadApkToCache(apkUrl) }
+            result
+                .onSuccess { apkFile ->
+                    AppLogger.log(this@MainActivity, "UPDATE", "APK успешно загружен в cache: ${apkFile.absolutePath}, size=${apkFile.length()}")
+                    Toast.makeText(this@MainActivity, "Подготовка установки...", Toast.LENGTH_SHORT).show()
+                    syncUpdateLogsToDashboard()
+                    installApkFile(apkFile)
+                }
+                .onFailure { error ->
+                    AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки обновления: ${error.message}", error)
+                    syncUpdateLogsToDashboard()
+                    Toast.makeText(this@MainActivity, "Ошибка загрузки обновления.", Toast.LENGTH_LONG).show()
+                }
         }
+        dialogBuilder.show()
+    }
+
+    private fun showUpdateDialog(update: UpdateInfo) {
+        val notes = update.releaseNotes
+            .filter { it.isNotBlank() }
+            .joinToString(separator = "\n") { "• $it" }
+            .ifBlank { "Список изменений не указан." }
+        val dialogBuilder = AlertDialog.Builder(this)
+            .setTitle("Доступна версия ${update.versionName}")
+            .setMessage(notes)
+            .setPositiveButton("Обновить") { _: DialogInterface, _: Int ->
+                startApkUpdateDownload(update.apkUrl)
+            }
+        if (!update.mandatory) {
+            dialogBuilder.setNegativeButton("Отмена") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
+        }
+        dialogBuilder.show()
+    }
+
+    private fun showUpdateDialog(update: UpdateInfo) {
+        val notes = update.releaseNotes
+            .filter { it.isNotBlank() }
+            .joinToString(separator = "\n") { "• $it" }
+            .ifBlank { "Список изменений не указан." }
+        val dialogBuilder = AlertDialog.Builder(this)
+            .setTitle("Доступна версия ${update.versionName}")
+            .setMessage(notes)
+            .setPositiveButton("Обновить") { _: DialogInterface, _: Int ->
+                startApkUpdateDownload(update.apkUrl)
+            }
+        if (!update.mandatory) {
+            dialogBuilder.setNegativeButton("Отмена") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
+        }
+        dialogBuilder.show()
+    }
+
+    private fun downloadApkToCache(apkUrl: String): Result<File> = runCatching {
+        val request = Request.Builder()
+            .url(apkUrl)
+            .addHeader("Accept", APK_MIME_TYPE)
+            .build()
+        updateHttpClient.newCall(request).execute().use { response ->
+            AppLogger.log(
+                this,
+                "UPDATE",
+                "Ответ загрузки APK: code=${response.code}, contentType=${response.header("Content-Type").orEmpty()}, contentLength=${response.body?.contentLength() ?: -1}"
+            )
+            if (!response.isSuccessful) error("HTTP ${response.code}")
+            val body = response.body ?: error("Пустое тело APK")
+            val tempFile = File(cacheDir, "$APK_FILE_NAME.part").apply { delete() }
+            val apkFile = File(cacheDir, APK_FILE_NAME).apply { delete() }
+            var copiedBytes = 0L
+            body.byteStream().use { input ->
+                tempFile.outputStream().use { output ->
+                    copiedBytes = input.copyTo(output)
+                }
+            }
+            if (copiedBytes <= 0L || tempFile.length() <= 0L) error("APK не был записан в cache")
+            if (!tempFile.renameTo(apkFile)) error("Не удалось подготовить APK файл")
+            AppLogger.log(this, "UPDATE", "APK записан в cache: bytes=$copiedBytes, file=${apkFile.absolutePath}")
+            apkFile
+        }
+    }
+
+    private fun installApkFile(apkFile: File) {
+        AppLogger.log(this, "UPDATE", "Подготовка установки APK: path=${apkFile.absolutePath}, exists=${apkFile.exists()}, size=${apkFile.length()}")
+        if (!apkFile.exists() || apkFile.length() <= 0L) {
+            AppLogger.log(this, "ERROR", "APK файл отсутствует или пустой")
+            Toast.makeText(this, "Ошибка загрузки обновления.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+            pendingInstallApk = apkFile
+            AppLogger.log(this, "WARN", "Нет разрешения на установку APK из неизвестных источников, открываем настройки")
+            Toast.makeText(this, "Разрешите установку приложения. После разрешения установка продолжится автоматически.", Toast.LENGTH_LONG).show()
+            val intent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:$packageName")
+            )
+            unknownAppsLauncher.launch(intent)
+            return
+        }
+
+        pendingInstallApk = null
+        val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", apkFile)
+        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkUri, APK_MIME_TYPE)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivity(installIntent) }
+            .onSuccess { AppLogger.log(this, "UPDATE", "Системный установщик APK открыт") }
+            .onFailure {
+                AppLogger.log(this, "ERROR", "Не удалось открыть установщик APK: ${it.message}", it)
+                Toast.makeText(this, "Не удалось открыть установщик APK", Toast.LENGTH_LONG).show()
+            }
     }
 
     private fun fetchLatestUpdateInfo(): UpdateCheckResult {
@@ -406,54 +477,6 @@ class MainActivity : BaseActivity() {
             if (text.isNotBlank()) return text.lines().map { it.trim() }.filter { it.isNotBlank() }
         }
         return emptyList()
-    }
-
-    private fun installDownloadedApk(downloadId: Long) {
-        AppLogger.log(this, "UPDATE", "APK загружен, подготовка установки")
-        Toast.makeText(this, "Подготовка установки...", Toast.LENGTH_SHORT).show()
-        val manager = getSystemService(DownloadManager::class.java)
-        val query = DownloadManager.Query().setFilterById(downloadId)
-        var localUri: String? = null
-        manager.query(query)?.use { cursor ->
-            if (!cursor.moveToFirst()) return
-            val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-            if (status != DownloadManager.STATUS_SUCCESSFUL) {
-                Toast.makeText(this, "Ошибка загрузки обновления.", Toast.LENGTH_SHORT).show()
-                return
-            }
-            localUri = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
-        }
-
-        val apkFile = localUri?.let { Uri.parse(it).path }?.let { File(it) }
-        if (apkFile == null || !apkFile.exists()) {
-            Toast.makeText(this, "Ошибка загрузки обновления.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val apkUri = FileProvider.getUriForFile(
-            this,
-            "$packageName.fileprovider",
-            apkFile
-        )
-
-        val installIntent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(apkUri, APK_MIME_TYPE)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        runCatching { startActivity(installIntent) }
-            .onFailure {
-                Toast.makeText(this, "Не удалось открыть установщик APK", Toast.LENGTH_LONG).show()
-            }
-    }
-
-    private fun registerDownloadReceiver() {
-        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(downloadCompleteReceiver, filter, RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(downloadCompleteReceiver, filter)
-        }
     }
 
     private fun setupBottomNav() {
@@ -588,7 +611,6 @@ class MainActivity : BaseActivity() {
 
     override fun onDestroy() {
         AppLogger.log(this, "APP", "MainActivity уничтожена")
-        runCatching { unregisterReceiver(downloadCompleteReceiver) }
         super.onDestroy()
     }
 
