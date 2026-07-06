@@ -10,7 +10,7 @@
         android:id="@+id/statusBarOverlay"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:background="#2ECC71" />
+        android:background="@color/primary" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -34,7 +34,7 @@
             android:layout_marginStart="8dp"
             android:text="Логи"
             android:textStyle="bold"
-            android:textColor="@color/textPrimary"
+            android:textColor="@color/white"
             android:textSize="20sp" />
 
         <Button
