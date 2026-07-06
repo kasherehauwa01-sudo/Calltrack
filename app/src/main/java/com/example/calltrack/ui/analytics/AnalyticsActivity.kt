@@ -64,7 +64,7 @@ class AnalyticsActivity : BaseActivity() {
         header.addView(Button(this).apply {
             text = "←"
             textSize = 20f
-            background = rounded(Color.WHITE, dp(16))
+            background = rounded(getColor(R.color.surface), dp(16))
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(dp(52), dp(44)))
         header.addView(TextView(this).apply {
@@ -78,7 +78,7 @@ class AnalyticsActivity : BaseActivity() {
 
         tabRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = rounded(Color.rgb(229, 234, 243), dp(22))
+            background = rounded(getColor(R.color.surfaceVariant), dp(22))
             setPadding(dp(4))
         }
         root.addView(tabRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(54)).apply { setMargins(0, dp(14), 0, dp(10)) })
@@ -103,7 +103,7 @@ class AnalyticsActivity : BaseActivity() {
         text = label
         textSize = 16f
         typeface = if (tab == activeTab) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-        background = rounded(if (tab == activeTab) Color.WHITE else Color.TRANSPARENT, dp(18))
+        background = rounded(if (tab == activeTab) getColor(R.color.surface) else Color.TRANSPARENT, dp(18))
         elevation = if (tab == activeTab) dp(2).toFloat() else 0f
         setTextColor(if (tab == activeTab) getColor(R.color.primary) else getColor(R.color.textSecondary))
         setOnClickListener {
@@ -119,7 +119,7 @@ class AnalyticsActivity : BaseActivity() {
         AnalyticsPeriod.entries.forEach { period ->
             periodRow.addView(Button(this).apply {
                 text = period.title
-                background = rounded(if (period == activePeriod) getColor(R.color.primary) else Color.WHITE, dp(18))
+                background = rounded(if (period == activePeriod) getColor(R.color.primary) else getColor(R.color.surface), dp(18))
                 setTextColor(if (period == activePeriod) Color.WHITE else getColor(R.color.textPrimary))
                 setOnClickListener {
                     activePeriod = period
@@ -136,7 +136,7 @@ class AnalyticsActivity : BaseActivity() {
             listOf("Входящий", "Исходящий", "Пропущенный", "Неотвеченный", "Сброшенный").forEach { type ->
                 typeRow.addView(Button(this).apply {
                     text = type.replace("енный", ".")
-                    background = rounded(if (activeTypes.contains(type)) typeColor(type) else Color.WHITE, dp(18))
+                    background = rounded(if (activeTypes.contains(type)) typeColor(type) else getColor(R.color.surface), dp(18))
                     setTextColor(if (activeTypes.contains(type)) Color.WHITE else getColor(R.color.textPrimary))
                     setOnClickListener {
                         if (activeTypes.contains(type)) activeTypes.remove(type) else activeTypes.add(type)
@@ -208,7 +208,7 @@ class AnalyticsActivity : BaseActivity() {
             textSize = 18f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(getColor(R.color.textPrimary))
-            background = rounded(Color.WHITE, dp(22))
+            background = rounded(getColor(R.color.surface), dp(22))
             elevation = dp(2).toFloat()
             setPadding(dp(16))
             if (onClick != null) {
@@ -237,13 +237,13 @@ class AnalyticsActivity : BaseActivity() {
         })
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = rounded(Color.WHITE, dp(20))
+            background = rounded(getColor(R.color.surface), dp(20))
             setPadding(dp(6))
         }
         AnalyticsDetail.entries.forEach { detail ->
             row.addView(Button(this).apply {
                 text = detail.title
-                background = rounded(if (detail == activeDetail) getColor(R.color.primary) else Color.rgb(243, 246, 250), dp(16))
+                background = rounded(if (detail == activeDetail) getColor(R.color.primary) else getColor(R.color.surfaceVariant), dp(16))
                 setTextColor(if (detail == activeDetail) Color.WHITE else getColor(R.color.textPrimary))
                 setOnClickListener {
                     activeDetail = detail
@@ -266,7 +266,7 @@ class AnalyticsActivity : BaseActivity() {
         val total = values.values.sum()
         val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         row.addView(TextView(this).apply { text = "$label — $total"; setTextColor(getColor(R.color.textPrimary)) })
-        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; background = rounded(Color.WHITE, dp(8)) }
+        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; background = rounded(getColor(R.color.surface), dp(8)) }
         listOf("Входящий", "Исходящий", "Пропущенный", "Неотвеченный", "Сброшенный").forEach { type ->
             val count = values[type] ?: 0
             if (count > 0) bar.addView(View(this).apply { setBackgroundColor(typeColor(type)) }, LinearLayout.LayoutParams(0, dp(14), count.toFloat()))
@@ -316,7 +316,7 @@ class AnalyticsActivity : BaseActivity() {
     private fun addPieLegend(values: List<Pair<String, Int>>, total: Float) {
         val legend = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(Color.WHITE, dp(16))
+            background = rounded(getColor(R.color.surface), dp(16))
             setPadding(dp(12), dp(8), dp(12), dp(8))
         }
         values.forEach { (type, count) ->
@@ -351,7 +351,7 @@ class AnalyticsActivity : BaseActivity() {
         val hasDetails = call.note.isNotBlank() || call.reminder.isNotBlank()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = rounded(Color.WHITE, dp(14))
+            background = rounded(getColor(R.color.surface), dp(14))
             setPadding(dp(12), dp(8), dp(12), dp(8))
             setOnClickListener { showCallEditor(call) }
         }
