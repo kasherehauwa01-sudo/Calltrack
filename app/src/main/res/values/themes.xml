@@ -9,7 +9,6 @@
         <item name="colorSurfaceVariant">@color/surfaceVariant</item>
         <item name="colorOnSurface">@color/textPrimary</item>
         <item name="colorOnSurfaceVariant">@color/textSecondary</item>
-        <item name="colorBackground">@color/background</item>
         <item name="colorOnBackground">@color/on_background</item>
         <item name="android:fontFamily">sans</item>
         <item name="android:textColorPrimary">@color/textPrimary</item>
