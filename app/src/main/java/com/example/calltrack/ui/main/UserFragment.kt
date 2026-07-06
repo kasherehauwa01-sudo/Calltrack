@@ -1,6 +1,7 @@
 package com.example.calltrack.ui.main
 
-import android.app.AlertDialog
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatDelegate
 import android.os.Bundle
 import android.text.InputFilter
 import android.view.Gravity
@@ -16,6 +17,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.App
+import com.example.calltrack.data.repository.PrefsManager
 import com.example.calltrack.databinding.FragmentUserBinding
 import kotlinx.coroutines.launch
 
@@ -41,12 +43,52 @@ class UserFragment : Fragment() {
             binding.tvCurrentUserPhone.text = phone.ifBlank { "Не указан" }
         }
 
+
+        viewModel.themeMode.observe(viewLifecycleOwner) { mode ->
+            binding.tvThemeMode.text = themeTitle(mode)
+        }
+
+        binding.btnThemeMode.setOnClickListener {
+            showThemeDialog()
+        }
+
         binding.btnSwitchUser.setOnClickListener {
             showSwitchUserDialog(
                 currentManager = binding.tvCurrentUser.text.toString(),
                 currentPhone = binding.tvCurrentUserPhone.text.toString()
             )
         }
+    }
+
+    private fun showThemeDialog() {
+        val modes = arrayOf(PrefsManager.THEME_LIGHT, PrefsManager.THEME_DARK, PrefsManager.THEME_SYSTEM)
+        val titles = modes.map(::themeTitle).toTypedArray()
+        val current = viewModel.themeMode.value ?: PrefsManager.THEME_SYSTEM
+        val checked = modes.indexOf(current).coerceAtLeast(0)
+        AlertDialog.Builder(requireContext())
+            .setTitle("Тема")
+            .setSingleChoiceItems(titles, checked) { dialog, which ->
+                val mode = modes[which]
+                viewLifecycleOwner.lifecycleScope.launch {
+                    viewModel.setThemeMode(mode)
+                    AppCompatDelegate.setDefaultNightMode(themeNightMode(mode))
+                }
+                dialog.dismiss()
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
+    }
+
+    private fun themeTitle(mode: String): String = when (mode) {
+        PrefsManager.THEME_LIGHT -> "Светлая"
+        PrefsManager.THEME_DARK -> "Темная"
+        else -> "Как в системе"
+    }
+
+    private fun themeNightMode(mode: String): Int = when (mode) {
+        PrefsManager.THEME_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+        PrefsManager.THEME_DARK -> AppCompatDelegate.MODE_NIGHT_YES
+        else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
     }
 
     private fun showSwitchUserDialog(currentManager: String, currentPhone: String) {

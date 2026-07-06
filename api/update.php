@@ -13,4 +13,5 @@ if (!is_array($data)) {
     sendJson(['status' => 'error', 'message' => 'update.json is invalid'], 500);
 }
 
+$data['status'] = 'ok';
 sendJson($data);
