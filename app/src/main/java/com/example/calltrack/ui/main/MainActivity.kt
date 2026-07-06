@@ -1,19 +1,13 @@
 package com.example.calltrack.ui.main
 
 import android.Manifest
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.provider.Settings
-import android.util.Log
 import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -48,13 +42,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 
 class MainActivity : BaseActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private var apkDownloadId: Long = -1L
+    private var pendingInstallApk: File? = null
     private var updateCheckHandled = false
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
@@ -66,14 +61,12 @@ class MainActivity : BaseActivity() {
     ) { updateWarningState() }
     private val unknownAppsLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { updateWarningState() }
-    private val downloadCompleteReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
-            val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
-            if (completedId == apkDownloadId) {
-                installDownloadedApk(completedId)
-            }
+    ) {
+        updateWarningState()
+        val apkFile = pendingInstallApk
+        if (apkFile != null && (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls())) {
+            AppLogger.log(this, "UPDATE", "Разрешение на установку APK получено, повторный запуск установки")
+            installApkFile(apkFile)
         }
     }
 
@@ -89,11 +82,7 @@ class MainActivity : BaseActivity() {
         setupSettingsButton()
         setupAnalyticsButton()
         setupNotificationButton()
-        registerDownloadReceiver()
         handleExternalNavigation(intent)
-        if (intent.getBooleanExtra(EXTRA_RUN_UPDATE_CHECK, false)) {
-            checkForUpdatesAndPrompt()
-        }
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
@@ -196,170 +185,263 @@ class MainActivity : BaseActivity() {
     private fun checkForUpdatesAndPrompt() {
         lifecycleScope.launch {
             AppLogger.log(this@MainActivity, "UI", "Нажата кнопка: Обновить")
-            AppLogger.log(this@MainActivity, "UPDATE", "Проверка обновлений")
-            AppLogger.log(this@MainActivity, "UPDATE", "Текущая версия: ${BuildConfig.VERSION_NAME}")
-            AppLogger.log(this@MainActivity, "NOTIFY", "Показ уведомления: Проверяем обновление")
-            Toast.makeText(this@MainActivity, "Проверяем наличие новой версии…", Toast.LENGTH_SHORT).show()
+            AppLogger.log(this@MainActivity, "UPDATE", "Проверка обновлений через kvasmix.ru")
+            AppLogger.log(this@MainActivity, "UPDATE", "Текущая версия: ${BuildConfig.VERSION_CODE} (${BuildConfig.VERSION_NAME})")
+            Toast.makeText(this@MainActivity, "Проверка обновлений...", Toast.LENGTH_SHORT).show()
 
-            val latestFromApi = withContext(Dispatchers.IO) { fetchLatestReleaseInfo() }
-            if (latestFromApi == null) {
-                AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки данных: не удалось получить данные о версии с GitHub")
-                AppLogger.log(this@MainActivity, "NOTIFY", "Показ уведомления: Ошибка сети")
-                Toast.makeText(this@MainActivity, "Не удалось проверить обновление. Повторите позже", Toast.LENGTH_LONG).show()
-                return@launch
-            }
-
-            val latest = latestFromApi
-            AppLogger.log(this@MainActivity, "UPDATE", "Удаленная версия: ${latest.tag}")
-            if (!isRemoteVersionNewer(BuildConfig.VERSION_NAME, latest.tag)) {
-                AppLogger.log(this@MainActivity, "UPDATE", "Версия актуальна")
-                AlertDialog.Builder(this@MainActivity)
-                    .setMessage("У Вас установлена актуальная версия приложения")
-                    .setPositiveButton("OK") { dialog: DialogInterface, _: Int ->
-                        dialog.dismiss()
+            val updateResult = withContext(Dispatchers.IO) { fetchLatestUpdateInfo() }
+            when (updateResult) {
+                is UpdateCheckResult.NetworkError -> {
+                    AppLogger.log(this@MainActivity, "ERROR", "Сервер обновлений недоступен: ${updateResult.reason}")
+                    syncUpdateLogsToDashboard()
+                    Toast.makeText(this@MainActivity, "Не удалось проверить наличие обновлений.", Toast.LENGTH_LONG).show()
+                    return@launch
+                }
+                is UpdateCheckResult.InvalidResponse -> {
+                    AppLogger.log(this@MainActivity, "ERROR", "Некорректный ответ сервера обновлений: ${updateResult.reason}")
+                    syncUpdateLogsToDashboard()
+                    Toast.makeText(this@MainActivity, "Некорректный ответ сервера обновлений.", Toast.LENGTH_LONG).show()
+                    return@launch
+                }
+                is UpdateCheckResult.Success -> {
+                    val update = updateResult.info
+                    AppLogger.log(this@MainActivity, "UPDATE", "Версия на сервере: ${update.versionCode} (${update.versionName})")
+                    if (update.versionCode <= BuildConfig.VERSION_CODE) {
+                        AppLogger.log(this@MainActivity, "UPDATE", "Версия актуальна")
+                        syncUpdateLogsToDashboard()
+                        AlertDialog.Builder(this@MainActivity)
+                            .setMessage("У вас установлена актуальная версия приложения.")
+                            .setPositiveButton("OK") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
+                            .show()
+                        return@launch
                     }
-                    .show()
-                return@launch
+                    syncUpdateLogsToDashboard()
+                    showUpdateDialog(update)
+                }
             }
-            AppLogger.log(this@MainActivity, "UPDATE", "Найдена новая версия")
-
-            AlertDialog.Builder(this@MainActivity)
-                .setTitle("Найдена свежая версия")
-                .setMessage("Установить?")
-                .setPositiveButton("Да") { _: DialogInterface, _: Int ->
-                    startApkUpdateDownload(latest.apkUrl)
-                }
-                .setNegativeButton("Нет") { dialog: DialogInterface, _: Int ->
-                    dialog.dismiss()
-                }
-                .show()
         }
+    }
+
+    private suspend fun syncUpdateLogsToDashboard() {
+        withContext(Dispatchers.IO) {
+            runCatching { viewModel.sendUserTelemetry() }
+                .onSuccess { AppLogger.log(this@MainActivity, "UPDATE", "Логи обновления отправлены в админ-панель") }
+                .onFailure { AppLogger.log(this@MainActivity, "ERROR", "Не удалось отправить логи обновления в админ-панель: ${it.message}", it) }
+        }
+    }
+
+    private fun showUpdateDialog(update: UpdateInfo) {
+        val notes = update.releaseNotes
+            .filter { it.isNotBlank() }
+            .joinToString(separator = "\n") { "• $it" }
+            .ifBlank { "Список изменений не указан." }
+        val dialogBuilder = AlertDialog.Builder(this)
+            .setTitle("Доступна версия ${update.versionName}")
+            .setMessage(notes)
+            .setPositiveButton("Обновить") { _: DialogInterface, _: Int ->
+                startApkUpdateDownload(update.apkUrl)
+            }
+        if (!update.mandatory) {
+            dialogBuilder.setNegativeButton("Отмена") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
+        }
+        dialogBuilder.show()
     }
 
     private fun startApkUpdateDownload(apkUrl: String) {
         lifecycleScope.launch {
-            Log.d("UPDATE_FLOW", "startApkUpdateDownload вызван")
-            AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK")
-            AppLogger.log(this@MainActivity, "NOTIFY", "Показ уведомления: Началась загрузка")
-            val manager = getSystemService(DownloadManager::class.java)
-            val request = DownloadManager.Request(Uri.parse(apkUrl))
-                .setTitle("Обновление Calltrack")
-                .setDescription("Загрузка новой версии приложения")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setAllowedOverMetered(true)
-                .setAllowedOverRoaming(true)
-                .setMimeType("application/vnd.android.package-archive")
-                .addRequestHeader("Accept", "application/vnd.android.package-archive")
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, APK_FILE_NAME)
-
-            apkDownloadId = -1L
-            apkDownloadId = manager.enqueue(request)
-            AppLogger.log(this@MainActivity, "INFO", "Начата загрузка обновления. downloadId=$apkDownloadId, url=$apkUrl")
-            Toast.makeText(this@MainActivity, "Началась загрузка обновления", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun fetchLatestReleaseInfo(): ReleaseInfo? {
-        val request = Request.Builder()
-            .url(LATEST_RELEASE_API)
-            .addHeader("Accept", "application/vnd.github+json")
-            .build()
-
-        return runCatching {
-            updateHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val body = response.body?.string().orEmpty()
-                val json = org.json.JSONObject(body)
-                val tag = json.optString("tag_name").orEmpty()
-
-                var apkUrl = ""
-                val assets = json.optJSONArray("assets")
-                if (assets != null) {
-                    for (i in 0 until assets.length()) {
-                        val asset = assets.optJSONObject(i) ?: continue
-                        val url = asset.optString("browser_download_url")
-                        if (url.endsWith(".apk", ignoreCase = true)) {
-                            apkUrl = url
-                            break
-                        }
-                    }
+            AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK с сервера kvasmix.ru: $apkUrl")
+            Toast.makeText(this@MainActivity, "Загрузка обновления...", Toast.LENGTH_SHORT).show()
+            val result = withContext(Dispatchers.IO) { downloadApkToCache(apkUrl) }
+            result
+                .onSuccess { apkFile ->
+                    AppLogger.log(this@MainActivity, "UPDATE", "APK успешно загружен в cache: ${apkFile.absolutePath}, size=${apkFile.length()}")
+                    Toast.makeText(this@MainActivity, "Подготовка установки...", Toast.LENGTH_SHORT).show()
+                    syncUpdateLogsToDashboard()
+                    installApkFile(apkFile)
                 }
-
-                if (tag.isBlank() || apkUrl.isBlank()) return null
-                ReleaseInfo(tag = tag, apkUrl = apkUrl)
-            }
-        }.getOrNull()
-    }
-
-    private fun isRemoteVersionNewer(current: String, remoteTag: String): Boolean {
-        val currentVersion = extractDotVersion(current)
-        val remoteVersion = extractDotVersion(remoteTag)
-
-        // Если любую из версий нельзя корректно распарсить в semver, считаем,
-        // что обновление недоступно, чтобы не запускать скачивание ошибочно.
-        if (remoteVersion == null) return false
-        if (currentVersion == null) return false
-
-        val max = maxOf(currentVersion.size, remoteVersion.size)
-        for (i in 0 until max) {
-            val c = currentVersion.getOrElse(i) { 0 }
-            val r = remoteVersion.getOrElse(i) { 0 }
-            if (r > c) return true
-            if (r < c) return false
+                .onFailure { error ->
+                    AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки обновления: ${error.message}", error)
+                    syncUpdateLogsToDashboard()
+                    Toast.makeText(this@MainActivity, "Ошибка загрузки обновления.", Toast.LENGTH_LONG).show()
+                }
         }
-        return false
     }
 
-    private fun extractDotVersion(value: String): List<Int>? {
-        val match = Regex("(\\d+(?:\\.\\d+)+)").find(value) ?: return null
-        return match.groupValues[1].split('.').mapNotNull { it.toIntOrNull() }
-    }
-
-    private fun installDownloadedApk(downloadId: Long) {
-        AppLogger.log(this, "UPDATE", "APK загружен, запуск установки")
-        val manager = getSystemService(DownloadManager::class.java)
-        val query = DownloadManager.Query().setFilterById(downloadId)
-        var localUri: String? = null
-        manager.query(query)?.use { cursor ->
-            if (!cursor.moveToFirst()) return
-            val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-            if (status != DownloadManager.STATUS_SUCCESSFUL) {
-                Toast.makeText(this, "Не удалось загрузить обновление", Toast.LENGTH_SHORT).show()
-                return
+    private fun downloadApkToCache(apkUrl: String): Result<File> = runCatching {
+        val request = Request.Builder()
+            .url(apkUrl)
+            .addHeader("Accept", APK_MIME_TYPE)
+            .build()
+        updateHttpClient.newCall(request).execute().use { response ->
+            AppLogger.log(
+                this,
+                "UPDATE",
+                "Ответ загрузки APK: code=${response.code}, contentType=${response.header("Content-Type").orEmpty()}, contentLength=${response.body?.contentLength() ?: -1}"
+            )
+            if (!response.isSuccessful) error("HTTP ${response.code}")
+            val body = response.body ?: error("Пустое тело APK")
+            val tempFile = File(cacheDir, "$APK_FILE_NAME.part").apply { delete() }
+            val apkFile = File(cacheDir, APK_FILE_NAME).apply { delete() }
+            var copiedBytes = 0L
+            body.byteStream().use { input ->
+                tempFile.outputStream().use { output ->
+                    copiedBytes = input.copyTo(output)
+                }
             }
-            localUri = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+            if (copiedBytes <= 0L || tempFile.length() <= 0L) error("APK не был записан в cache")
+            if (!tempFile.renameTo(apkFile)) error("Не удалось подготовить APK файл")
+            AppLogger.log(this, "UPDATE", "APK записан в cache: bytes=$copiedBytes, file=${apkFile.absolutePath}")
+            apkFile
         }
+    }
 
-        val apkFile = localUri?.let { Uri.parse(it).path }?.let { File(it) }
-        if (apkFile == null || !apkFile.exists()) {
-            Toast.makeText(this, "Файл обновления не найден", Toast.LENGTH_SHORT).show()
+    private fun installApkFile(apkFile: File) {
+        AppLogger.log(this, "UPDATE", "Подготовка установки APK: path=${apkFile.absolutePath}, exists=${apkFile.exists()}, size=${apkFile.length()}")
+        if (!apkFile.exists() || apkFile.length() <= 0L) {
+            AppLogger.log(this, "ERROR", "APK файл отсутствует или пустой")
+            Toast.makeText(this, "Ошибка загрузки обновления.", Toast.LENGTH_SHORT).show()
             return
         }
-        val apkUri = FileProvider.getUriForFile(
-            this,
-            "$packageName.fileprovider",
-            apkFile
-        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+            pendingInstallApk = apkFile
+            AppLogger.log(this, "WARN", "Нет разрешения на установку APK из неизвестных источников, открываем настройки")
+            Toast.makeText(this, "Разрешите установку приложения. После разрешения установка продолжится автоматически.", Toast.LENGTH_LONG).show()
+            val intent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:$packageName")
+            )
+            unknownAppsLauncher.launch(intent)
+            return
+        }
 
+        pendingInstallApk = null
+        val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", apkFile)
         val installIntent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(apkUri, "application/vnd.android.package-archive")
+            setDataAndType(apkUri, APK_MIME_TYPE)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         runCatching { startActivity(installIntent) }
+            .onSuccess { AppLogger.log(this, "UPDATE", "Системный установщик APK открыт") }
             .onFailure {
+                AppLogger.log(this, "ERROR", "Не удалось открыть установщик APK: ${it.message}", it)
                 Toast.makeText(this, "Не удалось открыть установщик APK", Toast.LENGTH_LONG).show()
             }
     }
 
-    private fun registerDownloadReceiver() {
-        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(downloadCompleteReceiver, filter, RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(downloadCompleteReceiver, filter)
+    private fun fetchLatestUpdateInfo(): UpdateCheckResult {
+        AppLogger.log(this, "UPDATE", "Запрос метаданных обновления: $UPDATE_API_URL")
+        val request = Request.Builder()
+            .url(UPDATE_API_URL)
+            .addHeader("Accept", "application/json")
+            .build()
+
+        return try {
+            updateHttpClient.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                val preview = body.take(MAX_UPDATE_LOG_BODY_CHARS)
+                AppLogger.log(
+                    this,
+                    "UPDATE",
+                    "Ответ сервера обновлений: code=${response.code}, contentType=${response.header("Content-Type").orEmpty()}, bodyLength=${body.length}, bodyPreview=$preview"
+                )
+                if (!response.isSuccessful) {
+                    return UpdateCheckResult.NetworkError("HTTP ${response.code}")
+                }
+                parseUpdateInfo(body)
+            }
+        } catch (error: JSONException) {
+            AppLogger.log(this, "ERROR", "JSON сервера обновлений поврежден: ${error.message}", error)
+            UpdateCheckResult.InvalidResponse("JSON parse error: ${error.message}")
+        } catch (error: Exception) {
+            AppLogger.log(this, "ERROR", "Ошибка запроса обновлений: ${error.message}", error)
+            UpdateCheckResult.NetworkError(error.message ?: error.javaClass.simpleName)
         }
+    }
+
+    private fun parseUpdateInfo(body: String): UpdateCheckResult {
+        if (body.isBlank()) return UpdateCheckResult.InvalidResponse("Пустое тело ответа")
+
+        val json = JSONObject(body)
+        val status = json.optString("status").trim()
+        if (status.isNotBlank() && !status.equals("ok", ignoreCase = true) && !status.equals("success", ignoreCase = true)) {
+            return UpdateCheckResult.InvalidResponse("status=$status")
+        }
+
+        val versionCode = json.optFlexibleInt("versionCode", "version_code")
+        val versionName = json.optFlexibleString("versionName", "version_name")
+        val apkUrl = json.optFlexibleString("apk", "apkUrl", "apk_url", "url")
+        if (versionCode == null) return UpdateCheckResult.InvalidResponse("Не найден versionCode/version_code")
+        if (versionName.isBlank()) return UpdateCheckResult.InvalidResponse("Не найден versionName/version_name")
+        if (apkUrl.isBlank()) return UpdateCheckResult.InvalidResponse("Не найдена ссылка apk")
+        if (!apkUrl.startsWith("https://", ignoreCase = true) && !apkUrl.startsWith("http://", ignoreCase = true)) {
+            return UpdateCheckResult.InvalidResponse("Некорректная ссылка apk=$apkUrl")
+        }
+
+        val releaseNotes = json.optFlexibleStringList("releaseNotes", "release_notes")
+        val mandatory = json.optFlexibleBoolean("mandatory", false)
+        AppLogger.log(
+            this,
+            "UPDATE",
+            "Метаданные обновления распознаны: versionCode=$versionCode, versionName=$versionName, mandatory=$mandatory, notes=${releaseNotes.size}, apk=$apkUrl"
+        )
+        return UpdateCheckResult.Success(
+            UpdateInfo(
+                versionCode = versionCode,
+                versionName = versionName,
+                apkUrl = apkUrl,
+                releaseNotes = releaseNotes,
+                mandatory = mandatory
+            )
+        )
+    }
+
+    private fun JSONObject.optFlexibleString(vararg names: String): String {
+        for (name in names) {
+            if (has(name) && !isNull(name)) return optString(name).trim()
+        }
+        return ""
+    }
+
+    private fun JSONObject.optFlexibleInt(vararg names: String): Int? {
+        for (name in names) {
+            if (!has(name) || isNull(name)) continue
+            val raw = opt(name)
+            when (raw) {
+                is Number -> return raw.toInt()
+                is String -> raw.trim().toIntOrNull()?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun JSONObject.optFlexibleBoolean(name: String, defaultValue: Boolean): Boolean {
+        if (!has(name) || isNull(name)) return defaultValue
+        val raw = opt(name)
+        return when (raw) {
+            is Boolean -> raw
+            is Number -> raw.toInt() != 0
+            is String -> raw.equals("true", ignoreCase = true) || raw == "1" || raw.equals("yes", ignoreCase = true)
+            else -> defaultValue
+        }
+    }
+
+    private fun JSONObject.optFlexibleStringList(vararg names: String): List<String> {
+        for (name in names) {
+            if (!has(name) || isNull(name)) continue
+            val array = optJSONArray(name)
+            if (array != null) {
+                return buildList {
+                    for (i in 0 until array.length()) {
+                        val note = array.optString(i).trim()
+                        if (note.isNotBlank()) add(note)
+                    }
+                }
+            }
+            val text = optString(name).trim()
+            if (text.isNotBlank()) return text.lines().map { it.trim() }.filter { it.isNotBlank() }
+        }
+        return emptyList()
     }
 
     private fun setupBottomNav() {
@@ -494,7 +576,6 @@ class MainActivity : BaseActivity() {
 
     override fun onDestroy() {
         AppLogger.log(this, "APP", "MainActivity уничтожена")
-        runCatching { unregisterReceiver(downloadCompleteReceiver) }
         super.onDestroy()
     }
 
@@ -513,16 +594,23 @@ class MainActivity : BaseActivity() {
         const val EXTRA_RUN_UPDATE_CHECK = "extra_run_update_check"
         private const val MENU_ABOUT_ID = 1001
         private const val MENU_USER_ID = 1003
-        private const val LATEST_RELEASE_API =
-            "https://api.github.com/repos/kasherehauwa01-sudo/Calltrack/releases/latest"
-        private const val FALLBACK_RELEASE_TAG = "v05-05-26-01"
-        private const val FALLBACK_RELEASE_APK_URL =
-            "https://github.com/kasherehauwa01-sudo/Calltrack/releases/download/v05-05-26-01/app-debug.apk"
-        private const val APK_FILE_NAME = "update.apk"
+        private const val UPDATE_API_URL = "https://kvasmix.ru/vr/calltrack/api/update.php"
+        private const val APK_FILE_NAME = "calltrack-update.apk"
+        private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
+        private const val MAX_UPDATE_LOG_BODY_CHARS = 1000
     }
 
-    private data class ReleaseInfo(
-        val tag: String,
-        val apkUrl: String
+    private sealed interface UpdateCheckResult {
+        data class Success(val info: UpdateInfo) : UpdateCheckResult
+        data class NetworkError(val reason: String) : UpdateCheckResult
+        data class InvalidResponse(val reason: String) : UpdateCheckResult
+    }
+
+    private data class UpdateInfo(
+        val versionCode: Int,
+        val versionName: String,
+        val apkUrl: String,
+        val releaseNotes: List<String>,
+        val mandatory: Boolean
     )
 }
