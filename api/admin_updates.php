@@ -72,7 +72,7 @@ function generateUpdateJson(PDO $pdo): void
         'versionName' => (string)$row['version_name'],
         'versionCode' => (int)$row['version_code'],
         'mandatory' => (bool)$row['mandatory'],
-        'apk' => rtrim((string)UPDATE_PUBLIC_BASE, '/') . '/' . rawurlencode((string)$row['filename']),
+        'apk' => (string)UPDATE_DOWNLOAD_URL . '&versionCode=' . (int)$row['version_code'],
         'releaseDate' => (string)$row['uploaded_at'],
         'releaseNotes' => $notes,
     ];
