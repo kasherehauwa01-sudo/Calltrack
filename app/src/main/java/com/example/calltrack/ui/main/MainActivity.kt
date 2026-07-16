@@ -558,7 +558,9 @@ class MainActivity : BaseActivity() {
                 add("Разрешите установку из неизвестных источников")
             }
         }
-        binding.tvWarning.text = messages.joinToString("\n")
+        val warningText = messages.joinToString("\n")
+        binding.tvWarning.text = warningText
+        binding.tvWarning.visibility = if (warningText.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
     }
 
     private fun requestUnknownAppsPermissionIfNeeded() {
