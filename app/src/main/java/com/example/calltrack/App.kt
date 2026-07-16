@@ -7,6 +7,7 @@ import com.example.calltrack.data.remote.ApiFactory
 import com.example.calltrack.data.notification.NotificationRepository
 import com.example.calltrack.data.repository.CallRepository
 import com.example.calltrack.logging.AppLogger
+import com.google.android.material.color.DynamicColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,6 +21,7 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        DynamicColors.applyToActivitiesIfAvailable(this)
         AppLogger.install(this)
         Thread.setDefaultUncaughtExceptionHandler { _, e ->
             AppLogger.log(this, "CRASH", Log.getStackTraceString(e))
