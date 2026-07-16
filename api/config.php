@@ -27,6 +27,9 @@ if (!defined('DB_CHARSET')) {
 if (!defined('UPDATE_PUBLIC_BASE')) {
     define('UPDATE_PUBLIC_BASE', 'https://kvasmix.ru/vr/calltrack/updates/');
 }
+if (!defined('UPDATE_DOWNLOAD_URL')) {
+    define('UPDATE_DOWNLOAD_URL', 'https://kvasmix.ru/vr/calltrack/api/update.php?download=1');
+}
 
 function dbConfigValue(string $envName, string $constantName): string
 {

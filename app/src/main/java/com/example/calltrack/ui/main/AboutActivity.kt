@@ -36,10 +36,12 @@ class AboutActivity : BaseActivity() {
         binding.btnBack.setOnClickListener { finish() }
         binding.btnUpdateApp.setOnClickListener {
             startActivity(
-                Intent(this, MainActivity::class.java).putExtra(
-                    MainActivity.EXTRA_RUN_UPDATE_CHECK,
-                    true
-                )
+                Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    .putExtra(
+                        MainActivity.EXTRA_RUN_UPDATE_CHECK,
+                        true
+                    )
             )
             finish()
         }
