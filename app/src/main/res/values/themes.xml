@@ -50,10 +50,10 @@
 
     <style name="KeyStyle" parent="Widget.Material3.Button.TextButton">
         <item name="android:layout_width">0dp</item>
-        <item name="android:layout_height">80dp</item>
+        <item name="android:layout_height">72dp</item>
         <item name="android:layout_columnWeight">1</item>
-        <item name="android:layout_margin">6dp</item>
-        <item name="android:textSize">26sp</item>
+        <item name="android:layout_margin">4dp</item>
+        <item name="android:textSize">24sp</item>
         <item name="android:textColor">@color/textPrimary</item>
         <item name="android:background">@drawable/bg_key</item>
         <item name="android:gravity">center</item>
