@@ -21,7 +21,6 @@ import com.example.calltrack.BuildConfig
 import com.example.calltrack.R
 import com.example.calltrack.data.local.NotificationEntity
 import com.example.calltrack.data.notification.NotificationTargets
-import com.example.calltrack.data.repository.PrefsManager
 import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.service.CallTrackingService
@@ -164,10 +163,15 @@ class MainActivity : BaseActivity() {
             AppLogger.log(this, "UI", "Нажата кнопка: Настройки")
             PopupMenu(this, anchor).apply {
                 menu.add(0, MENU_ABOUT_ID, 0, getString(R.string.about_app))
-                menu.add(0, MENU_USER_ID, 1, getString(R.string.user))
+                menu.add(0, MENU_SETTINGS_ID, 1, getString(R.string.settings))
+                menu.add(0, MENU_USER_ID, 2, getString(R.string.user))
                 setOnMenuItemClickListener { menuItem ->
                     when (menuItem.itemId) {
                         MENU_ABOUT_ID -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
+                        MENU_SETTINGS_ID -> {
+                            AppLogger.log(this@MainActivity, "UI", "Открыт экран: Настройки")
+                            openFragment(SettingsFragment.newInstance())
+                        }
                         MENU_USER_ID -> {
                             AppLogger.log(this@MainActivity, "UI", "Открыт экран: Пользователь")
                             openFragment(UserFragment.newInstance())
@@ -641,6 +645,7 @@ class MainActivity : BaseActivity() {
         const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
         const val EXTRA_RUN_UPDATE_CHECK = "extra_run_update_check"
         private const val MENU_ABOUT_ID = 1001
+        private const val MENU_SETTINGS_ID = 1002
         private const val MENU_USER_ID = 1003
         private const val UPDATE_API_URL = "https://kvasmix.ru/vr/calltrack/api/update.php"
         private const val APK_FILE_NAME = "calltrack-update.apk"
