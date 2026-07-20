@@ -242,7 +242,7 @@ class MainActivity : BaseActivity() {
             .setTitle("Доступна версия ${update.versionName}")
             .setMessage(notes)
             .setPositiveButton("Обновить") { _: DialogInterface, _: Int ->
-                startApkUpdateDownload(update.apkUrl)
+                startApkUpdateDownload(update)
             }
             .apply {
                 if (!update.mandatory) {
@@ -252,11 +252,11 @@ class MainActivity : BaseActivity() {
             .show()
     }
 
-    private fun startApkUpdateDownload(apkUrl: String) {
+    private fun startApkUpdateDownload(update: UpdateInfo) {
         lifecycleScope.launch {
-            AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK с сервера kvasmix.ru: $apkUrl")
+            AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK с сервера kvasmix.ru: ${update.apkUrl}")
             Toast.makeText(this@MainActivity, "Загрузка обновления...", Toast.LENGTH_SHORT).show()
-            val result = withContext(Dispatchers.IO) { downloadApkToCache(apkUrl) }
+            val result = withContext(Dispatchers.IO) { downloadApkToCache(update.apkDownloadUrls) }
             result
                 .onSuccess { downloadedApkFile: File ->
                     AppLogger.log(this@MainActivity, "UPDATE", "APK успешно загружен в cache: ${downloadedApkFile.absolutePath}, size=${downloadedApkFile.length()}")
@@ -270,6 +270,28 @@ class MainActivity : BaseActivity() {
                     Toast.makeText(this@MainActivity, "Ошибка загрузки обновления.", Toast.LENGTH_LONG).show()
                 }
         }
+    }
+
+    private fun downloadApkToCache(apkUrls: List<String>): Result<File> {
+        val candidateUrls = apkUrls.distinct()
+        var lastError: Throwable? = null
+        candidateUrls.forEachIndexed { index, apkUrl ->
+            val result = downloadApkToCache(apkUrl)
+            if (result.isSuccess) return result
+
+            val error = result.exceptionOrNull()
+            lastError = error
+            val nextUrl = candidateUrls.getOrNull(index + 1)
+            if (nextUrl != null) {
+                AppLogger.log(
+                    this,
+                    "WARN",
+                    "Не удалось скачать APK по ссылке $apkUrl: ${error?.message}. Пробуем резервную ссылку: $nextUrl",
+                    error
+                )
+            }
+        }
+        return Result.failure(lastError ?: IllegalStateException("Нет доступных ссылок APK"))
     }
 
     private fun downloadApkToCache(apkUrl: String): Result<File> {
@@ -423,6 +445,7 @@ class MainActivity : BaseActivity() {
                 versionCode = versionCode,
                 versionName = versionName,
                 apkUrl = apkUrl,
+                rawApkUrl = rawApkUrl,
                 releaseNotes = releaseNotes,
                 mandatory = mandatory
             )
@@ -663,7 +686,10 @@ class MainActivity : BaseActivity() {
         val versionCode: Int,
         val versionName: String,
         val apkUrl: String,
+        val rawApkUrl: String,
         val releaseNotes: List<String>,
         val mandatory: Boolean
-    )
+    ) {
+        val apkDownloadUrls: List<String> = listOf(apkUrl, rawApkUrl).distinct()
+    }
 }
