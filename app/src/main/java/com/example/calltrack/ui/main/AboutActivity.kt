@@ -45,8 +45,5 @@ class AboutActivity : BaseActivity() {
             )
             finish()
         }
-        binding.btnOpenLogs.setOnClickListener {
-            startActivity(Intent(this, LogsActivity::class.java))
-        }
     }
 }
