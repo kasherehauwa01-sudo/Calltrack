@@ -24,9 +24,15 @@ function loadUpdatePayload(): array
 
 function apkPathFromPayload(array $data): string
 {
-    $apkUrl = (string)($data['apk'] ?? '');
-    $path = (string)(parse_url($apkUrl, PHP_URL_PATH) ?: '');
-    $filename = basename(rawurldecode($path));
+    // Сначала используем имя файла, которое формирует админ-панель. Это важно,
+    // потому что поле apk в update.json теперь может указывать на download-proxy.
+    $filename = basename((string)($data['filename'] ?? ''));
+    if ($filename === '') {
+        // Поддержка старых update.json: раньше в apk лежала прямая ссылка /updates/*.apk.
+        $apkUrl = (string)($data['apk'] ?? '');
+        $path = (string)(parse_url($apkUrl, PHP_URL_PATH) ?: '');
+        $filename = basename(rawurldecode($path));
+    }
     if ($filename === '' || strtolower(pathinfo($filename, PATHINFO_EXTENSION)) !== 'apk') {
         sendJson(['status' => 'error', 'message' => 'APK filename is invalid'], 500);
     }

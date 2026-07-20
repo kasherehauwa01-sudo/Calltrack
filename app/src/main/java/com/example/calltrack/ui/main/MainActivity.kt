@@ -374,13 +374,14 @@ class MainActivity : BaseActivity() {
 
         val versionCode = json.optFlexibleInt("versionCode", "version_code")
         val versionName = json.optFlexibleString("versionName", "version_name")
-        val apkUrl = json.optFlexibleString("apk", "apkUrl", "apk_url", "url")
+        val rawApkUrl = json.optFlexibleString("apk", "apkUrl", "apk_url", "url")
         if (versionCode == null) return UpdateCheckResult.InvalidResponse("Не найден versionCode/version_code")
         if (versionName.isBlank()) return UpdateCheckResult.InvalidResponse("Не найден versionName/version_name")
-        if (apkUrl.isBlank()) return UpdateCheckResult.InvalidResponse("Не найдена ссылка apk")
-        if (!apkUrl.startsWith("https://", ignoreCase = true) && !apkUrl.startsWith("http://", ignoreCase = true)) {
-            return UpdateCheckResult.InvalidResponse("Некорректная ссылка apk=$apkUrl")
+        if (rawApkUrl.isBlank()) return UpdateCheckResult.InvalidResponse("Не найдена ссылка apk")
+        if (!rawApkUrl.startsWith("https://", ignoreCase = true) && !rawApkUrl.startsWith("http://", ignoreCase = true)) {
+            return UpdateCheckResult.InvalidResponse("Некорректная ссылка apk=$rawApkUrl")
         }
+        val apkUrl = normalizeUpdateApkUrl(rawApkUrl, versionCode)
 
         val releaseNotes = json.optFlexibleStringList("releaseNotes", "release_notes")
         val mandatory = json.optFlexibleBoolean("mandatory", false)
@@ -398,6 +399,23 @@ class MainActivity : BaseActivity() {
                 mandatory = mandatory
             )
         )
+    }
+
+    private fun normalizeUpdateApkUrl(apkUrl: String, versionCode: Int): String {
+        // Сервер должен отдавать APK через api/update.php?download=1. Если в старом
+        // update.json осталась прямая ссылка /updates/*.apk, принудительно переводим
+        // её на proxy-эндпоинт, чтобы не ловить 502 от прямой раздачи каталога updates.
+        val uri = Uri.parse(apkUrl)
+        val normalizedUrl = if (uri.host.equals("kvasmix.ru", ignoreCase = true)
+            && (uri.path ?: "").startsWith("/vr/calltrack/updates/")) {
+            "$UPDATE_API_URL?download=1&versionCode=$versionCode"
+        } else {
+            apkUrl
+        }
+        if (normalizedUrl != apkUrl) {
+            AppLogger.log(this, "UPDATE", "Ссылка APK заменена на серверный download endpoint: $normalizedUrl")
+        }
+        return normalizedUrl
     }
 
     private fun JSONObject.optFlexibleString(vararg names: String): String {
