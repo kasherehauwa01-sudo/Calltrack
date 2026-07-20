@@ -264,6 +264,20 @@ class MainActivity : BaseActivity() {
                     Toast.makeText(this@MainActivity, "Ошибка загрузки обновления.", Toast.LENGTH_LONG).show()
                 }
         }
+
+        pendingInstallApk = null
+        val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", apkFile)
+        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkUri, APK_MIME_TYPE)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivity(installIntent) }
+            .onSuccess { AppLogger.log(this, "UPDATE", "Системный установщик APK открыт") }
+            .onFailure {
+                AppLogger.log(this, "ERROR", "Не удалось открыть установщик APK: ${it.message}", it)
+                Toast.makeText(this, "Не удалось открыть установщик APK", Toast.LENGTH_LONG).show()
+            }
     }
 
     private fun downloadApkToCache(apkUrl: String): Result<File> {
