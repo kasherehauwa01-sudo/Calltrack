@@ -31,7 +31,7 @@ class PrefsManager(private val context: Context) {
     }
 
     val themeMode: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[themeKey] ?: THEME_LIGHT
+        prefs[themeKey] ?: THEME_SYSTEM
     }
 
     suspend fun setOnboardingCompleted(value: Boolean) {

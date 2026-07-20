@@ -9,7 +9,7 @@
         android:id="@+id/statusBarOverlay"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:background="#2ECC71"
+        android:background="@color/background"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
@@ -19,7 +19,8 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:padding="12dp"
-        android:textColor="@android:color/holo_red_light"
+        android:visibility="gone"
+        android:textColor="@color/errorColor"
         android:textSize="13sp"
         app:layout_constraintBottom_toBottomOf="@+id/analyticsButtonContainer"
         app:layout_constraintEnd_toStartOf="@+id/analyticsButtonContainer"
