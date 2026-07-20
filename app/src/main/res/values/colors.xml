@@ -2,7 +2,7 @@
     <color name="primary">#21A038</color>
     <color name="primaryContainer">#DFF5E5</color>
     <color name="onPrimaryContainer">#063B16</color>
-    <color name="background">#F5F7FA</color>
+    <color name="background">#FFFFFF</color>
     <color name="surface">#FFFFFF</color>
     <color name="surfaceVariant">#EEF3F0</color>
     <color name="on_background">#111827</color>
