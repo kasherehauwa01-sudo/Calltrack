@@ -2,6 +2,22 @@
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
 
+function isDownloadRequest(): bool
+{
+    $download = (string)($_GET['download'] ?? $_GET['apk'] ?? '');
+    if ($download === '1' || strcasecmp($download, 'true') === 0) {
+        return true;
+    }
+
+    // На некоторых конфигурациях хостинга параметры могут не попасть в $_GET.
+    // Поэтому дополнительно проверяем исходную строку запроса и REQUEST_URI.
+    $query = (string)($_SERVER['QUERY_STRING'] ?? '');
+    $uri = (string)($_SERVER['REQUEST_URI'] ?? '');
+    parse_str(parse_url($uri, PHP_URL_QUERY) ?: $query, $params);
+    $fallback = (string)($params['download'] ?? $params['apk'] ?? '');
+    return $fallback === '1' || strcasecmp($fallback, 'true') === 0;
+}
+
 function updateJsonPath(): string
 {
     return dirname(__DIR__) . '/updates/update.json';
@@ -54,12 +70,13 @@ function downloadUrl(array $data): string
 
 $data = loadUpdatePayload();
 
-if (isset($_GET['download']) && (string)$_GET['download'] === '1') {
+if (isDownloadRequest()) {
     $apkPath = apkPathFromPayload($data);
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
     header('Content-Type: application/vnd.android.package-archive');
+    header('X-Content-Type-Options: nosniff');
     header('Content-Length: ' . filesize($apkPath));
     header('Content-Disposition: attachment; filename="' . basename($apkPath) . '"');
     header('Cache-Control: no-store, no-cache, must-revalidate');

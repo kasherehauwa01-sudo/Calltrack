@@ -264,6 +264,20 @@ class MainActivity : BaseActivity() {
                     Toast.makeText(this@MainActivity, "Ошибка загрузки обновления.", Toast.LENGTH_LONG).show()
                 }
         }
+
+        pendingInstallApk = null
+        val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", apkFile)
+        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkUri, APK_MIME_TYPE)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching { startActivity(installIntent) }
+            .onSuccess { AppLogger.log(this, "UPDATE", "Системный установщик APK открыт") }
+            .onFailure {
+                AppLogger.log(this, "ERROR", "Не удалось открыть установщик APK: ${it.message}", it)
+                Toast.makeText(this, "Не удалось открыть установщик APK", Toast.LENGTH_LONG).show()
+            }
     }
 
     private fun downloadApkToCache(apkUrl: String): Result<File> {
@@ -290,6 +304,11 @@ class MainActivity : BaseActivity() {
                     }
                 }
                 if (copiedBytes <= 0L || tempFile.length() <= 0L) error("APK не был записан в cache")
+                if (!tempFile.hasApkZipSignature()) {
+                    val preview = tempFile.readTextPreview(MAX_UPDATE_LOG_BODY_CHARS)
+                    tempFile.delete()
+                    error("Сервер вернул не APK: contentType=${response.header("Content-Type").orEmpty()}, bytes=$copiedBytes, bodyPreview=$preview")
+                }
                 if (!tempFile.renameTo(apkFile)) error("Не удалось подготовить APK файл")
                 AppLogger.log(this, "UPDATE", "APK записан в cache: bytes=$copiedBytes, file=${apkFile.absolutePath}")
                 apkFile
@@ -297,6 +316,23 @@ class MainActivity : BaseActivity() {
 
             downloadedApk
         }
+    }
+
+    private fun File.hasApkZipSignature(): Boolean {
+        // APK — это ZIP-архив, поэтому первые байты должны начинаться с PK.
+        if (!exists() || length() < 2L) return false
+        inputStream().use { input ->
+            return input.read() == 0x50 && input.read() == 0x4B
+        }
+    }
+
+    private fun File.readTextPreview(maxChars: Int): String {
+        // Используется только для логов ошибок, чтобы не пытаться установить JSON/HTML как APK.
+        return inputStream().buffered().use { input ->
+            val buffer = ByteArray(maxChars.coerceAtLeast(1))
+            val read = input.read(buffer)
+            if (read <= 0) "" else String(buffer, 0, read, Charsets.UTF_8)
+        }.replace(Regex("\\s+"), " ").take(maxChars)
     }
 
     private fun installApkFile(apkFile: File) {
