@@ -68,10 +68,12 @@ function generateUpdateJson(PDO $pdo): void
     }
     $notes = array_values(array_filter(array_map('trim', preg_split('/\R/u', (string)($row['release_notes'] ?? '')) ?: []), static fn(string $line): bool => $line !== ''));
     $payload = [
+        'status' => 'ok',
         'versionName' => (string)$row['version_name'],
         'versionCode' => (int)$row['version_code'],
         'mandatory' => (bool)$row['mandatory'],
-        'apk' => rtrim((string)UPDATE_PUBLIC_BASE, '/') . '/' . rawurlencode((string)$row['filename']),
+        'apk' => (string)UPDATE_DOWNLOAD_URL . '&versionCode=' . (int)$row['version_code'],
+        'filename' => (string)$row['filename'],
         'releaseDate' => (string)$row['uploaded_at'],
         'releaseNotes' => $notes,
     ];
