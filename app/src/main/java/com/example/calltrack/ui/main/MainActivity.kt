@@ -227,6 +227,7 @@ class MainActivity : BaseActivity() {
                 .onSuccess { AppLogger.log(this@MainActivity, "UPDATE", "Логи обновления отправлены в админ-панель") }
                 .onFailure { AppLogger.log(this@MainActivity, "ERROR", "Не удалось отправить логи обновления в админ-панель: ${it.message}", it) }
         }
+        dialogBuilder.show()
     }
 
     private fun showUpdateDialog(update: UpdateInfo) {
@@ -252,11 +253,11 @@ class MainActivity : BaseActivity() {
             Toast.makeText(this@MainActivity, "Загрузка обновления...", Toast.LENGTH_SHORT).show()
             val result = withContext(Dispatchers.IO) { downloadApkToCache(apkUrl) }
             result
-                .onSuccess { apkFile: File ->
-                    AppLogger.log(this@MainActivity, "UPDATE", "APK успешно загружен в cache: ${apkFile.absolutePath}, size=${apkFile.length()}")
+                .onSuccess { downloadedApkFile: File ->
+                    AppLogger.log(this@MainActivity, "UPDATE", "APK успешно загружен в cache: ${downloadedApkFile.absolutePath}, size=${downloadedApkFile.length()}")
                     Toast.makeText(this@MainActivity, "Подготовка установки...", Toast.LENGTH_SHORT).show()
                     syncUpdateLogsToDashboard()
-                    installApkFile(apkFile)
+                    installApkFile(downloadedApkFile)
                 }
                 .onFailure { error ->
                     AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки обновления: ${error.message}", error)
@@ -264,20 +265,6 @@ class MainActivity : BaseActivity() {
                     Toast.makeText(this@MainActivity, "Ошибка загрузки обновления.", Toast.LENGTH_LONG).show()
                 }
         }
-
-        pendingInstallApk = null
-        val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", apkFile)
-        val installIntent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(apkUri, APK_MIME_TYPE)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        runCatching { startActivity(installIntent) }
-            .onSuccess { AppLogger.log(this, "UPDATE", "Системный установщик APK открыт") }
-            .onFailure {
-                AppLogger.log(this, "ERROR", "Не удалось открыть установщик APK: ${it.message}", it)
-                Toast.makeText(this, "Не удалось открыть установщик APK", Toast.LENGTH_LONG).show()
-            }
     }
 
     private fun downloadApkToCache(apkUrl: String): Result<File> {
@@ -335,15 +322,15 @@ class MainActivity : BaseActivity() {
         }.replace(Regex("\\s+"), " ").take(maxChars)
     }
 
-    private fun installApkFile(apkFile: File) {
-        AppLogger.log(this, "UPDATE", "Подготовка установки APK: path=${apkFile.absolutePath}, exists=${apkFile.exists()}, size=${apkFile.length()}")
-        if (!apkFile.exists() || apkFile.length() <= 0L) {
+    private fun installApkFile(downloadedApkFile: File) {
+        AppLogger.log(this, "UPDATE", "Подготовка установки APK: path=${downloadedApkFile.absolutePath}, exists=${downloadedApkFile.exists()}, size=${downloadedApkFile.length()}")
+        if (!downloadedApkFile.exists() || downloadedApkFile.length() <= 0L) {
             AppLogger.log(this, "ERROR", "APK файл отсутствует или пустой")
             Toast.makeText(this, "Ошибка загрузки обновления.", Toast.LENGTH_SHORT).show()
             return
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
-            pendingInstallApk = apkFile
+            pendingInstallApk = downloadedApkFile
             AppLogger.log(this, "WARN", "Нет разрешения на установку APK из неизвестных источников, открываем настройки")
             Toast.makeText(this, "Разрешите установку приложения. После разрешения установка продолжится автоматически.", Toast.LENGTH_LONG).show()
             val intent = Intent(
@@ -355,7 +342,7 @@ class MainActivity : BaseActivity() {
         }
 
         pendingInstallApk = null
-        val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", apkFile)
+        val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", downloadedApkFile)
         val installIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(apkUri, APK_MIME_TYPE)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
