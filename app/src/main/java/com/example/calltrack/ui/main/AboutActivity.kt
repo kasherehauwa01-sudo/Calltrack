@@ -5,6 +5,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import com.example.calltrack.BuildConfig
 import com.example.calltrack.databinding.ActivityAboutBinding
 import com.example.calltrack.ui.base.BaseActivity
 import java.text.SimpleDateFormat
@@ -29,15 +30,18 @@ class AboutActivity : BaseActivity() {
         }
         val updatedAtMillis = packageInfo.lastUpdateTime
         val formatter = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
+        binding.tvVersionValue.text = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
         binding.tvReleaseDateValue.text = formatter.format(Date(updatedAtMillis))
 
         binding.btnBack.setOnClickListener { finish() }
         binding.btnUpdateApp.setOnClickListener {
             startActivity(
-                Intent(this, MainActivity::class.java).putExtra(
-                    MainActivity.EXTRA_RUN_UPDATE_CHECK,
-                    true
-                )
+                Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    .putExtra(
+                        MainActivity.EXTRA_RUN_UPDATE_CHECK,
+                        true
+                    )
             )
             finish()
         }
