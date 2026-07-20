@@ -17,7 +17,7 @@
             android:id="@+id/statusBarOverlay"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:background="#2ECC71" />
+            android:background="@color/background" />
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"

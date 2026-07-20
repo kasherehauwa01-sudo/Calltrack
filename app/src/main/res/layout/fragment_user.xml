@@ -49,6 +49,30 @@
         android:textColor="@color/textPrimary"
         android:textStyle="bold" />
 
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Тема"
+        android:textColor="@color/textSecondary" />
+
+    <TextView
+        android:id="@+id/tvThemeMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/bg_input"
+        android:padding="16dp"
+        android:textColor="@color/textPrimary"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/btnThemeMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Изменить тему" />
+
     <Button
         android:id="@+id/btnSwitchUser"
         android:layout_width="match_parent"
