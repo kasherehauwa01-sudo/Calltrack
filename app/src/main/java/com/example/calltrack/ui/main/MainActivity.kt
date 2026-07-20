@@ -235,16 +235,18 @@ class MainActivity : BaseActivity() {
             .filter { it.isNotBlank() }
             .joinToString(separator = "\n") { "• $it" }
             .ifBlank { "Список изменений не указан." }
-        val dialogBuilder = AlertDialog.Builder(this)
+        AlertDialog.Builder(this)
             .setTitle("Доступна версия ${update.versionName}")
             .setMessage(notes)
             .setPositiveButton("Обновить") { _: DialogInterface, _: Int ->
                 startApkUpdateDownload(update.apkUrl)
             }
-        if (!update.mandatory) {
-            dialogBuilder.setNegativeButton("Отмена") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
-        }
-        dialogBuilder.show()
+            .apply {
+                if (!update.mandatory) {
+                    setNegativeButton("Отмена") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
+                }
+            }
+            .show()
     }
 
     private fun startApkUpdateDownload(apkUrl: String) {
