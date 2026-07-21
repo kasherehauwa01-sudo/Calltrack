@@ -575,8 +575,8 @@ async function loadUpdates(){
 }
 function renderUpdates(){
   if(!updates.length){adminEls.updatesTable.innerHTML='<div class="registry-empty">APK ещё не загружены</div>';return;}
-  const rows=updates.map((item)=>`<tr><td>${escapeHtml(item.filename)}</td><td>${escapeHtml(item.version_name)}</td><td>${escapeHtml(item.version_code)}</td><td class="updates-comments-col">${escapeHtml(item.release_notes||'')}</td><td>${escapeHtml(formatBytes(item.file_size))}</td><td>${escapeHtml(formatDateTimeDisplay(item.uploaded_at))}</td><td><button class="updates-action-btn" data-update-edit="${escapeHtml(item.id)}" type="button">Редактировать</button> <button class="updates-action-btn danger" data-update-delete="${escapeHtml(item.id)}" type="button">Удалить</button></td></tr>`).join('');
-  adminEls.updatesTable.innerHTML=`<table class="registry-table"><thead><tr><th>Название APK</th><th>Версия</th><th>VersionCode</th><th>Комментарии</th><th>Размер файла</th><th>Дата загрузки</th><th>Действия</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const rows=updates.map((item)=>{const apkLink=item.apk_url?`<a class="updates-apk-link" href="${escapeHtml(item.apk_url)}" download>Скачать APK</a>`:'—';return `<tr><td>${escapeHtml(item.filename)}</td><td>${escapeHtml(item.version_name)}</td><td>${escapeHtml(item.version_code)}</td><td>${apkLink}</td><td class="updates-comments-col">${escapeHtml(item.release_notes||'')}</td><td>${escapeHtml(formatBytes(item.file_size))}</td><td>${escapeHtml(formatDateTimeDisplay(item.uploaded_at))}</td><td><button class="updates-action-btn" data-update-edit="${escapeHtml(item.id)}" type="button">Редактировать</button> <button class="updates-action-btn danger" data-update-delete="${escapeHtml(item.id)}" type="button">Удалить</button></td></tr>`;}).join('');
+  adminEls.updatesTable.innerHTML=`<table class="registry-table"><thead><tr><th>Название APK</th><th>Версия</th><th>VersionCode</th><th>Ссылка на apk</th><th>Комментарии</th><th>Размер файла</th><th>Дата загрузки</th><th>Действия</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 function resetUpdateForm(){
   adminEls.updateForm.reset();

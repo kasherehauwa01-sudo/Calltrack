@@ -29,6 +29,52 @@ function deleteUpdateFile(?string $filename): void
     }
 }
 
+function adminUpdateDownloadUrl(int $id): string
+{
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+    $scheme = $https ? 'https' : 'http';
+    $host = (string)($_SERVER['HTTP_HOST'] ?? 'kvasmix.ru');
+    $script = strtok((string)($_SERVER['REQUEST_URI'] ?? '/vr/calltrack/api/admin_updates.php'), '?') ?: '/vr/calltrack/api/admin_updates.php';
+    return $scheme . '://' . $host . $script . '?action=download&id=' . $id;
+}
+
+function sendUpdateApk(PDO $pdo, int $id): void
+{
+    if ($id <= 0) {
+        sendJson(['status' => 'error', 'message' => 'Передайте id обновления'], 400);
+    }
+
+    $stmt = $pdo->prepare('SELECT filename FROM app_updates WHERE id = :id');
+    $stmt->execute([':id' => $id]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        sendJson(['status' => 'error', 'message' => 'Обновление не найдено'], 404);
+    }
+
+    $filename = basename((string)($row['filename'] ?? ''));
+    if ($filename === '' || strtolower(pathinfo($filename, PATHINFO_EXTENSION)) !== 'apk') {
+        sendJson(['status' => 'error', 'message' => 'APK filename is invalid'], 500);
+    }
+
+    $updatesDir = realpath(updatesDir());
+    $apkPath = realpath(updatesDir() . '/' . $filename);
+    if ($updatesDir === false || $apkPath === false || strpos($apkPath, $updatesDir) !== 0 || !is_file($apkPath)) {
+        sendJson(['status' => 'error', 'message' => 'APK file not found'], 404);
+    }
+
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    header('Content-Type: application/vnd.android.package-archive');
+    header('X-Content-Type-Options: nosniff');
+    header('Content-Length: ' . filesize($apkPath));
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    readfile($apkPath);
+    exit;
+}
+
 function nextUpdateVersion(PDO $pdo): array
 {
     $row = $pdo->query('SELECT version_name, version_code FROM app_updates ORDER BY version_code DESC, uploaded_at DESC, id DESC LIMIT 1')->fetch();
@@ -86,7 +132,11 @@ function generateUpdateJson(PDO $pdo): void
 function listUpdates(PDO $pdo): void
 {
     $stmt = $pdo->query('SELECT id, filename, version_name, version_code, release_notes, mandatory, file_size, uploaded_at FROM app_updates ORDER BY version_code DESC, uploaded_at DESC, id DESC');
-    sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
+    $updates = array_map(static function (array $row): array {
+        $row['apk_url'] = adminUpdateDownloadUrl((int)$row['id']);
+        return $row;
+    }, $stmt->fetchAll());
+    sendJson(['status' => 'success', 'data' => $updates]);
 }
 
 try {
@@ -98,6 +148,9 @@ try {
     }
 
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        if ((string)($_GET['action'] ?? '') === 'download') {
+            sendUpdateApk($pdo, (int)($_GET['id'] ?? 0));
+        }
         listUpdates($pdo);
     }
 
@@ -283,4 +336,3 @@ try {
         'trace' => $e->getTraceAsString()
     ], 500);
 }
-
