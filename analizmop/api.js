@@ -29,7 +29,7 @@ window.calltrackApi.requestJson = async function requestJson(url, options = {}) 
   }
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+    throw new Error(payload?.message || `HTTP ${response.status}`);
   }
 
   if (payload && payload.status === 'error') {
