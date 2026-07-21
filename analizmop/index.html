@@ -664,13 +664,14 @@ async function saveEmailSettings(event){
   }catch(error){adminEls.emailStatus.textContent=`Ошибка сохранения IMAP: ${error.message}`;}
 }
 
-function updateDownloadUrl(id){
-  const separator=ADMIN_UPDATES_API_URL.includes('?')?'&':'?';
-  return `${ADMIN_UPDATES_API_URL}${separator}action=download&id=${encodeURIComponent(id)}`;
+function updateDownloadUrl(versionCode){
+  const base=window.calltrackApi?.endpoints?.update||'/vr/calltrack/api/update.php';
+  const separator=base.includes('?')?'&':'?';
+  return `${base}${separator}download=1&versionCode=${encodeURIComponent(versionCode)}`;
 }
 function renderUpdates(){
   if(!updates.length){adminEls.updatesTable.innerHTML='<div class="registry-empty">APK ещё не загружены</div>';return;}
-  const rows=updates.map((item)=>{const apkUrl=item.apk_url||updateDownloadUrl(item.id);const apkLink=item.id?`<a class="updates-apk-link" href="${escapeHtml(apkUrl)}" download>Скачать APK</a>`:'—';return `<tr><td>${escapeHtml(item.filename)}</td><td>${escapeHtml(item.version_name)}</td><td>${escapeHtml(item.version_code)}</td><td>${apkLink}</td><td class="updates-comments-col">${escapeHtml(item.release_notes||'')}</td><td>${escapeHtml(formatBytes(item.file_size))}</td><td>${escapeHtml(formatDateTimeDisplay(item.uploaded_at))}</td><td><button class="updates-action-btn" data-update-edit="${escapeHtml(item.id)}" type="button">Редактировать</button> <button class="updates-action-btn danger" data-update-delete="${escapeHtml(item.id)}" type="button">Удалить</button></td></tr>`;}).join('');
+  const rows=updates.map((item)=>{const apkUrl=item.apk_url||updateDownloadUrl(item.version_code);const apkLink=item.version_code?`<a class="updates-apk-link" href="${escapeHtml(apkUrl)}" download>Скачать APK</a>`:'—';return `<tr><td>${escapeHtml(item.filename)}</td><td>${escapeHtml(item.version_name)}</td><td>${escapeHtml(item.version_code)}</td><td>${apkLink}</td><td class="updates-comments-col">${escapeHtml(item.release_notes||'')}</td><td>${escapeHtml(formatBytes(item.file_size))}</td><td>${escapeHtml(formatDateTimeDisplay(item.uploaded_at))}</td><td><button class="updates-action-btn" data-update-edit="${escapeHtml(item.id)}" type="button">Редактировать</button> <button class="updates-action-btn danger" data-update-delete="${escapeHtml(item.id)}" type="button">Удалить</button></td></tr>`;}).join('');
   adminEls.updatesTable.innerHTML=`<table class="registry-table"><thead><tr><th>Название APK</th><th>Версия</th><th>VersionCode</th><th>Ссылка на apk</th><th>Комментарии</th><th>Размер файла</th><th>Дата загрузки</th><th>Действия</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 function resetUpdateForm(){

@@ -213,6 +213,52 @@ CREATE TABLE IF NOT EXISTS app_updates (
 SQL);
 }
 
+function updateDownloadUrlForVersion(int $versionCode): string
+{
+    $suffix = $versionCode > 0 ? '&versionCode=' . rawurlencode((string)$versionCode) : '';
+    return (string)UPDATE_DOWNLOAD_URL . $suffix;
+}
+
+function resolveUpdateApk(PDO $pdo, int $versionCode = 0): array
+{
+    ensureAppUpdatesTable($pdo);
+    if ($versionCode > 0) {
+        $stmt = $pdo->prepare('SELECT filename, version_code FROM app_updates WHERE version_code = :version_code ORDER BY uploaded_at DESC, id DESC LIMIT 1');
+        $stmt->execute([':version_code' => $versionCode]);
+    } else {
+        $stmt = $pdo->query('SELECT filename, version_code FROM app_updates ORDER BY version_code DESC, uploaded_at DESC, id DESC LIMIT 1');
+    }
+    $row = $stmt->fetch();
+    if (!$row) {
+        sendJson(['status' => 'error', 'message' => 'APK update not found'], 404);
+    }
+
+    $filename = basename((string)($row['filename'] ?? ''));
+    if ($filename === '' || strtolower(pathinfo($filename, PATHINFO_EXTENSION)) !== 'apk') {
+        sendJson(['status' => 'error', 'message' => 'APK filename is invalid'], 500);
+    }
+    $updatesDir = realpath(dirname(__DIR__) . '/updates');
+    $apkPath = realpath(dirname(__DIR__) . '/updates/' . $filename);
+    if ($updatesDir === false || $apkPath === false || strpos($apkPath, $updatesDir) !== 0 || !is_file($apkPath)) {
+        sendJson(['status' => 'error', 'message' => 'APK file not found'], 404);
+    }
+    return ['path' => $apkPath, 'filename' => $filename, 'version_code' => (int)$row['version_code']];
+}
+
+function streamApkFile(string $apkPath, string $filename): void
+{
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    header('Content-Type: application/vnd.android.package-archive');
+    header('X-Content-Type-Options: nosniff');
+    header('Content-Length: ' . filesize($apkPath));
+    header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    readfile($apkPath);
+    exit;
+}
+
 function ensureEmailTables(PDO $pdo): void
 {
     $pdo->exec(<<<'SQL'

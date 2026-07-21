@@ -29,40 +29,10 @@ function deleteUpdateFile(?string $filename): void
     }
 }
 
-function sendUpdateApk(PDO $pdo, int $id): void
+function sendUpdateApk(PDO $pdo, int $versionCode): void
 {
-    if ($id <= 0) {
-        sendJson(['status' => 'error', 'message' => 'Передайте id обновления'], 400);
-    }
-
-    $stmt = $pdo->prepare('SELECT filename FROM app_updates WHERE id = :id');
-    $stmt->execute([':id' => $id]);
-    $row = $stmt->fetch();
-    if (!$row) {
-        sendJson(['status' => 'error', 'message' => 'Обновление не найдено'], 404);
-    }
-
-    $filename = basename((string)($row['filename'] ?? ''));
-    if ($filename === '' || strtolower(pathinfo($filename, PATHINFO_EXTENSION)) !== 'apk') {
-        sendJson(['status' => 'error', 'message' => 'APK filename is invalid'], 500);
-    }
-
-    $updatesDir = realpath(updatesDir());
-    $apkPath = realpath(updatesDir() . '/' . $filename);
-    if ($updatesDir === false || $apkPath === false || strpos($apkPath, $updatesDir) !== 0 || !is_file($apkPath)) {
-        sendJson(['status' => 'error', 'message' => 'APK file not found'], 404);
-    }
-
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    header('Content-Type: application/vnd.android.package-archive');
-    header('X-Content-Type-Options: nosniff');
-    header('Content-Length: ' . filesize($apkPath));
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
-    header('Cache-Control: no-store, no-cache, must-revalidate');
-    readfile($apkPath);
-    exit;
+    $apk = resolveUpdateApk($pdo, $versionCode);
+    streamApkFile($apk['path'], $apk['filename']);
 }
 
 function nextUpdateVersion(PDO $pdo): array
@@ -108,7 +78,7 @@ function generateUpdateJson(PDO $pdo): void
         'versionName' => (string)$row['version_name'],
         'versionCode' => (int)$row['version_code'],
         'mandatory' => (bool)$row['mandatory'],
-        'apk' => (string)UPDATE_DOWNLOAD_URL . '&versionCode=' . (int)$row['version_code'],
+        'apk' => updateDownloadUrlForVersion((int)$row['version_code']),
         'filename' => (string)$row['filename'],
         'releaseDate' => (string)$row['uploaded_at'],
         'releaseNotes' => $notes,
@@ -123,7 +93,7 @@ function listUpdates(PDO $pdo): void
 {
     $stmt = $pdo->query('SELECT id, filename, version_name, version_code, release_notes, mandatory, file_size, uploaded_at FROM app_updates ORDER BY version_code DESC, uploaded_at DESC, id DESC');
     $updates = array_map(static function (array $row): array {
-        $row['apk_url'] = adminUpdateDownloadUrl((int)$row['id']);
+        $row['apk_url'] = updateDownloadUrlForVersion((int)$row['version_code']);
         return $row;
     }, $stmt->fetchAll());
     sendJson(['status' => 'success', 'data' => $updates]);
@@ -139,7 +109,7 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if ((string)($_GET['action'] ?? '') === 'download') {
-            sendUpdateApk($pdo, (int)($_GET['id'] ?? 0));
+            sendUpdateApk($pdo, (int)($_GET['versionCode'] ?? $_GET['version_code'] ?? 0));
         }
         listUpdates($pdo);
     }
