@@ -57,123 +57,87 @@ function applyRegistryPeriod(array $source): array
     return $source;
 }
 
-function loadCallsColumns(PDO $pdo): array
+function firstRowValue(array $row, array $keys): string
 {
-    $columns = [];
-    foreach ($pdo->query('SHOW COLUMNS FROM calls')->fetchAll() as $row) {
-        $field = (string)($row['Field'] ?? '');
-        if ($field !== '') {
-            $columns[$field] = true;
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $row) && $row[$key] !== null) {
+            return (string)$row[$key];
         }
     }
-    return $columns;
+    return '';
 }
 
-function hasCallsColumn(array $columns, string $column): bool
+function normalizeCallRow(array $row): array
 {
-    return isset($columns[$column]);
+    return [
+        'id_db' => firstRowValue($row, ['id_db', 'id', 'ID']),
+        'call_date' => firstRowValue($row, ['call_date', 'date', 'Дата']),
+        'call_time' => firstRowValue($row, ['call_time', 'time', 'Время']),
+        'phone' => firstRowValue($row, ['phone', 'Номер телефона', 'Телефон']),
+        'call_type' => firstRowValue($row, ['call_type', 'type', 'Тип звонка', 'Тип']),
+        'duration' => firstRowValue($row, ['duration', 'Длительность']),
+        'manager' => firstRowValue($row, ['manager', 'Менеджер']),
+        'client' => firstRowValue($row, ['client', 'Клиент']),
+        'comment' => firstRowValue($row, ['comment', 'Комментарий']),
+        'tag' => firstRowValue($row, ['tag', 'Тег']),
+        'reminder' => firstRowValue($row, ['reminder', 'Напоминание']),
+        'reminder_text' => firstRowValue($row, ['reminder_text', 'Текст напоминания']),
+        'call_id' => firstRowValue($row, ['call_id', 'ID звонка']),
+        'user_phone' => firstRowValue($row, ['user_phone', 'manager_phone', 'Номер телефона пользователя']),
+        'created_at' => firstRowValue($row, ['created_at', 'Создано']),
+    ];
 }
 
-function callColumnExpr(array $columns, string $column, ?string $fallback = null): string
+function rowMatchesFilters(array $row, array $filters): bool
 {
-    if (hasCallsColumn($columns, $column)) {
-        return $column;
+    $manager = trim((string)($filters['manager'] ?? ''));
+    if ($manager !== '' && (string)$row['manager'] !== $manager) {
+        return false;
     }
-    if ($fallback !== null && hasCallsColumn($columns, $fallback)) {
-        return $fallback . ' AS ' . $column;
-    }
-    return 'NULL AS ' . $column;
-}
 
-function buildCallsFilters(array $source, array &$params, array $columns): string
-{
-    $where = [];
-    foreach (['manager', 'phone', 'user_phone'] as $field) {
-        if (!empty($source[$field]) && hasCallsColumn($columns, $field)) {
-            $where[] = "{$field} = :{$field}";
-            $params[":{$field}"] = $source[$field];
-        }
+    $phone = trim((string)($filters['phone'] ?? ''));
+    if ($phone !== '' && (string)$row['phone'] !== $phone) {
+        return false;
     }
-    if (!empty($source['date_from']) && hasCallsColumn($columns, 'call_date')) {
-        $where[] = 'call_date >= :date_from';
-        $params[':date_from'] = normalizeDate((string)$source['date_from']);
-    }
-    if (!empty($source['date_to']) && hasCallsColumn($columns, 'call_date')) {
-        $where[] = 'call_date <= :date_to';
-        $params[':date_to'] = normalizeDate((string)$source['date_to']);
-    }
-    return $where ? (' WHERE ' . implode(' AND ', $where)) : '';
-}
 
-function callsOrderBy(array $columns): string
-{
-    $order = [];
-    if (hasCallsColumn($columns, 'call_date')) {
-        $order[] = 'call_date DESC';
+    $userPhone = trim((string)($filters['user_phone'] ?? ''));
+    if ($userPhone !== '' && (string)$row['user_phone'] !== $userPhone) {
+        return false;
     }
-    if (hasCallsColumn($columns, 'call_time')) {
-        $order[] = 'call_time DESC';
+
+    $date = normalizeDate((string)$row['call_date']);
+    if (!empty($filters['date_from']) && ($date === null || $date < normalizeDate((string)$filters['date_from']))) {
+        return false;
     }
-    if (hasCallsColumn($columns, 'id_db')) {
-        $order[] = 'id_db DESC';
-    } elseif (hasCallsColumn($columns, 'id')) {
-        $order[] = 'id DESC';
+    if (!empty($filters['date_to']) && ($date === null || $date > normalizeDate((string)$filters['date_to']))) {
+        return false;
     }
-    return $order ? implode(', ', $order) : '1';
+    return true;
 }
 
 try {
-    $params = [];
     $filters = applyRegistryPeriod($_GET);
     $rawLimit = $_GET['limit'] ?? null;
     $period = strtolower(trim((string)($_GET['period'] ?? '')));
     $loadAll = $period === 'all' || $rawLimit === null || (int)$rawLimit === 0;
     $limit = $loadAll ? null : min(max((int)$rawLimit, 1), 1000);
     $offset = max((int)($_GET['offset'] ?? 0), 0);
-    $pdo = getPdo();
-    $columns = loadCallsColumns($pdo);
-    $where = buildCallsFilters($filters, $params, $columns);
 
-    $countStmt = $pdo->prepare("SELECT COUNT(*) AS total FROM calls{$where}");
-    foreach ($params as $key => $value) {
-        $countStmt->bindValue($key, $value);
-    }
-    $countStmt->execute();
-    $total = (int)$countStmt->fetchColumn();
+    $stmt = getPdo()->query('SELECT * FROM calls');
+    $rows = array_map('normalizeCallRow', $stmt->fetchAll());
+    $rows = array_values(array_filter($rows, static fn(array $row): bool => rowMatchesFilters($row, $filters)));
+    usort($rows, static function (array $a, array $b): int {
+        $left = sprintf('%s %s %012d', $a['call_date'], $a['call_time'], (int)$a['id_db']);
+        $right = sprintf('%s %s %012d', $b['call_date'], $b['call_time'], (int)$b['id_db']);
+        return $right <=> $left;
+    });
 
-    $selectColumns = [
-        callColumnExpr($columns, 'id_db', 'id'),
-        callColumnExpr($columns, 'call_date'),
-        callColumnExpr($columns, 'call_time'),
-        callColumnExpr($columns, 'phone'),
-        callColumnExpr($columns, 'call_type'),
-        callColumnExpr($columns, 'duration'),
-        callColumnExpr($columns, 'manager'),
-        callColumnExpr($columns, 'client'),
-        callColumnExpr($columns, 'comment'),
-        callColumnExpr($columns, 'tag'),
-        callColumnExpr($columns, 'reminder'),
-        callColumnExpr($columns, 'reminder_text'),
-        callColumnExpr($columns, 'call_id'),
-        callColumnExpr($columns, 'user_phone'),
-        callColumnExpr($columns, 'created_at'),
-    ];
-    $sql = 'SELECT ' . implode(', ', $selectColumns) . " FROM calls{$where} ORDER BY " . callsOrderBy($columns);
+    $total = count($rows);
     if (!$loadAll) {
-        $sql .= "\nLIMIT :limit OFFSET :offset";
+        $rows = array_slice($rows, $offset, $limit);
     }
 
-    $stmt = $pdo->prepare($sql);
-    foreach ($params as $key => $value) {
-        $stmt->bindValue($key, $value);
-    }
-    if (!$loadAll) {
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    }
-    $stmt->execute();
-
-    sendJson(['status' => 'success', 'data' => $stmt->fetchAll(), 'total' => $total]);
+    sendJson(['status' => 'success', 'data' => $rows, 'total' => $total]);
 } catch (Throwable $e) {
     sendJson(['status' => 'error', 'message' => $e->getMessage()], 500);
 }
