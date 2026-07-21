@@ -122,7 +122,11 @@ function generateUpdateJson(PDO $pdo): void
 function listUpdates(PDO $pdo): void
 {
     $stmt = $pdo->query('SELECT id, filename, version_name, version_code, release_notes, mandatory, file_size, uploaded_at FROM app_updates ORDER BY version_code DESC, uploaded_at DESC, id DESC');
-    sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
+    $updates = array_map(static function (array $row): array {
+        $row['apk_url'] = adminUpdateDownloadUrl((int)$row['id']);
+        return $row;
+    }, $stmt->fetchAll());
+    sendJson(['status' => 'success', 'data' => $updates]);
 }
 
 try {
