@@ -8,6 +8,7 @@ window.calltrackApi.endpoints = Object.assign({
   deleteCalls: '/vr/calltrack/api/delete_calls.php',
   deletePersonalContacts: '/vr/calltrack/api/delete_personal_contacts.php',
   updates: '/vr/calltrack/api/admin_updates.php',
+  email: '/vr/calltrack/api/admin_email.php',
   update: '/vr/calltrack/api/update.php',
   users: '/vr/calltrack/api/get_users.php',
   userCommand: '/vr/calltrack/api/user_command.php'
@@ -29,7 +30,7 @@ window.calltrackApi.requestJson = async function requestJson(url, options = {}) 
   }
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+    throw new Error(payload?.message || `HTTP ${response.status}`);
   }
 
   if (payload && payload.status === 'error') {
@@ -97,6 +98,33 @@ window.calltrackApi.deleteUpdate = window.calltrackApi.deleteUpdate || (async fu
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: JSON.stringify({ action: 'delete', id })
+  });
+});
+
+window.calltrackApi.getEmailMessages = window.calltrackApi.getEmailMessages || (async function getEmailMessages(params = {}) {
+  const query = new URLSearchParams(params);
+  const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
+  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${query.toString() ? separator + query.toString() : ''}`);
+  return Array.isArray(payload.data) ? payload.data : [];
+});
+
+window.calltrackApi.getEmailSettings = window.calltrackApi.getEmailSettings || (async function getEmailSettings() {
+  const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
+  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=settings`);
+  return Array.isArray(payload.data) ? payload.data : [];
+});
+
+window.calltrackApi.getEmailMessage = window.calltrackApi.getEmailMessage || (async function getEmailMessage(id) {
+  const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
+  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=detail&id=${encodeURIComponent(id)}`);
+  return payload.data || null;
+});
+
+window.calltrackApi.saveEmailSettings = window.calltrackApi.saveEmailSettings || (async function saveEmailSettings(data) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.email, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify(data)
   });
 });
 
