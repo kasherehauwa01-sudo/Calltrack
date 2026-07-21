@@ -29,16 +29,6 @@ function deleteUpdateFile(?string $filename): void
     }
 }
 
-function adminUpdateDownloadUrl(int $id): string
-{
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
-    $scheme = $https ? 'https' : 'http';
-    $host = (string)($_SERVER['HTTP_HOST'] ?? 'kvasmix.ru');
-    $script = strtok((string)($_SERVER['REQUEST_URI'] ?? '/vr/calltrack/api/admin_updates.php'), '?') ?: '/vr/calltrack/api/admin_updates.php';
-    return $scheme . '://' . $host . $script . '?action=download&id=' . $id;
-}
-
 function sendUpdateApk(PDO $pdo, int $id): void
 {
     if ($id <= 0) {
