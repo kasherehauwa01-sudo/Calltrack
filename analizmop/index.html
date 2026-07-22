@@ -662,6 +662,7 @@ async function openEmailCard(id){
 function setEmailModalVisible(visible){
   if(!adminEls.emailSettingsModal) return;
   adminEls.emailSettingsModal.hidden=!visible;
+  adminEls.emailSettingsModal.classList.toggle('open', visible);
   adminEls.emailSettingsModal.setAttribute('aria-hidden', visible?'false':'true');
 }
 function openEmailSettingsModal(item={}){
