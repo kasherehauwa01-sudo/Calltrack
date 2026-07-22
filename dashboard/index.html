@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CallTrack — реестр звонков</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{--bg:#f5f7fb;--card:#fff;--text:#1f2937;--muted:#6b7280;--accent:#2563eb;--danger:#dc2626;--shadow:0 6px 20px rgba(15,23,42,.08)}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:1280px;margin:0 auto;padding:16px} h1{margin:0 0 12px}
+    .card{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:14px;margin-bottom:14px}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.field{display:flex;flex-direction:column;gap:4px}.field label{font-size:12px;color:var(--muted)}
+    input,select{padding:9px 10px;border:1px solid #d1d5db;border-radius:10px;background:#fff} button{padding:9px 12px;border:0;border-radius:10px;background:#111827;color:#fff;cursor:pointer}
+    button.secondary{background:var(--accent)} button.danger{background:var(--danger)} button:disabled{opacity:.55;cursor:not-allowed}
+    .grid{display:grid;gap:12px}.kpi{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.kpi .val{font-size:26px;font-weight:700}.label{color:var(--muted);font-size:13px}
+    .tableWrap{overflow:auto} table{width:100%;border-collapse:collapse;font-size:14px} th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;white-space:nowrap} th{background:#f9fafb;position:sticky;top:0} tr:hover{background:#f8fafc}
+    .chartBox{height:280px}.status{color:var(--muted);font-size:13px;margin-top:8px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}.tabBtn{background:#e5e7eb;color:#111827}.tabBtn.active{background:var(--accent);color:#fff}.tabPanel[hidden]{display:none}.badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:600}.badge.yes{background:#dcfce7;color:#166534}.badge.no{background:#fee2e2;color:#991b1b}.empty{text-align:center;color:var(--muted);padding:24px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>📞 CallTrack — реестр звонков</h1>
+
+    <nav class="tabs" aria-label="Разделы админ-панели">
+      <button class="tabBtn active" data-tab="registry" type="button">Реестр</button>
+      <button class="tabBtn" data-tab="personalContacts" type="button">Признаки контакта</button>
+    </nav>
+
+    <div id="registryPanel" class="tabPanel">
+    <section class="card toolbar">
+      <div class="field">
+        <label for="period">Период</label>
+        <select id="period">
+          <option value="today" selected>Сегодня</option>
+          <option value="yesterday">Вчера</option>
+          <option value="week">Неделя</option>
+          <option value="month">Месяц</option>
+          <option value="year">Год</option>
+        </select>
+      </div>
+      <div class="field"><label for="manager">Менеджер</label><input id="manager" placeholder="Все" /></div>
+      <div class="field"><label for="phone">Номер клиента</label><input id="phone" placeholder="7900..." /></div>
+      <div class="field"><label for="userPhone">Номер пользователя</label><input id="userPhone" placeholder="7999..." /></div>
+      <button id="loadBtn" class="secondary">Загрузить</button>
+      <button id="deleteSelectedBtn" class="danger" disabled>Удалить выбранные</button>
+      <div id="status" class="status"></div>
+    </section>
+
+    <section class="grid kpi" id="kpi"></section>
+
+    <section class="card">
+      <h3>Звонки по дням</h3>
+      <div class="chartBox"><canvas id="callsByDay"></canvas></div>
+    </section>
+
+    <section class="card tableWrap">
+      <table>
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="selectAll" /></th>
+            <th>ID</th><th>Дата</th><th>Время</th><th>Номер телефона</th><th>Тип звонка</th><th>Длительность</th><th>Менеджер</th><th>Клиент</th><th>Комментарий</th><th>Тег</th><th>Напоминание</th><th>Текст напоминания</th><th>ID звонка</th><th>Номер пользователя</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="callsBody"></tbody>
+      </table>
+    </section>
+    </div>
+
+    <div id="personalContactsPanel" class="tabPanel" hidden>
+      <section class="card toolbar">
+        <button id="loadPersonalContactsBtn" class="secondary" type="button">Обновить</button>
+        <div id="personalContactsStatus" class="status"></div>
+      </section>
+
+      <section class="card tableWrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th><th>Номер пользователя</th><th>Менеджер</th><th>Номер контакта</th><th>Признак личного</th><th>Создано</th><th>Обновлено</th>
+            </tr>
+          </thead>
+          <tbody id="personalContactsBody"></tbody>
+        </table>
+      </section>
+    </div>
+  </div>
+
+  <script src="api.js"></script>
+</body>
+</html>
