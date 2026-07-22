@@ -344,7 +344,7 @@
                 <h2 id="emailSettingsModalTitle">Почтовый ящик</h2>
                 <form class="updates-form" id="emailSettingsForm">
                   <input id="emailMailboxId" type="hidden" />
-                  <label>ФИО менеджера<input id="emailManagerName" type="text" placeholder="Пашута Марина Сергеевна" /></label>
+                  <label>ФИО менеджера<select id="emailManagerName"><option value="">Выберите менеджера</option></select></label>
                   <label>Email<input id="emailAddress" type="email" placeholder="manager@example.com" /></label>
                   <label>IMAP Host<input id="emailImapHost" type="text" placeholder="imap.example.com" /></label>
                   <label>IMAP Port<input id="emailImapPort" type="number" value="993" /></label>
@@ -665,9 +665,21 @@ function setEmailModalVisible(visible){
   adminEls.emailSettingsModal.classList.toggle('open', visible);
   adminEls.emailSettingsModal.setAttribute('aria-hidden', visible?'false':'true');
 }
-function openEmailSettingsModal(item={}){
+async function ensureUsersForEmailSettings(){
+  if(usersLoaded&&users.length) return;
+  users=window.calltrackApi?.getUsers?await window.calltrackApi.getUsers():users;
+  usersLoaded=usersLoaded||users.length>0;
+}
+function renderEmailManagerOptions(selectedManager=''){
+  const select=document.getElementById('emailManagerName');
+  const managers=[...new Set(users.map((user)=>String(user.manager||'').trim()).filter(Boolean))].sort();
+  select.innerHTML='<option value="">Выберите менеджера</option>'+managers.map((manager)=>`<option value="${escapeHtml(manager)}">${escapeHtml(manager)}</option>`).join('');
+  select.value=managers.includes(selectedManager)?selectedManager:'';
+}
+async function openEmailSettingsModal(item={}){
+  try{await ensureUsersForEmailSettings();}catch(error){adminEls.emailStatus.textContent=`Ошибка загрузки менеджеров: ${error.message}`;}
   document.getElementById('emailMailboxId').value=item.id||'';
-  document.getElementById('emailManagerName').value=item.manager_name||'';
+  renderEmailManagerOptions(item.manager_name||'');
   document.getElementById('emailAddress').value=item.email||'';
   document.getElementById('emailImapHost').value=item.imap_host||'';
   document.getElementById('emailImapPort').value=item.imap_port||993;
