@@ -5,12 +5,15 @@
 
 declare(strict_types=1);
 
-if (file_exists(__DIR__ . '/config.local.php')) {
+$externalConfig = '/etc/calltrack/config.local.php';
+
+if (file_exists($externalConfig)) {
+    require_once $externalConfig;
+} elseif (file_exists(__DIR__ . '/config.local.php')) {
     require_once __DIR__ . '/config.local.php';
 } elseif (file_exists(dirname(__DIR__) . '/config.local.php')) {
     require_once dirname(__DIR__) . '/config.local.php';
 }
-
 if (!defined('DB_HOST')) {
     define('DB_HOST', 'localhost');       // пример Timeweb: localhost или mysqlXX.timeweb.ru
 }
