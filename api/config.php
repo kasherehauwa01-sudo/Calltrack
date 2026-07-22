@@ -299,6 +299,8 @@ CREATE TABLE IF NOT EXISTS email_messages (
     client_name VARCHAR(255),
     client_email VARCHAR(255),
     client_status ENUM('found','not_found','needs_review') NOT NULL DEFAULT 'not_found',
+    incoming_status ENUM('read','unread','answered') NOT NULL DEFAULT 'unread',
+    outgoing_status ENUM('delivered','not_delivered','opened') NULL,
     subject TEXT,
     body_text MEDIUMTEXT,
     body_html MEDIUMTEXT,
@@ -319,6 +321,16 @@ CREATE TABLE IF NOT EXISTS email_messages (
     INDEX idx_email_messages_direction (direction)
 )
 SQL);
+    foreach ([
+        "ALTER TABLE email_messages ADD COLUMN incoming_status ENUM('read','unread','answered') NOT NULL DEFAULT 'unread'",
+        "ALTER TABLE email_messages ADD COLUMN outgoing_status ENUM('delivered','not_delivered','opened') NULL",
+    ] as $sql) {
+        try {
+            $pdo->exec($sql);
+        } catch (Throwable $e) {
+            // Колонка уже существует.
+        }
+    }
     $pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS email_attachments (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

@@ -14,7 +14,7 @@ function sendEmailRegistryPayload(PDO $pdo): void
     ensureEmailTables($pdo);
     $where = [];
     $params = [];
-    foreach (['manager' => 'manager_name', 'direction' => 'direction', 'client_status' => 'client_status'] as $param => $column) {
+    foreach (['manager' => 'email_messages.manager_name', 'direction' => 'email_messages.direction', 'client_status' => 'email_messages.client_status'] as $param => $column) {
         $value = trim((string)($_GET[$param] ?? ''));
         if ($value !== '') {
             $where[] = "$column = :$param";
@@ -22,24 +22,24 @@ function sendEmailRegistryPayload(PDO $pdo): void
         }
     }
     if (!empty($_GET['has_attachments'])) {
-        $where[] = 'has_attachments = :has_attachments';
+        $where[] = 'email_messages.has_attachments = :has_attachments';
         $params[':has_attachments'] = (int)$_GET['has_attachments'] === 1 ? 1 : 0;
     }
     if (!empty($_GET['date_from'])) {
-        $where[] = 'sent_at >= :date_from';
+        $where[] = 'email_messages.sent_at >= :date_from';
         $params[':date_from'] = normalizeDate((string)$_GET['date_from']) . ' 00:00:00';
     }
     if (!empty($_GET['date_to'])) {
-        $where[] = 'sent_at <= :date_to';
+        $where[] = 'email_messages.sent_at <= :date_to';
         $params[':date_to'] = normalizeDate((string)$_GET['date_to']) . ' 23:59:59';
     }
     $search = trim((string)($_GET['search'] ?? ''));
     if ($search !== '') {
-        $where[] = '(subject LIKE :search OR client_email LIKE :search OR client_name LIKE :search OR body_text LIKE :search)';
+        $where[] = '(email_messages.subject LIKE :search OR email_messages.client_email LIKE :search OR email_messages.client_name LIKE :search OR email_messages.body_text LIKE :search)';
         $params[':search'] = '%' . $search . '%';
     }
     $sqlWhere = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
-    $stmt = $pdo->prepare('SELECT id, sent_at, manager_name, direction, client_name, client_email, subject, client_status, message_size, has_attachments, attachment_count, imap_uid FROM email_messages' . $sqlWhere . ' ORDER BY sent_at DESC, id DESC LIMIT 1000');
+    $stmt = $pdo->prepare('SELECT email_messages.id, email_messages.sent_at, email_messages.manager_name, email_mailboxes.email AS manager_email, email_messages.direction, email_messages.client_name, email_messages.client_email, email_messages.subject, email_messages.client_status, email_messages.incoming_status, email_messages.outgoing_status, email_messages.message_size, email_messages.has_attachments, email_messages.attachment_count, email_messages.imap_uid FROM email_messages LEFT JOIN email_mailboxes ON email_mailboxes.id = email_messages.mailbox_id' . $sqlWhere . ' ORDER BY email_messages.sent_at DESC, email_messages.id DESC LIMIT 1000');
     $stmt->execute($params);
     sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
 }
