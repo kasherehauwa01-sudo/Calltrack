@@ -337,20 +337,30 @@
             </div>
             <div class="registry-wrap" id="emailTable"><div class="registry-empty">Данные загружаются...</div></div>
             <h3>Настройки IMAP</h3>
-            <form class="updates-form" id="emailSettingsForm">
-              <label>ФИО менеджера<input id="emailManagerName" type="text" placeholder="Пашута Марина Сергеевна" /></label>
-              <label>Email<input id="emailAddress" type="email" placeholder="manager@example.com" /></label>
-              <label>IMAP Host<input id="emailImapHost" type="text" placeholder="imap.example.com" /></label>
-              <label>IMAP Port<input id="emailImapPort" type="number" value="993" /></label>
-              <label>Логин<input id="emailUsername" type="text" /></label>
-              <label>Пароль<input id="emailPassword" type="password" autocomplete="new-password" placeholder="Не отображается после сохранения" /></label>
-              <label>Папка INBOX<input id="emailInboxFolder" type="text" value="INBOX" /></label>
-              <label>Папка Sent<input id="emailSentFolder" type="text" value="Sent" /></label>
-              <label><input id="emailImapSsl" type="checkbox" checked /> SSL/TLS</label>
-              <label><input id="emailImportEnabled" type="checkbox" checked /> Импорт включен</label>
-              <button class="registry-refresh-btn" type="submit">Сохранить ящик</button>
-            </form>
+            <button class="registry-refresh-btn" id="emailAddMailboxBtn" type="button">Добавить почтовый ящик</button>
             <div class="registry-wrap" id="emailSettingsTable"><div class="registry-empty">Настройки загружаются...</div></div>
+            <div class="comment-modal" id="emailSettingsModal" aria-hidden="true" hidden>
+              <div class="comment-dialog" role="dialog" aria-modal="true" aria-labelledby="emailSettingsModalTitle">
+                <h2 id="emailSettingsModalTitle">Почтовый ящик</h2>
+                <form class="updates-form" id="emailSettingsForm">
+                  <input id="emailMailboxId" type="hidden" />
+                  <label>ФИО менеджера<input id="emailManagerName" type="text" placeholder="Пашута Марина Сергеевна" /></label>
+                  <label>Email<input id="emailAddress" type="email" placeholder="manager@example.com" /></label>
+                  <label>IMAP Host<input id="emailImapHost" type="text" placeholder="imap.example.com" /></label>
+                  <label>IMAP Port<input id="emailImapPort" type="number" value="993" /></label>
+                  <label>Логин<input id="emailUsername" type="text" /></label>
+                  <label>Пароль<input id="emailPassword" type="password" autocomplete="new-password" placeholder="Оставьте пустым, чтобы не менять" /></label>
+                  <label>Папка INBOX<input id="emailInboxFolder" type="text" value="INBOX" /></label>
+                  <label>Папка Sent<input id="emailSentFolder" type="text" value="Sent" /></label>
+                  <label><input id="emailImapSsl" type="checkbox" checked /> SSL/TLS</label>
+                  <label><input id="emailImportEnabled" type="checkbox" checked /> Импорт включен</label>
+                  <div class="updates-actions">
+                    <button class="registry-refresh-btn" type="submit">Сохранить</button>
+                    <button class="updates-action-btn" id="emailSettingsCancelBtn" type="button">Отмена</button>
+                  </div>
+                </form>
+              </div>
+            </div>
           </section>
           <section class="admin-panel" id="adminUpdatesPanel" hidden>
             <p>Загрузка новых APK на сервер и публикация обновлений для Android-приложения.</p>
@@ -426,9 +436,9 @@ const USERS_API_URL=window.calltrackApi?.endpoints?.users||'/vr/calltrack/api/ge
 const USER_COMMAND_API_URL=window.calltrackApi?.endpoints?.userCommand||'/vr/calltrack/api/user_command.php';
 console.log('calltrackApi', window.calltrackApi);
 console.log('SQL_CALLS_API_URL', SQL_CALLS_API_URL);
-const chartInstances=[]; let allCalls=[]; let activePeriod='all'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let activeGroupBy='day'; let adminRegistrySort={key:'call_date',direction:'desc'}; let adminRegistryPeriod='week'; let registryTotalRows=null; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; let users=[]; let usersLoaded=false; let updates=[]; let updatesLoaded=false; let emailMessages=[]; let emailLoaded=false; let activeUserId=''; const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные']); const selectedRegistryRows=new Set();
+const chartInstances=[]; let allCalls=[]; let activePeriod='all'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let activeGroupBy='day'; let adminRegistrySort={key:'call_date',direction:'desc'}; let adminRegistryPeriod='week'; let registryTotalRows=null; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; let users=[]; let usersLoaded=false; let updates=[]; let updatesLoaded=false; let emailMessages=[]; let emailSettings=[]; let emailLoaded=false; let activeUserId=''; const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные']); const selectedRegistryRows=new Set();
 const els={dashboardView:document.getElementById('dashboardView'),clientCallsView:document.getElementById('clientCallsView'),adminView:document.getElementById('adminView'),managerTags:document.getElementById('managerTags'),groupByFilter:document.getElementById('groupByFilter'),periodShell:document.getElementById('periodShell'),dateFrom:document.getElementById('dateFrom'),dateTo:document.getElementById('dateTo'),applyCustomRangeBtn:document.getElementById('applyCustomRangeBtn'),trendTitle:document.getElementById('trendTitle'),kpiTotal:document.getElementById('kpiTotal'),kpiIncoming:document.getElementById('kpiIncoming'),kpiOutgoing:document.getElementById('kpiOutgoing'),kpiMissed:document.getElementById('kpiMissed'),kpiUnanswered:document.getElementById('kpiUnanswered'),kpiDropped:document.getElementById('kpiDropped'),emptyState:document.getElementById('emptyState'),chartsGrid:document.getElementById('chartsGrid'),callTypeTags:document.getElementById('callTypeTags'),clientManagerTags:document.getElementById('clientManagerTags'),clientPeriodShell:document.getElementById('clientPeriodShell'),clientDateFrom:document.getElementById('clientDateFrom'),clientDateTo:document.getElementById('clientDateTo'),clientApplyRangeBtn:document.getElementById('clientApplyRangeBtn'),clientCallsList:document.getElementById('clientCallsList'),commentModal:document.getElementById('commentModal'),commentInfo:document.getElementById('commentInfo'),commentText:document.getElementById('commentText'),reminderText:document.getElementById('reminderText'),reminderAt:document.getElementById('reminderAt'),commentSaveStatus:document.getElementById('commentSaveStatus'),commentCancelBtn:document.getElementById('commentCancelBtn'),commentSaveBtn:document.getElementById('commentSaveBtn'),clientHistoryModal:document.getElementById('clientHistoryModal'),clientHistoryInfo:document.getElementById('clientHistoryInfo'),clientHistoryList:document.getElementById('clientHistoryList'),clientHistoryCloseBtn:document.getElementById('clientHistoryCloseBtn')};
-const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),updateCommand:document.getElementById('adminUpdateCommand'),updateCommandCopyBtn:document.getElementById('adminUpdateCommandCopyBtn'),updateCommandStatus:document.getElementById('adminUpdateCommandStatus'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsRefreshBtn:document.getElementById('personalContactsRefreshBtn'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),usersPanel:document.getElementById('adminUsersPanel'),usersSearch:document.getElementById('usersSearch'),usersRefreshBtn:document.getElementById('usersRefreshBtn'),usersStatus:document.getElementById('usersStatus'),usersList:document.getElementById('usersList'),userCard:document.getElementById('userCard'),emailPanel:document.getElementById('adminEmailPanel'),emailTable:document.getElementById('emailTable'),emailSettingsTable:document.getElementById('emailSettingsTable'),emailStatus:document.getElementById('emailStatus'),emailSearch:document.getElementById('emailSearch'),emailDirectionFilter:document.getElementById('emailDirectionFilter'),emailRefreshBtn:document.getElementById('emailRefreshBtn'),emailSettingsForm:document.getElementById('emailSettingsForm'),updatesPanel:document.getElementById('adminUpdatesPanel'),updatesTable:document.getElementById('updatesTable'),updateForm:document.getElementById('updateForm'),updateId:document.getElementById('updateId'),updateReleaseNotes:document.getElementById('updateReleaseNotes'),updateApk:document.getElementById('updateApk'),updateFormResetBtn:document.getElementById('updateFormResetBtn'),updatesStatus:document.getElementById('updatesStatus'),registryRefreshBtn:document.getElementById('registryRefreshBtn'),registryTable:document.getElementById('adminRegistryTable'),registryRowsCount:document.getElementById('registryRowsCount'),registryPeriodShell:document.getElementById('registryPeriodShell'),registryCustomPeriodFields:document.getElementById('registryCustomPeriodFields'),registryDateFrom:document.getElementById('registryDateFrom'),registryDateTo:document.getElementById('registryDateTo'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
+const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),updateCommand:document.getElementById('adminUpdateCommand'),updateCommandCopyBtn:document.getElementById('adminUpdateCommandCopyBtn'),updateCommandStatus:document.getElementById('adminUpdateCommandStatus'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsRefreshBtn:document.getElementById('personalContactsRefreshBtn'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),usersPanel:document.getElementById('adminUsersPanel'),usersSearch:document.getElementById('usersSearch'),usersRefreshBtn:document.getElementById('usersRefreshBtn'),usersStatus:document.getElementById('usersStatus'),usersList:document.getElementById('usersList'),userCard:document.getElementById('userCard'),emailPanel:document.getElementById('adminEmailPanel'),emailTable:document.getElementById('emailTable'),emailSettingsTable:document.getElementById('emailSettingsTable'),emailStatus:document.getElementById('emailStatus'),emailSearch:document.getElementById('emailSearch'),emailDirectionFilter:document.getElementById('emailDirectionFilter'),emailRefreshBtn:document.getElementById('emailRefreshBtn'),emailSettingsForm:document.getElementById('emailSettingsForm'),emailAddMailboxBtn:document.getElementById('emailAddMailboxBtn'),emailSettingsModal:document.getElementById('emailSettingsModal'),emailSettingsCancelBtn:document.getElementById('emailSettingsCancelBtn'),updatesPanel:document.getElementById('adminUpdatesPanel'),updatesTable:document.getElementById('updatesTable'),updateForm:document.getElementById('updateForm'),updateId:document.getElementById('updateId'),updateReleaseNotes:document.getElementById('updateReleaseNotes'),updateApk:document.getElementById('updateApk'),updateFormResetBtn:document.getElementById('updateFormResetBtn'),updatesStatus:document.getElementById('updatesStatus'),registryRefreshBtn:document.getElementById('registryRefreshBtn'),registryTable:document.getElementById('adminRegistryTable'),registryRowsCount:document.getElementById('registryRowsCount'),registryPeriodShell:document.getElementById('registryPeriodShell'),registryCustomPeriodFields:document.getElementById('registryCustomPeriodFields'),registryDateFrom:document.getElementById('registryDateFrom'),registryDateTo:document.getElementById('registryDateTo'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
 const createLocalDate=(year, monthIndex, day, hours=0, minutes=0, seconds=0)=>new Date(year, monthIndex, day, hours, minutes, seconds, 0);
 const startOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
 const endOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
@@ -576,10 +586,13 @@ function bindAdminPanel(){
   if(adminEls.updateFormResetBtn) adminEls.updateFormResetBtn.addEventListener('click',resetUpdateForm);
   if(adminEls.updatesTable) adminEls.updatesTable.addEventListener('click',(e)=>{const edit=e.target.closest('[data-update-edit]');const del=e.target.closest('[data-update-delete]');if(edit) editAppUpdate(edit.dataset.updateEdit);if(del) deleteAppUpdate(del.dataset.updateDelete);});
   if(adminEls.emailRefreshBtn) adminEls.emailRefreshBtn.addEventListener('click',loadEmailModule);
+  if(adminEls.emailAddMailboxBtn) adminEls.emailAddMailboxBtn.addEventListener('click',()=>openEmailSettingsModal());
+  if(adminEls.emailSettingsCancelBtn) adminEls.emailSettingsCancelBtn.addEventListener('click',()=>setEmailModalVisible(false));
   if(adminEls.emailTable) adminEls.emailTable.addEventListener('click',(e)=>{const row=e.target.closest('[data-email-id]'); if(row) openEmailCard(row.dataset.emailId);});
   if(adminEls.emailSearch) adminEls.emailSearch.addEventListener('input',()=>{emailLoaded=false;loadEmailModule();});
   if(adminEls.emailDirectionFilter) adminEls.emailDirectionFilter.addEventListener('change',loadEmailModule);
   if(adminEls.emailSettingsForm) adminEls.emailSettingsForm.addEventListener('submit',saveEmailSettings);
+  if(adminEls.emailSettingsTable) adminEls.emailSettingsTable.addEventListener('click',(e)=>{const edit=e.target.closest('[data-email-edit]');const del=e.target.closest('[data-email-delete]');if(edit){const item=emailSettings.find((row)=>String(row.id)===String(edit.dataset.emailEdit));if(item) openEmailSettingsModal(item);} if(del) deleteEmailSettings(del.dataset.emailDelete);});
 }
 
 
@@ -646,22 +659,47 @@ async function openEmailCard(id){
   }catch(error){adminEls.emailStatus.textContent=`Ошибка открытия письма: ${error.message}`;}
 }
 
+function setEmailModalVisible(visible){
+  if(!adminEls.emailSettingsModal) return;
+  adminEls.emailSettingsModal.hidden=!visible;
+  adminEls.emailSettingsModal.setAttribute('aria-hidden', visible?'false':'true');
+}
+function openEmailSettingsModal(item={}){
+  document.getElementById('emailMailboxId').value=item.id||'';
+  document.getElementById('emailManagerName').value=item.manager_name||'';
+  document.getElementById('emailAddress').value=item.email||'';
+  document.getElementById('emailImapHost').value=item.imap_host||'';
+  document.getElementById('emailImapPort').value=item.imap_port||993;
+  document.getElementById('emailUsername').value=item.username||'';
+  document.getElementById('emailPassword').value='';
+  document.getElementById('emailInboxFolder').value=item.inbox_folder||'INBOX';
+  document.getElementById('emailSentFolder').value=item.sent_folder||'Sent';
+  document.getElementById('emailImapSsl').checked=Number(item.imap_ssl??1)===1;
+  document.getElementById('emailImportEnabled').checked=Number(item.enabled??1)===1;
+  setEmailModalVisible(true);
+}
 async function loadEmailSettings(){
   if(!adminEls.emailSettingsTable) return;
-  const settings=window.calltrackApi?.getEmailSettings?await window.calltrackApi.getEmailSettings():[];
-  if(!settings.length){adminEls.emailSettingsTable.innerHTML='<div class="registry-empty">IMAP-ящики ещё не настроены</div>';return;}
-  const rows=settings.map((item)=>`<tr><td>${escapeHtml(item.manager_name)}</td><td>${escapeHtml(item.email)}</td><td>${escapeHtml(item.imap_host)}:${escapeHtml(item.imap_port)}</td><td>${Number(item.imap_ssl)?'Да':'Нет'}</td><td>${Number(item.enabled)?'Включен':'Отключен'}</td><td>${escapeHtml(formatDateTimeDisplay(item.last_sync_at))}</td></tr>`).join('');
-  adminEls.emailSettingsTable.innerHTML=`<table class="registry-table"><thead><tr><th>ФИО</th><th>Email</th><th>IMAP</th><th>SSL/TLS</th><th>Импорт</th><th>Последняя синхронизация</th></tr></thead><tbody>${rows}</tbody></table>`;
+  emailSettings=window.calltrackApi?.getEmailSettings?await window.calltrackApi.getEmailSettings():[];
+  if(!emailSettings.length){adminEls.emailSettingsTable.innerHTML='<div class="registry-empty">IMAP-ящики ещё не настроены</div>';return;}
+  const rows=emailSettings.map((item)=>`<tr><td>${escapeHtml(item.manager_name)}</td><td>${Number(item.enabled)?'Включен':'Отключен'}</td><td>${escapeHtml(formatDateTimeDisplay(item.last_sync_at)||'—')}</td><td><button class="updates-action-btn" data-email-edit="${escapeHtml(item.id)}" type="button" title="Редактировать">✏️</button> <button class="updates-action-btn danger" data-email-delete="${escapeHtml(item.id)}" type="button" title="Удалить">🗑️</button></td></tr>`).join('');
+  adminEls.emailSettingsTable.innerHTML=`<table class="registry-table"><thead><tr><th>Пользователь</th><th>Статус IMAP</th><th>Последняя проверка (Дата / время)</th><th>Действия</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 async function saveEmailSettings(event){
   event.preventDefault();
-  const payload={manager_name:document.getElementById('emailManagerName').value,email:document.getElementById('emailAddress').value,imap_host:document.getElementById('emailImapHost').value,imap_port:document.getElementById('emailImapPort').value,username:document.getElementById('emailUsername').value,password:document.getElementById('emailPassword').value,inbox_folder:document.getElementById('emailInboxFolder').value,sent_folder:document.getElementById('emailSentFolder').value,imap_ssl:document.getElementById('emailImapSsl').checked,enabled:document.getElementById('emailImportEnabled').checked};
+  const payload={id:document.getElementById('emailMailboxId').value,manager_name:document.getElementById('emailManagerName').value,email:document.getElementById('emailAddress').value,imap_host:document.getElementById('emailImapHost').value,imap_port:document.getElementById('emailImapPort').value,username:document.getElementById('emailUsername').value,password:document.getElementById('emailPassword').value,inbox_folder:document.getElementById('emailInboxFolder').value,sent_folder:document.getElementById('emailSentFolder').value,imap_ssl:document.getElementById('emailImapSsl').checked,enabled:document.getElementById('emailImportEnabled').checked};
   try{
     await window.calltrackApi.saveEmailSettings(payload);
     adminEls.emailSettingsForm.reset();
+    setEmailModalVisible(false);
     adminEls.emailStatus.textContent='IMAP-ящик сохранён';
     await loadEmailSettings();
   }catch(error){adminEls.emailStatus.textContent=`Ошибка сохранения IMAP: ${error.message}`;}
+}
+async function deleteEmailSettings(id){
+  if(!confirm('Удалить почтовый ящик?')) return;
+  try{await window.calltrackApi.deleteEmailSettings(id); await loadEmailSettings(); adminEls.emailStatus.textContent='Почтовый ящик удалён';}
+  catch(error){adminEls.emailStatus.textContent=`Ошибка удаления IMAP: ${error.message}`;}
 }
 
 function updateDownloadUrl(versionCode){

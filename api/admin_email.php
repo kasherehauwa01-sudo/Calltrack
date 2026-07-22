@@ -67,6 +67,15 @@ function saveEmailMailbox(PDO $pdo): void
 {
     ensureEmailTables($pdo);
     $data = readJsonBody();
+    if ((string)($data['action'] ?? '') === 'delete') {
+        $id = (int)($data['id'] ?? 0);
+        if ($id <= 0) {
+            sendJson(['status' => 'error', 'message' => 'Передайте id почтового ящика'], 400);
+        }
+        $stmt = $pdo->prepare('DELETE FROM email_mailboxes WHERE id = :id');
+        $stmt->execute([':id' => $id]);
+        sendJson(['status' => 'success', 'deleted' => $stmt->rowCount()]);
+    }
     $id = (int)($data['id'] ?? 0);
     $manager = trim((string)($data['manager_name'] ?? ''));
     $email = trim((string)($data['email'] ?? ''));

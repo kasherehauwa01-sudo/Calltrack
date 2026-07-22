@@ -128,6 +128,14 @@ window.calltrackApi.saveEmailSettings = window.calltrackApi.saveEmailSettings ||
   });
 });
 
+window.calltrackApi.deleteEmailSettings = window.calltrackApi.deleteEmailSettings || (async function deleteEmailSettings(id) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.email, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ action: 'delete', id })
+  });
+});
+
 window.calltrackApi.getUsers = window.calltrackApi.getUsers || (async function getDashboardUsers() {
   const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.users);
   return Array.isArray(payload.data) ? payload.data : [];
