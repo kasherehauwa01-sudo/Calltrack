@@ -35,6 +35,9 @@ if (!defined('UPDATE_PUBLIC_BASE')) {
 if (!defined('UPDATE_DOWNLOAD_URL')) {
     define('UPDATE_DOWNLOAD_URL', 'https://kvasmix.ru/vr/calltrack/api/update.php?download=1');
 }
+if (!defined('CLIENTS_API_URL')) {
+    define('CLIENTS_API_URL', 'https://kvasmix.ru/vr/clients/api/get_clients.php');
+}
 
 function dbConfigValue(string $envName, string $constantName): string
 {

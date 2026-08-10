@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/client_directory.php';
 
 function applyRegistryPeriod(array $source): array
 {
@@ -123,8 +124,17 @@ try {
     $limit = $loadAll ? null : min(max((int)$rawLimit, 1), 1000);
     $offset = max((int)($_GET['offset'] ?? 0), 0);
 
-    $stmt = getPdo()->query('SELECT * FROM calls');
+    $pdo = getPdo();
+    $stmt = $pdo->query('SELECT * FROM calls');
     $rows = array_map('normalizeCallRow', $stmt->fetchAll());
+    $clientIndex = buildClientPhoneIndex(loadClientsDirectory($pdo));
+    foreach ($rows as &$row) {
+        $normalizedPhone = normalizeClientPhone((string)$row['phone']);
+        if ($normalizedPhone !== '' && isset($clientIndex[$normalizedPhone])) {
+            $row['client'] = $clientIndex[$normalizedPhone];
+        }
+    }
+    unset($row);
     $rows = array_values(array_filter($rows, static fn(array $row): bool => rowMatchesFilters($row, $filters)));
     usort($rows, static function (array $a, array $b): int {
         $left = sprintf('%s %s %012d', $a['call_date'], $a['call_time'], (int)$a['id_db']);
