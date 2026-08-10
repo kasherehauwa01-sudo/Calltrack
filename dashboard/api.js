@@ -7,6 +7,12 @@ const bodyEl = $('callsBody');
 const deleteSelectedBtn = $('deleteSelectedBtn');
 const personalContactsBodyEl = $('personalContactsBody');
 const personalContactsStatusEl = $('personalContactsStatus');
+const clientTestPhoneEl = $('clientTestPhone');
+const testClientsBtn = $('testClientsBtn');
+const clientTestStatusEl = $('clientTestStatus');
+const clientTestModalEl = $('clientTestModal');
+const clientTestResultTitleEl = $('clientTestResultTitle');
+const clientTestResultEl = $('clientTestResult');
 
 function setStatus(message) { statusEl.textContent = message || ''; }
 function setPersonalContactsStatus(message) { personalContactsStatusEl.textContent = message || ''; }
@@ -36,6 +42,13 @@ async function getCalls(filters) {
 async function getPersonalContacts() {
   const payload = await requestJson('get_personal_contacts.php');
   return Array.isArray(payload.data) ? payload.data : [];
+}
+async function testClientPhone(phone) {
+  return requestJson('test_clients.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ phone })
+  });
 }
 async function deleteCall(idDb) {
   return requestJson('delete_call.php', {
@@ -144,14 +157,68 @@ async function loadPersonalContacts() {
   setPersonalContactsStatus(`Загружено: ${rows.length}`);
 }
 
+function closeClientTestModal() {
+  clientTestModalEl.hidden = true;
+  document.body.style.overflow = '';
+  testClientsBtn.focus();
+}
+
+function showClientTestResult(result) {
+  const rows = Array.isArray(result.data) ? result.data : [];
+  if (result.found && rows.length) {
+    clientTestResultTitleEl.textContent = 'Номер найден в clients';
+    clientTestResultEl.innerHTML = `
+      <div class="tableWrap">
+        <table>
+          <thead><tr><th>Номер телефона</th><th>Наименование</th></tr></thead>
+          <tbody>${rows.map((row) => `<tr><td>${esc(row.phone)}</td><td>${esc(row.name)}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>`;
+  } else {
+    clientTestResultTitleEl.textContent = 'Номер телефона не найден';
+    clientTestResultEl.innerHTML = `
+      <div class="resultReason">
+        <strong>Номер телефона не найден.</strong>
+        <span>Причина: ${esc(result.reason || 'неизвестная ошибка')}</span>
+        ${result.normalized_phone ? `<div class="normalizedPhone">Нормализованный номер: ${esc(result.normalized_phone)}</div>` : ''}
+      </div>`;
+  }
+  clientTestModalEl.hidden = false;
+  document.body.style.overflow = 'hidden';
+  $('closeClientTestModal').focus();
+}
+
+async function runClientsTest() {
+  const phone = clientTestPhoneEl.value.trim();
+  testClientsBtn.disabled = true;
+  clientTestStatusEl.textContent = 'Запрос к API clients...';
+  try {
+    const result = await testClientPhone(phone);
+    showClientTestResult(result);
+    clientTestStatusEl.textContent = result.found ? `Номер ${result.normalized_phone} найден` : 'Номер не найден';
+  } catch (error) {
+    console.error(error);
+    clientTestStatusEl.textContent = 'Тест не выполнен';
+    showClientTestResult({ found: false, reason: error.message });
+  } finally {
+    testClientsBtn.disabled = false;
+  }
+}
+
 function showTab(tabName) {
-  const isRegistry = tabName === 'registry';
-  $('registryPanel').hidden = !isRegistry;
-  $('personalContactsPanel').hidden = isRegistry;
-  document.querySelectorAll('.tabBtn').forEach((button) => {
-    button.classList.toggle('active', button.dataset.tab === tabName);
+  const panels = {
+    registry: 'registryPanel',
+    personalContacts: 'personalContactsPanel',
+    generalSettings: 'generalSettingsPanel'
+  };
+  const activeTab = panels[tabName] ? tabName : 'registry';
+  Object.entries(panels).forEach(([name, panelId]) => {
+    $(panelId).hidden = name !== activeTab;
   });
-  if (!isRegistry && !state.personalContactsLoaded) {
+  document.querySelectorAll('.tabBtn').forEach((button) => {
+    button.classList.toggle('active', button.dataset.tab === activeTab);
+  });
+  if (activeTab === 'personalContacts' && !state.personalContactsLoaded) {
     loadPersonalContacts().catch((error) => { console.error(error); setPersonalContactsStatus(`Ошибка: ${error.message}`); alert(error.message); });
   }
 }
@@ -170,6 +237,17 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('loadBtn').addEventListener('click', () => loadData().catch((error) => { console.error(error); setStatus(`Ошибка: ${error.message}`); alert(error.message); }));
   $('loadPersonalContactsBtn').addEventListener('click', () => loadPersonalContacts().catch((error) => { console.error(error); setPersonalContactsStatus(`Ошибка: ${error.message}`); alert(error.message); }));
+  testClientsBtn.addEventListener('click', runClientsTest);
+  clientTestPhoneEl.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') runClientsTest();
+  });
+  $('closeClientTestModal').addEventListener('click', closeClientTestModal);
+  clientTestModalEl.addEventListener('click', (event) => {
+    if (event.target.hasAttribute('data-close-client-test')) closeClientTestModal();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !clientTestModalEl.hidden) closeClientTestModal();
+  });
   $('selectAll').addEventListener('change', (event) => {
     document.querySelectorAll('.rowCheck').forEach((checkbox) => {
       checkbox.checked = event.target.checked;
