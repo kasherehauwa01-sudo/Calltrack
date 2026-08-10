@@ -1,11 +1,12 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/email_sync.php';
 
 function sendEmailSettingsPayload(PDO $pdo): void
 {
     ensureEmailTables($pdo);
-    $stmt = $pdo->query('SELECT id, manager_name, email, imap_host, imap_port, imap_ssl, username, inbox_folder, sent_folder, enabled, last_sync_at, created_at, updated_at FROM email_mailboxes ORDER BY manager_name, email');
+    $stmt = $pdo->query('SELECT id, manager_name, email, imap_host, imap_port, imap_ssl, username, inbox_folder, sent_folder, enabled, last_sync_at, sync_status, sync_error, created_at, updated_at FROM email_mailboxes ORDER BY manager_name, email');
     sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
 }
 
@@ -72,8 +73,12 @@ function saveEmailMailbox(PDO $pdo): void
         if ($id <= 0) {
             sendJson(['status' => 'error', 'message' => 'Передайте id почтового ящика'], 400);
         }
-        $stmt = $pdo->prepare('DELETE FROM email_mailboxes WHERE id = :id');
-        $stmt->execute([':id' => $id]);
+        $pdo->beginTransaction();
+        $pdo->prepare('DELETE FROM email_attachments WHERE message_id IN (SELECT id FROM email_messages WHERE mailbox_id=:id)')->execute([':id'=>$id]);
+        $pdo->prepare('DELETE FROM email_messages WHERE mailbox_id=:id')->execute([':id'=>$id]);
+        $stmt = $pdo->prepare('DELETE FROM email_mailboxes WHERE id=:id');
+        $stmt->execute([':id'=>$id]);
+        $pdo->commit();
         sendJson(['status' => 'success', 'deleted' => $stmt->rowCount()]);
     }
     $id = (int)($data['id'] ?? 0);
@@ -110,6 +115,7 @@ try {
     }
     if ($action === 'settings') sendEmailSettingsPayload($pdo);
     if ($action === 'detail') sendEmailDetailPayload($pdo);
+    if ($action === 'sync') sendJson(['status'=>'success', 'data'=>syncEmailMailboxes($pdo, isset($_GET['id']) ? (int)$_GET['id'] : null)]);
     sendEmailRegistryPayload($pdo);
 } catch (Throwable $e) {
     sendJson(['status' => 'error', 'message' => $e->getMessage()], 500);

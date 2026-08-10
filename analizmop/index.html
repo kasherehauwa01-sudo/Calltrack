@@ -585,7 +585,7 @@ function bindAdminPanel(){
   if(adminEls.updateForm) adminEls.updateForm.addEventListener('submit',saveAppUpdate);
   if(adminEls.updateFormResetBtn) adminEls.updateFormResetBtn.addEventListener('click',resetUpdateForm);
   if(adminEls.updatesTable) adminEls.updatesTable.addEventListener('click',(e)=>{const edit=e.target.closest('[data-update-edit]');const del=e.target.closest('[data-update-delete]');if(edit) editAppUpdate(edit.dataset.updateEdit);if(del) deleteAppUpdate(del.dataset.updateDelete);});
-  if(adminEls.emailRefreshBtn) adminEls.emailRefreshBtn.addEventListener('click',loadEmailModule);
+  if(adminEls.emailRefreshBtn) adminEls.emailRefreshBtn.addEventListener('click',()=>loadEmailModule(true));
   if(adminEls.emailAddMailboxBtn) adminEls.emailAddMailboxBtn.addEventListener('click',()=>openEmailSettingsModal());
   if(adminEls.emailSettingsCancelBtn) adminEls.emailSettingsCancelBtn.addEventListener('click',()=>setEmailModalVisible(false));
   if(adminEls.emailTable) adminEls.emailTable.addEventListener('click',(e)=>{const row=e.target.closest('[data-email-id]'); if(row) openEmailCard(row.dataset.emailId);});
@@ -608,7 +608,7 @@ function setActiveAdminTab(tab){
   if(tab==='personalContacts'&&!personalContactsLoaded) loadPersonalContacts();
   if(tab==='users'&&!usersLoaded) loadUsers();
   if(tab==='updates'&&!updatesLoaded) loadUpdates();
-  if((tab==='emailRegistry'||tab==='email')&&!emailLoaded) loadEmailModule();
+  if((tab==='emailRegistry'||tab==='email')&&!emailLoaded) loadEmailModule(tab==='emailRegistry');
 }
 
 function formatBytes(bytes){
@@ -628,16 +628,19 @@ async function loadUpdates(){
   }
 }
 
-async function loadEmailModule(){
+async function loadEmailModule(runSync=false){
   if(!adminEls.emailTable) return;
-  adminEls.emailStatus.textContent='Загрузка email...';
+  adminEls.emailStatus.textContent=runSync?'Синхронизация IMAP...':'Загрузка email...';
   const params={search:adminEls.emailSearch?.value||'',direction:adminEls.emailDirectionFilter?.value||''};
   try{
+    let syncResult=null;
+    if(runSync&&window.calltrackApi?.syncEmail) syncResult=await window.calltrackApi.syncEmail();
     emailMessages=window.calltrackApi?.getEmailMessages?await window.calltrackApi.getEmailMessages(params):await fetch(`${ADMIN_EMAIL_API_URL}?${new URLSearchParams(params)}`).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p.data||[];});
     renderEmailMessages();
     await loadEmailSettings();
     emailLoaded=true;
-    adminEls.emailStatus.textContent=`Писем: ${emailMessages.length}`;
+    const syncText=syncResult?` Импортировано: ${syncResult.imported||0}.${syncResult.errors?.length?` Ошибок IMAP: ${syncResult.errors.length}.`:''}`:'';
+    adminEls.emailStatus.textContent=`Писем: ${emailMessages.length}.${syncText}`;
   }catch(error){
     adminEls.emailStatus.textContent=`Ошибка загрузки email: ${error.message}`;
     adminEls.emailTable.innerHTML=`<div class="registry-empty">${escapeHtml(error.message)}</div>`;
@@ -698,7 +701,7 @@ async function loadEmailSettings(){
   if(!adminEls.emailSettingsTable) return;
   emailSettings=window.calltrackApi?.getEmailSettings?await window.calltrackApi.getEmailSettings():[];
   if(!emailSettings.length){adminEls.emailSettingsTable.innerHTML='<div class="registry-empty">IMAP-ящики ещё не настроены</div>';return;}
-  const rows=emailSettings.map((item)=>`<tr><td>${escapeHtml(item.manager_name)}</td><td>${Number(item.enabled)?'Включен':'Отключен'}</td><td>${escapeHtml(formatDateTimeDisplay(item.last_sync_at)||'—')}</td><td><button class="updates-action-btn" data-email-edit="${escapeHtml(item.id)}" type="button" title="Редактировать">✏️</button> <button class="updates-action-btn danger" data-email-delete="${escapeHtml(item.id)}" type="button" title="Удалить">🗑️</button></td></tr>`).join('');
+  const rows=emailSettings.map((item)=>{const status=!Number(item.enabled)?'Отключен':(item.sync_status==='error'?`Ошибка: ${escapeHtml(item.sync_error||'IMAP')}`:(item.sync_status==='success'?'Подключен':'Ожидает проверки'));return `<tr><td>${escapeHtml(item.manager_name)}<br><small>${escapeHtml(item.email)}</small></td><td>${status}</td><td>${escapeHtml(formatDateTimeDisplay(item.last_sync_at)||'—')}</td><td><button class="updates-action-btn" data-email-edit="${escapeHtml(item.id)}" type="button" title="Редактировать" aria-label="Редактировать">✏️</button> <button class="updates-action-btn danger" data-email-delete="${escapeHtml(item.id)}" type="button" title="Удалить" aria-label="Удалить">🗑️</button></td></tr>`}).join('');
   adminEls.emailSettingsTable.innerHTML=`<table class="registry-table"><thead><tr><th>Пользователь</th><th>Статус IMAP</th><th>Последняя проверка (Дата / время)</th><th>Действия</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 async function saveEmailSettings(event){

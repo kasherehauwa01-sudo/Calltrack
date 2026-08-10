@@ -278,6 +278,8 @@ CREATE TABLE IF NOT EXISTS email_mailboxes (
     sent_folder VARCHAR(255) NOT NULL DEFAULT 'Sent',
     enabled TINYINT(1) NOT NULL DEFAULT 1,
     last_sync_at DATETIME NULL,
+    sync_status ENUM('never','success','error') NOT NULL DEFAULT 'never',
+    sync_error TEXT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_email_mailboxes_email (email),
@@ -308,12 +310,13 @@ CREATE TABLE IF NOT EXISTS email_messages (
     has_attachments TINYINT(1) NOT NULL DEFAULT 0,
     attachment_count INT UNSIGNED NOT NULL DEFAULT 0,
     imap_uid BIGINT UNSIGNED NOT NULL,
+    imap_folder VARCHAR(255) NOT NULL DEFAULT 'INBOX',
     message_id VARCHAR(512),
     thread_key VARCHAR(512),
     answered_at DATETIME NULL,
     response_minutes INT UNSIGNED NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_email_messages_mailbox_uid (mailbox_id, imap_uid),
+    UNIQUE KEY uk_email_messages_mailbox_folder_uid (mailbox_id, imap_folder, imap_uid),
     INDEX idx_email_messages_sent_at (sent_at),
     INDEX idx_email_messages_manager (manager_name),
     INDEX idx_email_messages_client_email (client_email),
@@ -322,14 +325,22 @@ CREATE TABLE IF NOT EXISTS email_messages (
 )
 SQL);
     foreach ([
+        "ALTER TABLE email_mailboxes ADD COLUMN sync_status ENUM('never','success','error') NOT NULL DEFAULT 'never'",
+        "ALTER TABLE email_mailboxes ADD COLUMN sync_error TEXT NULL",
         "ALTER TABLE email_messages ADD COLUMN incoming_status ENUM('read','unread','answered') NOT NULL DEFAULT 'unread'",
         "ALTER TABLE email_messages ADD COLUMN outgoing_status ENUM('delivered','not_delivered','opened') NULL",
+        "ALTER TABLE email_messages ADD COLUMN imap_folder VARCHAR(255) NOT NULL DEFAULT 'INBOX'",
     ] as $sql) {
         try {
             $pdo->exec($sql);
         } catch (Throwable $e) {
             // Колонка уже существует.
         }
+    }
+    try {
+        $pdo->exec('ALTER TABLE email_messages DROP INDEX uk_email_messages_mailbox_uid, ADD UNIQUE KEY uk_email_messages_mailbox_folder_uid (mailbox_id, imap_folder, imap_uid)');
+    } catch (Throwable $e) {
+        // Индекс уже приведён к схеме «ящик + папка + UID».
     }
     $pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS email_attachments (
@@ -357,6 +368,29 @@ function encryptSecret(string $secret): string
         throw new RuntimeException('Не удалось зашифровать секрет');
     }
     return 'aes256cbc:' . base64_encode($iv . $cipher);
+}
+
+function decryptSecret(string $encrypted): string
+{
+    $isEncrypted = str_starts_with($encrypted, 'aes256cbc:');
+    $payload = $isEncrypted ? substr($encrypted, strlen('aes256cbc:')) : $encrypted;
+    $decoded = base64_decode($payload, true);
+    if ($decoded === false) {
+        throw new RuntimeException('Некорректный формат зашифрованного пароля');
+    }
+    $key = getenv('CALLTRACK_SECRET_KEY') ?: getenv('APP_SECRET_KEY') ?: '';
+    if (!$isEncrypted) {
+        return $decoded;
+    }
+    if ($key === '' || !function_exists('openssl_decrypt') || strlen($decoded) < 17) {
+        throw new RuntimeException('Для расшифровки IMAP-пароля не настроен ключ приложения');
+    }
+    $iv = substr($decoded, 0, 16);
+    $secret = openssl_decrypt(substr($decoded, 16), 'AES-256-CBC', hash('sha256', $key, true), OPENSSL_RAW_DATA, $iv);
+    if ($secret === false) {
+        throw new RuntimeException('Не удалось расшифровать пароль IMAP');
+    }
+    return $secret;
 }
 
 function normalizeUserStateKey(?string $phone, ?string $manager = null, ?string $userId = null): string

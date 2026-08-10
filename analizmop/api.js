@@ -114,6 +114,12 @@ window.calltrackApi.getEmailSettings = window.calltrackApi.getEmailSettings || (
   return Array.isArray(payload.data) ? payload.data : [];
 });
 
+window.calltrackApi.syncEmail = window.calltrackApi.syncEmail || (async function syncEmail() {
+  const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
+  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=sync`);
+  return payload.data || { imported: 0, mailboxes: 0, errors: [] };
+});
+
 window.calltrackApi.getEmailMessage = window.calltrackApi.getEmailMessage || (async function getEmailMessage(id) {
   const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
   const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=detail&id=${encodeURIComponent(id)}`);
