@@ -46,6 +46,7 @@ class ContactCardFragment : Fragment() {
     private val dateTimeFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
     private var currentPhone: String = ""
     private var isPersonalContact: Boolean = false
+    private var clientCardLoading: Boolean = false
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentContactCardBinding.inflate(inflater, container, false)
@@ -152,11 +153,15 @@ class ContactCardFragment : Fragment() {
     }
 
     private fun showClientCard(phone: String, clientName: String) {
+        if (clientCardLoading) return
+        clientCardLoading = true
         viewLifecycleOwner.lifecycleScope.launch {
             val cards = runCatching { viewModel.loadClientCards(phone) }.getOrElse { error ->
+                clientCardLoading = false
                 Toast.makeText(requireContext(), "Не удалось загрузить карточку: ${error.message}", Toast.LENGTH_LONG).show()
                 return@launch
             }
+            clientCardLoading = false
             val card = cards.firstOrNull { it.name == clientName } ?: cards.firstOrNull()
             if (card == null) {
                 Toast.makeText(requireContext(), "Карточка клиента не найдена", Toast.LENGTH_SHORT).show()
