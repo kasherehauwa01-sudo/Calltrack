@@ -43,6 +43,9 @@ if (!defined('CLIENTS_API_URL')) {
 if (!defined('CLIENTS_CARD_API_URL')) {
     define('CLIENTS_CARD_API_URL', 'http://127.0.0.1/vr/clients/api/client_card.php');
 }
+if (!defined('CLIENTS_CARD_API_URL')) {
+    define('CLIENTS_CARD_API_URL', 'https://kvasmix.ru/vr/clients/api/client_card.php');
+}
 
 function dbConfigValue(string $envName, string $constantName): string
 {
