@@ -10,6 +10,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONObject
 
 class ClientDirectory(context: Context) {
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -17,156 +18,68 @@ class ClientDirectory(context: Context) {
     private val lock = Any()
 
     @Volatile
-    private var loaded = false
+    private var loadedAt = 0L
 
     @Volatile
     private var phoneToClient: Map<String, String> = emptyMap()
 
     init {
-        // Прогреваем кэш в фоне, чтобы UI не блокировался сетью.
+        // Прогреваем справочник проекта clients в фоне, не блокируя UI.
         ioScope.launch { ensureLoaded() }
     }
 
     fun findClientName(rawPhone: String): String {
         val normalized = normalizePhone(rawPhone)
         if (normalized.isBlank()) return ""
-
-        // На main-потоке сеть не трогаем, возвращаем текущий кэш.
         if (!isMainThread()) {
             ensureLoaded()
+        } else if (directoryExpired()) {
+            ioScope.launch { ensureLoaded() }
         }
         return phoneToClient[normalized].orEmpty()
     }
 
     private fun ensureLoaded() {
-        if (loaded) return
+        if (!directoryExpired()) return
         synchronized(lock) {
-            if (loaded) return
-            phoneToClient = loadFromGoogleSheets()
-            loaded = true
+            if (!directoryExpired()) return
+            val loaded = loadFromClientsProject()
+            if (loaded.isNotEmpty()) phoneToClient = loaded
+            loadedAt = System.currentTimeMillis()
         }
     }
 
-    private fun loadFromGoogleSheets(): Map<String, String> {
-        val result = linkedMapOf<String, String>()
-        val spreadsheetIds = BuildConfig.CLIENT_DIRECTORY_SPREADSHEET_ID
-            .split(',')
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .toMutableList()
-
-        // Гарантированно проверяем оба рабочих справочника, даже если один из ID забыли в конфиге сборки.
-        REQUIRED_SPREADSHEET_IDS.forEach { requiredId ->
-            if (!spreadsheetIds.contains(requiredId)) {
-                spreadsheetIds += requiredId
-            }
-        }
-        if (spreadsheetIds.isEmpty()) return result
-
-        val gids = BuildConfig.CLIENT_DIRECTORY_SHEET_GIDS
-            .split(',')
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .ifEmpty { listOf("0") }
-
-        spreadsheetIds.forEach { spreadsheetId ->
-            gids.forEach { gid ->
-                val url = "https://docs.google.com/spreadsheets/d/$spreadsheetId/export?format=csv&gid=$gid"
-                val csv = downloadCsv(url) ?: return@forEach
-                parseCsvToMap(csv, result)
-            }
-        }
-
-        return result
-    }
-
-    private fun downloadCsv(url: String): String? {
+    private fun loadFromClientsProject(): Map<String, String> {
+        val url = BuildConfig.SQL_API_BASE_URL.trimEnd('/') + "/client_directory.php"
         val request = Request.Builder().url(url).build()
         return runCatching {
             httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                response.body?.string()
-            }
-        }.getOrNull()
-    }
-
-    private fun parseCsvToMap(csv: String, target: MutableMap<String, String>) {
-        val lines = csv.lineSequence()
-            .map { it.trimEnd('\r') }
-            .filter { it.isNotBlank() }
-            .toList()
-
-        if (lines.isEmpty()) return
-
-        val delimiter = resolveDelimiter(lines.first())
-        val header = parseCsvLine(lines.first(), delimiter)
-        val normalizedHeader = header.map { normalizeHeader(it) }
-        val phoneIndex = normalizedHeader.indexOfFirst { it.contains("телефон") || it.contains("phone") }
-        val clientIndex = normalizedHeader.indexOfFirst { it.contains("клиент") || it.contains("client") }
-        if (phoneIndex < 0 || clientIndex < 0) {
-            Log.w("ClientDirectory", "Не найдены колонки 'Телефон/Клиент'. Header=$header")
-            return
-        }
-
-        lines.drop(1).forEach { line ->
-            val cols = parseCsvLine(line, delimiter)
-            if (phoneIndex >= cols.size || clientIndex >= cols.size) return@forEach
-
-            val phone = normalizePhone(cols[phoneIndex])
-            val client = cols[clientIndex].trim()
-            if (phone.isBlank() || client.isBlank()) return@forEach
-
-            // Первое совпадение оставляем (приоритет — порядок gid в конфиге).
-            target.putIfAbsent(phone, client)
-        }
-
-        Log.d("ClientDirectory", "Загружено клиентов: ${target.size}")
-    }
-
-    private fun parseCsvLine(line: String, delimiter: Char): List<String> {
-        val out = mutableListOf<String>()
-        val sb = StringBuilder()
-        var inQuotes = false
-        var i = 0
-
-        while (i < line.length) {
-            val ch = line[i]
-            when {
-                ch == '"' -> {
-                    if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
-                        sb.append('"')
-                        i++
-                    } else {
-                        inQuotes = !inQuotes
+                if (!response.isSuccessful) error("HTTP ${response.code}")
+                val payload = JSONObject(response.body?.string().orEmpty())
+                if (!payload.optString("status").equals("success", ignoreCase = true)) {
+                    error(payload.optString("message", "API error"))
+                }
+                val result = linkedMapOf<String, String>()
+                val clients = payload.optJSONArray("data") ?: return@use result
+                for (index in 0 until clients.length()) {
+                    val client = clients.optJSONObject(index) ?: continue
+                    val name = client.optString("name").trim()
+                    val phones = client.optJSONArray("phones") ?: continue
+                    if (name.isBlank()) continue
+                    for (phoneIndex in 0 until phones.length()) {
+                        val phone = normalizePhone(phones.optString(phoneIndex))
+                        if (phone.isNotBlank()) result.putIfAbsent(phone, name)
                     }
                 }
-
-                ch == delimiter && !inQuotes -> {
-                    out += sb.toString().trim()
-                    sb.setLength(0)
-                }
-
-                else -> sb.append(ch)
+                Log.d("ClientDirectory", "Из проекта clients загружено номеров: ${result.size}")
+                result
             }
-            i++
-        }
-
-        out += sb.toString().trim()
-        return out
+        }.onFailure {
+            Log.e("ClientDirectory", "Ошибка загрузки справочника проекта clients", it)
+        }.getOrDefault(emptyMap())
     }
 
-    private fun resolveDelimiter(headerLine: String): Char {
-        val commaCount = headerLine.count { it == ',' }
-        val semicolonCount = headerLine.count { it == ';' }
-        return if (semicolonCount > commaCount) ';' else ','
-    }
-
-    private fun normalizeHeader(value: String): String {
-        return value
-            .replace("\uFEFF", "")
-            .trim()
-            .lowercase()
-    }
+    private fun directoryExpired(): Boolean = System.currentTimeMillis() - loadedAt >= CACHE_TTL_MS
 
     private fun normalizePhone(phone: String): String {
         return phone.replace(Regex("[^0-9]"), "").takeLast(10)
@@ -175,9 +88,6 @@ class ClientDirectory(context: Context) {
     private fun isMainThread(): Boolean = Looper.getMainLooper() == Looper.myLooper()
 
     companion object {
-        private val REQUIRED_SPREADSHEET_IDS = setOf(
-            "1Wl4UXI_x0a7A0iPYuW_ZRlrf3xEdVKMnOALi9p6J_Mc",
-            "1ysEVeWSw96UgrQ1_4dEO5cSyv-18DSdr_VWPj3rUlhM"
-        )
+        private const val CACHE_TTL_MS = 5 * 60 * 1000L
     }
 }

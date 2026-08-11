@@ -38,52 +38,19 @@ function loadUpdatePayload(): array
     return $data;
 }
 
-function apkPathFromPayload(array $data): string
-{
-    // Сначала используем имя файла, которое формирует админ-панель. Это важно,
-    // потому что поле apk в update.json теперь может указывать на download-proxy.
-    $filename = basename((string)($data['filename'] ?? ''));
-    if ($filename === '') {
-        // Поддержка старых update.json: раньше в apk лежала прямая ссылка /updates/*.apk.
-        $apkUrl = (string)($data['apk'] ?? '');
-        $path = (string)(parse_url($apkUrl, PHP_URL_PATH) ?: '');
-        $filename = basename(rawurldecode($path));
-    }
-    if ($filename === '' || strtolower(pathinfo($filename, PATHINFO_EXTENSION)) !== 'apk') {
-        sendJson(['status' => 'error', 'message' => 'APK filename is invalid'], 500);
-    }
-
-    $updatesDir = realpath(dirname(__DIR__) . '/updates');
-    $apkPath = realpath(dirname(__DIR__) . '/updates/' . $filename);
-    if ($updatesDir === false || $apkPath === false || strpos($apkPath, $updatesDir) !== 0 || !is_file($apkPath)) {
-        sendJson(['status' => 'error', 'message' => 'APK file not found'], 404);
-    }
-    return $apkPath;
-}
-
 function downloadUrl(array $data): string
 {
     $versionCode = (int)($data['versionCode'] ?? 0);
-    $suffix = $versionCode > 0 ? '&versionCode=' . $versionCode : '';
-    return (string)UPDATE_DOWNLOAD_URL . $suffix;
+    return updateDownloadUrlForVersion($versionCode);
+}
+
+if (isDownloadRequest()) {
+    $versionCode = (int)($_GET['versionCode'] ?? $_GET['version_code'] ?? 0);
+    $apk = resolveUpdateApk(getPdo(), $versionCode);
+    streamApkFile($apk['path'], $apk['filename']);
 }
 
 $data = loadUpdatePayload();
-
-if (isDownloadRequest()) {
-    $apkPath = apkPathFromPayload($data);
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
-    header('Content-Type: application/vnd.android.package-archive');
-    header('X-Content-Type-Options: nosniff');
-    header('Content-Length: ' . filesize($apkPath));
-    header('Content-Disposition: attachment; filename="' . basename($apkPath) . '"');
-    header('Cache-Control: no-store, no-cache, must-revalidate');
-    readfile($apkPath);
-    exit;
-}
-
 $data['status'] = 'ok';
 $data['apk'] = downloadUrl($data);
 sendJson($data);
