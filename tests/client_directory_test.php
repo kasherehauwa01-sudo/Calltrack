@@ -55,6 +55,15 @@ expectSame([
     ]],
 ], $cards, 'Карточка должна содержать все заполненные поля клиента');
 
+$rawCache = tempnam(sys_get_temp_dir(), 'calltrack_clients_test_');
+file_put_contents($rawCache, json_encode(['rows'=>[['name'=>'Тест']], 'source_total'=>1]));
+expectSame(
+    ['rows'=>[['name'=>'Тест']], 'source_total'=>1],
+    readClientsRawCache($rawCache),
+    'Свежий сырой ответ Clients должен читаться из кэша без повторного HTTP-запроса'
+);
+unlink($rawCache);
+
 expectSame([
     'found'=>false,
     'phone'=>'12345',

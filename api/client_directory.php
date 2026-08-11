@@ -81,28 +81,79 @@ function clientsApiStatusCode(array $headers): int
     return $statusCode;
 }
 
-function fetchClientsApiRows(): array
+function clientsRawCacheFile(): string
 {
+    return sys_get_temp_dir() . '/calltrack_clients_raw_' . sha1(implode('|', clientsApiUrls())) . '.json';
+}
+
+function readClientsRawCache(string $cacheFile): ?array
+{
+    if (!is_file($cacheFile) || filemtime($cacheFile) === false || filemtime($cacheFile) <= time() - 300) return null;
+    $cached = json_decode((string)file_get_contents($cacheFile), true);
+    return is_array($cached) && isset($cached['rows'], $cached['source_total']) ? $cached : null;
+}
+
+function fetchClientsApiRows(bool $useCache=true): array
+{
+    $startedAt = microtime(true);
+    $cacheFile = clientsRawCacheFile();
+    if ($useCache && ($cached = readClientsRawCache($cacheFile)) !== null) {
+        error_log(sprintf('Clients timing: raw cache hit, total=%.0f ms, rows=%d', (microtime(true)-$startedAt)*1000, $cached['source_total']));
+        return $cached;
+    }
+    $lock = $useCache ? fopen($cacheFile . '.lock', 'c') : false;
+    if ($lock !== false) {
+        flock($lock, LOCK_EX);
+        if (($cached = readClientsRawCache($cacheFile)) !== null) {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+            error_log(sprintf('Clients timing: raw cache hit after lock, total=%.0f ms, rows=%d', (microtime(true)-$startedAt)*1000, $cached['source_total']));
+            return $cached;
+        }
+    }
     $context = stream_context_create(['http'=>[
-        'timeout'=>30,
+        // Ответ должен успеть вернуться раньше стандартного 10-секундного таймаута OkHttp.
+        'timeout'=>8,
         'ignore_errors'=>true,
-        'header'=>"Accept: application/json\r\nUser-Agent: CallTrack/clients-test\r\n",
+        'protocol_version'=>1.1,
+        // Закрываем соединение после ответа: PHP stream не должен ждать keep-alive,
+        // если upstream не прислал корректный Content-Length.
+        'header'=>"Accept: application/json\r\nUser-Agent: CallTrack/clients-test\r\nConnection: close\r\n",
     ]]);
     $lastReason = 'не удалось подключиться к API clients';
     foreach (clientsApiUrls() as $url) {
+        $requestStartedAt = microtime(true);
+        error_log("Clients timing: CallTrack -> Clients start, url={$url}");
         $body = @file_get_contents($url, false, $context);
+        $receivedAt = microtime(true);
         $headers = $http_response_header ?? [];
         $statusCode = clientsApiStatusCode($headers);
-        if ($body === false) {$lastReason='не удалось установить соединение с API clients';continue;}
+        if ($body === false) {$lastReason='не удалось установить соединение с API clients';error_log(sprintf('Clients timing: request failed after %.0f ms', ($receivedAt-$requestStartedAt)*1000));continue;}
         if ($statusCode >= 400) {$lastReason="API clients вернул HTTP {$statusCode}";continue;}
         if (trim($body) === '') {$lastReason='API clients вернул пустой ответ';continue;}
         $payload = json_decode($body, true);
+        $parsedAt = microtime(true);
         if (!is_array($payload)) {$lastReason='API clients вернул некорректный JSON';continue;}
         if (($payload['status'] ?? 'success') === 'error') {$lastReason='API clients сообщил об ошибке';continue;}
         $rows = $payload['data'] ?? $payload['clients'] ?? $payload;
         if (!is_array($rows)) {$lastReason='в ответе API clients нет массива data';continue;}
-        return ['rows'=>array_values($rows), 'source_total'=>count($rows)];
+        $result = ['rows'=>array_values($rows), 'source_total'=>count($rows)];
+        if ($useCache) {
+            $tempFile = $cacheFile . '.tmp.' . getmypid();
+            file_put_contents($tempFile, json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
+            rename($tempFile, $cacheFile);
+        }
+        if ($lock !== false) {flock($lock, LOCK_UN);fclose($lock);$lock=false;}
+        error_log(sprintf(
+            'Clients timing: response=%.0f ms, json=%.0f ms, total=%.0f ms, rows=%d',
+            ($receivedAt-$requestStartedAt)*1000,
+            ($parsedAt-$receivedAt)*1000,
+            (microtime(true)-$startedAt)*1000,
+            $result['source_total']
+        ));
+        return $result;
     }
+    if ($lock !== false) {flock($lock, LOCK_UN);fclose($lock);}
     throw new RuntimeException($lastReason);
 }
 
@@ -163,7 +214,7 @@ function findClientsByPhone(array $clients, string $normalizedPhone): array
 
 function testClientPhoneAgainstApi(string $normalizedPhone): array
 {
-    $response = fetchClientsApiRows();
+    $response = fetchClientsApiRows(false);
     $matches = [];
     $normalizedTotal = 0;
     foreach ($response['rows'] as $row) {
@@ -212,10 +263,13 @@ function findClientCardsInRows(array $rows, string $normalizedPhone): array
 
 function loadClientCards(string $rawPhone): array
 {
+    $startedAt = microtime(true);
     $normalized = normalizeClientPhone($rawPhone);
     if ($normalized === '') throw new InvalidArgumentException('Номер должен содержать не менее 10 цифр');
     $response = fetchClientsApiRows();
-    return findClientCardsInRows($response['rows'], $normalized);
+    $cards = findClientCardsInRows($response['rows'], $normalized);
+    error_log(sprintf('Clients timing: card lookup=%.0f ms, matches=%d', (microtime(true)-$startedAt)*1000, count($cards)));
+    return $cards;
 }
 
 function testClientPhone(string $rawPhone): array
@@ -265,7 +319,9 @@ function testClientPhone(string $rawPhone): array
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
     try {
         if (($_GET['card'] ?? '') === '1') {
+            $requestStartedAt = microtime(true);
             $cards = loadClientCards(trim((string)($_GET['phone'] ?? '')));
+            header('Server-Timing: calltrack;dur=' . round((microtime(true)-$requestStartedAt)*1000, 1));
             sendJson(['status'=>'success', 'data'=>$cards, 'total'=>count($cards)]);
         }
         if (array_key_exists('phone', $_GET)) {
