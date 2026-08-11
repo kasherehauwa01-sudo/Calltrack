@@ -16,6 +16,8 @@
     .grid{display:grid;gap:12px}.kpi{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.kpi .val{font-size:26px;font-weight:700}.label{color:var(--muted);font-size:13px}
     .tableWrap{overflow:auto} table{width:100%;border-collapse:collapse;font-size:14px} th,td{padding:9px;border-bottom:1px solid #e5e7eb;text-align:left;white-space:nowrap} th{background:#f9fafb;position:sticky;top:0} tr:hover{background:#f8fafc}
     .chartBox{height:280px}.status{color:var(--muted);font-size:13px;margin-top:8px}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}.tabBtn{background:#e5e7eb;color:#111827}.tabBtn.active{background:var(--accent);color:#fff}.tabPanel[hidden]{display:none}.badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:600}.badge.yes{background:#dcfce7;color:#166534}.badge.no{background:#fee2e2;color:#991b1b}.empty{text-align:center;color:var(--muted);padding:24px}
+    .settingsCard{max-width:760px}.settingsCard h2{margin:0 0 8px}.settingsCard p{margin:0 0 16px;color:var(--muted);line-height:1.5}.testToolbar{align-items:end}.testToolbar .field{flex:1;min-width:260px}.testToolbar input{width:100%}
+    .modal[hidden]{display:none}.modal{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px}.modalBackdrop{position:absolute;inset:0;background:rgba(15,23,42,.55)}.modalDialog{position:relative;width:min(680px,100%);max-height:calc(100vh - 36px);overflow:auto;background:#fff;border-radius:16px;box-shadow:0 22px 60px rgba(15,23,42,.3);padding:20px}.modalHeader{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:14px}.modalHeader h2{margin:0;font-size:20px}.modalClose{background:#e5e7eb;color:#111827;font-size:22px;line-height:1;padding:7px 10px}.resultReason{line-height:1.55}.resultReason strong{display:block;margin-bottom:6px}.normalizedPhone{color:var(--muted);font-size:13px;margin-top:10px}
   </style>
 </head>
 <body>
@@ -25,6 +27,7 @@
     <nav class="tabs" aria-label="Разделы админ-панели">
       <button class="tabBtn active" data-tab="registry" type="button">Реестр</button>
       <button class="tabBtn" data-tab="personalContacts" type="button">Признаки контакта</button>
+      <button class="tabBtn" data-tab="generalSettings" type="button">Общие настройки</button>
     </nav>
 
     <div id="registryPanel" class="tabPanel">
@@ -84,6 +87,32 @@
         </table>
       </section>
     </div>
+
+    <div id="generalSettingsPanel" class="tabPanel" hidden>
+      <section class="card settingsCard">
+        <h2>Тест API с clients</h2>
+        <p>Введите номер в любом формате. Для поиска он будет приведён к виду +7XXXXXXXXXX и сверен с колонкой «Телефоны» проекта clients.</p>
+        <div class="toolbar testToolbar">
+          <div class="field">
+            <label for="clientTestPhone">Номер телефона</label>
+            <input id="clientTestPhone" type="tel" autocomplete="tel" placeholder="+7 (999) 123-45-67" />
+          </div>
+          <button id="testClientsBtn" class="secondary" type="button">Тест</button>
+        </div>
+        <div id="clientTestStatus" class="status" aria-live="polite"></div>
+      </section>
+    </div>
+  </div>
+
+  <div id="clientTestModal" class="modal" hidden>
+    <div class="modalBackdrop" data-close-client-test></div>
+    <section class="modalDialog" role="dialog" aria-modal="true" aria-labelledby="clientTestResultTitle">
+      <div class="modalHeader">
+        <h2 id="clientTestResultTitle"></h2>
+        <button id="closeClientTestModal" class="modalClose" type="button" aria-label="Закрыть">&times;</button>
+      </div>
+      <div id="clientTestResult"></div>
+    </section>
   </div>
 
   <script src="api.js"></script>
