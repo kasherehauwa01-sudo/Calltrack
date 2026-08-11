@@ -36,19 +36,8 @@ if (!defined('UPDATE_DOWNLOAD_URL')) {
     define('UPDATE_DOWNLOAD_URL', 'https://kvasmix.ru/vr/calltrack/api/update.php?download=1');
 }
 if (!defined('CLIENTS_API_URL')) {
-    // Оба проекта обслуживаются одним Nginx: loopback исключает внешний DNS,
-    // TLS и запрет исходящего соединения сервера с собственным публичным адресом.
     define('CLIENTS_API_URL', 'http://127.0.0.1/vr/clients/api/get_clients.php');
 }
-if (!defined('CLIENTS_CARD_API_URL')) {
-    define('CLIENTS_CARD_API_URL', 'https://kvasmix.ru/vr/clients/api/client_card.php');
-}
-// 0 — определять порт из URL (HTTPS=443, HTTP=80).
-if (!defined('CLIENTS_API_PORT')) define('CLIENTS_API_PORT', 0);
-if (!defined('CLIENTS_API_TOKEN')) define('CLIENTS_API_TOKEN', '');
-if (!defined('CLIENTS_API_CONNECT_TIMEOUT')) define('CLIENTS_API_CONNECT_TIMEOUT', 3);
-if (!defined('CLIENTS_API_TIMEOUT')) define('CLIENTS_API_TIMEOUT', 8);
-if (!defined('CLIENTS_API_RESOLVE_LOCAL')) define('CLIENTS_API_RESOLVE_LOCAL', true);
 
 function dbConfigValue(string $envName, string $constantName): string
 {

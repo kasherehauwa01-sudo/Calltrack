@@ -3,10 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Дашборд отдела продаж</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23f8fafc%22/%3E%3Cg%20fill%3D%22%2316a34a%22%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2024%2022%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2040%2022%29%22/%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2024%2038%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2040%2038%29%22/%3E%3C/g%3E%3Cpath%20d%3D%22M32%2032%20C38%2040%2043%2049%2048%2058%22%20fill%3D%22none%22%20stroke%3D%22%2315803d%22%20stroke-width%3D%225%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="api.js"></script>
+  <script src="api.js?v=20260811-clients-api-fix"></script>
   <style>
     :root { --bg:#f4f6fb; --card:#fff; --text:#1f2a37; --muted:#6b7280; --shadow:0 10px 30px rgba(15,23,42,.08); --radius:14px; }
     *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
@@ -27,7 +30,7 @@
     .admin-login-btn{border:0;border-radius:999px;background:#111827;color:#fff;padding:10px 18px;cursor:pointer;transition:.2s ease}
     .admin-login-btn:hover{background:#374151}.admin-error{color:#dc2626;font-size:.9rem;min-height:20px}
     .admin-content{display:grid;gap:14px}.admin-content[hidden],.admin-lock[hidden]{display:none}
-    .admin-subtabs{display:flex;gap:8px;flex-wrap:wrap;background:#eceff4;border-radius:16px;padding:6px;width:max-content;max-width:100%}
+    .admin-subtabs{display:flex;gap:8px;flex-wrap:wrap;background:#eceff4;border-radius:16px;padding:6px;width:100%;overflow:visible}
     .admin-command-row{display:flex;gap:8px;align-items:end;flex-wrap:wrap;background:#f8fafc;border:1px solid #e5e7eb;border-radius:14px;padding:12px}
     .admin-command-field{display:grid;gap:5px;min-width:min(520px,100%);flex:1}.admin-command-field label{font-size:.82rem;color:var(--muted)}
     .admin-command-input{width:100%;border:1px solid #d1d5db;border-radius:12px;padding:10px 12px;background:#fff;color:#111827;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -247,6 +250,7 @@
           <h2>Админ панель</h2>
           <div class="admin-subtabs" role="tablist" aria-label="Разделы админ панели">
             <button class="admin-subtab active" data-admin-tab="registry" type="button">Реестр звонков</button>
+            <button class="admin-subtab" data-admin-tab="generalSettings" type="button">Общие настройки</button>
             <button class="admin-subtab" data-admin-tab="emailRegistry" type="button">Реестр Email</button>
             <button class="admin-subtab" data-admin-tab="personalContacts" type="button">Признаки контакта</button>
             <button class="admin-subtab" data-admin-tab="users" type="button">Пользователи</button>
@@ -664,7 +668,7 @@ async function testClientsApiPhone(event){
     }
     setClientsApiTestModalVisible(true);
   }catch(error){
-    adminEls.clientsApiTestResult.innerHTML=`<div class="registry-empty"><strong>Ошибка запроса к clients</strong><p>${escapeHtml(error.message)}</p></div>`;
+    adminEls.clientsApiTestResult.innerHTML=`<div class="registry-empty"><strong>Номер телефона не найден</strong><p>${escapeHtml(`Не удалось выполнить запрос в clients: ${error.message}`)}</p></div>`;
     adminEls.clientsApiTestStatus.textContent=`Ошибка теста API: ${error.message}`;
     setClientsApiTestModalVisible(true);
   }finally{adminEls.clientsApiTestBtn.disabled=false;}
