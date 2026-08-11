@@ -250,7 +250,6 @@
           <h2>Админ панель</h2>
           <div class="admin-subtabs" role="tablist" aria-label="Разделы админ панели">
             <button class="admin-subtab active" data-admin-tab="registry" type="button">Реестр звонков</button>
-            <button class="admin-subtab" data-admin-tab="generalSettings" type="button">Общие настройки</button>
             <button class="admin-subtab" data-admin-tab="emailRegistry" type="button">Реестр Email</button>
             <button class="admin-subtab" data-admin-tab="personalContacts" type="button">Признаки контакта</button>
             <button class="admin-subtab" data-admin-tab="users" type="button">Пользователи</button>
@@ -668,7 +667,7 @@ async function testClientsApiPhone(event){
     }
     setClientsApiTestModalVisible(true);
   }catch(error){
-    adminEls.clientsApiTestResult.innerHTML=`<div class="registry-empty"><strong>Номер телефона не найден</strong><p>${escapeHtml(`Не удалось выполнить запрос в clients: ${error.message}`)}</p></div>`;
+    adminEls.clientsApiTestResult.innerHTML=`<div class="registry-empty"><strong>Ошибка запроса к clients</strong><p>${escapeHtml(error.message)}</p></div>`;
     adminEls.clientsApiTestStatus.textContent=`Ошибка теста API: ${error.message}`;
     setClientsApiTestModalVisible(true);
   }finally{adminEls.clientsApiTestBtn.disabled=false;}
