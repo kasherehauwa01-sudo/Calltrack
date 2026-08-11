@@ -86,9 +86,24 @@ function clientsRawCacheFile(): string
     return sys_get_temp_dir() . '/calltrack_clients_raw_' . sha1(implode('|', clientsApiUrls())) . '.json';
 }
 
+function clientsCardApiUrl(string $phone): string
+{
+    $configured = getenv('CALLTRACK_CLIENTS_CARD_API_URL') ?: (defined('CLIENTS_CARD_API_URL') ? CLIENTS_CARD_API_URL : '');
+    if (trim((string)$configured) === '') return '';
+    $separator = str_contains((string)$configured, '?') ? '&' : '?';
+    return trim((string)$configured) . $separator . 'phone=' . rawurlencode($phone);
+}
+
 function readClientsRawCache(string $cacheFile): ?array
 {
     if (!is_file($cacheFile) || filemtime($cacheFile) === false || filemtime($cacheFile) <= time() - 300) return null;
+    $cached = json_decode((string)file_get_contents($cacheFile), true);
+    return is_array($cached) && isset($cached['rows'], $cached['source_total']) ? $cached : null;
+}
+
+function readClientsStaleRawCache(string $cacheFile): ?array
+{
+    if (!is_file($cacheFile)) return null;
     $cached = json_decode((string)file_get_contents($cacheFile), true);
     return is_array($cached) && isset($cached['rows'], $cached['source_total']) ? $cached : null;
 }
@@ -103,7 +118,15 @@ function fetchClientsApiRows(bool $useCache=true): array
     }
     $lock = $useCache ? fopen($cacheFile . '.lock', 'c') : false;
     if ($lock !== false) {
-        flock($lock, LOCK_EX);
+        if (!flock($lock, LOCK_EX | LOCK_NB)) {
+            fclose($lock);
+            $lock = false;
+            if (($stale = readClientsStaleRawCache($cacheFile)) !== null) {
+                error_log(sprintf('Clients timing: concurrent refresh, stale cache used, rows=%d', $stale['source_total']));
+                return $stale;
+            }
+            throw new RuntimeException('Справочник clients обновляется, повторите запрос');
+        }
         if (($cached = readClientsRawCache($cacheFile)) !== null) {
             flock($lock, LOCK_UN);
             fclose($lock);
@@ -155,6 +178,31 @@ function fetchClientsApiRows(bool $useCache=true): array
     }
     if ($lock !== false) {flock($lock, LOCK_UN);fclose($lock);}
     throw new RuntimeException($lastReason);
+}
+
+function fetchClientCardsDirect(string $normalizedPhone): ?array
+{
+    $url = clientsCardApiUrl($normalizedPhone);
+    if ($url === '') return null;
+    $startedAt = microtime(true);
+    error_log('Clients timing: CallTrack -> Clients card start');
+    $context = stream_context_create(['http'=>[
+        'timeout'=>5,
+        'ignore_errors'=>true,
+        'header'=>"Accept: application/json\r\nUser-Agent: CallTrack/client-card\r\nConnection: close\r\n",
+    ]]);
+    $body = @file_get_contents($url, false, $context);
+    $statusCode = clientsApiStatusCode($http_response_header ?? []);
+    error_log(sprintf('Clients timing: direct card response=%d, total=%.0f ms', $statusCode, (microtime(true)-$startedAt)*1000));
+    if ($statusCode === 404) return null;
+    if ($body === false) throw new RuntimeException('API карточки clients не ответил за 5 секунд');
+    if ($statusCode >= 400) throw new RuntimeException("API карточки clients вернул HTTP {$statusCode}");
+    $payload = json_decode($body, true);
+    if (!is_array($payload)) throw new RuntimeException('API карточки clients вернул некорректный JSON');
+    if (($payload['status'] ?? 'success') === 'error') throw new RuntimeException((string)($payload['message'] ?? 'API карточки clients сообщил об ошибке'));
+    $cards = $payload['data'] ?? [];
+    if (!is_array($cards)) throw new RuntimeException('API карточки clients не вернул массив data');
+    return array_values(array_filter($cards, 'is_array'));
 }
 
 function clientsRowsFromApi(): array
@@ -266,8 +314,12 @@ function loadClientCards(string $rawPhone): array
     $startedAt = microtime(true);
     $normalized = normalizeClientPhone($rawPhone);
     if ($normalized === '') throw new InvalidArgumentException('Номер должен содержать не менее 10 цифр');
-    $response = fetchClientsApiRows();
-    $cards = findClientCardsInRows($response['rows'], $normalized);
+    $cards = fetchClientCardsDirect($normalized);
+    if ($cards === null) {
+        $response = fetchClientsApiRows();
+        $cards = findClientCardsInRows($response['rows'], $normalized);
+        error_log('Clients timing: direct card endpoint unavailable, directory fallback used');
+    }
     error_log(sprintf('Clients timing: card lookup=%.0f ms, matches=%d', (microtime(true)-$startedAt)*1000, count($cards)));
     return $cards;
 }
