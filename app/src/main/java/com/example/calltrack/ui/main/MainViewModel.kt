@@ -12,6 +12,9 @@ import com.example.calltrack.data.local.ContactEntity
 import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.data.repository.CallRepository
+import com.example.calltrack.data.repository.ClientCard
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class MainViewModel(private val repository: CallRepository) : ViewModel() {
     val calls = repository.observeCalls().asLiveData()
@@ -32,6 +35,9 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     fun observeReminders(phone: String): LiveData<List<ReminderEntity>> = repository.observeReminders(phone).asLiveData()
     fun observeComments(phone: String): LiveData<List<CommentEntity>> = repository.observeComments(phone).asLiveData()
     fun findClientName(phone: String): String = repository.findClientName(phone)
+    suspend fun loadClientCards(phone: String): List<ClientCard> = withContext(Dispatchers.IO) {
+        repository.loadClientCards(phone)
+    }
 
     suspend fun saveCallOutcome(
         callId: Long,
