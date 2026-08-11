@@ -46,6 +46,14 @@ if (!defined('CLIENTS_CARD_API_URL')) {
 if (!defined('CLIENTS_CARD_API_URL')) {
     define('CLIENTS_CARD_API_URL', 'https://kvasmix.ru/vr/clients/api/client_card.php');
 }
+if (!defined('CLIENTS_CARD_API_URL')) {
+    define('CLIENTS_CARD_API_URL', 'https://kvasmix.ru/vr/clients/api/client_card.php');
+}
+if (!defined('CLIENTS_API_PORT')) define('CLIENTS_API_PORT', 443);
+if (!defined('CLIENTS_API_TOKEN')) define('CLIENTS_API_TOKEN', '');
+if (!defined('CLIENTS_API_CONNECT_TIMEOUT')) define('CLIENTS_API_CONNECT_TIMEOUT', 3);
+if (!defined('CLIENTS_API_TIMEOUT')) define('CLIENTS_API_TIMEOUT', 8);
+if (!defined('CLIENTS_API_RESOLVE_LOCAL')) define('CLIENTS_API_RESOLVE_LOCAL', true);
 
 function dbConfigValue(string $envName, string $constantName): string
 {

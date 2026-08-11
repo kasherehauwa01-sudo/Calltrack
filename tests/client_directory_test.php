@@ -63,14 +63,14 @@ expectSame(
     'Свежий сырой ответ Clients должен читаться из кэша без повторного HTTP-запроса'
 );
 expectSame(
-    'http://127.0.0.1/vr/clients/api/client_card.php?phone=9991234567',
+    'https://kvasmix.ru/vr/clients/api/client_card.php?phone=9991234567',
     clientsCardApiUrl('9991234567'),
     'Карточка должна запрашиваться через быстрый endpoint поиска по телефону'
 );
 expectSame(
-    "Host: kvasmix.ru\r\nAccept: application/json\r\nUser-Agent: CallTrack/test\r\nConnection: close\r\n",
-    clientsRequestHeaders('http://127.0.0.1/vr/clients/api/client_card.php', 'CallTrack/test'),
-    'Loopback-запрос должен попадать в виртуальный хост kvasmix.ru'
+    "Accept: application/json\r\nUser-Agent: CallTrack/test\r\nConnection: close\r\n",
+    clientsRequestHeaders('https://kvasmix.ru/vr/clients/api/client_card.php', 'CallTrack/test'),
+    'Публичный URL должен сохранять корректный Host для TLS SNI'
 );
 expectSame(
     ['rows'=>[['name'=>'Тест']], 'source_total'=>1],

@@ -101,6 +101,58 @@ function clientsRequestHeaders(string $url, string $userAgent): string
     return $hostHeader . "Accept: application/json\r\nUser-Agent: {$userAgent}\r\nConnection: close\r\n";
 }
 
+function clientsCurlRequest(string $url, string $userAgent, ?int $timeout=null): array
+{
+    if (!function_exists('curl_init')) throw new RuntimeException('На сервере не установлено расширение PHP cURL');
+    $token = getenv('CALLTRACK_CLIENTS_API_TOKEN') ?: (defined('CLIENTS_API_TOKEN') ? CLIENTS_API_TOKEN : '');
+    $port = (int)(getenv('CALLTRACK_CLIENTS_API_PORT') ?: (defined('CLIENTS_API_PORT') ? CLIENTS_API_PORT : 0));
+    $connectTimeout = (int)(getenv('CALLTRACK_CLIENTS_API_CONNECT_TIMEOUT') ?: (defined('CLIENTS_API_CONNECT_TIMEOUT') ? CLIENTS_API_CONNECT_TIMEOUT : 3));
+    $requestTimeout = $timeout ?? (int)(getenv('CALLTRACK_CLIENTS_API_TIMEOUT') ?: (defined('CLIENTS_API_TIMEOUT') ? CLIENTS_API_TIMEOUT : 8));
+    $headers = ['Accept: application/json', "User-Agent: {$userAgent}", 'Connection: close'];
+    if (trim((string)$token) !== '') $headers[] = 'Authorization: Bearer ' . trim((string)$token);
+    $curl = curl_init($url);
+    $options = [
+        CURLOPT_RETURNTRANSFER=>true,
+        CURLOPT_FOLLOWLOCATION=>false,
+        CURLOPT_CONNECTTIMEOUT=>max(1, $connectTimeout),
+        CURLOPT_TIMEOUT=>max(1, $requestTimeout),
+        CURLOPT_HTTPHEADER=>$headers,
+        CURLOPT_SSL_VERIFYPEER=>true,
+        CURLOPT_SSL_VERIFYHOST=>2,
+    ];
+    if ($port > 0) $options[CURLOPT_PORT] = $port;
+    $resolveLocal = getenv('CALLTRACK_CLIENTS_API_RESOLVE_LOCAL');
+    $resolveLocal = $resolveLocal === false ? (defined('CLIENTS_API_RESOLVE_LOCAL') && CLIENTS_API_RESOLVE_LOCAL) : filter_var($resolveLocal, FILTER_VALIDATE_BOOL);
+    $host = (string)parse_url($url, PHP_URL_HOST);
+    if ($resolveLocal && $host === 'kvasmix.ru') $options[CURLOPT_RESOLVE] = ["kvasmix.ru:{$port}:127.0.0.1"];
+    curl_setopt_array($curl, $options);
+    $startedAt = microtime(true);
+    $body = curl_exec($curl);
+    $diagnostic = [
+        'url'=>$url,
+        'effective_url'=>(string)curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
+        'port'=>$port,
+        'http_code'=>(int)curl_getinfo($curl, CURLINFO_HTTP_CODE),
+        'curl_errno'=>curl_errno($curl),
+        'curl_error'=>curl_error($curl),
+        'dns_ms'=>round((float)curl_getinfo($curl, CURLINFO_NAMELOOKUP_TIME)*1000, 1),
+        'connect_ms'=>round((float)curl_getinfo($curl, CURLINFO_CONNECT_TIME)*1000, 1),
+        'tls_ms'=>round((float)curl_getinfo($curl, CURLINFO_APPCONNECT_TIME)*1000, 1),
+        'total_ms'=>round((microtime(true)-$startedAt)*1000, 1),
+        'token_configured'=>trim((string)$token) !== '',
+        'body'=>$body === false ? '' : (string)$body,
+    ];
+    curl_close($curl);
+    error_log('Clients cURL: ' . json_encode(array_diff_key($diagnostic, ['body'=>true]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    if ($diagnostic['curl_errno'] !== 0) {
+        throw new RuntimeException(sprintf(
+            'Clients cURL error: url=%s, port=%d, errno=%d, error=%s, HTTP=%d',
+            $url, $port, $diagnostic['curl_errno'], $diagnostic['curl_error'], $diagnostic['http_code']
+        ));
+    }
+    return $diagnostic;
+}
+
 function readClientsRawCache(string $cacheFile): ?array
 {
     if (!is_file($cacheFile) || filemtime($cacheFile) === false || filemtime($cacheFile) <= time() - 300) return null;
@@ -143,23 +195,19 @@ function fetchClientsApiRows(bool $useCache=true): array
     }
     $lastReason = 'не удалось подключиться к API clients';
     foreach (clientsApiUrls() as $url) {
-        $context = stream_context_create(['http'=>[
-            // Ответ должен успеть вернуться раньше стандартного 10-секундного таймаута OkHttp.
-            'timeout'=>8,
-            'ignore_errors'=>true,
-            'protocol_version'=>1.1,
-            // Закрываем соединение после ответа: PHP stream не должен ждать keep-alive,
-            // если upstream не прислал корректный Content-Length.
-            'header'=>clientsRequestHeaders($url, 'CallTrack/clients-test'),
-        ]]);
         $requestStartedAt = microtime(true);
         error_log("Clients timing: CallTrack -> Clients start, url={$url}");
-        $body = @file_get_contents($url, false, $context);
+        try {
+            $http = clientsCurlRequest($url, 'CallTrack/clients-test');
+        } catch (Throwable $e) {
+            $lastReason = $e->getMessage();
+            error_log($lastReason);
+            continue;
+        }
+        $body = $http['body'];
         $receivedAt = microtime(true);
-        $headers = $http_response_header ?? [];
-        $statusCode = clientsApiStatusCode($headers);
-        if ($body === false) {$lastReason='не удалось установить соединение с API clients';error_log(sprintf('Clients timing: request failed after %.0f ms', ($receivedAt-$requestStartedAt)*1000));continue;}
-        if ($statusCode >= 400) {$lastReason="API clients вернул HTTP {$statusCode}";continue;}
+        $statusCode = $http['http_code'];
+        if ($statusCode >= 400) {$lastReason="API clients вернул HTTP {$statusCode}; response={$body}";continue;}
         if (trim($body) === '') {$lastReason='API clients вернул пустой ответ';continue;}
         $payload = json_decode($body, true);
         $parsedAt = microtime(true);
@@ -193,17 +241,12 @@ function fetchClientCardsDirect(string $normalizedPhone): ?array
     if ($url === '') return null;
     $startedAt = microtime(true);
     error_log('Clients timing: CallTrack -> Clients card start');
-    $context = stream_context_create(['http'=>[
-        'timeout'=>5,
-        'ignore_errors'=>true,
-        'header'=>clientsRequestHeaders($url, 'CallTrack/client-card'),
-    ]]);
-    $body = @file_get_contents($url, false, $context);
-    $statusCode = clientsApiStatusCode($http_response_header ?? []);
+    $http = clientsCurlRequest($url, 'CallTrack/client-card', 5);
+    $body = $http['body'];
+    $statusCode = $http['http_code'];
     error_log(sprintf('Clients timing: direct card response=%d, total=%.0f ms', $statusCode, (microtime(true)-$startedAt)*1000));
     if ($statusCode === 404) return null;
-    if ($body === false) throw new RuntimeException('API карточки clients не ответил за 5 секунд');
-    if ($statusCode >= 400) throw new RuntimeException("API карточки clients вернул HTTP {$statusCode}");
+    if ($statusCode >= 400) throw new RuntimeException("API карточки clients вернул HTTP {$statusCode}; response={$body}");
     $payload = json_decode($body, true);
     if (!is_array($payload)) throw new RuntimeException('API карточки clients вернул некорректный JSON');
     if (($payload['status'] ?? 'success') === 'error') throw new RuntimeException((string)($payload['message'] ?? 'API карточки clients сообщил об ошибке'));
