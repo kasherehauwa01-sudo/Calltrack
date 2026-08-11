@@ -655,8 +655,9 @@ async function testClientsApiPhone(event){
     const result=await window.calltrackApi.testClientPhone(phone);
     if(result?.found){
       const rows=(result.matches||[]).map((match)=>`<tr><td>${escapeHtml(match.phone||result.phone||'')}</td><td>${escapeHtml(match.name||'')}</td></tr>`).join('');
-      adminEls.clientsApiTestResult.innerHTML=`<div class="registry-wrap"><table class="registry-table clients-api-result-table"><thead><tr><th>Номер телефона</th><th>Наименование</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-      adminEls.clientsApiTestStatus.textContent=`Номер ${result.phone||phone} найден`;
+      const matchesCount=Number(result.matches_count)||(result.matches||[]).length;
+      adminEls.clientsApiTestResult.innerHTML=`<p><strong>Найдено совпадений: ${matchesCount}</strong></p><div class="registry-wrap"><table class="registry-table clients-api-result-table"><thead><tr><th>Номер телефона</th><th>Наименование</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      adminEls.clientsApiTestStatus.textContent=`Номер ${result.phone||phone} найден у клиентов: ${matchesCount}`;
     }else{
       adminEls.clientsApiTestResult.innerHTML=`<div class="registry-empty"><strong>Номер телефона не найден</strong><p>${escapeHtml(result?.reason||'Проект clients не вернул причину.')}</p></div>`;
       adminEls.clientsApiTestStatus.textContent='Номер телефона не найден';

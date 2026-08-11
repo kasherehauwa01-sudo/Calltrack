@@ -111,6 +111,19 @@ function buildClientPhoneIndex(array $clients): array
     return $index;
 }
 
+function findClientsByPhone(array $clients, string $normalizedPhone): array
+{
+    $matches = [];
+    foreach ($clients as $client) {
+        if (in_array($normalizedPhone, $client['phones'], true)) {
+            // Не останавливаемся на первом результате: один телефон может быть
+            // указан у нескольких клиентов проекта clients.
+            $matches[] = ['phone'=>'+7' . $normalizedPhone, 'name'=>$client['name']];
+        }
+    }
+    return $matches;
+}
+
 function testClientPhone(string $rawPhone): array
 {
     $normalized = normalizeClientPhone($rawPhone);
@@ -121,6 +134,7 @@ function testClientPhone(string $rawPhone): array
             'phone'=>$displayPhone,
             'normalized'=>$normalized,
             'matches'=>[],
+            'matches_count'=>0,
             'reason'=>'После удаления форматирования номер должен содержать 10 цифр.',
         ];
     }
@@ -134,21 +148,18 @@ function testClientPhone(string $rawPhone): array
             'phone'=>$displayPhone,
             'normalized'=>$normalized,
             'matches'=>[],
+            'matches_count'=>0,
             'reason'=>'Проект clients не вернул ни одной записи с заполненными колонками «Наименование» и «Телефоны».',
         ];
     }
 
-    $matches = [];
-    foreach ($clients as $client) {
-        if (in_array($normalized, $client['phones'], true)) {
-            $matches[] = ['phone'=>$displayPhone, 'name'=>$client['name']];
-        }
-    }
+    $matches = findClientsByPhone($clients, $normalized);
     return [
         'found'=>(bool)$matches,
         'phone'=>$displayPhone,
         'normalized'=>$normalized,
         'matches'=>$matches,
+        'matches_count'=>count($matches),
         'reason'=>$matches ? '' : sprintf(
             'Номер %s не найден в колонке «Телефоны». Проверено клиентов: %d.',
             $displayPhone,
