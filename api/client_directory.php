@@ -101,11 +101,24 @@ function clientsRequestHeaders(string $url, string $userAgent): string
     return $hostHeader . "Accept: application/json\r\nUser-Agent: {$userAgent}\r\nConnection: close\r\n";
 }
 
+function clientsApiPort(string $url, int $configuredPort=0): int
+{
+    $urlPort = (int)(parse_url($url, PHP_URL_PORT) ?: 0);
+    if ($urlPort > 0) return $urlPort;
+    if ($configuredPort > 0) return $configuredPort;
+    return strtolower((string)parse_url($url, PHP_URL_SCHEME)) === 'https' ? 443 : 80;
+}
+
 function clientsCurlRequest(string $url, string $userAgent, ?int $timeout=null): array
 {
     if (!function_exists('curl_init')) throw new RuntimeException('На сервере не установлено расширение PHP cURL');
     $token = getenv('CALLTRACK_CLIENTS_API_TOKEN') ?: (defined('CLIENTS_API_TOKEN') ? CLIENTS_API_TOKEN : '');
-    $port = (int)(getenv('CALLTRACK_CLIENTS_API_PORT') ?: (defined('CLIENTS_API_PORT') ? CLIENTS_API_PORT : 0));
+    $configuredPort = getenv('CALLTRACK_CLIENTS_API_PORT');
+    $configuredPort = $configuredPort !== false && trim((string)$configuredPort) !== ''
+        ? (int)$configuredPort
+        : (int)(defined('CLIENTS_API_PORT') ? CLIENTS_API_PORT : 0);
+    $urlPort = (int)(parse_url($url, PHP_URL_PORT) ?: 0);
+    $port = clientsApiPort($url, $configuredPort);
     $connectTimeout = (int)(getenv('CALLTRACK_CLIENTS_API_CONNECT_TIMEOUT') ?: (defined('CLIENTS_API_CONNECT_TIMEOUT') ? CLIENTS_API_CONNECT_TIMEOUT : 3));
     $requestTimeout = $timeout ?? (int)(getenv('CALLTRACK_CLIENTS_API_TIMEOUT') ?: (defined('CLIENTS_API_TIMEOUT') ? CLIENTS_API_TIMEOUT : 8));
     $headers = ['Accept: application/json', "User-Agent: {$userAgent}", 'Connection: close'];
@@ -120,7 +133,8 @@ function clientsCurlRequest(string $url, string $userAgent, ?int $timeout=null):
         CURLOPT_SSL_VERIFYPEER=>true,
         CURLOPT_SSL_VERIFYHOST=>2,
     ];
-    if ($port > 0) $options[CURLOPT_PORT] = $port;
+    // Не переопределяем порт cURL без необходимости: схема URL сама выбирает 80/443.
+    if ($urlPort > 0 || $configuredPort > 0) $options[CURLOPT_PORT] = $port;
     $resolveLocal = getenv('CALLTRACK_CLIENTS_API_RESOLVE_LOCAL');
     $resolveLocal = $resolveLocal === false ? (defined('CLIENTS_API_RESOLVE_LOCAL') && CLIENTS_API_RESOLVE_LOCAL) : filter_var($resolveLocal, FILTER_VALIDATE_BOOL);
     $host = (string)parse_url($url, PHP_URL_HOST);

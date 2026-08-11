@@ -72,6 +72,9 @@ expectSame(
     clientsRequestHeaders('https://kvasmix.ru/vr/clients/api/client_card.php', 'CallTrack/test'),
     'Публичный URL должен сохранять корректный Host для TLS SNI'
 );
+expectSame(443, clientsApiPort('https://kvasmix.ru/vr/clients/api/get_clients.php'), 'HTTPS должен использовать порт 443');
+expectSame(80, clientsApiPort('http://127.0.0.1/vr/clients/api/get_clients.php'), 'HTTP loopback должен использовать порт 80');
+expectSame(8443, clientsApiPort('https://kvasmix.ru/vr/clients/api/get_clients.php', 8443), 'Явно заданный порт должен сохраняться');
 expectSame(
     ['rows'=>[['name'=>'Тест']], 'source_total'=>1],
     readClientsStaleRawCache($rawCache),

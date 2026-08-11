@@ -9,7 +9,7 @@ define('DB_PASS', 'YOUR_PASSWORD');
 // «Наименование» и «Телефоны» (либо name и phones).
 define('CLIENTS_API_URL', 'https://kvasmix.ru/vr/clients/api/get_clients.php');
 define('CLIENTS_CARD_API_URL', 'https://kvasmix.ru/vr/clients/api/client_card.php');
-define('CLIENTS_API_PORT', 443);
+define('CLIENTS_API_PORT', 0); // 0 — взять порт из URL; укажите число только для нестандартного порта.
 define('CLIENTS_API_TOKEN', ''); // Не коммитьте реальный токен.
 define('CLIENTS_API_CONNECT_TIMEOUT', 3);
 define('CLIENTS_API_TIMEOUT', 8);
