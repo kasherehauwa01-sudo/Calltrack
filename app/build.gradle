@@ -9,11 +9,17 @@ android {
     compileSdk 35
 
     defaultConfig {
+        def releaseVersionCode = (project.findProperty("calltrackVersionCode")
+                ?: System.getenv("CALLTRACK_VERSION_CODE")
+                ?: "12").toString().toInteger()
+        def releaseVersionName = (project.findProperty("calltrackVersionName")
+                ?: System.getenv("CALLTRACK_VERSION_NAME")
+                ?: "1.0.12").toString()
         applicationId "com.example.calltrack"
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName "1.0"
+        versionCode releaseVersionCode
+        versionName releaseVersionName
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "SQL_API_BASE_URL", '"https://kvasmix.ru/vr/calltrack/api/"'

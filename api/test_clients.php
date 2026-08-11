@@ -23,35 +23,9 @@ if ($normalizedPhone === '') {
 }
 
 try {
-    $testResult = testClientPhoneAgainstApi($normalizedPhone);
-    $matches = $testResult['matches'];
-    $displayPhone = '+7' . $normalizedPhone;
-
-    if ($matches) {
-        sendJson([
-            'status'=>'success',
-            'found'=>true,
-            'normalized_phone'=>$displayPhone,
-            'data'=>$matches,
-        ]);
-    }
-
-    $sourceTotal = (int)$testResult['source_total'];
-    $normalizedTotal = (int)$testResult['normalized_total'];
-    if ($sourceTotal === 0) {
-        $reason = 'API clients доступен, но вернул пустой справочник';
-    } elseif ($normalizedTotal === 0) {
-        $reason = 'API clients вернул записи, но в них нет корректных полей «Наименование» и «Телефоны»';
-    } else {
-        $reason = "API clients доступен; проверено клиентов: {$normalizedTotal}. Совпадение {$displayPhone} в колонке «Телефоны» отсутствует";
-    }
-
     sendJson([
         'status'=>'success',
-        'found'=>false,
-        'normalized_phone'=>$displayPhone,
-        'data'=>[],
-        'reason'=>$reason,
+        'data'=>testClientPhone((string)$phone),
     ]);
 } catch (Throwable $e) {
     error_log('Clients API test error: ' . $e->getMessage());
