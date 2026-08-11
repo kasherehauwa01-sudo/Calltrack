@@ -181,6 +181,43 @@ function testClientPhoneAgainstApi(string $normalizedPhone): array
     ];
 }
 
+function clientCardFieldValue(mixed $value): string
+{
+    if (is_bool($value)) return $value ? 'Да' : 'Нет';
+    if (is_scalar($value)) return trim((string)$value);
+    if (!is_array($value)) return '';
+    $parts = [];
+    array_walk_recursive($value, static function (mixed $item) use (&$parts): void {
+        if (is_bool($item)) $parts[] = $item ? 'Да' : 'Нет';
+        elseif (is_scalar($item) && trim((string)$item) !== '') $parts[] = trim((string)$item);
+    });
+    return implode(', ', array_values(array_unique($parts)));
+}
+
+function findClientCardsInRows(array $rows, string $normalizedPhone): array
+{
+    $cards = [];
+    foreach ($rows as $row) {
+        $client = normalizeClientRow($row);
+        if ($client === null || !in_array($normalizedPhone, $client['phones'], true)) continue;
+        $fields = [];
+        foreach ($row as $label=>$value) {
+            $displayValue = clientCardFieldValue($value);
+            if ($displayValue !== '') $fields[(string)$label] = $displayValue;
+        }
+        $cards[] = ['name'=>$client['name'], 'fields'=>$fields];
+    }
+    return $cards;
+}
+
+function loadClientCards(string $rawPhone): array
+{
+    $normalized = normalizeClientPhone($rawPhone);
+    if ($normalized === '') throw new InvalidArgumentException('Номер должен содержать не менее 10 цифр');
+    $response = fetchClientsApiRows();
+    return findClientCardsInRows($response['rows'], $normalized);
+}
+
 function testClientPhone(string $rawPhone): array
 {
     $normalized = normalizeClientPhone($rawPhone);
@@ -227,6 +264,10 @@ function testClientPhone(string $rawPhone): array
 
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
     try {
+        if (($_GET['card'] ?? '') === '1') {
+            $cards = loadClientCards(trim((string)($_GET['phone'] ?? '')));
+            sendJson(['status'=>'success', 'data'=>$cards, 'total'=>count($cards)]);
+        }
         if (array_key_exists('phone', $_GET)) {
             sendJson(['status'=>'success', 'data'=>testClientPhone(trim((string)$_GET['phone']))]);
         }

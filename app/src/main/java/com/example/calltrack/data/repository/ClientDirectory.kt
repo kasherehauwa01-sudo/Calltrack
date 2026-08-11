@@ -11,6 +11,13 @@ import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+
+data class ClientCard(
+    val name: String,
+    val fields: List<Pair<String, String>>
+)
 
 class ClientDirectory(context: Context) {
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -37,6 +44,35 @@ class ClientDirectory(context: Context) {
             ioScope.launch { ensureLoaded() }
         }
         return phoneToClient[normalized].orEmpty()
+    }
+
+    fun loadClientCards(rawPhone: String): List<ClientCard> {
+        val encodedPhone = URLEncoder.encode(rawPhone, StandardCharsets.UTF_8.name())
+        val url = BuildConfig.SQL_API_BASE_URL.trimEnd('/') + "/client_directory.php?card=1&phone=$encodedPhone"
+        val request = Request.Builder().url(url).build()
+        return httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("HTTP ${response.code}")
+            val payload = JSONObject(response.body?.string().orEmpty())
+            if (!payload.optString("status").equals("success", ignoreCase = true)) {
+                error(payload.optString("message", "API error"))
+            }
+            val cards = payload.optJSONArray("data") ?: return@use emptyList()
+            buildList {
+                for (index in 0 until cards.length()) {
+                    val card = cards.optJSONObject(index) ?: continue
+                    val fieldsObject = card.optJSONObject("fields") ?: JSONObject()
+                    val fields = buildList {
+                        val keys = fieldsObject.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            val value = fieldsObject.optString(key).trim()
+                            if (value.isNotEmpty()) add(key to value)
+                        }
+                    }
+                    add(ClientCard(card.optString("name").trim(), fields))
+                }
+            }
+        }
     }
 
     private fun ensureLoaded() {
