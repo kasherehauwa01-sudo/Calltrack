@@ -36,7 +36,9 @@ if (!defined('UPDATE_DOWNLOAD_URL')) {
     define('UPDATE_DOWNLOAD_URL', 'https://kvasmix.ru/vr/calltrack/api/update.php?download=1');
 }
 if (!defined('CLIENTS_API_URL')) {
-    define('CLIENTS_API_URL', 'https://kvasmix.ru/vr/clients/api/get_clients.php');
+    // Оба проекта обслуживаются одним Nginx: loopback исключает внешний DNS,
+    // TLS и запрет исходящего соединения сервера с собственным публичным адресом.
+    define('CLIENTS_API_URL', 'http://127.0.0.1/vr/clients/api/get_clients.php');
 }
 if (!defined('CLIENTS_CARD_API_URL')) {
     define('CLIENTS_CARD_API_URL', 'https://kvasmix.ru/vr/clients/api/client_card.php');
