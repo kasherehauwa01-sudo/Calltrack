@@ -50,6 +50,8 @@ class MainActivity : BaseActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private var pendingInstallApk: File? = null
+    private var pendingInstallVersionCode: Int? = null
+    private var pendingInstallVersionName: String? = null
     private var updateCheckHandled = false
     private var updateOperationRunning = false
     private val viewModel: MainViewModel by viewModels {
@@ -290,6 +292,8 @@ class MainActivity : BaseActivity() {
                     AppLogger.log(this@MainActivity, "UPDATE", "APK успешно загружен в cache: ${downloadedApkFile.absolutePath}, size=${downloadedApkFile.length()}")
                     Toast.makeText(this@MainActivity, "Подготовка установки...", Toast.LENGTH_SHORT).show()
                     syncUpdateLogsToDashboard()
+                    pendingInstallVersionCode = update.versionCode
+                    pendingInstallVersionName = update.versionName
                     installApkFile(downloadedApkFile)
                 }
                 .onFailure { error ->
@@ -444,8 +448,15 @@ class MainActivity : BaseActivity() {
         val archiveVersion = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) archive.longVersionCode else {
             @Suppress("DEPRECATION") archive.versionCode.toLong()
         }
+        val expectedVersion = pendingInstallVersionCode
+        if (expectedVersion != null && archiveVersion != expectedVersion.toLong()) {
+            return "Сервер объявил версию $expectedVersion (${pendingInstallVersionName.orEmpty()}), " +
+                "но внутри скачанного APK указан versionCode=$archiveVersion. " +
+                "Пересоберите APK с правильным versionCode и загрузите его заново."
+        }
         if (archiveVersion <= BuildConfig.VERSION_CODE.toLong()) {
-            return "Версия APK ($archiveVersion) не новее установленной (${BuildConfig.VERSION_CODE})."
+            return "Внутри APK указан versionCode=$archiveVersion, установленная версия=${BuildConfig.VERSION_CODE}. " +
+                "Имя файла и версия в update.json не изменяют версию внутри APK."
         }
         AppLogger.log(this, "UPDATE", "APK проверен: package=${archive.packageName}, versionCode=$archiveVersion, подпись совпадает")
         return null
