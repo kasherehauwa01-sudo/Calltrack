@@ -94,6 +94,13 @@ function clientsCardApiUrl(string $phone): string
     return trim((string)$configured) . $separator . 'phone=' . rawurlencode($phone);
 }
 
+function clientsRequestHeaders(string $url, string $userAgent): string
+{
+    $host = parse_url($url, PHP_URL_HOST);
+    $hostHeader = in_array($host, ['127.0.0.1', 'localhost'], true) ? "Host: kvasmix.ru\r\n" : '';
+    return $hostHeader . "Accept: application/json\r\nUser-Agent: {$userAgent}\r\nConnection: close\r\n";
+}
+
 function readClientsRawCache(string $cacheFile): ?array
 {
     if (!is_file($cacheFile) || filemtime($cacheFile) === false || filemtime($cacheFile) <= time() - 300) return null;
@@ -134,17 +141,17 @@ function fetchClientsApiRows(bool $useCache=true): array
             return $cached;
         }
     }
-    $context = stream_context_create(['http'=>[
-        // Ответ должен успеть вернуться раньше стандартного 10-секундного таймаута OkHttp.
-        'timeout'=>8,
-        'ignore_errors'=>true,
-        'protocol_version'=>1.1,
-        // Закрываем соединение после ответа: PHP stream не должен ждать keep-alive,
-        // если upstream не прислал корректный Content-Length.
-        'header'=>"Accept: application/json\r\nUser-Agent: CallTrack/clients-test\r\nConnection: close\r\n",
-    ]]);
     $lastReason = 'не удалось подключиться к API clients';
     foreach (clientsApiUrls() as $url) {
+        $context = stream_context_create(['http'=>[
+            // Ответ должен успеть вернуться раньше стандартного 10-секундного таймаута OkHttp.
+            'timeout'=>8,
+            'ignore_errors'=>true,
+            'protocol_version'=>1.1,
+            // Закрываем соединение после ответа: PHP stream не должен ждать keep-alive,
+            // если upstream не прислал корректный Content-Length.
+            'header'=>clientsRequestHeaders($url, 'CallTrack/clients-test'),
+        ]]);
         $requestStartedAt = microtime(true);
         error_log("Clients timing: CallTrack -> Clients start, url={$url}");
         $body = @file_get_contents($url, false, $context);
@@ -189,7 +196,7 @@ function fetchClientCardsDirect(string $normalizedPhone): ?array
     $context = stream_context_create(['http'=>[
         'timeout'=>5,
         'ignore_errors'=>true,
-        'header'=>"Accept: application/json\r\nUser-Agent: CallTrack/client-card\r\nConnection: close\r\n",
+        'header'=>clientsRequestHeaders($url, 'CallTrack/client-card'),
     ]]);
     $body = @file_get_contents($url, false, $context);
     $statusCode = clientsApiStatusCode($http_response_header ?? []);

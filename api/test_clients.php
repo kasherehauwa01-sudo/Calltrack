@@ -31,6 +31,6 @@ try {
     error_log('Clients API test error: ' . $e->getMessage());
     sendJson([
         'status'=>'error',
-        'message'=>'не удалось выполнить запрос: ' . $e->getMessage(),
+        'message'=>$e->getMessage(),
     ], 502);
 }

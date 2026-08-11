@@ -664,7 +664,7 @@ async function testClientsApiPhone(event){
     }
     setClientsApiTestModalVisible(true);
   }catch(error){
-    adminEls.clientsApiTestResult.innerHTML=`<div class="registry-empty"><strong>Номер телефона не найден</strong><p>${escapeHtml(`Не удалось выполнить запрос в clients: ${error.message}`)}</p></div>`;
+    adminEls.clientsApiTestResult.innerHTML=`<div class="registry-empty"><strong>Ошибка запроса к clients</strong><p>${escapeHtml(error.message)}</p></div>`;
     adminEls.clientsApiTestStatus.textContent=`Ошибка теста API: ${error.message}`;
     setClientsApiTestModalVisible(true);
   }finally{adminEls.clientsApiTestBtn.disabled=false;}
