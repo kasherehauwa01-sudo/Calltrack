@@ -38,4 +38,13 @@ expectSame([
     ['phone'=>'+79991234567', 'name'=>'ООО Ромашка'],
 ], findClientsByPhone($clients, '9991234567'), 'Поиск должен вернуть канонический номер и наименование');
 
+expectSame([
+    'found'=>false,
+    'phone'=>'12345',
+    'normalized'=>'',
+    'matches'=>[],
+    'matches_count'=>0,
+    'reason'=>'После удаления форматирования номер должен содержать 10 цифр.',
+], testClientPhone('12345'), 'Некорректный номер не должен запускать внешний API-запрос');
+
 echo "client_directory_test: OK\n";

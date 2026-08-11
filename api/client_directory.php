@@ -6,24 +6,27 @@ require_once __DIR__ . '/config.php';
 function normalizeClientPhone(string $value): string
 {
     $digits = preg_replace('/\D+/', '', $value) ?? '';
-    return strlen($digits) >= 10 ? substr($digits, -10) : $digits;
+    return strlen($digits) >= 10 ? substr($digits, -10) : '';
 }
 
-function clientValue(array $row, array $keys): string
+function clientValue(array $row, array $keys): mixed
 {
     foreach ($keys as $key) {
-        if (array_key_exists($key, $row) && $row[$key] !== null) return trim((string)$row[$key]);
+        if (array_key_exists($key, $row) && $row[$key] !== null) return $row[$key];
     }
     return '';
 }
 
-function splitClientPhones(string $value): array
+function splitClientPhones(string|array $value): array
 {
-    preg_match_all('/(?:\+?\d[\d\s().-]{7,}\d)/u', $value, $matches);
     $phones = [];
-    foreach ($matches[0] ?? [] as $phone) {
-        $normalized = normalizeClientPhone($phone);
-        if ($normalized !== '') $phones[$normalized] = $normalized;
+    foreach ((array)$value as $part) {
+        if (!is_scalar($part)) continue;
+        preg_match_all('/(?:\+?\d[\d\s().-]{7,}\d)/u', (string)$part, $matches);
+        foreach ($matches[0] ?? [] as $phone) {
+            $normalized = normalizeClientPhone($phone);
+            if ($normalized !== '') $phones[$normalized] = $normalized;
+        }
     }
     return array_values($phones);
 }
@@ -33,7 +36,8 @@ function normalizeClientsPayload(array $rows): array
     $result = [];
     foreach ($rows as $row) {
         if (!is_array($row)) continue;
-        $name = clientValue($row, ['Наименование', 'наименование', 'name', 'client_name', 'client']);
+        $nameValue = clientValue($row, ['Наименование', 'наименование', 'name', 'client_name', 'client']);
+        $name = is_scalar($nameValue) ? trim((string)$nameValue) : '';
         $rawPhones = clientValue($row, ['Телефоны', 'телефоны', 'phones', 'phone_numbers', 'phone']);
         $phones = splitClientPhones($rawPhones);
         if ($name === '' || !$phones) continue;
