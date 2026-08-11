@@ -62,6 +62,16 @@ expectSame(
     readClientsRawCache($rawCache),
     'Свежий сырой ответ Clients должен читаться из кэша без повторного HTTP-запроса'
 );
+expectSame(
+    'https://kvasmix.ru/vr/clients/api/client_card.php?phone=9991234567',
+    clientsCardApiUrl('9991234567'),
+    'Карточка должна запрашиваться через быстрый endpoint поиска по телефону'
+);
+expectSame(
+    ['rows'=>[['name'=>'Тест']], 'source_total'=>1],
+    readClientsStaleRawCache($rawCache),
+    'При параллельном обновлении допустимо сразу вернуть ранее сохранённый справочник'
+);
 unlink($rawCache);
 
 expectSame([
