@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Looper
 import android.util.Log
 import com.example.calltrack.BuildConfig
+import com.example.calltrack.logging.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,8 +14,14 @@ import okhttp3.Request
 import org.json.JSONObject
 
 class ClientDirectory(context: Context) {
+    private val appContext = context.applicationContext
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val httpClient = OkHttpClient()
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .callTimeout(10, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
     private val lock = Any()
 
     @Volatile
@@ -22,6 +29,7 @@ class ClientDirectory(context: Context) {
 
     @Volatile
     private var phoneToClient: Map<String, String> = emptyMap()
+    private val clientCards = mutableMapOf<String, Pair<Long, List<ClientCard>>>()
 
     init {
         // Прогреваем справочник проекта clients в фоне, не блокируя UI.
