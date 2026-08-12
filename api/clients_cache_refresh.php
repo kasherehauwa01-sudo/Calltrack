@@ -119,18 +119,27 @@ function runClientsCacheRefresh(string $source): array
         $stream = clientsStreamingCacheCreate();
         $clientsCount = 0;
         $page = 1;
+        $processedPages = 0;
+        $sourceTotal = null;
+        $effectivePageSize = $pageSize;
         try {
             do {
                 $batch = fetchClientsApiPage($url, $page, $pageSize);
+                if ($sourceTotal !== null && $batch['total'] !== $sourceTotal) {
+                    throw new RuntimeException("Количество Clients изменилось во время обновления: {$sourceTotal} → {$batch['total']}");
+                }
+                $sourceTotal = $batch['total'];
+                $effectivePageSize = $batch['page_size'];
                 $clientsCount += clientsStreamingCacheAppend($stream, $batch['clients']);
+                $processedPages++;
                 unset($batch['clients']);
                 $hasMore = (bool)$batch['has_more'];
-                if ($batch['source_count'] === 0) $hasMore = false;
                 unset($batch);
                 gc_collect_cycles();
                 $page++;
             } while ($hasMore);
             if ($clientsCount === 0) throw new RuntimeException('Clients API не вернул ни одной корректной записи');
+            appendClientsRefreshLog("Обработано страниц: {$processedPages}");
             appendClientsRefreshLog("Получено клиентов: {$clientsCount}");
             clientsStreamingCachePublish($stream);
         } catch (Throwable $streamError) {
@@ -145,9 +154,11 @@ function runClientsCacheRefresh(string $source): array
         $result['finished_at'] = $finished->format(DATE_ATOM);
         $result['clients'] = $clientsCount;
         $result['peak_memory_bytes'] = $peakMemory;
-        $result['page_size'] = $pageSize;
+        $result['page_size'] = $effectivePageSize;
+        $result['processed_pages'] = $processedPages;
+        $result['source_total'] = $sourceTotal;
         writeClientsRefreshStatus($result);
-        appendClientsRefreshLog('Пиковое потребление памяти PHP: ' . round($peakMemory / 1048576, 1) . ' МБ');
+        appendClientsRefreshLog('Peak memory: ' . round($peakMemory / 1048576, 1) . ' MB');
         appendClientsRefreshLog('Кэш успешно обновлен');
         return clientsRefreshStatusPayload($result);
     } catch (Throwable $error) {

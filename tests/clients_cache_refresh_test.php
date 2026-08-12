@@ -11,6 +11,10 @@ function refreshExpect(bool $condition, string $message): void
 }
 
 $timezone = new DateTimeZone('Europe/Moscow');
+refreshExpect(clientsPageHasMore(1, 1000, 164712, 1000), 'После первой страницы должна запрашиваться следующая');
+refreshExpect(clientsPageHasMore(164, 1000, 164712, 1000), 'Страница 164 не должна завершать обход');
+refreshExpect(!clientsPageHasMore(165, 1000, 164712, 712), 'Страница 165 должна завершать обход');
+refreshExpect(!clientsPageHasMore(2, 1000, 164712, 0), 'Пустая страница должна завершать обход');
 refreshExpect(
     clientsNextRefresh(new DateTimeImmutable('2026-08-12 03:00:00', $timezone))->format('Y-m-d H:i') === '2026-08-12 04:00',
     'До 04:00 следующим должен быть сегодняшний запуск'
