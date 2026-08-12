@@ -104,6 +104,11 @@ function clientsCacheFile(): string
     return sys_get_temp_dir() . '/calltrack_clients_v2_' . sha1(implode('|', clientsApiUrls())) . '.json';
 }
 
+function clientsPhoneIndexCacheFile(): string
+{
+    return sys_get_temp_dir() . '/calltrack_clients_phone_index_' . sha1(implode('|', clientsApiUrls())) . '.json';
+}
+
 function clientsRefreshStatusFile(): string
 {
     return sys_get_temp_dir() . '/calltrack_clients_refresh.status.json';
@@ -135,14 +140,12 @@ function readClientsCache(): array
     return is_array($cached) ? $cached : [];
 }
 
-function readClientsCacheAllowStale(): array
+function readClientsPhoneIndexCache(): array
 {
-    $cached = readClientsCache();
-    return array_values(array_filter($cached, static function ($client): bool {
-        return is_array($client)
-            && isset($client['name'], $client['phones'])
-            && is_array($client['phones']);
-    }));
+    $cacheFile = clientsPhoneIndexCacheFile();
+    if (!is_file($cacheFile)) return [];
+    $index = json_decode((string)file_get_contents($cacheFile), true);
+    return is_array($index) ? $index : [];
 }
 
 function writeClientsCache(array $clients): void
@@ -150,6 +153,13 @@ function writeClientsCache(array $clients): void
     $json = json_encode($clients, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($json === false || @file_put_contents(clientsCacheFile(), $json, LOCK_EX) === false) {
         throw new RuntimeException('Не удалось сохранить локальный кэш Clients');
+    }
+
+    // Для дашборда сохраняется отдельный компактный индекс. Так основной API
+    // звонков не декодирует многомегабайтные карточки всех клиентов.
+    $indexJson = json_encode(buildClientPhoneIndex($clients), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($indexJson === false || @file_put_contents(clientsPhoneIndexCacheFile(), $indexJson, LOCK_EX) === false) {
+        throw new RuntimeException('Не удалось сохранить индекс телефонов Clients');
     }
 }
 

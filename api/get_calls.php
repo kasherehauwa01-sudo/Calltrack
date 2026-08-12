@@ -61,9 +61,9 @@ function applyRegistryPeriod(array $source): array
 function enrichCallsWithClients(array $rows): array
 {
     try {
-        // Основной дашборд не должен выполнять тяжёлый запрос в Clients или
-        // читать всю таблицу справочника. Для обогащения используем только кэш.
-        $clientIndex = buildClientPhoneIndex(readClientsCacheAllowStale());
+        // Основной дашборд читает компактный индекс телефон => наименование,
+        // а не многомегабайтный кэш полных карточек Clients.
+        $clientIndex = readClientsPhoneIndexCache();
         if (!$clientIndex) return $rows;
 
         foreach ($rows as &$row) {
