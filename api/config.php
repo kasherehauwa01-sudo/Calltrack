@@ -36,7 +36,9 @@ if (!defined('UPDATE_DOWNLOAD_URL')) {
     define('UPDATE_DOWNLOAD_URL', 'https://kvasmix.ru/vr/calltrack/api/update.php?download=1');
 }
 if (!defined('CLIENTS_API_URL')) {
-    define('CLIENTS_API_URL', 'http://127.0.0.1/vr/clients/api/get_clients.php');
+    // Clients опубликован непосредственно на loopback-порту 8015. Путь через
+    // локальный Nginx /vr/clients не настроен и отвечает HTTP 404.
+    define('CLIENTS_API_URL', 'http://127.0.0.1:8015/api/get_clients.php');
 }
 
 function dbConfigValue(string $envName, string $constantName): string

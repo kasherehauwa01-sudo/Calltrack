@@ -23,11 +23,13 @@ function clientsCurlRequest(string $url): array
     ]);
     $body = curl_exec($curl);
     $httpCode = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    $effectiveUrl = (string)curl_getinfo($curl, CURLINFO_EFFECTIVE_URL);
     $curlError = curl_error($curl);
     curl_close($curl);
 
     return [
         'http_code'=>$httpCode,
+        'effective_url'=>$effectiveUrl,
         'body'=>$body === false ? '' : (string)$body,
         'curl_error'=>$curlError,
     ];
@@ -41,7 +43,11 @@ function fetchClientsApiRows(string $url): array
         throw new RuntimeException('Ошибка соединения с Clients: ' . $http['curl_error']);
     }
     if ($http['http_code'] !== 200) {
-        throw new RuntimeException('Clients API вернул HTTP ' . $http['http_code']);
+        throw new RuntimeException(sprintf(
+            'Clients API вернул HTTP %d для URL %s',
+            $http['http_code'],
+            $http['effective_url'] !== '' ? $http['effective_url'] : $url
+        ));
     }
     if (trim($http['body']) === '') {
         throw new RuntimeException('Clients API вернул пустой ответ');
