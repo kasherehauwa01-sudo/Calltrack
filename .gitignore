@@ -1,2 +1,5 @@
-# Local database credentials
+# Локальные настройки окружения
+api/config.local.php
+logs/
+updates/
 api/config.local.php
