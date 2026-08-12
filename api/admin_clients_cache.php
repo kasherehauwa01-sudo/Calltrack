@@ -19,9 +19,8 @@ try {
     }
     if ($method !== 'POST') sendJson(['status'=>'error', 'message'=>'Разрешены только GET и POST'], 405);
 
-    @set_time_limit(max(30, (int)CLIENTS_API_TIMEOUT + 30));
-    $result = runClientsCacheRefresh('manual');
-    sendJson(['status'=>'success', 'message'=>'Кэш успешно обновлен', 'data'=>$result]);
+    $result = startClientsCacheRefreshInBackground();
+    sendJson(['status'=>'success', 'message'=>'Обновление запущено', 'data'=>$result], 202);
 } catch (Throwable $error) {
     $code = strpos($error->getMessage(), 'уже выполняется') !== false ? 409 : 502;
     sendJson(['status'=>'error', 'message'=>$error->getMessage(), 'data'=>clientsRefreshStatusPayload(readClientsRefreshStatus())], $code);

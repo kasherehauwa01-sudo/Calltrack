@@ -692,22 +692,33 @@ async function refreshClientsCacheNow(){
   const spinner=document.getElementById('clientsCacheRefreshSpinner');
   const message=document.getElementById('clientsCacheRefreshMessage');
   const startedAt=Date.now();
-  let seconds=0;
-  button.disabled=true;button.textContent='Обновление выполняется...';
+  const pollingTimeoutMs=10*60*1000;
+  button.disabled=true;button.textContent='Запуск обновления...';
   feedback.className='cache-refresh-feedback running';spinner.hidden=false;
   message.textContent='Запуск обновления кэша Clients...';
-  // Даём браузеру отрисовать начало операции до отправки продолжительного POST-запроса.
-  await new Promise((resolve)=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-  const timer=setInterval(()=>{seconds=Math.floor((Date.now()-startedAt)/1000);message.textContent=`Обновление выполняется — ${seconds} сек.`;},1000);
   try{
-    const result=await window.calltrackApi.refreshClientsCache(adminPasswordValue);
-    renderClientsCacheStatus(result.data);feedback.className='cache-refresh-feedback success';
-    message.textContent=`Кэш успешно обновлен за ${Math.max(1,Math.round((Date.now()-startedAt)/1000))} сек. Получено клиентов: ${Number(result.data?.clients||0).toLocaleString('ru-RU')}`;
+    const launched=await window.calltrackApi.refreshClientsCache(adminPasswordValue);
+    renderClientsCacheStatus(launched.data);button.textContent='Обновление выполняется...';
+    message.textContent='Обновление кэша запущено';
+    while(Date.now()-startedAt<pollingTimeoutMs){
+      await new Promise((resolve)=>setTimeout(resolve,4000));
+      const status=await window.calltrackApi.clientsCacheStatus(adminPasswordValue);
+      renderClientsCacheStatus(status);
+      if(status.status==='success'){
+        feedback.className='cache-refresh-feedback success';
+        message.textContent=`Кэш успешно обновлен. Получено клиентов: ${Number(status.clients||0).toLocaleString('ru-RU')}`;
+        return;
+      }
+      if(status.status==='error') throw new Error(status.error||'Неизвестная ошибка обновления Clients');
+      message.textContent=`Обновление выполняется... Прошло ${Math.max(1,Math.floor((Date.now()-startedAt)/1000))} сек.`;
+    }
+    feedback.className='cache-refresh-feedback error';
+    message.textContent='Автоматическая проверка остановлена через 10 минут. Серверный процесс продолжает работу; обновите статус позднее.';
   }catch(error){
     feedback.className='cache-refresh-feedback error';message.textContent=`Обновление завершилось с ошибкой: ${error.message}`;
     try{renderClientsCacheStatus(await window.calltrackApi.clientsCacheStatus(adminPasswordValue));}catch(statusError){console.error(statusError);}
   }finally{
-    clearInterval(timer);spinner.hidden=true;button.disabled=false;button.textContent='Обновить кэш сейчас';
+    spinner.hidden=true;button.disabled=false;button.textContent='Обновить кэш сейчас';
   }
 }
 

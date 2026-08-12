@@ -48,7 +48,7 @@ function formatClientsRefreshTime(DateTimeImmutable $time): string
     return $time->setTimezone(new DateTimeZone(CLIENTS_REFRESH_TIMEZONE))->format('d.m.Y H:i:s');
 }
 
-function clientsNextRefresh(DateTimeImmutable $now = null): DateTimeImmutable
+function clientsNextRefresh(?DateTimeImmutable $now = null): DateTimeImmutable
 {
     $now = ($now ?? clientsRefreshNow())->setTimezone(new DateTimeZone(CLIENTS_REFRESH_TIMEZONE));
     $next = $now->setTime(4, 0, 0);
@@ -87,10 +87,13 @@ function clientsRefreshStatusPayload(array $status): array
 
 function runClientsCacheRefresh(string $source): array
 {
-    $source = in_array($source, ['cron', 'manual', 'update_calltrack.sh'], true) ? $source : 'update_calltrack.sh';
-    $lock = fopen(clientsRefreshLockFile(), 'c');
-    if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
-        if (is_resource($lock)) fclose($lock);
+    $source = in_array($source, ['cron', 'manual'], true) ? $source : 'manual';
+    $lock = @fopen(clientsRefreshLockFile(), 'c');
+    if ($lock === false) {
+        throw new RuntimeException('Не удалось открыть файл блокировки обновления кэша Clients');
+    }
+    if (!flock($lock, LOCK_EX | LOCK_NB)) {
+        fclose($lock);
         throw new RuntimeException('Обновление кэша Clients уже выполняется');
     }
 
@@ -137,4 +140,78 @@ function runClientsCacheRefresh(string $source): array
         flock($lock, LOCK_UN);
         fclose($lock);
     }
+}
+
+function clientsRefreshIsLocked(): bool
+{
+    $lock = @fopen(clientsRefreshLockFile(), 'c');
+    if ($lock === false) {
+        throw new RuntimeException('Не удалось открыть файл блокировки обновления кэша Clients');
+    }
+    if (!flock($lock, LOCK_EX | LOCK_NB)) {
+        fclose($lock);
+        return true;
+    }
+    flock($lock, LOCK_UN);
+    fclose($lock);
+    return false;
+}
+
+function startClientsCacheRefreshInBackground(): array
+{
+    if (!function_exists('exec')) {
+        throw new RuntimeException('Фоновый запуск недоступен: функция PHP exec отключена');
+    }
+    if (clientsRefreshIsLocked()) {
+        throw new RuntimeException('Обновление кэша Clients уже выполняется');
+    }
+    $current = readClientsRefreshStatus();
+    $updatedAt = strtotime((string)($current['updated_at'] ?? '')) ?: 0;
+    if (($current['status'] ?? '') === 'starting' && $updatedAt > time() - 30) {
+        throw new RuntimeException('Обновление кэша Clients уже выполняется');
+    }
+
+    $phpBinary = trim((string)(getenv('CALLTRACK_PHP_CLI') ?: '/usr/bin/php'));
+    $script = __DIR__ . '/refresh_clients_cache.php';
+    if (!is_file($phpBinary) || !is_executable($phpBinary)) {
+        throw new RuntimeException('Не найден исполняемый файл PHP CLI для фонового обновления Clients');
+    }
+    if (!is_file($script)) {
+        throw new RuntimeException('Не найден CLI-скрипт обновления кэша Clients');
+    }
+
+    $previous = readClientsRefreshStatus();
+    $starting = [
+        'status'=>'starting',
+        'success'=>false,
+        'source'=>'manual',
+        'started_at'=>clientsRefreshNow()->format(DATE_ATOM),
+        'finished_at'=>null,
+        'clients'=>null,
+        'error'=>null,
+    ];
+    if (isset($previous['last_cron_started_at'])) $starting['last_cron_started_at'] = $previous['last_cron_started_at'];
+    writeClientsRefreshStatus($starting);
+
+    // Все части команды формируются сервером и экранируются; клиент не передаёт пути или аргументы.
+    $command = sprintf(
+        'nohup %s %s --source=manual </dev/null >/dev/null 2>&1 & echo $!',
+        escapeshellarg($phpBinary),
+        escapeshellarg($script)
+    );
+    $output = [];
+    $exitCode = 0;
+    exec($command, $output, $exitCode);
+    $pid = isset($output[0]) && ctype_digit(trim((string)$output[0])) ? (int)trim((string)$output[0]) : 0;
+    if ($exitCode !== 0 || $pid <= 0) {
+        $starting['status'] = 'error';
+        $starting['finished_at'] = clientsRefreshNow()->format(DATE_ATOM);
+        $starting['error'] = 'Не удалось создать фоновый процесс обновления кэша Clients';
+        writeClientsRefreshStatus($starting);
+        appendClientsRefreshLog('ERROR: ' . $starting['error']);
+        throw new RuntimeException($starting['error']);
+    }
+    appendClientsRefreshLog("Создан фоновый процесс ручного обновления Clients, PID: {$pid}");
+    $starting['pid'] = $pid;
+    return clientsRefreshStatusPayload($starting);
 }

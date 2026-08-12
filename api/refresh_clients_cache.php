@@ -8,7 +8,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 try {
-    $source = 'update_calltrack.sh';
+    $source = 'manual';
     foreach (array_slice($argv ?? [], 1) as $argument) {
         if (strpos($argument, '--source=') === 0) $source = substr($argument, 9);
     }
