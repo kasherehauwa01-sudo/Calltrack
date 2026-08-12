@@ -7,6 +7,8 @@ declare(strict_types=1);
 
 if (file_exists(__DIR__ . '/config.local.php')) {
     require_once __DIR__ . '/config.local.php';
+} elseif (file_exists(dirname(__DIR__) . '/config.local.php')) {
+    require_once dirname(__DIR__) . '/config.local.php';
 }
 
 if (!defined('DB_HOST')) {
@@ -30,6 +32,11 @@ if (!defined('UPDATE_PUBLIC_BASE')) {
 if (!defined('UPDATE_DOWNLOAD_URL')) {
     define('UPDATE_DOWNLOAD_URL', 'https://kvasmix.ru/vr/calltrack/api/update.php?download=1');
 }
+if (!defined('CLIENTS_API_URL')) {
+    // Clients опубликован непосредственно на loopback-порту 8015. Путь через
+    // локальный Nginx /vr/clients не настроен и отвечает HTTP 404.
+    define('CLIENTS_API_URL', 'http://127.0.0.1:8015/api/get_clients.php');
+}
 
 function dbConfigValue(string $envName, string $constantName): string
 {
@@ -40,14 +47,25 @@ function dbConfigValue(string $envName, string $constantName): string
     return (string)constant($constantName);
 }
 
+function firstDbConfigValue(array $envNames, string $constantName): string
+{
+    foreach ($envNames as $envName) {
+        $envValue = getenv($envName);
+        if ($envValue !== false && trim((string)$envValue) !== '') {
+            return trim((string)$envValue);
+        }
+    }
+    return (string)constant($constantName);
+}
+
 function getDbConfig(): array
 {
     return [
-        'host' => dbConfigValue('CALLTRACK_DB_HOST', 'DB_HOST'),
-        'db' => dbConfigValue('CALLTRACK_DB_NAME', 'DB_NAME'),
-        'user' => dbConfigValue('CALLTRACK_DB_USER', 'DB_USER'),
-        'pass' => dbConfigValue('CALLTRACK_DB_PASS', 'DB_PASS'),
-        'charset' => dbConfigValue('CALLTRACK_DB_CHARSET', 'DB_CHARSET'),
+        'host' => firstDbConfigValue(['CALLTRACK_DB_HOST', 'DB_HOST', 'MYSQL_HOST', 'MYSQL_SERVER'], 'DB_HOST'),
+        'db' => firstDbConfigValue(['CALLTRACK_DB_NAME', 'DB_NAME', 'MYSQL_DATABASE', 'MYSQL_DB'], 'DB_NAME'),
+        'user' => firstDbConfigValue(['CALLTRACK_DB_USER', 'DB_USER', 'MYSQL_USER', 'MYSQL_USERNAME'], 'DB_USER'),
+        'pass' => firstDbConfigValue(['CALLTRACK_DB_PASS', 'DB_PASS', 'MYSQL_PASSWORD', 'MYSQL_PASS'], 'DB_PASS'),
+        'charset' => firstDbConfigValue(['CALLTRACK_DB_CHARSET', 'DB_CHARSET', 'MYSQL_CHARSET'], 'DB_CHARSET'),
     ];
 }
 
@@ -64,11 +82,21 @@ function getPdo(): PDO
     error_log('DB USER: ' . $user);
 
     $dsn = "mysql:host={$host};dbname={$db};charset={$charset}";
-    return new PDO($dsn, $user, $pass, [
+    $options = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
+    ];
+
+    try {
+        return new PDO($dsn, $user, $pass, $options);
+    } catch (PDOException $error) {
+        if ($pass !== 'YOUR_PASSWORD') {
+            throw $error;
+        }
+        error_log('DB PASS is default placeholder, retrying connection with empty password');
+        return new PDO($dsn, $user, '', $options);
+    }
 }
 
 
@@ -188,6 +216,183 @@ CREATE TABLE IF NOT EXISTS app_updates (
     INDEX idx_app_updates_uploaded_at (uploaded_at)
 )
 SQL);
+}
+
+function updateDownloadUrlForVersion(int $versionCode): string
+{
+    $suffix = $versionCode > 0 ? '&versionCode=' . rawurlencode((string)$versionCode) : '';
+    return (string)UPDATE_DOWNLOAD_URL . $suffix;
+}
+
+function resolveUpdateApk(PDO $pdo, int $versionCode = 0): array
+{
+    ensureAppUpdatesTable($pdo);
+    if ($versionCode > 0) {
+        $stmt = $pdo->prepare('SELECT filename, version_code FROM app_updates WHERE version_code = :version_code ORDER BY uploaded_at DESC, id DESC LIMIT 1');
+        $stmt->execute([':version_code' => $versionCode]);
+    } else {
+        $stmt = $pdo->query('SELECT filename, version_code FROM app_updates ORDER BY version_code DESC, uploaded_at DESC, id DESC LIMIT 1');
+    }
+    $row = $stmt->fetch();
+    if (!$row) {
+        sendJson(['status' => 'error', 'message' => 'APK update not found'], 404);
+    }
+
+    $filename = basename((string)($row['filename'] ?? ''));
+    if ($filename === '' || strtolower(pathinfo($filename, PATHINFO_EXTENSION)) !== 'apk') {
+        sendJson(['status' => 'error', 'message' => 'APK filename is invalid'], 500);
+    }
+    $updatesDir = realpath(dirname(__DIR__) . '/updates');
+    $apkPath = realpath(dirname(__DIR__) . '/updates/' . $filename);
+    if ($updatesDir === false || $apkPath === false || strpos($apkPath, $updatesDir) !== 0 || !is_file($apkPath)) {
+        sendJson(['status' => 'error', 'message' => 'APK file not found'], 404);
+    }
+    return ['path' => $apkPath, 'filename' => $filename, 'version_code' => (int)$row['version_code']];
+}
+
+function streamApkFile(string $apkPath, string $filename): void
+{
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    header('Content-Type: application/vnd.android.package-archive');
+    header('X-Content-Type-Options: nosniff');
+    header('Content-Length: ' . filesize($apkPath));
+    header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    readfile($apkPath);
+    exit;
+}
+
+function ensureEmailTables(PDO $pdo): void
+{
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS email_mailboxes (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    manager_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    imap_host VARCHAR(255) NOT NULL,
+    imap_port INT NOT NULL DEFAULT 993,
+    imap_ssl TINYINT(1) NOT NULL DEFAULT 1,
+    username VARCHAR(255) NOT NULL,
+    password_encrypted TEXT NOT NULL,
+    inbox_folder VARCHAR(255) NOT NULL DEFAULT 'INBOX',
+    sent_folder VARCHAR(255) NOT NULL DEFAULT 'Sent',
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    last_sync_at DATETIME NULL,
+    sync_status ENUM('never','success','error') NOT NULL DEFAULT 'never',
+    sync_error TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_email_mailboxes_email (email),
+    INDEX idx_email_mailboxes_manager (manager_name),
+    INDEX idx_email_mailboxes_enabled (enabled)
+)
+SQL);
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS email_messages (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    mailbox_id BIGINT UNSIGNED NOT NULL,
+    manager_name VARCHAR(255) NOT NULL,
+    direction ENUM('incoming','outgoing') NOT NULL,
+    sent_at DATETIME NOT NULL,
+    from_email VARCHAR(255),
+    from_name VARCHAR(255),
+    to_emails TEXT,
+    cc_emails TEXT,
+    client_name VARCHAR(255),
+    client_email VARCHAR(255),
+    client_status ENUM('found','not_found','needs_review') NOT NULL DEFAULT 'not_found',
+    incoming_status ENUM('read','unread','answered') NOT NULL DEFAULT 'unread',
+    outgoing_status ENUM('delivered','not_delivered','opened') NULL,
+    subject TEXT,
+    body_text MEDIUMTEXT,
+    body_html MEDIUMTEXT,
+    message_size BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    has_attachments TINYINT(1) NOT NULL DEFAULT 0,
+    attachment_count INT UNSIGNED NOT NULL DEFAULT 0,
+    imap_uid BIGINT UNSIGNED NOT NULL,
+    imap_folder VARCHAR(255) NOT NULL DEFAULT 'INBOX',
+    message_id VARCHAR(512),
+    thread_key VARCHAR(512),
+    answered_at DATETIME NULL,
+    response_minutes INT UNSIGNED NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_email_messages_mailbox_folder_uid (mailbox_id, imap_folder, imap_uid),
+    INDEX idx_email_messages_sent_at (sent_at),
+    INDEX idx_email_messages_manager (manager_name),
+    INDEX idx_email_messages_client_email (client_email),
+    INDEX idx_email_messages_status (client_status),
+    INDEX idx_email_messages_direction (direction)
+)
+SQL);
+    foreach ([
+        "ALTER TABLE email_mailboxes ADD COLUMN sync_status ENUM('never','success','error') NOT NULL DEFAULT 'never'",
+        "ALTER TABLE email_mailboxes ADD COLUMN sync_error TEXT NULL",
+        "ALTER TABLE email_messages ADD COLUMN incoming_status ENUM('read','unread','answered') NOT NULL DEFAULT 'unread'",
+        "ALTER TABLE email_messages ADD COLUMN outgoing_status ENUM('delivered','not_delivered','opened') NULL",
+        "ALTER TABLE email_messages ADD COLUMN imap_folder VARCHAR(255) NOT NULL DEFAULT 'INBOX'",
+    ] as $sql) {
+        try {
+            $pdo->exec($sql);
+        } catch (Throwable $e) {
+            // Колонка уже существует.
+        }
+    }
+    try {
+        $pdo->exec('ALTER TABLE email_messages DROP INDEX uk_email_messages_mailbox_uid, ADD UNIQUE KEY uk_email_messages_mailbox_folder_uid (mailbox_id, imap_folder, imap_uid)');
+    } catch (Throwable $e) {
+        // Индекс уже приведён к схеме «ящик + папка + UID».
+    }
+    $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS email_attachments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    message_id BIGINT UNSIGNED NOT NULL,
+    filename VARCHAR(512) NOT NULL,
+    mime_type VARCHAR(255),
+    file_size BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    storage_path VARCHAR(1024),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_email_attachments_message (message_id)
+)
+SQL);
+}
+
+function encryptSecret(string $secret): string
+{
+    $key = getenv('CALLTRACK_SECRET_KEY') ?: getenv('APP_SECRET_KEY') ?: '';
+    if ($key === '' || !function_exists('openssl_encrypt')) {
+        return base64_encode($secret);
+    }
+    $iv = random_bytes(16);
+    $cipher = openssl_encrypt($secret, 'AES-256-CBC', hash('sha256', $key, true), OPENSSL_RAW_DATA, $iv);
+    if ($cipher === false) {
+        throw new RuntimeException('Не удалось зашифровать секрет');
+    }
+    return 'aes256cbc:' . base64_encode($iv . $cipher);
+}
+
+function decryptSecret(string $encrypted): string
+{
+    $isEncrypted = str_starts_with($encrypted, 'aes256cbc:');
+    $payload = $isEncrypted ? substr($encrypted, strlen('aes256cbc:')) : $encrypted;
+    $decoded = base64_decode($payload, true);
+    if ($decoded === false) {
+        throw new RuntimeException('Некорректный формат зашифрованного пароля');
+    }
+    $key = getenv('CALLTRACK_SECRET_KEY') ?: getenv('APP_SECRET_KEY') ?: '';
+    if (!$isEncrypted) {
+        return $decoded;
+    }
+    if ($key === '' || !function_exists('openssl_decrypt') || strlen($decoded) < 17) {
+        throw new RuntimeException('Для расшифровки IMAP-пароля не настроен ключ приложения');
+    }
+    $iv = substr($decoded, 0, 16);
+    $secret = openssl_decrypt(substr($decoded, 16), 'AES-256-CBC', hash('sha256', $key, true), OPENSSL_RAW_DATA, $iv);
+    if ($secret === false) {
+        throw new RuntimeException('Не удалось расшифровать пароль IMAP');
+    }
+    return $secret;
 }
 
 function normalizeUserStateKey(?string $phone, ?string $manager = null, ?string $userId = null): string
