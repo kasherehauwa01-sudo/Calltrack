@@ -36,6 +36,27 @@ function splitClientPhones(string $value): array
     return array_values($phones);
 }
 
+function clientFieldIsFilled($value): bool
+{
+    if ($value === null) return false;
+    if (is_string($value)) return trim($value) !== '';
+    if (is_array($value)) {
+        foreach ($value as $item) if (clientFieldIsFilled($item)) return true;
+        return false;
+    }
+    return true;
+}
+
+function filledClientFields(array $row): array
+{
+    $fields = [];
+    foreach ($row as $key=>$value) {
+        if (!clientFieldIsFilled($value)) continue;
+        $fields[(string)$key] = $value;
+    }
+    return $fields;
+}
+
 function normalizeClientsPayload(array $rows): array
 {
     $result = [];
@@ -49,7 +70,8 @@ function normalizeClientsPayload(array $rows): array
         }
         $phones = array_values($phones);
         if ($name === '' || !$phones) continue;
-        $result[] = ['name'=>$name, 'phones'=>$phones];
+        // Исходные заполненные поля сохраняются для карточки клиента в тесте API.
+        $result[] = ['name'=>$name, 'phones'=>$phones, 'fields'=>filledClientFields($row)];
     }
     return $result;
 }
@@ -78,7 +100,8 @@ function clientsApiUrls(): array
 
 function clientsCacheFile(): string
 {
-    return sys_get_temp_dir() . '/calltrack_clients_' . sha1(implode('|', clientsApiUrls())) . '.json';
+    // v2 хранит не только name/phones, но и заполненные поля карточки клиента.
+    return sys_get_temp_dir() . '/calltrack_clients_v2_' . sha1(implode('|', clientsApiUrls())) . '.json';
 }
 
 function clientsRefreshStatusFile(): string
@@ -189,7 +212,11 @@ function findClientsByPhone(array $clients, string $normalizedPhone): array
         if (in_array($normalizedPhone, $client['phones'], true)) {
             // Не останавливаемся на первом результате: один телефон может быть
             // указан у нескольких клиентов проекта clients.
-            $matches[] = ['phone'=>'+7' . $normalizedPhone, 'name'=>$client['name']];
+            $matches[] = [
+                'phone'=>'+7' . $normalizedPhone,
+                'name'=>$client['name'],
+                'fields'=>is_array($client['fields'] ?? null) ? $client['fields'] : [],
+            ];
         }
     }
     return $matches;
