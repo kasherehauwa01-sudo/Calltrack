@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/client_directory.php';
 
 function applyRegistryPeriod(array $source): array
 {
@@ -57,6 +58,29 @@ function applyRegistryPeriod(array $source): array
     return $source;
 }
 
+function enrichCallsWithClients(array $rows): array
+{
+    try {
+        // Основной дашборд не должен выполнять тяжёлый запрос в Clients или
+        // читать всю таблицу справочника. Для обогащения используем только кэш.
+        $clientIndex = buildClientPhoneIndex(readClientsCacheAllowStale());
+        if (!$clientIndex) return $rows;
+
+        foreach ($rows as &$row) {
+            $normalizedPhone = normalizeClientPhone((string)$row['phone']);
+            if ($normalizedPhone !== '' && isset($clientIndex[$normalizedPhone])) {
+                $row['client'] = $clientIndex[$normalizedPhone];
+            }
+        }
+        unset($row);
+    } catch (Throwable $e) {
+        // Справочник Clients обогащает звонки, но его недоступность не должна
+        // останавливать основной дашборд. Возвращаем клиент из таблицы calls.
+        error_log('Calls client enrichment failed: ' . $e->getMessage());
+    }
+    return $rows;
+}
+
 try {
     $params = [];
     $filters = applyRegistryPeriod($_GET);
@@ -66,36 +90,28 @@ try {
     $loadAll = $period === 'all' || $rawLimit === null || (int)$rawLimit === 0;
     $limit = $loadAll ? null : min(max((int)$rawLimit, 1), 1000);
     $offset = max((int)($_GET['offset'] ?? 0), 0);
-    $pdo = getPdo();
 
-    $countStmt = $pdo->prepare("SELECT COUNT(*) AS total FROM calls{$where}");
-    foreach ($params as $key => $value) {
-        $countStmt->bindValue($key, $value);
-    }
+    $pdo = getPdo();
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM calls{$where}");
+    foreach ($params as $key => $value) $countStmt->bindValue($key, $value);
     $countStmt->execute();
     $total = (int)$countStmt->fetchColumn();
 
-    $sql = <<<SQL
-SELECT id_db, call_date, call_time, phone, call_type, duration, manager, client,
-       comment, tag, reminder, reminder_text, call_id, user_phone, created_at
-FROM calls{$where}
-ORDER BY call_date DESC, call_time DESC, id_db DESC
-SQL;
+    $sql = "SELECT id_db, call_date, call_time, phone, call_type, duration, manager, client, comment, tag, reminder, reminder_text, call_id, user_phone, created_at FROM calls{$where} ORDER BY call_date DESC, call_time DESC, id_db DESC";
     if (!$loadAll) {
-        $sql .= "\nLIMIT :limit OFFSET :offset";
+        $sql .= ' LIMIT :limit OFFSET :offset';
     }
 
     $stmt = $pdo->prepare($sql);
-    foreach ($params as $key => $value) {
-        $stmt->bindValue($key, $value);
-    }
+    foreach ($params as $key => $value) $stmt->bindValue($key, $value);
     if (!$loadAll) {
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
     }
     $stmt->execute();
+    $rows = enrichCallsWithClients($stmt->fetchAll());
 
-    sendJson(['status' => 'success', 'data' => $stmt->fetchAll(), 'total' => $total]);
+    sendJson(['status' => 'success', 'data' => $rows, 'total' => $total]);
 } catch (Throwable $e) {
     sendJson(['status' => 'error', 'message' => $e->getMessage()], 500);
 }
