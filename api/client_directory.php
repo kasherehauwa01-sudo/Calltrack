@@ -122,7 +122,10 @@ function clientsLookupReadyFile(): string
 
 function clientsRefreshStatusFile(): string
 {
-    return sys_get_temp_dir() . '/calltrack_clients_refresh.status.json';
+    $storage = trim((string)(getenv('CALLTRACK_STORAGE_DIR') ?: ''));
+    $directory = $storage !== '' ? rtrim($storage, '/') : dirname(__DIR__) . '/storage';
+    if (!is_dir($directory)) @mkdir($directory, 0775, true);
+    return $directory . '/clients_cache_refresh.status.json';
 }
 
 function readClientsRefreshStatus(): array
@@ -136,11 +139,14 @@ function readClientsRefreshStatus(): array
 function writeClientsRefreshStatus(array $status): void
 {
     $status['updated_at'] = date(DATE_ATOM);
-    @file_put_contents(
-        clientsRefreshStatusFile(),
-        json_encode($status, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        LOCK_EX
-    );
+    $json = json_encode($status, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) throw new RuntimeException('Не удалось сериализовать статус обновления Clients');
+    $target = clientsRefreshStatusFile();
+    $temporary = $target . '.tmp.' . getmypid();
+    if (@file_put_contents($temporary, $json, LOCK_EX) === false || !@rename($temporary, $target)) {
+        @unlink($temporary);
+        throw new RuntimeException('Не удалось сохранить статус обновления Clients');
+    }
 }
 
 function readClientsCache(): array
@@ -172,14 +178,19 @@ function readClientMatchesCache(string $normalizedPhone): ?array
 function writeClientsCache(array $clients): void
 {
     $json = json_encode($clients, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($json === false || @file_put_contents(clientsCacheFile(), $json, LOCK_EX) === false) {
-        throw new RuntimeException('Не удалось сохранить локальный кэш Clients');
+    $indexJson = json_encode(buildClientPhoneIndex($clients), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false || $indexJson === false) {
+        throw new RuntimeException('Не удалось подготовить локальный кэш Clients');
     }
 
-    // Для дашборда сохраняется отдельный компактный индекс. Так основной API
-    // звонков не декодирует многомегабайтные карточки всех клиентов.
-    $indexJson = json_encode(buildClientPhoneIndex($clients), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($indexJson === false || @file_put_contents(clientsPhoneIndexCacheFile(), $indexJson, LOCK_EX) === false) {
+    $suffix = '.new.' . getmypid();
+    $cacheTemporary = clientsCacheFile() . $suffix;
+    $indexTemporary = clientsPhoneIndexCacheFile() . $suffix;
+    if (@file_put_contents($cacheTemporary, $json, LOCK_EX) === false) {
+        throw new RuntimeException('Не удалось сохранить локальный кэш Clients');
+    }
+    if (@file_put_contents($indexTemporary, $indexJson, LOCK_EX) === false) {
+        @unlink($cacheTemporary);
         throw new RuntimeException('Не удалось сохранить индекс телефонов Clients');
     }
 
@@ -199,15 +210,34 @@ function writeClientsCache(array $clients): void
             ];
         }
     }
-    $shardPattern = sys_get_temp_dir() . '/calltrack_clients_lookup_' . sha1(implode('|', clientsApiUrls())) . '_*.json';
-    foreach (glob($shardPattern) ?: [] as $oldShard) @unlink($oldShard);
-    @unlink(clientsLookupReadyFile());
+    $temporaryShards = [];
     foreach ($shards as $shardRows) {
         $firstPhone = (string)array_key_first($shardRows);
         $shardJson = json_encode($shardRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if ($shardJson === false || @file_put_contents(clientsLookupShardFile($firstPhone), $shardJson, LOCK_EX) === false) {
+        $target = clientsLookupShardFile($firstPhone);
+        $temporary = $target . $suffix;
+        if ($shardJson === false || @file_put_contents($temporary, $shardJson, LOCK_EX) === false) {
+            @unlink($cacheTemporary);
+            @unlink($indexTemporary);
+            foreach ($temporaryShards as $file) @unlink($file['temporary']);
             throw new RuntimeException('Не удалось сохранить индекс карточек Clients');
         }
+        $temporaryShards[] = ['temporary'=>$temporary, 'target'=>$target];
+    }
+
+    // Действующий набор не трогаем, пока полностью не подготовлены все новые файлы.
+    @unlink(clientsLookupReadyFile());
+    if (!@rename($cacheTemporary, clientsCacheFile()) || !@rename($indexTemporary, clientsPhoneIndexCacheFile())) {
+        foreach ($temporaryShards as $file) @unlink($file['temporary']);
+        throw new RuntimeException('Не удалось атомарно заменить кэш Clients');
+    }
+    foreach ($temporaryShards as $file) {
+        if (!@rename($file['temporary'], $file['target'])) throw new RuntimeException('Не удалось заменить индекс карточек Clients');
+    }
+    $activeShards = array_column($temporaryShards, 'target');
+    $shardPattern = sys_get_temp_dir() . '/calltrack_clients_lookup_' . sha1(implode('|', clientsApiUrls())) . '_*.json';
+    foreach (glob($shardPattern) ?: [] as $oldShard) {
+        if (!in_array($oldShard, $activeShards, true)) @unlink($oldShard);
     }
     if (@file_put_contents(clientsLookupReadyFile(), date(DATE_ATOM), LOCK_EX) === false) {
         throw new RuntimeException('Не удалось завершить индекс карточек Clients');

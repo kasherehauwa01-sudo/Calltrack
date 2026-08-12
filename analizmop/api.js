@@ -13,6 +13,7 @@ window.calltrackApi.endpoints = Object.assign({
   users: '/vr/calltrack/api/get_users.php',
   clientDirectory: '/vr/calltrack/api/client_directory.php',
   testClients: '/vr/calltrack/api/test_clients.php',
+  clientsCache: '/vr/calltrack/api/admin_clients_cache.php',
   userCommand: '/vr/calltrack/api/user_command.php'
 }, window.calltrackApi.endpoints || {});
 window.calltrackApi.requestJson = async function requestJson(url, options = {}) {
@@ -53,6 +54,20 @@ window.calltrackApi.testClientPhone = window.calltrackApi.testClientPhone || (as
   const payload = await window.calltrackApi.requestJson(`${endpoint}${separator}phone=${encodeURIComponent(phone)}`);
   return payload.data || null;
 });
+
+window.calltrackApi.clientsCacheStatus = async function clientsCacheStatus(password) {
+  const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientsCache, {
+    headers: { 'X-Calltrack-Admin-Password': password }
+  });
+  return payload.data || {};
+};
+
+window.calltrackApi.refreshClientsCache = async function refreshClientsCache(password) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientsCache, {
+    method: 'POST',
+    headers: { 'X-Calltrack-Admin-Password': password }
+  });
+};
 
 window.calltrackApi.getPersonalContacts = window.calltrackApi.getPersonalContacts || (async function getDashboardPersonalContacts() {
   const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.personalContacts);
