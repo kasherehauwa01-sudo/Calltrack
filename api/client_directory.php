@@ -135,6 +135,16 @@ function readClientsCache(): array
     return is_array($cached) ? $cached : [];
 }
 
+function readClientsCacheAllowStale(): array
+{
+    $cached = readClientsCache();
+    return array_values(array_filter($cached, static function ($client): bool {
+        return is_array($client)
+            && isset($client['name'], $client['phones'])
+            && is_array($client['phones']);
+    }));
+}
+
 function writeClientsCache(array $clients): void
 {
     $json = json_encode($clients, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
