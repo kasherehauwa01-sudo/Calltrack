@@ -192,6 +192,8 @@ class CallRepository(
     }
     fun loadClientCards(phone: String): List<ClientCard> = clientDirectory.loadClientCards(phone)
 
+    fun loadClientCards(phone: String): List<ClientCard> = clientDirectory.loadClientCards(phone)
+
     suspend fun isPersonalContact(phone: String): Boolean {
         if (phone.isBlank() || phone == "Неизвестно") return false
 

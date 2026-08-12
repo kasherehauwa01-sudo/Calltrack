@@ -11,7 +11,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
+
+data class ClientCard(
+    val name: String,
+    val phone: String,
+    val fields: Map<String, String>
+)
 
 class ClientDirectory(context: Context) {
     private val appContext = context.applicationContext
@@ -45,6 +52,52 @@ class ClientDirectory(context: Context) {
             ioScope.launch { ensureLoaded() }
         }
         return phoneToClient[normalized].orEmpty()
+    }
+
+    /** Загружает все карточки Clients, найденные по одному номеру телефона. */
+    fun loadClientCards(rawPhone: String): List<ClientCard> {
+        val normalized = normalizePhone(rawPhone)
+        if (normalized.length != 10) return emptyList()
+        val baseUrl = BuildConfig.SQL_API_BASE_URL.trimEnd('/')
+        val url = "$baseUrl/test_clients.php?phone=${java.net.URLEncoder.encode(rawPhone, "UTF-8")}"
+        val request = Request.Builder().url(url).build()
+        return runCatching {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) error("HTTP ${response.code}")
+                val payload = JSONObject(response.body?.string().orEmpty())
+                if (!payload.optString("status").equals("success", ignoreCase = true)) {
+                    error(payload.optString("message", "API error"))
+                }
+                val data = payload.optJSONObject("data") ?: return@use emptyList()
+                if (data.optBoolean("pending")) return@use emptyList()
+                val matches = data.optJSONArray("matches") ?: return@use emptyList()
+                parseClientCards(matches)
+            }
+        }.onFailure {
+            Log.e("ClientDirectory", "Ошибка загрузки карточек Clients", it)
+        }.getOrDefault(emptyList())
+    }
+
+    private fun parseClientCards(matches: JSONArray): List<ClientCard> = buildList {
+        for (index in 0 until matches.length()) {
+            val match = matches.optJSONObject(index) ?: continue
+            val fieldsJson = match.optJSONObject("fields")
+            val fields = linkedMapOf<String, String>()
+            fieldsJson?.keys()?.forEach { key ->
+                formatFieldValue(fieldsJson.opt(key)).takeIf(String::isNotBlank)?.let { fields[key] = it }
+            }
+            add(ClientCard(match.optString("name"), match.optString("phone"), fields))
+        }
+    }
+
+    private fun formatFieldValue(value: Any?): String = when (value) {
+        null, JSONObject.NULL -> ""
+        is JSONArray -> (0 until value.length()).map { formatFieldValue(value.opt(it)) }.filter(String::isNotBlank).joinToString("\n")
+        is JSONObject -> value.keys().asSequence().mapNotNull { key ->
+            formatFieldValue(value.opt(key)).takeIf(String::isNotBlank)?.let { "$key: $it" }
+        }.joinToString("\n")
+        is Boolean -> if (value) "Да" else "Нет"
+        else -> value.toString().trim()
     }
 
     private fun ensureLoaded() {
