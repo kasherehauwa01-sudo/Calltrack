@@ -39,6 +39,7 @@
     .admin-subtab{border:0;border-radius:999px;background:transparent;color:#4b5563;padding:9px 16px;cursor:pointer;transition:.2s ease}
     .admin-subtab:hover{background:#dfe4ec;color:#111827}.admin-subtab.active{background:#fff;color:#111827;font-weight:600;box-shadow:0 4px 14px rgba(15,23,42,.11)}
     .admin-panel{display:grid;gap:12px}.admin-panel[hidden]{display:none}
+    .cache-refresh-card{border:1px solid #dbe3ef;border-radius:16px;padding:18px;background:#f8fafc;display:grid;gap:14px}.cache-refresh-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.cache-refresh-item{display:grid;gap:3px}.cache-refresh-label{font-size:.82rem;color:var(--muted)}.cache-refresh-value{font-weight:600;color:#111827}.cache-refresh-value.success{color:#15803d}.cache-refresh-value.error{color:#b91c1c}
     .registry-wrap{overflow:auto;border:1px solid #e5e7eb;border-radius:14px;background:#fff;max-height:62vh}
     .registry-table{width:100%;border-collapse:collapse;min-width:1280px;font-size:.86rem}
     .registry-table th,.registry-table td{padding:10px 12px;border-bottom:1px solid #eef2f7;text-align:left;vertical-align:top;white-space:nowrap}
@@ -391,6 +392,20 @@
           </section>
           <section class="admin-panel" id="adminGeneralSettingsPanel" hidden>
             <h3>Общие настройки</h3>
+            <section class="cache-refresh-card" aria-labelledby="clientsCacheRefreshTitle">
+              <h3 id="clientsCacheRefreshTitle">Обновление кэша</h3>
+              <div class="cache-refresh-grid">
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Автоматическое обновление</span><span class="cache-refresh-value" id="clientsCacheSchedule">Ежедневно в 04:00 МСК</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Статус cron</span><span class="cache-refresh-value" id="clientsCacheCronState">Загрузка...</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Последнее обновление</span><span class="cache-refresh-value" id="clientsCacheLastUpdate">Нет данных</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Статус последнего обновления</span><span class="cache-refresh-value" id="clientsCacheLastStatus">Нет данных</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Получено клиентов</span><span class="cache-refresh-value" id="clientsCacheCount">Нет данных</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Следующее обновление</span><span class="cache-refresh-value" id="clientsCacheNextRun">Нет данных</span></div>
+                <div class="cache-refresh-item" id="clientsCacheErrorRow" hidden><span class="cache-refresh-label">Последняя ошибка</span><span class="cache-refresh-value error" id="clientsCacheError"></span></div>
+              </div>
+              <div class="updates-actions"><button class="registry-refresh-btn" id="clientsCacheRefreshBtn" type="button">Обновить кэш сейчас</button></div>
+              <div class="updates-status" id="clientsCacheRefreshStatus" aria-live="polite"></div>
+            </section>
             <p>Проверка поиска наименования клиента по данным проекта clients.</p>
             <form class="updates-form" id="clientsApiTestForm">
               <h3>Тест API с clients</h3>
@@ -465,7 +480,7 @@ const USERS_API_URL=window.calltrackApi?.endpoints?.users||'/vr/calltrack/api/ge
 const USER_COMMAND_API_URL=window.calltrackApi?.endpoints?.userCommand||'/vr/calltrack/api/user_command.php';
 console.log('calltrackApi', window.calltrackApi);
 console.log('SQL_CALLS_API_URL', SQL_CALLS_API_URL);
-const chartInstances=[]; let allCalls=[]; let activePeriod='all'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let activeGroupBy='day'; let adminRegistrySort={key:'call_date',direction:'desc'}; let adminRegistryPeriod='week'; let registryTotalRows=null; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; let users=[]; let usersLoaded=false; let updates=[]; let updatesLoaded=false; let emailMessages=[]; let emailSettings=[]; let emailLoaded=false; let clientsApiTestMatches=[]; let activeUserId=''; const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные']); const selectedRegistryRows=new Set();
+const chartInstances=[]; let allCalls=[]; let activePeriod='all'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let adminPasswordValue=''; let activeGroupBy='day'; let adminRegistrySort={key:'call_date',direction:'desc'}; let adminRegistryPeriod='week'; let registryTotalRows=null; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; let users=[]; let usersLoaded=false; let updates=[]; let updatesLoaded=false; let emailMessages=[]; let emailSettings=[]; let emailLoaded=false; let clientsApiTestMatches=[]; let activeUserId=''; const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные']); const selectedRegistryRows=new Set();
 const els={dashboardView:document.getElementById('dashboardView'),clientCallsView:document.getElementById('clientCallsView'),adminView:document.getElementById('adminView'),managerTags:document.getElementById('managerTags'),groupByFilter:document.getElementById('groupByFilter'),periodShell:document.getElementById('periodShell'),dateFrom:document.getElementById('dateFrom'),dateTo:document.getElementById('dateTo'),applyCustomRangeBtn:document.getElementById('applyCustomRangeBtn'),trendTitle:document.getElementById('trendTitle'),kpiTotal:document.getElementById('kpiTotal'),kpiIncoming:document.getElementById('kpiIncoming'),kpiOutgoing:document.getElementById('kpiOutgoing'),kpiMissed:document.getElementById('kpiMissed'),kpiUnanswered:document.getElementById('kpiUnanswered'),kpiDropped:document.getElementById('kpiDropped'),emptyState:document.getElementById('emptyState'),chartsGrid:document.getElementById('chartsGrid'),callTypeTags:document.getElementById('callTypeTags'),clientManagerTags:document.getElementById('clientManagerTags'),clientPeriodShell:document.getElementById('clientPeriodShell'),clientDateFrom:document.getElementById('clientDateFrom'),clientDateTo:document.getElementById('clientDateTo'),clientApplyRangeBtn:document.getElementById('clientApplyRangeBtn'),clientCallsList:document.getElementById('clientCallsList'),commentModal:document.getElementById('commentModal'),commentInfo:document.getElementById('commentInfo'),commentText:document.getElementById('commentText'),reminderText:document.getElementById('reminderText'),reminderAt:document.getElementById('reminderAt'),commentSaveStatus:document.getElementById('commentSaveStatus'),commentCancelBtn:document.getElementById('commentCancelBtn'),commentSaveBtn:document.getElementById('commentSaveBtn'),clientHistoryModal:document.getElementById('clientHistoryModal'),clientHistoryInfo:document.getElementById('clientHistoryInfo'),clientHistoryList:document.getElementById('clientHistoryList'),clientHistoryCloseBtn:document.getElementById('clientHistoryCloseBtn')};
 const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),updateCommand:document.getElementById('adminUpdateCommand'),updateCommandCopyBtn:document.getElementById('adminUpdateCommandCopyBtn'),updateCommandStatus:document.getElementById('adminUpdateCommandStatus'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsRefreshBtn:document.getElementById('personalContactsRefreshBtn'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),usersPanel:document.getElementById('adminUsersPanel'),usersSearch:document.getElementById('usersSearch'),usersRefreshBtn:document.getElementById('usersRefreshBtn'),usersStatus:document.getElementById('usersStatus'),usersList:document.getElementById('usersList'),userCard:document.getElementById('userCard'),emailRegistryPanel:document.getElementById('adminEmailRegistryPanel'),emailPanel:document.getElementById('adminEmailPanel'),emailTable:document.getElementById('emailTable'),emailSettingsTable:document.getElementById('emailSettingsTable'),emailStatus:document.getElementById('emailStatus'),emailSearch:document.getElementById('emailSearch'),emailDirectionFilter:document.getElementById('emailDirectionFilter'),emailRefreshBtn:document.getElementById('emailRefreshBtn'),emailSettingsForm:document.getElementById('emailSettingsForm'),emailAddMailboxBtn:document.getElementById('emailAddMailboxBtn'),emailSettingsModal:document.getElementById('emailSettingsModal'),emailSettingsCancelBtn:document.getElementById('emailSettingsCancelBtn'),updatesPanel:document.getElementById('adminUpdatesPanel'),updatesTable:document.getElementById('updatesTable'),updateForm:document.getElementById('updateForm'),updateId:document.getElementById('updateId'),updateReleaseNotes:document.getElementById('updateReleaseNotes'),updateApk:document.getElementById('updateApk'),updateFormResetBtn:document.getElementById('updateFormResetBtn'),updatesStatus:document.getElementById('updatesStatus'),generalSettingsPanel:document.getElementById('adminGeneralSettingsPanel'),clientsApiTestForm:document.getElementById('clientsApiTestForm'),clientsApiTestPhone:document.getElementById('clientsApiTestPhone'),clientsApiTestBtn:document.getElementById('clientsApiTestBtn'),clientsApiTestStatus:document.getElementById('clientsApiTestStatus'),clientsApiTestModal:document.getElementById('clientsApiTestModal'),clientsApiTestResult:document.getElementById('clientsApiTestResult'),clientsApiTestBackBtn:document.getElementById('clientsApiTestBackBtn'),clientsApiTestCloseBtn:document.getElementById('clientsApiTestCloseBtn'),registryRefreshBtn:document.getElementById('registryRefreshBtn'),registryTable:document.getElementById('adminRegistryTable'),registryRowsCount:document.getElementById('registryRowsCount'),registryPeriodShell:document.getElementById('registryPeriodShell'),registryCustomPeriodFields:document.getElementById('registryCustomPeriodFields'),registryDateFrom:document.getElementById('registryDateFrom'),registryDateTo:document.getElementById('registryDateTo'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
 const createLocalDate=(year, monthIndex, day, hours=0, minutes=0, seconds=0)=>new Date(year, monthIndex, day, hours, minutes, seconds, 0);
@@ -547,6 +562,7 @@ function unlockAdminPanel(){
     return;
   }
   isAdminUnlocked=true;
+  adminPasswordValue=value;
   adminEls.error.textContent='';
   adminEls.lock.hidden=true;
   adminEls.content.hidden=false;
@@ -623,6 +639,7 @@ function bindAdminPanel(){
   if(adminEls.emailSettingsForm) adminEls.emailSettingsForm.addEventListener('submit',saveEmailSettings);
   if(adminEls.emailSettingsTable) adminEls.emailSettingsTable.addEventListener('click',(e)=>{const edit=e.target.closest('[data-email-edit]');const del=e.target.closest('[data-email-delete]');if(edit){const item=emailSettings.find((row)=>String(row.id)===String(edit.dataset.emailEdit));if(item) openEmailSettingsModal(item);} if(del) deleteEmailSettings(del.dataset.emailDelete);});
   if(adminEls.clientsApiTestForm) adminEls.clientsApiTestForm.addEventListener('submit',testClientsApiPhone);
+  document.getElementById('clientsCacheRefreshBtn')?.addEventListener('click',refreshClientsCacheNow);
   if(adminEls.clientsApiTestCloseBtn) adminEls.clientsApiTestCloseBtn.addEventListener('click',closeClientsApiTestModal);
   if(adminEls.clientsApiTestBackBtn) adminEls.clientsApiTestBackBtn.addEventListener('click',renderClientsApiTestMatches);
   if(adminEls.clientsApiTestResult) adminEls.clientsApiTestResult.addEventListener('click',(event)=>{const row=event.target.closest('[data-clients-match-index]');if(row) renderClientsApiClientCard(Number(row.dataset.clientsMatchIndex));});
@@ -644,6 +661,35 @@ function setActiveAdminTab(tab){
   if(tab==='users'&&!usersLoaded) loadUsers();
   if(tab==='updates'&&!updatesLoaded) loadUpdates();
   if((tab==='emailRegistry'||tab==='email')&&!emailLoaded) loadEmailModule(tab==='emailRegistry');
+  if(tab==='generalSettings') loadClientsCacheStatus();
+}
+
+function renderClientsCacheStatus(data={}){
+  const cronLabels={working:'Работает',configured:'Настроен, ожидается первый запуск',overdue:'Просрочен',no_data:'Нет данных'};
+  document.getElementById('clientsCacheSchedule').textContent=data.schedule||'Ежедневно в 04:00 МСК';
+  document.getElementById('clientsCacheCronState').textContent=cronLabels[data.cron_state]||'Нет данных';
+  document.getElementById('clientsCacheLastUpdate').textContent=data.finished_at?formatDateTimeDisplay(data.finished_at):'Нет данных';
+  const status=document.getElementById('clientsCacheLastStatus');
+  status.textContent=data.status==='success'?'Успешно':data.status==='error'?'Ошибка':data.status==='running'?'Выполняется':'Нет данных';
+  status.className=`cache-refresh-value ${data.status==='success'?'success':data.status==='error'?'error':''}`;
+  document.getElementById('clientsCacheCount').textContent=Number.isFinite(Number(data.clients))&&data.clients!==null?Number(data.clients).toLocaleString('ru-RU'):'Нет данных';
+  document.getElementById('clientsCacheNextRun').textContent=data.next_run_at?`${data.next_run_at.slice(0,16)} МСК`:'Нет данных';
+  const errorRow=document.getElementById('clientsCacheErrorRow');
+  errorRow.hidden=!data.error;
+  document.getElementById('clientsCacheError').textContent=data.error||'';
+}
+async function loadClientsCacheStatus(){
+  const message=document.getElementById('clientsCacheRefreshStatus');
+  try{renderClientsCacheStatus(await window.calltrackApi.clientsCacheStatus(adminPasswordValue));message.textContent='';}
+  catch(error){message.textContent=`Не удалось получить статус: ${error.message}`;}
+}
+async function refreshClientsCacheNow(){
+  const button=document.getElementById('clientsCacheRefreshBtn');
+  const message=document.getElementById('clientsCacheRefreshStatus');
+  button.disabled=true;message.textContent='Обновление кэша Clients...';
+  try{const result=await window.calltrackApi.refreshClientsCache(adminPasswordValue);renderClientsCacheStatus(result.data);message.textContent='Кэш успешно обновлен';}
+  catch(error){message.textContent=`Ошибка: ${error.message}`;await loadClientsCacheStatus();}
+  finally{button.disabled=false;}
 }
 
 function setClientsApiTestModalVisible(visible){

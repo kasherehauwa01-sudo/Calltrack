@@ -851,6 +851,36 @@ public_html/
 
 `analizmop/index.html` подключает скрипт как `api.js`, а `analizmop/api.js` обращается к API через `../api/`.
 
+### Ежедневное обновление кэша Clients
+
+CallTrack использует существующую бизнес-логику `api/refresh_clients_cache.php` для всех трёх источников обновления: после `update_calltrack.sh`, вручную из раздела «Админ панель → Общие настройки» и ежедневно через cron. Новые данные сначала полностью загружаются, проверяются и записываются во временные файлы; действующий кэш заменяется только после успешной подготовки нового набора.
+
+Один раз после развёртывания установите задание от имени пользователя, которому должен принадлежать cron (обычно `root`):
+
+```bash
+sudo bash /var/www/html/vr/calltrack/scripts/install_clients_cache_cron.sh /var/www/html/vr/calltrack
+```
+
+Скрипт идемпотентно заменяет блок с маркером `CALLTRACK_CLIENTS_CACHE_REFRESH`, задаёт `CRON_TZ=Europe/Moscow` и планирует запуск на `04:00`. Проверить установленную запись можно командой:
+
+```bash
+sudo crontab -u www-data -l | sed -n '/CALLTRACK_CLIENTS_CACHE_REFRESH/,/CALLTRACK_CLIENTS_CACHE_REFRESH END/p'
+```
+
+Ручной серверный тест того же механизма:
+
+```bash
+cd /var/www/html/vr/calltrack && sudo -u www-data /usr/bin/php api/refresh_clients_cache.php --source=manual
+```
+
+Статус последнего запуска хранится в `storage/clients_cache_refresh.status.json`, а журнал с ограничением размера — в `storage/logs/clients_cache_refresh.log`:
+
+```bash
+tail -n 100 /var/www/html/vr/calltrack/storage/logs/clients_cache_refresh.log
+```
+
+Файл `/etc/calltrack/clients-cache-cron.installed` подтверждает, что установщик cron выполнялся. Панель считает cron работающим только при наличии этого маркера и свежего heartbeat от запуска с источником `cron`; отдельно показывает состояния «Настроен», «Работает», «Нет данных» и «Просрочен». Перезапуск PHP-FPM или Nginx после `git pull` не требуется, если сервер не использует агрессивный OPcache без проверки временных меток.
+
 ### Изменённые файлы после объединения
 
 - `analizmop/index.html`
