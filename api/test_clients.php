@@ -169,7 +169,11 @@ function startClientsCacheRefresh(): bool
     }
     if ($phpCli === '') return false;
 
-    writeClientsRefreshStatus(['status'=>'starting', 'php_cli'=>$phpCli]);
+    $status = readClientsRefreshStatus();
+    $status['status'] = 'starting';
+    $status['source'] = 'background_test';
+    $status['php_cli'] = $phpCli;
+    writeClientsRefreshStatus($status);
     $command = sprintf('%s %s >/dev/null 2>&1 &', escapeshellarg($phpCli), escapeshellarg($script));
     exec($command, $output, $exitCode);
     return $exitCode === 0;
