@@ -114,18 +114,40 @@ function runClientsCacheRefresh(string $source): array
     appendClientsRefreshLog("Начато обновление кэша Clients (источник: {$source})");
 
     try {
-        $url = trim((string)(getenv('CALLTRACK_CLIENTS_API_URL') ?: CLIENTS_API_URL));
-        $clients = fetchClientsApiRows($url);
-        if (!$clients) throw new RuntimeException('Clients API не вернул ни одной корректной записи');
-        appendClientsRefreshLog('Получено клиентов: ' . count($clients));
-        writeClientsCache($clients);
+        $url = trim((string)(getenv('CALLTRACK_CLIENTS_PAGINATED_API_URL') ?: CLIENTS_PAGINATED_API_URL));
+        $pageSize = max(100, min(2000, (int)(getenv('CALLTRACK_CLIENTS_REFRESH_PAGE_SIZE') ?: CLIENTS_REFRESH_PAGE_SIZE)));
+        $stream = clientsStreamingCacheCreate();
+        $clientsCount = 0;
+        $page = 1;
+        try {
+            do {
+                $batch = fetchClientsApiPage($url, $page, $pageSize);
+                $clientsCount += clientsStreamingCacheAppend($stream, $batch['clients']);
+                unset($batch['clients']);
+                $hasMore = (bool)$batch['has_more'];
+                if ($batch['source_count'] === 0) $hasMore = false;
+                unset($batch);
+                gc_collect_cycles();
+                $page++;
+            } while ($hasMore);
+            if ($clientsCount === 0) throw new RuntimeException('Clients API не вернул ни одной корректной записи');
+            appendClientsRefreshLog("Получено клиентов: {$clientsCount}");
+            clientsStreamingCachePublish($stream);
+        } catch (Throwable $streamError) {
+            clientsStreamingCacheAbort($stream);
+            throw $streamError;
+        }
         $finished = clientsRefreshNow();
+        $peakMemory = memory_get_peak_usage(true);
         $result = $running + [];
         $result['status'] = 'success';
         $result['success'] = true;
         $result['finished_at'] = $finished->format(DATE_ATOM);
-        $result['clients'] = count($clients);
+        $result['clients'] = $clientsCount;
+        $result['peak_memory_bytes'] = $peakMemory;
+        $result['page_size'] = $pageSize;
         writeClientsRefreshStatus($result);
+        appendClientsRefreshLog('Пиковое потребление памяти PHP: ' . round($peakMemory / 1048576, 1) . ' МБ');
         appendClientsRefreshLog('Кэш успешно обновлен');
         return clientsRefreshStatusPayload($result);
     } catch (Throwable $error) {

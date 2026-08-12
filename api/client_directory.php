@@ -244,6 +244,100 @@ function writeClientsCache(array $clients): void
     }
 }
 
+function clientsStreamingCacheCreate(): array
+{
+    $suffix = '.new.' . getmypid();
+    $cache = clientsCacheFile() . $suffix;
+    $index = clientsPhoneIndexCacheFile() . $suffix;
+    $cacheHandle = @fopen($cache, 'wb');
+    $indexHandle = @fopen($index, 'wb');
+    if ($cacheHandle === false || $indexHandle === false) {
+        if (is_resource($cacheHandle)) fclose($cacheHandle);
+        if (is_resource($indexHandle)) fclose($indexHandle);
+        @unlink($cache); @unlink($index);
+        throw new RuntimeException('Не удалось создать временный потоковый кэш Clients');
+    }
+    fwrite($cacheHandle, '[');
+    fwrite($indexHandle, '{');
+    return ['suffix'=>$suffix, 'cache'=>$cache, 'index'=>$index, 'cache_handle'=>$cacheHandle,
+        'index_handle'=>$indexHandle, 'first_client'=>true, 'first_index'=>true, 'shards'=>[]];
+}
+
+function clientsStreamingCacheAppend(array &$stream, array $clients): int
+{
+    $written = 0;
+    foreach ($clients as $client) {
+        $json = json_encode($client, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json === false || fwrite($stream['cache_handle'], ($stream['first_client'] ? '' : ',') . $json) === false) {
+            throw new RuntimeException('Не удалось записать страницу во временный кэш Clients');
+        }
+        $stream['first_client'] = false;
+        $written++;
+        foreach (($client['phones'] ?? []) as $phone) {
+            $phone = (string)$phone;
+            $indexEntry = json_encode($phone, JSON_UNESCAPED_UNICODE) . ':' . json_encode((string)$client['name'], JSON_UNESCAPED_UNICODE);
+            if (fwrite($stream['index_handle'], ($stream['first_index'] ? '' : ',') . $indexEntry) === false) {
+                throw new RuntimeException('Не удалось записать потоковый индекс телефонов Clients');
+            }
+            $stream['first_index'] = false;
+            $shard = substr(sha1($phone), 0, 2);
+            if (!isset($stream['shards'][$shard])) {
+                $path = sys_get_temp_dir() . '/calltrack_clients_shard_rows_' . getmypid() . '_' . $shard;
+                $handle = @fopen($path, 'ab');
+                if ($handle === false) throw new RuntimeException('Не удалось создать временный shard Clients');
+                $stream['shards'][$shard] = ['path'=>$path, 'handle'=>$handle];
+            }
+            $row = [$phone, ['phone'=>'+7'.$phone, 'name'=>(string)$client['name'],
+                'fields'=>is_array($client['fields'] ?? null) ? $client['fields'] : []]];
+            fwrite($stream['shards'][$shard]['handle'], json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n");
+        }
+    }
+    return $written;
+}
+
+function clientsStreamingCacheAbort(array &$stream): void
+{
+    foreach (['cache_handle', 'index_handle'] as $key) if (is_resource($stream[$key] ?? null)) fclose($stream[$key]);
+    foreach ($stream['shards'] ?? [] as $shard) {
+        if (is_resource($shard['handle'] ?? null)) fclose($shard['handle']);
+        @unlink($shard['path']);
+    }
+    @unlink($stream['cache'] ?? ''); @unlink($stream['index'] ?? '');
+}
+
+function clientsStreamingCachePublish(array &$stream): void
+{
+    fwrite($stream['cache_handle'], ']'); fclose($stream['cache_handle']); $stream['cache_handle'] = null;
+    fwrite($stream['index_handle'], '}'); fclose($stream['index_handle']); $stream['index_handle'] = null;
+    $temporaryTargets = [];
+    foreach ($stream['shards'] as $shardCode=>$shard) {
+        fclose($shard['handle']); $stream['shards'][$shardCode]['handle'] = null;
+        $rows = [];
+        $input = fopen($shard['path'], 'rb');
+        while (($line = fgets($input)) !== false) {
+            $row = json_decode($line, true);
+            if (is_array($row) && isset($row[0], $row[1])) $rows[(string)$row[0]][] = $row[1];
+        }
+        fclose($input); @unlink($shard['path']);
+        $target = sys_get_temp_dir() . '/calltrack_clients_lookup_' . sha1(implode('|', clientsApiUrls())) . '_' . $shardCode . '.json';
+        $temporary = $target . $stream['suffix'];
+        if (@file_put_contents($temporary, json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX) === false) {
+            throw new RuntimeException('Не удалось подготовить потоковый shard Clients');
+        }
+        unset($rows);
+        $temporaryTargets[] = ['temporary'=>$temporary, 'target'=>$target];
+    }
+    @unlink(clientsLookupReadyFile());
+    if (!@rename($stream['cache'], clientsCacheFile()) || !@rename($stream['index'], clientsPhoneIndexCacheFile())) {
+        throw new RuntimeException('Не удалось атомарно опубликовать потоковый кэш Clients');
+    }
+    foreach ($temporaryTargets as $file) if (!@rename($file['temporary'], $file['target'])) throw new RuntimeException('Не удалось опубликовать shard Clients');
+    $active = array_column($temporaryTargets, 'target');
+    $pattern = sys_get_temp_dir() . '/calltrack_clients_lookup_' . sha1(implode('|', clientsApiUrls())) . '_*.json';
+    foreach (glob($pattern) ?: [] as $old) if (!in_array($old, $active, true)) @unlink($old);
+    if (@file_put_contents(clientsLookupReadyFile(), date(DATE_ATOM), LOCK_EX) === false) throw new RuntimeException('Не удалось завершить потоковый индекс Clients');
+}
+
 function clientsRowsFromApi(): array
 {
     $context = stream_context_create(['http'=>[

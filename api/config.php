@@ -44,6 +44,12 @@ if (!defined('CLIENTS_API_TIMEOUT')) {
     // Полный справочник Clients может занимать десятки мегабайт.
     define('CLIENTS_API_TIMEOUT', 120);
 }
+if (!defined('CLIENTS_PAGINATED_API_URL')) {
+    define('CLIENTS_PAGINATED_API_URL', 'http://127.0.0.1:8015/api/clients');
+}
+if (!defined('CLIENTS_REFRESH_PAGE_SIZE')) {
+    define('CLIENTS_REFRESH_PAGE_SIZE', 1000);
+}
 if (!defined('CALLTRACK_ADMIN_PASSWORD')) {
     // Для production задайте значение в /etc/calltrack/config.local.php.
     define('CALLTRACK_ADMIN_PASSWORD', (string)(getenv('CALLTRACK_ADMIN_PASSWORD') ?: '8852285'));

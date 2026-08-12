@@ -44,4 +44,25 @@ refreshExpect(!clientsRefreshIsLocked(), 'Освобождённый flock не 
 
 @unlink($storage . '/clients_cache_refresh.lock');
 @rmdir($storage);
+
+putenv('CALLTRACK_CLIENTS_API_URL=http://streaming-cache-test.invalid/api');
+$stream = clientsStreamingCacheCreate();
+$expected = 2500;
+for ($offset = 0; $offset < $expected; $offset += 500) {
+    $batch = [];
+    for ($index = $offset; $index < min($expected, $offset + 500); $index++) {
+        $phone = str_pad((string)$index, 10, '0', STR_PAD_LEFT);
+        $batch[] = ['name'=>'Клиент ' . $index, 'phones'=>[$phone], 'fields'=>['Телефон'=>$phone]];
+    }
+    clientsStreamingCacheAppend($stream, $batch);
+    unset($batch);
+}
+clientsStreamingCachePublish($stream);
+$cache = readClientsCache();
+refreshExpect(count($cache) === $expected, 'Потоковый кэш потерял записи при пакетной записи');
+refreshExpect($cache[2499]['name'] === 'Клиент 2499', 'Последняя запись потокового кэша повреждена');
+@unlink(clientsCacheFile());
+@unlink(clientsPhoneIndexCacheFile());
+@unlink(clientsLookupReadyFile());
+foreach (glob(sys_get_temp_dir() . '/calltrack_clients_lookup_' . sha1(implode('|', clientsApiUrls())) . '_*.json') ?: [] as $file) @unlink($file);
 echo "clients_cache_refresh_test: OK\n";
