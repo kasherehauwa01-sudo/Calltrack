@@ -1,0 +1,84 @@
+<?php
+declare(strict_types=1);
+
+require_once dirname(__DIR__) . '/api/clients_cache_refresh.php';
+
+function refreshExpect(bool $condition, string $message): void
+{
+    if ($condition) return;
+    fwrite(STDERR, $message . PHP_EOL);
+    exit(1);
+}
+
+$timezone = new DateTimeZone('Europe/Moscow');
+refreshExpect(clientsPageHasMore(1, 1000, 164712, 1000), 'После первой страницы должна запрашиваться следующая');
+refreshExpect(clientsPageHasMore(164, 1000, 164712, 1000), 'Страница 164 не должна завершать обход');
+refreshExpect(!clientsPageHasMore(165, 1000, 164712, 712), 'Страница 165 должна завершать обход');
+refreshExpect(!clientsPageHasMore(2, 1000, 164712, 0), 'Пустая страница должна завершать обход');
+refreshExpect(
+    clientsNextRefresh(new DateTimeImmutable('2026-08-12 03:00:00', $timezone))->format('Y-m-d H:i') === '2026-08-12 04:00',
+    'До 04:00 следующим должен быть сегодняшний запуск'
+);
+refreshExpect(
+    clientsNextRefresh(new DateTimeImmutable('2026-08-12 17:00:00', $timezone))->format('Y-m-d H:i') === '2026-08-13 04:00',
+    'После 04:00 следующим должен быть завтрашний запуск'
+);
+
+putenv('CALLTRACK_STORAGE_DIR=/proc/calltrack-storage-is-not-writable');
+try {
+    clientsRefreshIsLocked();
+    refreshExpect(false, 'Ошибка открытия lock-файла не была обнаружена');
+} catch (RuntimeException $error) {
+    refreshExpect(
+        $error->getMessage() === 'Не удалось создать служебный каталог CallTrack'
+            || $error->getMessage() === 'Не удалось открыть файл блокировки обновления кэша Clients',
+        'Ошибка открытия lock-файла имеет неверный текст'
+    );
+}
+
+$storage = '/var/tmp/calltrack_refresh_test_' . getmypid() . '/storage';
+mkdir($storage, 0777, true);
+putenv('CALLTRACK_STORAGE_DIR=' . $storage);
+$lock = fopen($storage . '/clients_cache_refresh.lock', 'c');
+refreshExpect(is_resource($lock) && flock($lock, LOCK_EX | LOCK_NB), 'Не удалось подготовить занятую блокировку');
+refreshExpect(clientsRefreshIsLocked(), 'Занятый flock должен определяться как выполняющееся обновление');
+flock($lock, LOCK_UN);
+fclose($lock);
+refreshExpect(!clientsRefreshIsLocked(), 'Освобождённый flock не должен считаться занятым');
+
+@unlink($storage . '/clients_cache_refresh.lock');
+
+putenv('CALLTRACK_CLIENTS_API_URL=http://streaming-cache-test.invalid/api');
+$cacheRoot = clientsCacheDirectory();
+refreshExpect(strpos($cacheRoot, sys_get_temp_dir()) !== 0, 'Рабочий каталог Clients не должен находиться в системном /tmp');
+refreshExpect(str_ends_with($cacheRoot, '/storage/cache/clients'), 'Кэш Clients должен находиться в storage/cache/clients');
+refreshExpect(str_starts_with(clientsCacheFile(), $cacheRoot . '/'), 'Основной кэш находится вне каталога Clients');
+refreshExpect(str_starts_with(clientsPhoneIndexCacheFile(), $cacheRoot . '/'), 'Индекс находится вне каталога Clients');
+refreshExpect(str_starts_with(clientsLookupShardFile('9991234567'), $cacheRoot . '/shards/'), 'Shard находится вне каталога Clients');
+$stream = clientsStreamingCacheCreate();
+refreshExpect(str_starts_with($stream['cache'], $cacheRoot . '/'), 'Временный кэш находится вне постоянной файловой системы');
+$expected = 2500;
+for ($offset = 0; $offset < $expected; $offset += 500) {
+    $batch = [];
+    for ($index = $offset; $index < min($expected, $offset + 500); $index++) {
+        $phone = str_pad((string)$index, 10, '0', STR_PAD_LEFT);
+        $batch[] = ['name'=>'Клиент ' . $index, 'phones'=>[$phone], 'fields'=>['Телефон'=>$phone]];
+    }
+    clientsStreamingCacheAppend($stream, $batch);
+    unset($batch);
+}
+clientsStreamingCachePublish($stream);
+$cache = readClientsCache();
+refreshExpect(count($cache) === $expected, 'Потоковый кэш потерял записи при пакетной записи');
+refreshExpect($cache[2499]['name'] === 'Клиент 2499', 'Последняя запись потокового кэша повреждена');
+@unlink(clientsCacheFile());
+@unlink(clientsPhoneIndexCacheFile());
+@unlink(clientsLookupReadyFile());
+foreach (glob(clientsCacheShardsDirectory() . '/*.json') ?: [] as $file) @unlink($file);
+@rmdir(clientsCacheTempDirectory());
+@rmdir(clientsCacheShardsDirectory());
+@rmdir(clientsCacheDirectory());
+@rmdir(dirname(clientsCacheDirectory()));
+@rmdir($storage);
+@rmdir(dirname($storage));
+echo "clients_cache_refresh_test: OK\n";

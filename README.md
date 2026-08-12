@@ -851,6 +851,58 @@ public_html/
 
 `analizmop/index.html` подключает скрипт как `api.js`, а `analizmop/api.js` обращается к API через `../api/`.
 
+### Ежедневное обновление кэша Clients
+
+CallTrack использует существующую бизнес-логику `api/refresh_clients_cache.php` для двух источников обновления: вручную из раздела «Админ панель → Общие настройки» и ежедневно через cron. Ручной HTTP-запрос только создаёт независимый фоновый PHP CLI-процесс и сразу возвращает HTTP 202; панель получает результат периодическим чтением статуса. Новые данные сначала полностью загружаются, проверяются и записываются во временные файлы; действующий кэш заменяется только после успешной подготовки нового набора. `update_calltrack.sh` обновление Clients не запускает.
+
+Обновление читает пагинированный endpoint `CLIENTS_PAGINATED_API_URL` страницами по 1000 исходных записей (`CLIENTS_REFRESH_PAGE_SIZE`). Каждая страница нормализуется и сразу дописывается в новый JSON-кэш и временные индексы, поэтому полный справочник и его повторная JSON-копия не находятся в памяти одновременно. Для нестандартного адреса задайте `CALLTRACK_CLIENTS_PAGINATED_API_URL`; endpoint должен принимать `page` и `page_size` и возвращать `items`, `total`, `page`, `page_size`. Следующая страница определяется строго по условию `page * page_size < total`; пустой `items` завершает обход.
+
+Большие файлы Clients не используют системный `/tmp`: основной кэш находится в `storage/cache/clients/clients.json`, телефонный индекс — в `storage/cache/clients/phone_index.json`, shards — в `storage/cache/clients/shards`, а промежуточные строки shards — в `storage/cache/clients/temp`. Временные `.new.<pid>` создаются на той же файловой системе. Перед запуском удаляются только временные файлы строгих шаблонов старше шести часов.
+
+Один раз после развёртывания установите задание от имени пользователя, которому должен принадлежать cron (обычно `root`):
+
+```bash
+sudo bash /var/www/html/vr/calltrack/scripts/install_clients_cache_cron.sh /var/www/html/vr/calltrack
+```
+
+Скрипт идемпотентно заменяет блок с маркером `CALLTRACK_CLIENTS_CACHE_REFRESH`, задаёт `CRON_TZ=Europe/Moscow` и планирует запуск на `04:00`. Проверить установленную запись можно командой:
+
+```bash
+sudo crontab -u www-data -l | sed -n '/CALLTRACK_CLIENTS_CACHE_REFRESH/,/CALLTRACK_CLIENTS_CACHE_REFRESH END/p'
+```
+
+Ручной серверный тест того же механизма:
+
+```bash
+cd /var/www/html/vr/calltrack && sudo -u www-data /usr/bin/php api/refresh_clients_cache.php --source=manual
+```
+
+Статус последнего запуска хранится в `storage/clients_cache_refresh.status.json`, а журнал с ограничением размера — в `storage/logs/clients_cache_refresh.log`:
+
+```bash
+tail -n 100 /var/www/html/vr/calltrack/storage/logs/clients_cache_refresh.log
+```
+
+PHP-FPM и cron должны запускаться от `www-data` и иметь право записи в `storage` и `storage/logs`. После первого развёртывания это обеспечивает установщик cron. При ручной настройке выполните без изменения владельца из PHP:
+
+```bash
+sudo install -d -o www-data -g www-data -m 0775 /var/www/html/vr/calltrack/storage /var/www/html/vr/calltrack/storage/logs
+```
+
+После обновления создайте постоянные каталоги и при наличии перенесите последний рабочий основной кэш и телефонный индекс из `/tmp` безопасным идемпотентным скриптом. Скрипт сравнивает копии и не удаляет исходники:
+
+```bash
+sudo mkdir -p /var/www/html/vr/calltrack/storage/cache/clients/{shards,temp}
+sudo chown -R www-data:www-data /var/www/html/vr/calltrack/storage
+sudo find /var/www/html/vr/calltrack/storage -type d -exec chmod 775 {} \;
+sudo find /var/www/html/vr/calltrack/storage -type f -exec chmod 664 {} \;
+sudo bash /var/www/html/vr/calltrack/scripts/migrate_clients_cache_from_tmp.sh /var/www/html/vr/calltrack
+```
+
+После успешного полного refresh старые файлы `/tmp/calltrack_clients_*` можно удалить вручную. Deploy и миграция автоматически их не удаляют.
+
+Файл `/etc/calltrack/clients-cache-cron.installed` подтверждает, что установщик cron выполнялся. Панель считает cron работающим только при наличии этого маркера и свежего heartbeat от запуска с источником `cron`; отдельно показывает состояния «Настроен», «Работает», «Нет данных» и «Просрочен». Перезапуск PHP-FPM или Nginx после `git pull` не требуется, если сервер не использует агрессивный OPcache без проверки временных меток.
+
 ### Изменённые файлы после объединения
 
 - `analizmop/index.html`

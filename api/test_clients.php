@@ -77,6 +77,52 @@ function fetchClientsApiRows(string $url): array
     return normalizeClientsPayload(array_values($rows));
 }
 
+function clientsPageHasMore(int $page, int $pageSize, int $total, int $itemsCount): bool
+{
+    return $itemsCount > 0 && ($page * $pageSize) < $total;
+}
+
+function fetchClientsApiPage(string $url, int $page, int $pageSize): array
+{
+    $separator = str_contains($url, '?') ? '&' : '?';
+    $pageUrl = $url . $separator . http_build_query(['page'=>$page, 'page_size'=>$pageSize]);
+    $http = clientsCurlRequest($pageUrl);
+    if ($http['curl_error'] !== '') {
+        throw new RuntimeException("Ошибка соединения с Clients на странице {$page}: {$http['curl_error']}");
+    }
+    if ($http['http_code'] !== 200) {
+        throw new RuntimeException("Clients API вернул HTTP {$http['http_code']} на странице {$page}");
+    }
+    $payload = json_decode($http['body'], true);
+    if (!is_array($payload)) throw new RuntimeException("Clients API вернул некорректный JSON на странице {$page}");
+    if (($payload['status'] ?? '') === 'error') {
+        throw new RuntimeException('Clients API сообщил об ошибке: ' . (string)($payload['message'] ?? 'без описания'));
+    }
+    $rows = $payload['items'] ?? null;
+    if (!is_array($rows)) throw new RuntimeException("В ответе Clients API отсутствует массив клиентов на странице {$page}");
+    $responsePage = filter_var($payload['page'] ?? null, FILTER_VALIDATE_INT);
+    $responsePageSize = filter_var($payload['page_size'] ?? null, FILTER_VALIDATE_INT);
+    $total = filter_var($payload['total'] ?? null, FILTER_VALIDATE_INT);
+    if ($responsePage === false || $responsePage !== $page || $responsePageSize === false || $responsePageSize <= 0 || $total === false || $total < 0) {
+        throw new RuntimeException("Clients API вернул некорректные параметры пагинации на странице {$page}");
+    }
+    if (count($rows) > $responsePageSize) {
+        throw new RuntimeException("Clients API вернул больше page_size записей на странице {$page}");
+    }
+    if (!$rows && (($responsePage - 1) * $responsePageSize) < $total) {
+        throw new RuntimeException("Clients API вернул пустую страницу {$page} до достижения total={$total}");
+    }
+    return [
+        'clients'=>normalizeClientsPayload(array_values($rows)),
+        'source_count'=>count($rows),
+        'total'=>$total,
+        'page'=>$responsePage,
+        'page_size'=>$responsePageSize,
+        // Пустая страница всегда завершает обход, даже если total на стороне Clients устарел.
+        'has_more'=>clientsPageHasMore($responsePage, $responsePageSize, $total, count($rows)),
+    ];
+}
+
 function testClientPhoneAgainstApi(string $rawPhone, string $url): array
 {
     $normalized = normalizeClientPhone($rawPhone);
@@ -169,7 +215,11 @@ function startClientsCacheRefresh(): bool
     }
     if ($phpCli === '') return false;
 
-    writeClientsRefreshStatus(['status'=>'starting', 'php_cli'=>$phpCli]);
+    $status = readClientsRefreshStatus();
+    $status['status'] = 'starting';
+    $status['source'] = 'background_test';
+    $status['php_cli'] = $phpCli;
+    writeClientsRefreshStatus($status);
     $command = sprintf('%s %s >/dev/null 2>&1 &', escapeshellarg($phpCli), escapeshellarg($script));
     exec($command, $output, $exitCode);
     return $exitCode === 0;
