@@ -191,6 +191,11 @@ class CallRepository(
         return clientName
     }
 
+    /** Единая точка доступа к карточкам Clients для ViewModel. */
+    fun loadClientCards(phone: String): List<ClientCard> {
+        return clientDirectory.loadClientCards(phone)
+    }
+
     suspend fun isPersonalContact(phone: String): Boolean {
         if (phone.isBlank() || phone == "Неизвестно") return false
 
@@ -1243,14 +1248,6 @@ class CallRepository(
         )
     }
 
-    private companion object {
-        private const val HISTORY_LOG_TAG = "COMMENT_HISTORY"
-        private const val DEVICE_RECENT_CALLS_LIMIT = 100
-        private const val DEVICE_CONTACT_HISTORY_LIMIT = 100
-        private const val CALL_HISTORY_MIN_ARRAY_COLUMNS = 5
-        private const val PERSONAL_CALL_CLIENT_VALUE = "Личный звонок"
-    }
-
     private data class SyncFingerprint(
         val phone: String,
         val type: String,
@@ -1267,4 +1264,12 @@ class CallRepository(
         val contactPhone: String,
         val isPersonal: Boolean
     )
+
+    private companion object Constants {
+        private const val HISTORY_LOG_TAG = "COMMENT_HISTORY"
+        private const val DEVICE_RECENT_CALLS_LIMIT = 100
+        private const val DEVICE_CONTACT_HISTORY_LIMIT = 100
+        private const val CALL_HISTORY_MIN_ARRAY_COLUMNS = 5
+        private const val PERSONAL_CALL_CLIENT_VALUE = "Личный звонок"
+    }
 }
