@@ -6,10 +6,18 @@ require_once __DIR__ . '/config.php';
 function normalizeClientPhone(string $value): string
 {
     $digits = preg_replace('/\D+/', '', $value) ?? '';
-    return strlen($digits) >= 10 ? substr($digits, -10) : '';
+    return strlen($digits) >= 10 ? substr($digits, -10) : $digits;
 }
 
-function clientValue(array $row, array $keys): mixed
+function clientValue(array $row, array $keys): string
+{
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $row) && $row[$key] !== null) return trim((string)$row[$key]);
+    }
+    return '';
+}
+
+function clientRawValue(array $row, array $keys)
 {
     foreach ($keys as $key) {
         if (array_key_exists($key, $row) && $row[$key] !== null) return $row[$key];
@@ -17,35 +25,53 @@ function clientValue(array $row, array $keys): mixed
     return '';
 }
 
-function splitClientPhones(string|array $value): array
+function splitClientPhones(string $value): array
 {
+    preg_match_all('/(?:\+?\d[\d\s().-]{7,}\d)/u', $value, $matches);
     $phones = [];
-    foreach ((array)$value as $part) {
-        if (!is_scalar($part)) continue;
-        preg_match_all('/(?<!\d)(?:\+?7|8)?(?:[\s().-]*\d){10}(?!\d)/u', (string)$part, $matches);
-        foreach ($matches[0] ?? [] as $phone) {
-            $normalized = normalizeClientPhone($phone);
-            if ($normalized !== '') $phones[$normalized] = $normalized;
-        }
+    foreach ($matches[0] ?? [] as $phone) {
+        $normalized = normalizeClientPhone($phone);
+        if ($normalized !== '') $phones[$normalized] = $normalized;
     }
     return array_values($phones);
 }
 
-function normalizeClientRow(mixed $row): ?array
+function clientFieldIsFilled($value): bool
 {
-    if (!is_array($row)) return null;
-    $nameValue = clientValue($row, ['Наименование', 'наименование', 'name', 'client_name', 'client']);
-    $name = is_scalar($nameValue) ? trim((string)$nameValue) : '';
-    $phones = splitClientPhones(clientValue($row, ['Телефоны', 'телефоны', 'phones', 'phone_numbers', 'phone']));
-    return $name === '' || !$phones ? null : ['name'=>$name, 'phones'=>$phones];
+    if ($value === null) return false;
+    if (is_string($value)) return trim($value) !== '';
+    if (is_array($value)) {
+        foreach ($value as $item) if (clientFieldIsFilled($item)) return true;
+        return false;
+    }
+    return true;
+}
+
+function filledClientFields(array $row): array
+{
+    $fields = [];
+    foreach ($row as $key=>$value) {
+        if (!clientFieldIsFilled($value)) continue;
+        $fields[(string)$key] = $value;
+    }
+    return $fields;
 }
 
 function normalizeClientsPayload(array $rows): array
 {
     $result = [];
     foreach ($rows as $row) {
-        $client = normalizeClientRow($row);
-        if ($client !== null) $result[] = $client;
+        if (!is_array($row)) continue;
+        $name = clientValue($row, ['Наименование', 'наименование', 'name', 'client_name', 'client']);
+        $rawPhones = clientRawValue($row, ['Телефоны', 'телефоны', 'phones', 'phone_numbers', 'phone']);
+        $phones = [];
+        foreach (is_array($rawPhones) ? $rawPhones : [$rawPhones] as $rawPhone) {
+            foreach (splitClientPhones((string)$rawPhone) as $phone) $phones[$phone] = $phone;
+        }
+        $phones = array_values($phones);
+        if ($name === '' || !$phones) continue;
+        // Исходные заполненные поля сохраняются для карточки клиента в тесте API.
+        $result[] = ['name'=>$name, 'phones'=>$phones, 'fields'=>filledClientFields($row)];
     }
     return $result;
 }
@@ -72,163 +98,166 @@ function clientsApiUrls(): array
     ];
 }
 
-function clientsApiStatusCode(array $headers): int
+function clientsCacheFile(): string
 {
-    $statusCode = 0;
-    foreach ($headers as $header) {
-        if (preg_match('/^HTTP\/\S+\s+(\d{3})\b/i', $header, $matches)) $statusCode = (int)$matches[1];
-    }
-    return $statusCode;
+    // v2 хранит не только name/phones, но и заполненные поля карточки клиента.
+    return sys_get_temp_dir() . '/calltrack_clients_v2_' . sha1(implode('|', clientsApiUrls())) . '.json';
 }
 
-function clientsRawCacheFile(): string
+function clientsPhoneIndexCacheFile(): string
 {
-    return sys_get_temp_dir() . '/calltrack_clients_raw_' . sha1(implode('|', clientsApiUrls())) . '.json';
+    return sys_get_temp_dir() . '/calltrack_clients_phone_index_' . sha1(implode('|', clientsApiUrls())) . '.json';
 }
 
-function clientsCardApiUrl(string $phone): string
+function clientsLookupShardFile(string $normalizedPhone): string
 {
-    $configured = getenv('CALLTRACK_CLIENTS_CARD_API_URL') ?: (defined('CLIENTS_CARD_API_URL') ? CLIENTS_CARD_API_URL : '');
-    if (trim((string)$configured) === '') return '';
-    $separator = str_contains((string)$configured, '?') ? '&' : '?';
-    return trim((string)$configured) . $separator . 'phone=' . rawurlencode($phone);
+    $shard = substr(sha1($normalizedPhone), 0, 2);
+    return sys_get_temp_dir() . '/calltrack_clients_lookup_' . sha1(implode('|', clientsApiUrls())) . '_' . $shard . '.json';
 }
 
-function readClientsRawCache(string $cacheFile): ?array
+function clientsLookupReadyFile(): string
 {
-    if (!is_file($cacheFile) || filemtime($cacheFile) === false || filemtime($cacheFile) <= time() - 300) return null;
+    return sys_get_temp_dir() . '/calltrack_clients_lookup_' . sha1(implode('|', clientsApiUrls())) . '.ready';
+}
+
+function clientsRefreshStatusFile(): string
+{
+    return sys_get_temp_dir() . '/calltrack_clients_refresh.status.json';
+}
+
+function readClientsRefreshStatus(): array
+{
+    $statusFile = clientsRefreshStatusFile();
+    if (!is_file($statusFile)) return [];
+    $status = json_decode((string)file_get_contents($statusFile), true);
+    return is_array($status) ? $status : [];
+}
+
+function writeClientsRefreshStatus(array $status): void
+{
+    $status['updated_at'] = date(DATE_ATOM);
+    @file_put_contents(
+        clientsRefreshStatusFile(),
+        json_encode($status, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        LOCK_EX
+    );
+}
+
+function readClientsCache(): array
+{
+    $cacheFile = clientsCacheFile();
+    if (!is_file($cacheFile)) return [];
     $cached = json_decode((string)file_get_contents($cacheFile), true);
-    return is_array($cached) && isset($cached['rows'], $cached['source_total']) ? $cached : null;
+    return is_array($cached) ? $cached : [];
 }
 
-function readClientsStaleRawCache(string $cacheFile): ?array
+function readClientsPhoneIndexCache(): array
 {
-    if (!is_file($cacheFile)) return null;
-    $cached = json_decode((string)file_get_contents($cacheFile), true);
-    return is_array($cached) && isset($cached['rows'], $cached['source_total']) ? $cached : null;
+    $cacheFile = clientsPhoneIndexCacheFile();
+    if (!is_file($cacheFile)) return [];
+    $index = json_decode((string)file_get_contents($cacheFile), true);
+    return is_array($index) ? $index : [];
 }
 
-function fetchClientsApiRows(bool $useCache=true): array
+function readClientMatchesCache(string $normalizedPhone): ?array
 {
-    $startedAt = microtime(true);
-    $cacheFile = clientsRawCacheFile();
-    if ($useCache && ($cached = readClientsRawCache($cacheFile)) !== null) {
-        error_log(sprintf('Clients timing: raw cache hit, total=%.0f ms, rows=%d', (microtime(true)-$startedAt)*1000, $cached['source_total']));
-        return $cached;
-    }
-    $lock = $useCache ? fopen($cacheFile . '.lock', 'c') : false;
-    if ($lock !== false) {
-        if (!flock($lock, LOCK_EX | LOCK_NB)) {
-            fclose($lock);
-            $lock = false;
-            if (($stale = readClientsStaleRawCache($cacheFile)) !== null) {
-                error_log(sprintf('Clients timing: concurrent refresh, stale cache used, rows=%d', $stale['source_total']));
-                return $stale;
-            }
-            throw new RuntimeException('Справочник clients обновляется, повторите запрос');
-        }
-        if (($cached = readClientsRawCache($cacheFile)) !== null) {
-            flock($lock, LOCK_UN);
-            fclose($lock);
-            error_log(sprintf('Clients timing: raw cache hit after lock, total=%.0f ms, rows=%d', (microtime(true)-$startedAt)*1000, $cached['source_total']));
-            return $cached;
-        }
-    }
-    $context = stream_context_create(['http'=>[
-        // Ответ должен успеть вернуться раньше стандартного 10-секундного таймаута OkHttp.
-        'timeout'=>8,
-        'ignore_errors'=>true,
-        'protocol_version'=>1.1,
-        // Закрываем соединение после ответа: PHP stream не должен ждать keep-alive,
-        // если upstream не прислал корректный Content-Length.
-        'header'=>"Accept: application/json\r\nUser-Agent: CallTrack/clients-test\r\nConnection: close\r\n",
-    ]]);
-    $lastReason = 'не удалось подключиться к API clients';
-    foreach (clientsApiUrls() as $url) {
-        $requestStartedAt = microtime(true);
-        error_log("Clients timing: CallTrack -> Clients start, url={$url}");
-        $body = @file_get_contents($url, false, $context);
-        $receivedAt = microtime(true);
-        $headers = $http_response_header ?? [];
-        $statusCode = clientsApiStatusCode($headers);
-        if ($body === false) {$lastReason='не удалось установить соединение с API clients';error_log(sprintf('Clients timing: request failed after %.0f ms', ($receivedAt-$requestStartedAt)*1000));continue;}
-        if ($statusCode >= 400) {$lastReason="API clients вернул HTTP {$statusCode}";continue;}
-        if (trim($body) === '') {$lastReason='API clients вернул пустой ответ';continue;}
-        $payload = json_decode($body, true);
-        $parsedAt = microtime(true);
-        if (!is_array($payload)) {$lastReason='API clients вернул некорректный JSON';continue;}
-        if (($payload['status'] ?? 'success') === 'error') {$lastReason='API clients сообщил об ошибке';continue;}
-        $rows = $payload['data'] ?? $payload['clients'] ?? $payload;
-        if (!is_array($rows)) {$lastReason='в ответе API clients нет массива data';continue;}
-        $result = ['rows'=>array_values($rows), 'source_total'=>count($rows)];
-        if ($useCache) {
-            $tempFile = $cacheFile . '.tmp.' . getmypid();
-            file_put_contents($tempFile, json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
-            rename($tempFile, $cacheFile);
-        }
-        if ($lock !== false) {flock($lock, LOCK_UN);fclose($lock);$lock=false;}
-        error_log(sprintf(
-            'Clients timing: response=%.0f ms, json=%.0f ms, total=%.0f ms, rows=%d',
-            ($receivedAt-$requestStartedAt)*1000,
-            ($parsedAt-$receivedAt)*1000,
-            (microtime(true)-$startedAt)*1000,
-            $result['source_total']
-        ));
-        return $result;
-    }
-    if ($lock !== false) {flock($lock, LOCK_UN);fclose($lock);}
-    throw new RuntimeException($lastReason);
+    $cacheFile = clientsLookupShardFile($normalizedPhone);
+    if (!is_file($cacheFile)) return is_file(clientsLookupReadyFile()) ? [] : null;
+    $shard = json_decode((string)file_get_contents($cacheFile), true);
+    if (!is_array($shard)) return null;
+    $matches = $shard[$normalizedPhone] ?? [];
+    return is_array($matches) ? $matches : [];
 }
 
-function fetchClientCardsDirect(string $normalizedPhone): ?array
+function writeClientsCache(array $clients): void
 {
-    $url = clientsCardApiUrl($normalizedPhone);
-    if ($url === '') return null;
-    $startedAt = microtime(true);
-    error_log('Clients timing: CallTrack -> Clients card start');
-    $context = stream_context_create(['http'=>[
-        'timeout'=>5,
-        'ignore_errors'=>true,
-        'header'=>"Accept: application/json\r\nUser-Agent: CallTrack/client-card\r\nConnection: close\r\n",
-    ]]);
-    $body = @file_get_contents($url, false, $context);
-    $statusCode = clientsApiStatusCode($http_response_header ?? []);
-    error_log(sprintf('Clients timing: direct card response=%d, total=%.0f ms', $statusCode, (microtime(true)-$startedAt)*1000));
-    if ($statusCode === 404) return null;
-    if ($body === false) throw new RuntimeException('API карточки clients не ответил за 5 секунд');
-    if ($statusCode >= 400) throw new RuntimeException("API карточки clients вернул HTTP {$statusCode}");
-    $payload = json_decode($body, true);
-    if (!is_array($payload)) throw new RuntimeException('API карточки clients вернул некорректный JSON');
-    if (($payload['status'] ?? 'success') === 'error') throw new RuntimeException((string)($payload['message'] ?? 'API карточки clients сообщил об ошибке'));
-    $cards = $payload['data'] ?? [];
-    if (!is_array($cards)) throw new RuntimeException('API карточки clients не вернул массив data');
-    return array_values(array_filter($cards, 'is_array'));
+    $json = json_encode($clients, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false || @file_put_contents(clientsCacheFile(), $json, LOCK_EX) === false) {
+        throw new RuntimeException('Не удалось сохранить локальный кэш Clients');
+    }
+
+    // Для дашборда сохраняется отдельный компактный индекс. Так основной API
+    // звонков не декодирует многомегабайтные карточки всех клиентов.
+    $indexJson = json_encode(buildClientPhoneIndex($clients), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($indexJson === false || @file_put_contents(clientsPhoneIndexCacheFile(), $indexJson, LOCK_EX) === false) {
+        throw new RuntimeException('Не удалось сохранить индекс телефонов Clients');
+    }
+
+
+    // Полные карточки разбиваются на небольшие файлы. Тест одного номера
+    // читает только один shard и не декодирует весь многомегабайтный справочник.
+    $shards = [];
+    foreach ($clients as $client) {
+        if (!is_array($client)) continue;
+        foreach (($client['phones'] ?? []) as $phone) {
+            $phone = (string)$phone;
+            if ($phone === '') continue;
+            $shards[substr(sha1($phone), 0, 2)][$phone][] = [
+                'phone'=>'+7' . $phone,
+                'name'=>(string)($client['name'] ?? ''),
+                'fields'=>is_array($client['fields'] ?? null) ? $client['fields'] : [],
+            ];
+        }
+    }
+    $shardPattern = sys_get_temp_dir() . '/calltrack_clients_lookup_' . sha1(implode('|', clientsApiUrls())) . '_*.json';
+    foreach (glob($shardPattern) ?: [] as $oldShard) @unlink($oldShard);
+    @unlink(clientsLookupReadyFile());
+    foreach ($shards as $shardRows) {
+        $firstPhone = (string)array_key_first($shardRows);
+        $shardJson = json_encode($shardRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($shardJson === false || @file_put_contents(clientsLookupShardFile($firstPhone), $shardJson, LOCK_EX) === false) {
+            throw new RuntimeException('Не удалось сохранить индекс карточек Clients');
+        }
+    }
+    if (@file_put_contents(clientsLookupReadyFile(), date(DATE_ATOM), LOCK_EX) === false) {
+        throw new RuntimeException('Не удалось завершить индекс карточек Clients');
+    }
 }
 
 function clientsRowsFromApi(): array
 {
-    try {
-        $response = fetchClientsApiRows();
-        return normalizeClientsPayload($response['rows']);
-    } catch (Throwable $e) {
-        error_log('Clients API error: ' . $e->getMessage());
-        return [];
+    $context = stream_context_create(['http'=>[
+        'timeout'=>3,
+        'ignore_errors'=>true,
+        'follow_location'=>0,
+        'header'=>"Accept: application/json\r\nConnection: close\r\n",
+    ]]);
+    foreach (clientsApiUrls() as $url) {
+        $body = @file_get_contents($url, false, $context);
+        if ($body === false || trim($body) === '') continue;
+        $payload = json_decode($body, true);
+        if (!is_array($payload)) continue;
+        $rows = $payload['data'] ?? $payload['clients'] ?? $payload;
+        if (!is_array($rows)) continue;
+        $clients = normalizeClientsPayload(array_values($rows));
+        if ($clients) return $clients;
     }
+    return [];
 }
 
-function loadClientsDirectory(PDO $pdo): array
+function loadClientsDirectory(PDO $pdo, bool $allowRemote = true): array
 {
     $clients = clientsRowsFromDatabase($pdo);
     if ($clients) return $clients;
 
-    $cacheFile = sys_get_temp_dir() . '/calltrack_clients_' . sha1(implode('|', clientsApiUrls())) . '.json';
+    $cacheFile = clientsCacheFile();
     if (is_file($cacheFile) && filemtime($cacheFile) !== false && filemtime($cacheFile) > time() - 300) {
         $cached = json_decode((string)file_get_contents($cacheFile), true);
         if (is_array($cached)) return $cached;
     }
+    if (!$allowRemote) {
+        // Основные API Calltrack не должны ждать внешний сервис. Свежий кэш
+        // обновляется отдельным client_directory.php или тестом интеграции.
+        // Просроченный кэш допустим для необязательного обогащения названий.
+        if (is_file($cacheFile)) {
+            $stale = json_decode((string)file_get_contents($cacheFile), true);
+            if (is_array($stale)) return $stale;
+        }
+        return [];
+    }
     $clients = clientsRowsFromApi();
     if ($clients) {
-        @file_put_contents($cacheFile, json_encode($clients, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
+        writeClientsCache($clients);
         return $clients;
     }
     if (is_file($cacheFile)) {
@@ -254,131 +283,18 @@ function findClientsByPhone(array $clients, string $normalizedPhone): array
         if (in_array($normalizedPhone, $client['phones'], true)) {
             // Не останавливаемся на первом результате: один телефон может быть
             // указан у нескольких клиентов проекта clients.
-            $matches[] = ['phone'=>'+7' . $normalizedPhone, 'name'=>$client['name']];
+            $matches[] = [
+                'phone'=>'+7' . $normalizedPhone,
+                'name'=>$client['name'],
+                'fields'=>is_array($client['fields'] ?? null) ? $client['fields'] : [],
+            ];
         }
     }
     return $matches;
 }
 
-function testClientPhoneAgainstApi(string $normalizedPhone): array
-{
-    $response = fetchClientsApiRows(false);
-    $matches = [];
-    $normalizedTotal = 0;
-    foreach ($response['rows'] as $row) {
-        $client = normalizeClientRow($row);
-        if ($client === null) continue;
-        $normalizedTotal++;
-        if (!in_array($normalizedPhone, $client['phones'], true)) continue;
-        $key = $normalizedPhone . '|' . $client['name'];
-        $matches[$key] = ['phone'=>'+7' . $normalizedPhone, 'name'=>$client['name']];
-    }
-    return [
-        'matches'=>array_values($matches),
-        'source_total'=>(int)$response['source_total'],
-        'normalized_total'=>$normalizedTotal,
-    ];
-}
-
-function clientCardFieldValue(mixed $value): string
-{
-    if (is_bool($value)) return $value ? 'Да' : 'Нет';
-    if (is_scalar($value)) return trim((string)$value);
-    if (!is_array($value)) return '';
-    $parts = [];
-    array_walk_recursive($value, static function (mixed $item) use (&$parts): void {
-        if (is_bool($item)) $parts[] = $item ? 'Да' : 'Нет';
-        elseif (is_scalar($item) && trim((string)$item) !== '') $parts[] = trim((string)$item);
-    });
-    return implode(', ', array_values(array_unique($parts)));
-}
-
-function findClientCardsInRows(array $rows, string $normalizedPhone): array
-{
-    $cards = [];
-    foreach ($rows as $row) {
-        $client = normalizeClientRow($row);
-        if ($client === null || !in_array($normalizedPhone, $client['phones'], true)) continue;
-        $fields = [];
-        foreach ($row as $label=>$value) {
-            $displayValue = clientCardFieldValue($value);
-            if ($displayValue !== '') $fields[(string)$label] = $displayValue;
-        }
-        $cards[] = ['name'=>$client['name'], 'fields'=>$fields];
-    }
-    return $cards;
-}
-
-function loadClientCards(string $rawPhone): array
-{
-    $startedAt = microtime(true);
-    $normalized = normalizeClientPhone($rawPhone);
-    if ($normalized === '') throw new InvalidArgumentException('Номер должен содержать не менее 10 цифр');
-    $cards = fetchClientCardsDirect($normalized);
-    if ($cards === null) {
-        $response = fetchClientsApiRows();
-        $cards = findClientCardsInRows($response['rows'], $normalized);
-        error_log('Clients timing: direct card endpoint unavailable, directory fallback used');
-    }
-    error_log(sprintf('Clients timing: card lookup=%.0f ms, matches=%d', (microtime(true)-$startedAt)*1000, count($cards)));
-    return $cards;
-}
-
-function testClientPhone(string $rawPhone): array
-{
-    $normalized = normalizeClientPhone($rawPhone);
-    $displayPhone = strlen($normalized) === 10 ? '+7' . $normalized : $rawPhone;
-    if (strlen($normalized) !== 10) {
-        return [
-            'found'=>false,
-            'phone'=>$displayPhone,
-            'normalized'=>$normalized,
-            'matches'=>[],
-            'matches_count'=>0,
-            'reason'=>'После удаления форматирования номер должен содержать 10 цифр.',
-        ];
-    }
-
-    // Тест намеренно обходит локальную таблицу и файловый кэш: кнопка должна
-    // проверять фактический ответ API проекта clients в момент нажатия.
-    $testResult = testClientPhoneAgainstApi($normalized);
-    if ($testResult['normalized_total'] === 0) {
-        return [
-            'found'=>false,
-            'phone'=>$displayPhone,
-            'normalized'=>$normalized,
-            'matches'=>[],
-            'matches_count'=>0,
-            'reason'=>'Проект clients не вернул ни одной записи с заполненными колонками «Наименование» и «Телефоны».',
-        ];
-    }
-
-    $matches = $testResult['matches'];
-    return [
-        'found'=>(bool)$matches,
-        'phone'=>$displayPhone,
-        'normalized'=>$normalized,
-        'matches'=>$matches,
-        'matches_count'=>count($matches),
-        'reason'=>$matches ? '' : sprintf(
-            'Номер %s не найден в колонке «Телефоны». Проверено клиентов: %d.',
-            $displayPhone,
-            $testResult['normalized_total']
-        ),
-    ];
-}
-
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
     try {
-        if (($_GET['card'] ?? '') === '1') {
-            $requestStartedAt = microtime(true);
-            $cards = loadClientCards(trim((string)($_GET['phone'] ?? '')));
-            header('Server-Timing: calltrack;dur=' . round((microtime(true)-$requestStartedAt)*1000, 1));
-            sendJson(['status'=>'success', 'data'=>$cards, 'total'=>count($cards)]);
-        }
-        if (array_key_exists('phone', $_GET)) {
-            sendJson(['status'=>'success', 'data'=>testClientPhone(trim((string)$_GET['phone']))]);
-        }
         $pdo = getPdo();
         $clients = loadClientsDirectory($pdo);
         sendJson(['status'=>'success', 'data'=>$clients, 'total'=>count($clients)]);
