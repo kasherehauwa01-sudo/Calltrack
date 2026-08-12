@@ -7,10 +7,15 @@ import android.app.TimePickerDialog
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.text.InputFilter
+import android.text.SpannableString
+import android.text.style.UnderlineSpan
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -41,6 +46,7 @@ class ContactCardFragment : Fragment() {
     private val dateTimeFormat = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
     private var currentPhone: String = ""
     private var isPersonalContact: Boolean = false
+    private var clientCardLoading: Boolean = false
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentContactCardBinding.inflate(inflater, container, false)
@@ -53,6 +59,12 @@ class ContactCardFragment : Fragment() {
         binding.tvContactPhone.text = phone
         binding.tvContactName.text = phone
         binding.tvClient1c.text = viewModel.findClientName(phone).ifBlank { "—" }
+        binding.tvClient1c.setOnClickListener {
+            val clientName = binding.tvClient1c.text.toString().trim()
+            if (clientName.isNotBlank() && clientName != "—" && clientName != "Личный") {
+                showClientCard(phone, clientName)
+            }
+        }
 
         binding.btnBack.setOnClickListener {
             requireActivity().onBackPressedDispatcher.onBackPressed()
@@ -71,6 +83,7 @@ class ContactCardFragment : Fragment() {
                         binding.tvClient1c.text = "—"
                         isPersonalContact = false
                         renderPersonalButtonState()
+                        renderClientLinkState()
                         Toast.makeText(requireContext(), "Пометка личного контакта убрана", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(requireContext(), "Не удалось убрать пометку личного контакта", Toast.LENGTH_SHORT).show()
@@ -80,6 +93,7 @@ class ContactCardFragment : Fragment() {
                         binding.tvClient1c.text = "Личный"
                         isPersonalContact = true
                         renderPersonalButtonState()
+                        renderClientLinkState()
                         Toast.makeText(requireContext(), "Контакт помечен как личный", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(requireContext(), "Не удалось пометить контакт как личный", Toast.LENGTH_SHORT).show()
@@ -107,7 +121,10 @@ class ContactCardFragment : Fragment() {
             }
             if (binding.tvClient1c.text.toString() == "—") {
                 val client = viewModel.findClientName(phone)
-                if (client.isNotBlank()) binding.tvClient1c.text = client
+                if (client.isNotBlank()) {
+                    binding.tvClient1c.text = client
+                    renderClientLinkState()
+                }
             }
         }
 
@@ -118,6 +135,62 @@ class ContactCardFragment : Fragment() {
             binding.tvClient1c.text = contact?.client1c?.ifBlank { fallbackClient } ?: fallbackClient
             isPersonalContact = binding.tvClient1c.text.toString() == "Личный"
             renderPersonalButtonState()
+            renderClientLinkState()
+        }
+        renderClientLinkState()
+    }
+
+    private fun renderClientLinkState() {
+        val name = binding.tvClient1c.text.toString().trim()
+        val clickable = name.isNotBlank() && name != "—" && name != "Личный"
+        binding.tvClient1c.isClickable = clickable
+        binding.tvClient1c.isFocusable = clickable
+        binding.tvClient1c.text = if (clickable) {
+            SpannableString(name).apply { setSpan(UnderlineSpan(), 0, length, 0) }
+        } else {
+            name
+        }
+    }
+
+    private fun showClientCard(phone: String, clientName: String) {
+        if (clientCardLoading) return
+        clientCardLoading = true
+        viewLifecycleOwner.lifecycleScope.launch {
+            val cards = runCatching { viewModel.loadClientCards(phone) }.getOrElse { error ->
+                clientCardLoading = false
+                Toast.makeText(requireContext(), "Не удалось загрузить карточку: ${error.message}", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            clientCardLoading = false
+            val card = cards.firstOrNull { it.name == clientName } ?: cards.firstOrNull()
+            if (card == null) {
+                Toast.makeText(requireContext(), "Карточка клиента не найдена", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val padding = (16 * resources.displayMetrics.density).toInt()
+            val content = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(padding, padding / 2, padding, padding / 2)
+            }
+            card.fields.forEach { (label, value) ->
+                content.addView(TextView(requireContext()).apply {
+                    text = label
+                    textSize = 13f
+                    setTextColor(0xFF6B7280.toInt())
+                    setPadding(0, padding / 2, 0, 2)
+                })
+                content.addView(TextView(requireContext()).apply {
+                    text = value
+                    textSize = 17f
+                    setTextColor(0xFF1F2937.toInt())
+                    setTextIsSelectable(true)
+                })
+            }
+            AlertDialog.Builder(requireContext())
+                .setTitle(card.name.ifBlank { clientName })
+                .setView(ScrollView(requireContext()).apply { addView(content) })
+                .setPositiveButton("Закрыть", null)
+                .show()
         }
     }
 

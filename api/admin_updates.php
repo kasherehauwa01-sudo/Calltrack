@@ -15,6 +15,28 @@ function safeApkFilename(string $versionName, int $versionCode, string $original
     return sprintf('%s_v%s_%d_%s.apk', $base, $version ?: 'version', $versionCode, date('YmdHis'));
 }
 
+function apkVersionFromFilename(string $filename): array
+{
+    if (!preg_match('/(?:^|[_-])v(\d+\.\d+\.\d+)[_-](\d+)(?:[_-]|\.apk$)/i', basename($filename), $matches)) {
+        throw new InvalidArgumentException(
+            'Имя APK не содержит версию. Соберите файл через Gradle: calltrack_v1.0.13_13.apk'
+        );
+    }
+    return ['version_name'=>$matches[1], 'version_code'=>(int)$matches[2]];
+}
+
+function assertApkVersionMatchesCurrent(array $version, ?array $current): void
+{
+    if ($current === null) return;
+    if ((int)$current['version_code'] !== $version['version_code'] || (string)$current['version_name'] !== $version['version_name']) {
+        throw new InvalidArgumentException(sprintf(
+            'Для замены версии %s (%d) загрузите APK с теми же versionName и versionCode',
+            $current['version_name'],
+            $current['version_code']
+        ));
+    }
+}
+
 function deleteUpdateFile(?string $filename): void
 {
     $filename = basename((string)$filename);
@@ -179,9 +201,10 @@ try {
                 sendJson(['status' => 'error', 'message' => 'Обновление не найдено'], 404);
             }
         }
-        $autoVersion = nextUpdateVersion($pdo);
-        $versionName = $current ? (string)$current['version_name'] : $autoVersion['version_name'];
-        $versionCode = $current ? (int)$current['version_code'] : $autoVersion['version_code'];
+        $apkVersion = apkVersionFromFilename($originalName);
+        assertApkVersionMatchesCurrent($apkVersion, $current ?: null);
+        $versionName = $apkVersion['version_name'];
+        $versionCode = $apkVersion['version_code'];
         $newFilename = safeApkFilename($versionName, $versionCode, $originalName);
         $target = $dir . '/' . $newFilename;
         $out = @fopen($target, 'wb');
@@ -256,6 +279,10 @@ try {
         if (strtolower(pathinfo($originalName, PATHINFO_EXTENSION)) !== 'apk') {
             sendJson(['status' => 'error', 'message' => 'Можно загружать только .apk файлы'], 400);
         }
+        $apkVersion = apkVersionFromFilename($originalName);
+        assertApkVersionMatchesCurrent($apkVersion, $current ?: null);
+        $versionName = $apkVersion['version_name'];
+        $versionCode = $apkVersion['version_code'];
         $tmp = (string)($file['tmp_name'] ?? '');
         if ($tmp === '' || !is_uploaded_file($tmp)) {
             sendJson(['status' => 'error', 'message' => 'APK не был загружен'], 400);
@@ -288,11 +315,9 @@ try {
     sendJson(['status' => 'success', 'id' => $id]);
 } catch (Throwable $e) {
     error_log($e);
+    $statusCode = $e instanceof InvalidArgumentException ? 400 : 500;
     sendJson([
         'status' => 'error',
         'message' => $e->getMessage(),
-        'file' => $e->getFile(),
-        'line' => $e->getLine(),
-        'trace' => $e->getTraceAsString()
-    ], 500);
+    ], $statusCode);
 }
