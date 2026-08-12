@@ -82,9 +82,7 @@ function enrichCallsWithClients(array $rows): array
 }
 
 try {
-    $params = [];
     $filters = applyRegistryPeriod($_GET);
-    $where = buildFilters($filters, $params);
     $rawLimit = $_GET['limit'] ?? null;
     $period = strtolower(trim((string)($_GET['period'] ?? '')));
     $loadAll = $period === 'all' || $rawLimit === null || (int)$rawLimit === 0;
@@ -105,8 +103,7 @@ try {
     $stmt = $pdo->prepare($sql);
     foreach ($params as $key => $value) $stmt->bindValue($key, $value);
     if (!$loadAll) {
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $rows = array_slice($rows, $offset, $limit);
     }
     $stmt->execute();
     $rows = enrichCallsWithClients($stmt->fetchAll());
