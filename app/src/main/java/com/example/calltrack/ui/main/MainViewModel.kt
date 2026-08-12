@@ -41,6 +41,8 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
 
     fun loadClientCards(phone: String): List<ClientCard> = repository.loadClientCards(phone)
 
+    fun loadClientCards(phone: String): List<ClientCard> = repository.loadClientCards(phone)
+
     suspend fun saveCallOutcome(
         callId: Long,
         phone: String,
