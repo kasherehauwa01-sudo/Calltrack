@@ -40,6 +40,10 @@ if (!defined('CLIENTS_API_URL')) {
     // локальный Nginx /vr/clients не настроен и отвечает HTTP 404.
     define('CLIENTS_API_URL', 'http://127.0.0.1:8015/api/get_clients.php');
 }
+if (!defined('CLIENTS_API_TIMEOUT')) {
+    // Полный справочник Clients может занимать десятки мегабайт.
+    define('CLIENTS_API_TIMEOUT', 120);
+}
 
 function dbConfigValue(string $envName, string $constantName): string
 {

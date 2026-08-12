@@ -14,12 +14,16 @@ function clientsCurlRequest(string $url): array
     if ($curl === false) {
         throw new RuntimeException('Не удалось инициализировать запрос к Clients');
     }
+    $configuredTimeout = getenv('CALLTRACK_CLIENTS_API_TIMEOUT');
+    $timeout = max(15, (int)($configuredTimeout !== false ? $configuredTimeout : CLIENTS_API_TIMEOUT));
     curl_setopt_array($curl, [
         CURLOPT_RETURNTRANSFER=>true,
         CURLOPT_CONNECTTIMEOUT=>5,
-        CURLOPT_TIMEOUT=>15,
+        CURLOPT_TIMEOUT=>$timeout,
         CURLOPT_FOLLOWLOCATION=>false,
-        CURLOPT_HTTPHEADER=>['Accept: application/json'],
+        // Просим сжатый ответ: реальный справочник Clients может превышать 15 МБ.
+        CURLOPT_ENCODING=>'',
+        CURLOPT_HTTPHEADER=>['Accept: application/json', 'Connection: close'],
     ]);
     $body = curl_exec($curl);
     $httpCode = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
@@ -32,6 +36,7 @@ function clientsCurlRequest(string $url): array
         'effective_url'=>$effectiveUrl,
         'body'=>$body === false ? '' : (string)$body,
         'curl_error'=>$curlError,
+        'timeout'=>$timeout,
     ];
 }
 
@@ -40,7 +45,12 @@ function fetchClientsApiRows(string $url): array
     // URL передаётся в cURL без добавления путей и без fallback-переходов.
     $http = clientsCurlRequest($url);
     if ($http['curl_error'] !== '') {
-        throw new RuntimeException('Ошибка соединения с Clients: ' . $http['curl_error']);
+        throw new RuntimeException(sprintf(
+            'Ошибка соединения с Clients после %d сек. (получено %d байт): %s',
+            $http['timeout'],
+            strlen($http['body']),
+            $http['curl_error']
+        ));
     }
     if ($http['http_code'] !== 200) {
         throw new RuntimeException(sprintf(
@@ -108,6 +118,9 @@ function testClientPhone(string $rawPhone): array
 }
 
 try {
+    // cURL имеет собственный контролируемый timeout; PHP не должен завершить
+    // обработчик раньше, чем закончится загрузка большого справочника.
+    @set_time_limit(max(30, (int)CLIENTS_API_TIMEOUT + 10));
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
         sendJson(['status'=>'error', 'message'=>'Разрешён только метод GET'], 405);
     }
