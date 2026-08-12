@@ -40,6 +40,7 @@
     .admin-subtab:hover{background:#dfe4ec;color:#111827}.admin-subtab.active{background:#fff;color:#111827;font-weight:600;box-shadow:0 4px 14px rgba(15,23,42,.11)}
     .admin-panel{display:grid;gap:12px}.admin-panel[hidden]{display:none}
     .cache-refresh-card{border:1px solid #dbe3ef;border-radius:16px;padding:18px;background:#f8fafc;display:grid;gap:14px}.cache-refresh-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.cache-refresh-item{display:grid;gap:3px}.cache-refresh-label{font-size:.82rem;color:var(--muted)}.cache-refresh-value{font-weight:600;color:#111827}.cache-refresh-value.success{color:#15803d}.cache-refresh-value.error{color:#b91c1c}
+    .cache-refresh-feedback{display:flex;align-items:center;gap:9px;min-height:24px;font-weight:600}.cache-refresh-feedback.running{color:#1d4ed8}.cache-refresh-feedback.success{color:#15803d}.cache-refresh-feedback.error{color:#b91c1c}.cache-refresh-spinner{width:16px;height:16px;border:2px solid #bfdbfe;border-top-color:#2563eb;border-radius:50%;animation:cache-refresh-spin .8s linear infinite}.cache-refresh-spinner[hidden]{display:none}@keyframes cache-refresh-spin{to{transform:rotate(360deg)}}
     .registry-wrap{overflow:auto;border:1px solid #e5e7eb;border-radius:14px;background:#fff;max-height:62vh}
     .registry-table{width:100%;border-collapse:collapse;min-width:1280px;font-size:.86rem}
     .registry-table th,.registry-table td{padding:10px 12px;border-bottom:1px solid #eef2f7;text-align:left;vertical-align:top;white-space:nowrap}
@@ -250,24 +251,15 @@
         <div class="admin-content" id="adminContent" hidden>
           <h2>Админ панель</h2>
           <div class="admin-subtabs" role="tablist" aria-label="Разделы админ панели">
-            <button class="admin-subtab active" data-admin-tab="registry" type="button">Реестр звонков</button>
-            <button class="admin-subtab" data-admin-tab="generalSettings" type="button">Общие настройки</button>
+            <button class="admin-subtab active" data-admin-tab="generalSettings" type="button">Общие настройки</button>
+            <button class="admin-subtab" data-admin-tab="registry" type="button">Реестр звонков</button>
             <button class="admin-subtab" data-admin-tab="emailRegistry" type="button">Реестр Email</button>
             <button class="admin-subtab" data-admin-tab="personalContacts" type="button">Признаки контакта</button>
             <button class="admin-subtab" data-admin-tab="users" type="button">Пользователи</button>
             <button class="admin-subtab" data-admin-tab="email" type="button">Email</button>
             <button class="admin-subtab" data-admin-tab="updates" type="button">Обновления</button>
-            <button class="admin-subtab" data-admin-tab="generalSettings" type="button">Общие настройки</button>
           </div>
-          <div class="admin-command-row" aria-label="Команда обновления Calltrack">
-            <div class="admin-command-field">
-              <label for="adminUpdateCommand">Команда обновления</label>
-              <input class="admin-command-input" id="adminUpdateCommand" type="text" value="bash /var/www/html/vr/update_calltrack.sh" readonly />
-            </div>
-            <button class="admin-command-copy" id="adminUpdateCommandCopyBtn" type="button" aria-label="Скопировать команду">📋 <span>Копировать</span></button>
-            <div class="admin-command-status" id="adminUpdateCommandStatus" aria-live="polite"></div>
-          </div>
-          <section class="admin-panel" id="adminRegistryPanel">
+          <section class="admin-panel" id="adminRegistryPanel" hidden>
             <p>Полный список звонков из SQL таблицы calls.</p>
             <div class="registry-period-shell" id="registryPeriodShell" aria-label="Период реестра">
               <button class="period-pill" data-registry-period="yesterday" type="button">Вчера</button>
@@ -390,8 +382,16 @@
               </div>
             </div>
           </section>
-          <section class="admin-panel" id="adminGeneralSettingsPanel" hidden>
+          <section class="admin-panel" id="adminGeneralSettingsPanel">
             <h3>Общие настройки</h3>
+            <div class="admin-command-row" aria-label="Команда обновления Calltrack">
+              <div class="admin-command-field">
+                <label for="adminUpdateCommand">Команда обновления</label>
+                <input class="admin-command-input" id="adminUpdateCommand" type="text" value="bash /var/www/html/vr/update_calltrack.sh" readonly />
+              </div>
+              <button class="admin-command-copy" id="adminUpdateCommandCopyBtn" type="button" aria-label="Скопировать команду">📋 <span>Копировать</span></button>
+              <div class="admin-command-status" id="adminUpdateCommandStatus" aria-live="polite"></div>
+            </div>
             <section class="cache-refresh-card" aria-labelledby="clientsCacheRefreshTitle">
               <h3 id="clientsCacheRefreshTitle">Обновление кэша</h3>
               <div class="cache-refresh-grid">
@@ -404,7 +404,10 @@
                 <div class="cache-refresh-item" id="clientsCacheErrorRow" hidden><span class="cache-refresh-label">Последняя ошибка</span><span class="cache-refresh-value error" id="clientsCacheError"></span></div>
               </div>
               <div class="updates-actions"><button class="registry-refresh-btn" id="clientsCacheRefreshBtn" type="button">Обновить кэш сейчас</button></div>
-              <div class="updates-status" id="clientsCacheRefreshStatus" aria-live="polite"></div>
+              <div class="cache-refresh-feedback" id="clientsCacheRefreshStatus" role="status" aria-live="assertive">
+                <span class="cache-refresh-spinner" id="clientsCacheRefreshSpinner" hidden aria-hidden="true"></span>
+                <span id="clientsCacheRefreshMessage">Готово к обновлению</span>
+              </div>
             </section>
             <p>Проверка поиска наименования клиента по данным проекта clients.</p>
             <form class="updates-form" id="clientsApiTestForm">
@@ -566,8 +569,7 @@ function unlockAdminPanel(){
   adminEls.error.textContent='';
   adminEls.lock.hidden=true;
   adminEls.content.hidden=false;
-  setActiveAdminTab('registry');
-  renderAdminRegistry();
+  setActiveAdminTab('generalSettings');
 }
 function bindAdminPanel(){
   adminEls.tabs.forEach((btn)=>btn.addEventListener('click',()=>setActiveTab(btn.dataset.tab)));
@@ -679,17 +681,34 @@ function renderClientsCacheStatus(data={}){
   document.getElementById('clientsCacheError').textContent=data.error||'';
 }
 async function loadClientsCacheStatus(){
-  const message=document.getElementById('clientsCacheRefreshStatus');
-  try{renderClientsCacheStatus(await window.calltrackApi.clientsCacheStatus(adminPasswordValue));message.textContent='';}
-  catch(error){message.textContent=`Не удалось получить статус: ${error.message}`;}
+  const feedback=document.getElementById('clientsCacheRefreshStatus');
+  const message=document.getElementById('clientsCacheRefreshMessage');
+  try{renderClientsCacheStatus(await window.calltrackApi.clientsCacheStatus(adminPasswordValue));if(!feedback.classList.contains('running'))message.textContent='Статус кэша загружен';}
+  catch(error){feedback.className='cache-refresh-feedback error';message.textContent=`Не удалось получить статус: ${error.message}`;}
 }
 async function refreshClientsCacheNow(){
   const button=document.getElementById('clientsCacheRefreshBtn');
-  const message=document.getElementById('clientsCacheRefreshStatus');
-  button.disabled=true;message.textContent='Обновление кэша Clients...';
-  try{const result=await window.calltrackApi.refreshClientsCache(adminPasswordValue);renderClientsCacheStatus(result.data);message.textContent='Кэш успешно обновлен';}
-  catch(error){message.textContent=`Ошибка: ${error.message}`;await loadClientsCacheStatus();}
-  finally{button.disabled=false;}
+  const feedback=document.getElementById('clientsCacheRefreshStatus');
+  const spinner=document.getElementById('clientsCacheRefreshSpinner');
+  const message=document.getElementById('clientsCacheRefreshMessage');
+  const startedAt=Date.now();
+  let seconds=0;
+  button.disabled=true;button.textContent='Обновление выполняется...';
+  feedback.className='cache-refresh-feedback running';spinner.hidden=false;
+  message.textContent='Запуск обновления кэша Clients...';
+  // Даём браузеру отрисовать начало операции до отправки продолжительного POST-запроса.
+  await new Promise((resolve)=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  const timer=setInterval(()=>{seconds=Math.floor((Date.now()-startedAt)/1000);message.textContent=`Обновление выполняется — ${seconds} сек.`;},1000);
+  try{
+    const result=await window.calltrackApi.refreshClientsCache(adminPasswordValue);
+    renderClientsCacheStatus(result.data);feedback.className='cache-refresh-feedback success';
+    message.textContent=`Кэш успешно обновлен за ${Math.max(1,Math.round((Date.now()-startedAt)/1000))} сек. Получено клиентов: ${Number(result.data?.clients||0).toLocaleString('ru-RU')}`;
+  }catch(error){
+    feedback.className='cache-refresh-feedback error';message.textContent=`Обновление завершилось с ошибкой: ${error.message}`;
+    try{renderClientsCacheStatus(await window.calltrackApi.clientsCacheStatus(adminPasswordValue));}catch(statusError){console.error(statusError);}
+  }finally{
+    clearInterval(timer);spinner.hidden=true;button.disabled=false;button.textContent='Обновить кэш сейчас';
+  }
 }
 
 function setClientsApiTestModalVisible(visible){
