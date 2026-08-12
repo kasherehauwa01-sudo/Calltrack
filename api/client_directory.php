@@ -78,7 +78,12 @@ function clientsApiUrls(): array
 
 function clientsRowsFromApi(): array
 {
-    $context = stream_context_create(['http'=>['timeout'=>10, 'ignore_errors'=>true, 'header'=>"Accept: application/json\r\n"]]);
+    $context = stream_context_create(['http'=>[
+        'timeout'=>3,
+        'ignore_errors'=>true,
+        'follow_location'=>0,
+        'header'=>"Accept: application/json\r\nConnection: close\r\n",
+    ]]);
     foreach (clientsApiUrls() as $url) {
         $body = @file_get_contents($url, false, $context);
         if ($body === false || trim($body) === '') continue;
@@ -92,7 +97,7 @@ function clientsRowsFromApi(): array
     return [];
 }
 
-function loadClientsDirectory(PDO $pdo): array
+function loadClientsDirectory(PDO $pdo, bool $allowRemote = true): array
 {
     $clients = clientsRowsFromDatabase($pdo);
     if ($clients) return $clients;
@@ -101,6 +106,16 @@ function loadClientsDirectory(PDO $pdo): array
     if (is_file($cacheFile) && filemtime($cacheFile) !== false && filemtime($cacheFile) > time() - 300) {
         $cached = json_decode((string)file_get_contents($cacheFile), true);
         if (is_array($cached)) return $cached;
+    }
+    if (!$allowRemote) {
+        // Основные API Calltrack не должны ждать внешний сервис. Свежий кэш
+        // обновляется отдельным client_directory.php или тестом интеграции.
+        // Просроченный кэш допустим для необязательного обогащения названий.
+        if (is_file($cacheFile)) {
+            $stale = json_decode((string)file_get_contents($cacheFile), true);
+            if (is_array($stale)) return $stale;
+        }
+        return [];
     }
     $clients = clientsRowsFromApi();
     if ($clients) {

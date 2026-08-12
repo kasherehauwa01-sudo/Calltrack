@@ -116,6 +116,27 @@ function rowMatchesFilters(array $row, array $filters): bool
     return true;
 }
 
+function enrichCallsWithClients(array $rows, PDO $pdo): array
+{
+    try {
+        $clientIndex = buildClientPhoneIndex(loadClientsDirectory($pdo, false));
+        if (!$clientIndex) return $rows;
+
+        foreach ($rows as &$row) {
+            $normalizedPhone = normalizeClientPhone((string)$row['phone']);
+            if ($normalizedPhone !== '' && isset($clientIndex[$normalizedPhone])) {
+                $row['client'] = $clientIndex[$normalizedPhone];
+            }
+        }
+        unset($row);
+    } catch (Throwable $e) {
+        // Справочник Clients обогащает звонки, но его недоступность не должна
+        // останавливать основной дашборд. Возвращаем клиент из таблицы calls.
+        error_log('Calls client enrichment failed: ' . $e->getMessage());
+    }
+    return $rows;
+}
+
 try {
     $filters = applyRegistryPeriod($_GET);
     $rawLimit = $_GET['limit'] ?? null;
@@ -127,14 +148,7 @@ try {
     $pdo = getPdo();
     $stmt = $pdo->query('SELECT * FROM calls');
     $rows = array_map('normalizeCallRow', $stmt->fetchAll());
-    $clientIndex = buildClientPhoneIndex(loadClientsDirectory($pdo));
-    foreach ($rows as &$row) {
-        $normalizedPhone = normalizeClientPhone((string)$row['phone']);
-        if ($normalizedPhone !== '' && isset($clientIndex[$normalizedPhone])) {
-            $row['client'] = $clientIndex[$normalizedPhone];
-        }
-    }
-    unset($row);
+    $rows = enrichCallsWithClients($rows, $pdo);
     $rows = array_values(array_filter($rows, static fn(array $row): bool => rowMatchesFilters($row, $filters)));
     usort($rows, static function (array $a, array $b): int {
         $left = sprintf('%s %s %012d', $a['call_date'], $a['call_time'], (int)$a['id_db']);
