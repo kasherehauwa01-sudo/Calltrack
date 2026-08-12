@@ -1,6 +1,7 @@
 package com.example.calltrack.ui.main
 
 import android.Manifest
+import android.content.ClipData
 import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -43,12 +44,16 @@ import okhttp3.Request
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
+import java.security.MessageDigest
 
 class MainActivity : BaseActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private var pendingInstallApk: File? = null
+    private var pendingInstallVersionCode: Int? = null
+    private var pendingInstallVersionName: String? = null
     private var updateCheckHandled = false
+    private var updateOperationRunning = false
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
@@ -65,7 +70,20 @@ class MainActivity : BaseActivity() {
         if (apkFile != null && (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls())) {
             AppLogger.log(this, "UPDATE", "Разрешение на установку APK получено, повторный запуск установки")
             installApkFile(apkFile)
+        } else {
+            updateOperationRunning = false
+            AppLogger.log(this, "WARN", "Разрешение на установку APK не предоставлено")
         }
+    }
+    private val apkInstallerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        updateOperationRunning = false
+        AppLogger.log(this, "UPDATE", "Системный установщик APK завершён: resultCode=${result.resultCode}")
+        if (result.resultCode != RESULT_OK) {
+            Toast.makeText(this, "Установка не завершена. Проверьте сообщение системного установщика.", Toast.LENGTH_LONG).show()
+        }
+        lifecycleScope.launch { syncUpdateLogsToDashboard() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -186,6 +204,11 @@ class MainActivity : BaseActivity() {
     }
 
     private fun checkForUpdatesAndPrompt() {
+        if (updateOperationRunning) {
+            AppLogger.log(this, "UPDATE", "Повторный запуск обновления пропущен: операция уже выполняется")
+            return
+        }
+        updateOperationRunning = true
         lifecycleScope.launch {
             AppLogger.log(this@MainActivity, "UI", "Нажата кнопка: Обновить")
             AppLogger.log(this@MainActivity, "UPDATE", "Проверка обновлений через kvasmix.ru")
@@ -197,13 +220,15 @@ class MainActivity : BaseActivity() {
                 is UpdateCheckResult.NetworkError -> {
                     AppLogger.log(this@MainActivity, "ERROR", "Сервер обновлений недоступен: ${updateResult.reason}")
                     syncUpdateLogsToDashboard()
-                    Toast.makeText(this@MainActivity, "Не удалось проверить наличие обновлений.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@MainActivity, "Не удалось проверить наличие обновлений.", Toast.LENGTH_LONG).show()
+                        updateOperationRunning = false
                     return@launch
                 }
                 is UpdateCheckResult.InvalidResponse -> {
                     AppLogger.log(this@MainActivity, "ERROR", "Некорректный ответ сервера обновлений: ${updateResult.reason}")
                     syncUpdateLogsToDashboard()
-                    Toast.makeText(this@MainActivity, "Некорректный ответ сервера обновлений.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@MainActivity, "Некорректный ответ сервера обновлений.", Toast.LENGTH_LONG).show()
+                        updateOperationRunning = false
                     return@launch
                 }
                 is UpdateCheckResult.Success -> {
@@ -216,6 +241,7 @@ class MainActivity : BaseActivity() {
                             .setMessage("У вас установлена актуальная версия приложения.")
                             .setPositiveButton("OK") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
                             .show()
+                        updateOperationRunning = false
                         return@launch
                     }
                     syncUpdateLogsToDashboard()
@@ -246,9 +272,13 @@ class MainActivity : BaseActivity() {
             }
             .apply {
                 if (!update.mandatory) {
-                    setNegativeButton("Отмена") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
+                    setNegativeButton("Отмена") { dialog: DialogInterface, _: Int ->
+                        updateOperationRunning = false
+                        dialog.dismiss()
+                    }
                 }
             }
+            .setOnCancelListener { updateOperationRunning = false }
             .show()
     }
 
@@ -262,12 +292,15 @@ class MainActivity : BaseActivity() {
                     AppLogger.log(this@MainActivity, "UPDATE", "APK успешно загружен в cache: ${downloadedApkFile.absolutePath}, size=${downloadedApkFile.length()}")
                     Toast.makeText(this@MainActivity, "Подготовка установки...", Toast.LENGTH_SHORT).show()
                     syncUpdateLogsToDashboard()
+                    pendingInstallVersionCode = update.versionCode
+                    pendingInstallVersionName = update.versionName
                     installApkFile(downloadedApkFile)
                 }
                 .onFailure { error ->
                     AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки обновления: ${error.message}", error)
                     syncUpdateLogsToDashboard()
                     Toast.makeText(this@MainActivity, "Ошибка загрузки обновления.", Toast.LENGTH_LONG).show()
+                    updateOperationRunning = false
                 }
         }
     }
@@ -354,6 +387,14 @@ class MainActivity : BaseActivity() {
         if (!downloadedApkFile.exists() || downloadedApkFile.length() <= 0L) {
             AppLogger.log(this, "ERROR", "APK файл отсутствует или пустой")
             Toast.makeText(this, "Ошибка загрузки обновления.", Toast.LENGTH_SHORT).show()
+            updateOperationRunning = false
+            return
+        }
+        val validationError = validateDownloadedApk(downloadedApkFile)
+        if (validationError != null) {
+            AppLogger.log(this, "ERROR", "APK не может обновить приложение: $validationError")
+            Toast.makeText(this, validationError, Toast.LENGTH_LONG).show()
+            updateOperationRunning = false
             return
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
@@ -370,17 +411,68 @@ class MainActivity : BaseActivity() {
 
         pendingInstallApk = null
         val apkUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", downloadedApkFile)
-        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+        val installIntent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
             setDataAndType(apkUri, APK_MIME_TYPE)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            clipData = ClipData.newRawUri("Calltrack update", apkUri)
+            putExtra(Intent.EXTRA_RETURN_RESULT, true)
+            putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
         }
-        runCatching { startActivity(installIntent) }
+        runCatching { apkInstallerLauncher.launch(installIntent) }
             .onSuccess { AppLogger.log(this, "UPDATE", "Системный установщик APK открыт") }
             .onFailure {
+                updateOperationRunning = false
                 AppLogger.log(this, "ERROR", "Не удалось открыть установщик APK: ${it.message}", it)
                 Toast.makeText(this, "Не удалось открыть установщик APK", Toast.LENGTH_LONG).show()
             }
+    }
+
+    private fun validateDownloadedApk(apkFile: File): String? {
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        }
+        val archive = packageManager.getPackageArchiveInfo(apkFile.absolutePath, flags)
+            ?: return "Скачанный файл не является корректным APK."
+        if (archive.packageName != packageName) {
+            return "APK предназначен для другого приложения (${archive.packageName})."
+        }
+        val current = packageManager.getPackageInfo(packageName, flags)
+        val archiveSignatures = archive.signatureDigests()
+        val currentSignatures = current.signatureDigests()
+        if (archiveSignatures.isEmpty() || archiveSignatures != currentSignatures) {
+            return "APK подписан другим ключом. Загрузите сборку, подписанную тем же ключом, что и установленное приложение."
+        }
+        val archiveVersion = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) archive.longVersionCode else {
+            @Suppress("DEPRECATION") archive.versionCode.toLong()
+        }
+        val expectedVersion = pendingInstallVersionCode
+        if (expectedVersion != null && archiveVersion != expectedVersion.toLong()) {
+            return "Сервер объявил версию $expectedVersion (${pendingInstallVersionName.orEmpty()}), " +
+                "но внутри скачанного APK указан versionCode=$archiveVersion. " +
+                "Пересоберите APK с правильным versionCode и загрузите его заново."
+        }
+        if (archiveVersion <= BuildConfig.VERSION_CODE.toLong()) {
+            return "Внутри APK указан versionCode=$archiveVersion, установленная версия=${BuildConfig.VERSION_CODE}. " +
+                "Имя файла и версия в update.json не изменяют версию внутри APK."
+        }
+        AppLogger.log(this, "UPDATE", "APK проверен: package=${archive.packageName}, versionCode=$archiveVersion, подпись совпадает")
+        return null
+    }
+
+    private fun android.content.pm.PackageInfo.signatureDigests(): Set<String> {
+        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            signingInfo?.apkContentsSigners.orEmpty()
+        } else {
+            @Suppress("DEPRECATION")
+            this.signatures.orEmpty()
+        }
+        return signatures.mapTo(linkedSetOf()) { signature ->
+            MessageDigest.getInstance("SHA-256").digest(signature.toByteArray())
+                .joinToString("") { byte -> "%02x".format(byte) }
+        }
     }
 
     private fun fetchLatestUpdateInfo(): UpdateCheckResult {

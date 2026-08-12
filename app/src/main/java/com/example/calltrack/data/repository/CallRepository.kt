@@ -190,6 +190,9 @@ class CallRepository(
         Log.d("CLIENT_SEARCH", "Phone: $phone → Client: $clientName")
         return clientName
     }
+    fun loadClientCards(phone: String): List<ClientCard> = clientDirectory.loadClientCards(phone)
+
+    fun loadClientCards(phone: String): List<ClientCard> = clientDirectory.loadClientCards(phone)
 
     /** Единая точка доступа к карточкам Clients для ViewModel. */
     fun loadClientCards(phone: String): List<ClientCard> {

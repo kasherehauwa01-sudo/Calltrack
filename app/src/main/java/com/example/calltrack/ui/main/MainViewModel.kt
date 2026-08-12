@@ -33,6 +33,11 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     fun observeReminders(phone: String): LiveData<List<ReminderEntity>> = repository.observeReminders(phone).asLiveData()
     fun observeComments(phone: String): LiveData<List<CommentEntity>> = repository.observeComments(phone).asLiveData()
     fun findClientName(phone: String): String = repository.findClientName(phone)
+    suspend fun loadClientCards(phone: String): List<ClientCard> = withContext(Dispatchers.IO) {
+        repository.loadClientCards(phone)
+    }
+
+    fun loadClientCards(phone: String): List<ClientCard> = repository.loadClientCards(phone)
 
     fun loadClientCards(phone: String): List<ClientCard> = repository.loadClientCards(phone)
 
