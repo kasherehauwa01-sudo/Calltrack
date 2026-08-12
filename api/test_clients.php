@@ -108,14 +108,35 @@ function testClientPhoneAgainstApi(string $rawPhone, string $url): array
     ];
 }
 
-function testClientPhone(string $rawPhone): array
+function testClientPhone(string $rawPhone, array $clients): array
 {
-    $url = trim((string)(getenv('CALLTRACK_CLIENTS_API_URL') ?: CLIENTS_API_URL));
-    if ($url === '') {
-        throw new RuntimeException('Не настроен CLIENTS_API_URL');
-    }
-    return testClientPhoneAgainstApi($rawPhone, $url);
+    $normalized = normalizeClientPhone($rawPhone);
+    $displayPhone = strlen($normalized) === 10 ? '+7' . $normalized : $rawPhone;
+    if (strlen($normalized) !== 10) return testClientPhoneAgainstApi($rawPhone, '');
+    $matches = findClientsByPhone($clients, $normalized);
+    return [
+        'found'=>(bool)$matches,
+        'phone'=>$displayPhone,
+        'normalized'=>$normalized,
+        'matches'=>$matches,
+        'matches_count'=>count($matches),
+        'reason'=>$matches ? '' : sprintf(
+            'Номер %s не найден в колонке «Телефоны». Проверено клиентов: %d.',
+            $displayPhone,
+            count($clients)
+        ),
+    ];
 }
+
+function startClientsCacheRefresh(): bool
+{
+    $script = __DIR__ . '/refresh_clients_cache.php';
+    $command = sprintf('%s %s >/dev/null 2>&1 &', escapeshellarg(PHP_BINARY), escapeshellarg($script));
+    exec($command, $output, $exitCode);
+    return $exitCode === 0;
+}
+
+if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) !== __FILE__) return;
 
 try {
     // cURL имеет собственный контролируемый timeout; PHP не должен завершить
@@ -128,7 +149,17 @@ try {
     if ($phone === '') {
         sendJson(['status'=>'error', 'message'=>'Передайте номер телефона'], 400);
     }
-    sendJson(['status'=>'success', 'data'=>testClientPhone($phone)]);
+    $clients = readClientsCache();
+    if (!$clients) {
+        if (!startClientsCacheRefresh()) {
+            throw new RuntimeException('Не удалось запустить фоновое обновление справочника Clients');
+        }
+        sendJson(['status'=>'success', 'data'=>[
+            'pending'=>true,
+            'reason'=>'Справочник Clients загружается в фоне. Ожидайте завершения.',
+        ]], 202);
+    }
+    sendJson(['status'=>'success', 'data'=>testClientPhone($phone, $clients)]);
 } catch (Throwable $e) {
     error_log('Clients API test failed: ' . $e->getMessage());
     sendJson(['status'=>'error', 'message'=>$e->getMessage()], 502);

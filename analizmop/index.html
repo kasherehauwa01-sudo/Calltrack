@@ -656,7 +656,13 @@ async function testClientsApiPhone(event){
   adminEls.clientsApiTestBtn.disabled=true;
   adminEls.clientsApiTestStatus.textContent='Выполняется запрос в проект clients...';
   try{
-    const result=await window.calltrackApi.testClientPhone(phone);
+    let result=await window.calltrackApi.testClientPhone(phone);
+    for(let attempt=0;result?.pending&&attempt<90;attempt++){
+      adminEls.clientsApiTestStatus.textContent=`Справочник Clients загружается в фоне... ${attempt+1}`;
+      await new Promise((resolve)=>setTimeout(resolve,2000));
+      result=await window.calltrackApi.testClientPhone(phone);
+    }
+    if(result?.pending) throw new Error('Фоновая загрузка Clients не завершилась за 3 минуты');
     if(result?.found){
       const rows=(result.matches||[]).map((match)=>`<tr><td>${escapeHtml(match.phone||result.phone||'')}</td><td>${escapeHtml(match.name||'')}</td></tr>`).join('');
       const matchesCount=Number(result.matches_count)||(result.matches||[]).length;

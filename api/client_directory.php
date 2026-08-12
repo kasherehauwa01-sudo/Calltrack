@@ -76,6 +76,27 @@ function clientsApiUrls(): array
     ];
 }
 
+function clientsCacheFile(): string
+{
+    return sys_get_temp_dir() . '/calltrack_clients_' . sha1(implode('|', clientsApiUrls())) . '.json';
+}
+
+function readClientsCache(): array
+{
+    $cacheFile = clientsCacheFile();
+    if (!is_file($cacheFile)) return [];
+    $cached = json_decode((string)file_get_contents($cacheFile), true);
+    return is_array($cached) ? $cached : [];
+}
+
+function writeClientsCache(array $clients): void
+{
+    $json = json_encode($clients, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false || @file_put_contents(clientsCacheFile(), $json, LOCK_EX) === false) {
+        throw new RuntimeException('Не удалось сохранить локальный кэш Clients');
+    }
+}
+
 function clientsRowsFromApi(): array
 {
     $context = stream_context_create(['http'=>[
@@ -102,7 +123,7 @@ function loadClientsDirectory(PDO $pdo, bool $allowRemote = true): array
     $clients = clientsRowsFromDatabase($pdo);
     if ($clients) return $clients;
 
-    $cacheFile = sys_get_temp_dir() . '/calltrack_clients_' . sha1(implode('|', clientsApiUrls())) . '.json';
+    $cacheFile = clientsCacheFile();
     if (is_file($cacheFile) && filemtime($cacheFile) !== false && filemtime($cacheFile) > time() - 300) {
         $cached = json_decode((string)file_get_contents($cacheFile), true);
         if (is_array($cached)) return $cached;
@@ -119,7 +140,7 @@ function loadClientsDirectory(PDO $pdo, bool $allowRemote = true): array
     }
     $clients = clientsRowsFromApi();
     if ($clients) {
-        @file_put_contents($cacheFile, json_encode($clients, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
+        writeClientsCache($clients);
         return $clients;
     }
     if (is_file($cacheFile)) {
