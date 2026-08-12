@@ -77,6 +77,35 @@ function fetchClientsApiRows(string $url): array
     return normalizeClientsPayload(array_values($rows));
 }
 
+function fetchClientsApiPage(string $url, int $page, int $pageSize): array
+{
+    $separator = str_contains($url, '?') ? '&' : '?';
+    $pageUrl = $url . $separator . http_build_query(['page'=>$page, 'per_page'=>$pageSize]);
+    $http = clientsCurlRequest($pageUrl);
+    if ($http['curl_error'] !== '') {
+        throw new RuntimeException("Ошибка соединения с Clients на странице {$page}: {$http['curl_error']}");
+    }
+    if ($http['http_code'] !== 200) {
+        throw new RuntimeException("Clients API вернул HTTP {$http['http_code']} на странице {$page}");
+    }
+    $payload = json_decode($http['body'], true);
+    if (!is_array($payload)) throw new RuntimeException("Clients API вернул некорректный JSON на странице {$page}");
+    if (($payload['status'] ?? '') === 'error') {
+        throw new RuntimeException('Clients API сообщил об ошибке: ' . (string)($payload['message'] ?? 'без описания'));
+    }
+    $rows = $payload['data'] ?? $payload['clients'] ?? $payload['items'] ?? null;
+    if (!is_array($rows)) throw new RuntimeException("В ответе Clients API отсутствует массив клиентов на странице {$page}");
+    // Защита от endpoint, который игнорирует пагинацию и снова возвращает весь справочник.
+    if (count($rows) > $pageSize) throw new RuntimeException('Clients API не применил параметр per_page; потоковое обновление остановлено');
+    $meta = is_array($payload['meta'] ?? null) ? $payload['meta'] : [];
+    return [
+        'clients'=>normalizeClientsPayload(array_values($rows)),
+        'source_count'=>count($rows),
+        'has_more'=>isset($payload['has_more']) ? (bool)$payload['has_more'] :
+            (isset($meta['has_more']) ? (bool)$meta['has_more'] : count($rows) === $pageSize),
+    ];
+}
+
 function testClientPhoneAgainstApi(string $rawPhone, string $url): array
 {
     $normalized = normalizeClientPhone($rawPhone);
@@ -169,7 +198,11 @@ function startClientsCacheRefresh(): bool
     }
     if ($phpCli === '') return false;
 
-    writeClientsRefreshStatus(['status'=>'starting', 'php_cli'=>$phpCli]);
+    $status = readClientsRefreshStatus();
+    $status['status'] = 'starting';
+    $status['source'] = 'background_test';
+    $status['php_cli'] = $phpCli;
+    writeClientsRefreshStatus($status);
     $command = sprintf('%s %s >/dev/null 2>&1 &', escapeshellarg($phpCli), escapeshellarg($script));
     exec($command, $output, $exitCode);
     return $exitCode === 0;
