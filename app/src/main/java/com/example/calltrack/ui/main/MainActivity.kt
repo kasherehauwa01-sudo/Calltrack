@@ -21,7 +21,6 @@ import com.example.calltrack.BuildConfig
 import com.example.calltrack.R
 import com.example.calltrack.data.local.NotificationEntity
 import com.example.calltrack.data.notification.NotificationTargets
-import com.example.calltrack.data.repository.PrefsManager
 import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.service.CallTrackingService
@@ -164,10 +163,15 @@ class MainActivity : BaseActivity() {
             AppLogger.log(this, "UI", "Нажата кнопка: Настройки")
             PopupMenu(this, anchor).apply {
                 menu.add(0, MENU_ABOUT_ID, 0, getString(R.string.about_app))
-                menu.add(0, MENU_USER_ID, 1, getString(R.string.user))
+                menu.add(0, MENU_SETTINGS_ID, 1, getString(R.string.settings))
+                menu.add(0, MENU_USER_ID, 2, getString(R.string.user))
                 setOnMenuItemClickListener { menuItem ->
                     when (menuItem.itemId) {
                         MENU_ABOUT_ID -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
+                        MENU_SETTINGS_ID -> {
+                            AppLogger.log(this@MainActivity, "UI", "Открыт экран: Настройки")
+                            openFragment(SettingsFragment.newInstance())
+                        }
                         MENU_USER_ID -> {
                             AppLogger.log(this@MainActivity, "UI", "Открыт экран: Пользователь")
                             openFragment(UserFragment.newInstance())
@@ -227,7 +231,6 @@ class MainActivity : BaseActivity() {
                 .onSuccess { AppLogger.log(this@MainActivity, "UPDATE", "Логи обновления отправлены в админ-панель") }
                 .onFailure { AppLogger.log(this@MainActivity, "ERROR", "Не удалось отправить логи обновления в админ-панель: ${it.message}", it) }
         }
-        dialogBuilder.show()
     }
 
     private fun showUpdateDialog(update: UpdateInfo) {
@@ -239,7 +242,7 @@ class MainActivity : BaseActivity() {
             .setTitle("Доступна версия ${update.versionName}")
             .setMessage(notes)
             .setPositiveButton("Обновить") { _: DialogInterface, _: Int ->
-                startApkUpdateDownload(update.apkUrl)
+                startApkUpdateDownload(update)
             }
             .apply {
                 if (!update.mandatory) {
@@ -249,11 +252,11 @@ class MainActivity : BaseActivity() {
             .show()
     }
 
-    private fun startApkUpdateDownload(apkUrl: String) {
+    private fun startApkUpdateDownload(update: UpdateInfo) {
         lifecycleScope.launch {
-            AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK с сервера kvasmix.ru: $apkUrl")
+            AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK с сервера kvasmix.ru: ${update.apkUrl}")
             Toast.makeText(this@MainActivity, "Загрузка обновления...", Toast.LENGTH_SHORT).show()
-            val result = withContext(Dispatchers.IO) { downloadApkToCache(apkUrl) }
+            val result = withContext(Dispatchers.IO) { downloadApkToCache(update.apkDownloadUrls) }
             result
                 .onSuccess { downloadedApkFile: File ->
                     AppLogger.log(this@MainActivity, "UPDATE", "APK успешно загружен в cache: ${downloadedApkFile.absolutePath}, size=${downloadedApkFile.length()}")
@@ -267,6 +270,28 @@ class MainActivity : BaseActivity() {
                     Toast.makeText(this@MainActivity, "Ошибка загрузки обновления.", Toast.LENGTH_LONG).show()
                 }
         }
+    }
+
+    private fun downloadApkToCache(apkUrls: List<String>): Result<File> {
+        val candidateUrls = apkUrls.distinct()
+        var lastError: Throwable? = null
+        candidateUrls.forEachIndexed { index, apkUrl ->
+            val result = downloadApkToCache(apkUrl)
+            if (result.isSuccess) return result
+
+            val error = result.exceptionOrNull()
+            lastError = error
+            val nextUrl = candidateUrls.getOrNull(index + 1)
+            if (nextUrl != null) {
+                AppLogger.log(
+                    this,
+                    "WARN",
+                    "Не удалось скачать APK по ссылке $apkUrl: ${error?.message}. Пробуем резервную ссылку: $nextUrl",
+                    error
+                )
+            }
+        }
+        return Result.failure(lastError ?: IllegalStateException("Нет доступных ссылок APK"))
     }
 
     private fun downloadApkToCache(apkUrl: String): Result<File> {
@@ -420,6 +445,7 @@ class MainActivity : BaseActivity() {
                 versionCode = versionCode,
                 versionName = versionName,
                 apkUrl = apkUrl,
+                rawApkUrl = rawApkUrl,
                 releaseNotes = releaseNotes,
                 mandatory = mandatory
             )
@@ -642,6 +668,7 @@ class MainActivity : BaseActivity() {
         const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
         const val EXTRA_RUN_UPDATE_CHECK = "extra_run_update_check"
         private const val MENU_ABOUT_ID = 1001
+        private const val MENU_SETTINGS_ID = 1002
         private const val MENU_USER_ID = 1003
         private const val UPDATE_API_URL = "https://kvasmix.ru/vr/calltrack/api/update.php"
         private const val APK_FILE_NAME = "calltrack-update.apk"
@@ -659,7 +686,10 @@ class MainActivity : BaseActivity() {
         val versionCode: Int,
         val versionName: String,
         val apkUrl: String,
+        val rawApkUrl: String,
         val releaseNotes: List<String>,
         val mandatory: Boolean
-    )
+    ) {
+        val apkDownloadUrls: List<String> = listOf(apkUrl, rawApkUrl).distinct()
+    }
 }
