@@ -204,6 +204,11 @@ class CallRepository(
         return clientDirectory.loadClientCards(phone)
     }
 
+    /** Единая точка доступа к карточкам Clients для ViewModel. */
+    fun loadClientCards(phone: String): List<ClientCard> {
+        return clientDirectory.loadClientCards(phone)
+    }
+
     suspend fun isPersonalContact(phone: String): Boolean {
         if (phone.isBlank() || phone == "Неизвестно") return false
 
@@ -1273,7 +1278,7 @@ class CallRepository(
         val isPersonal: Boolean
     )
 
-    private companion object {
+    private companion object Constants {
         private const val HISTORY_LOG_TAG = "COMMENT_HISTORY"
         private const val DEVICE_RECENT_CALLS_LIMIT = 100
         private const val DEVICE_CONTACT_HISTORY_LIMIT = 100
