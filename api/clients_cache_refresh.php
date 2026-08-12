@@ -118,6 +118,7 @@ function runClientsCacheRefresh(string $source): array
         $pageSize = max(100, min(2000, (int)(getenv('CALLTRACK_CLIENTS_REFRESH_PAGE_SIZE') ?: CLIENTS_REFRESH_PAGE_SIZE)));
         $stream = clientsStreamingCacheCreate();
         $clientsCount = 0;
+        $sourceRecordsCount = 0;
         $page = 1;
         $processedPages = 0;
         $sourceTotal = null;
@@ -130,6 +131,7 @@ function runClientsCacheRefresh(string $source): array
                 }
                 $sourceTotal = $batch['total'];
                 $effectivePageSize = $batch['page_size'];
+                $sourceRecordsCount += $batch['source_count'];
                 $clientsCount += clientsStreamingCacheAppend($stream, $batch['clients']);
                 $processedPages++;
                 unset($batch['clients']);
@@ -138,9 +140,14 @@ function runClientsCacheRefresh(string $source): array
                 gc_collect_cycles();
                 $page++;
             } while ($hasMore);
+            if ($sourceTotal === null || $sourceRecordsCount !== $sourceTotal) {
+                throw new RuntimeException("Пагинация Clients завершилась частично: обработано {$sourceRecordsCount} из {$sourceTotal}");
+            }
             if ($clientsCount === 0) throw new RuntimeException('Clients API не вернул ни одной корректной записи');
+            appendClientsRefreshLog("Всего записей в Clients API: {$sourceTotal}");
             appendClientsRefreshLog("Обработано страниц: {$processedPages}");
-            appendClientsRefreshLog("Получено клиентов: {$clientsCount}");
+            appendClientsRefreshLog("Обработано исходных записей: {$sourceRecordsCount}");
+            appendClientsRefreshLog("Записано клиентов: {$clientsCount}");
             clientsStreamingCachePublish($stream);
         } catch (Throwable $streamError) {
             clientsStreamingCacheAbort($stream);
@@ -157,9 +164,13 @@ function runClientsCacheRefresh(string $source): array
         $result['page_size'] = $effectivePageSize;
         $result['processed_pages'] = $processedPages;
         $result['source_total'] = $sourceTotal;
+        $result['source_records_processed'] = $sourceRecordsCount;
+        $cacheSize = filesize(clientsCacheFile());
+        $result['cache_size_bytes'] = $cacheSize === false ? null : $cacheSize;
         writeClientsRefreshStatus($result);
         appendClientsRefreshLog('Peak memory: ' . round($peakMemory / 1048576, 1) . ' MB');
-        appendClientsRefreshLog('Кэш успешно обновлен');
+        appendClientsRefreshLog('Размер нового кэша: ' . round((int)$cacheSize / 1048576, 1) . ' MB');
+        appendClientsRefreshLog('Кэш успешно опубликован');
         return clientsRefreshStatusPayload($result);
     } catch (Throwable $error) {
         $failed = $running;

@@ -857,6 +857,8 @@ CallTrack использует существующую бизнес-логик�
 
 Обновление читает пагинированный endpoint `CLIENTS_PAGINATED_API_URL` страницами по 1000 исходных записей (`CLIENTS_REFRESH_PAGE_SIZE`). Каждая страница нормализуется и сразу дописывается в новый JSON-кэш и временные индексы, поэтому полный справочник и его повторная JSON-копия не находятся в памяти одновременно. Для нестандартного адреса задайте `CALLTRACK_CLIENTS_PAGINATED_API_URL`; endpoint должен принимать `page` и `page_size` и возвращать `items`, `total`, `page`, `page_size`. Следующая страница определяется строго по условию `page * page_size < total`; пустой `items` завершает обход.
 
+Большие файлы Clients не используют системный `/tmp`: основной кэш находится в `storage/cache/clients/clients.json`, телефонный индекс — в `storage/cache/clients/phone_index.json`, shards — в `storage/cache/clients/shards`, а промежуточные строки shards — в `storage/cache/clients/temp`. Временные `.new.<pid>` создаются на той же файловой системе. Перед запуском удаляются только временные файлы строгих шаблонов старше шести часов.
+
 Один раз после развёртывания установите задание от имени пользователя, которому должен принадлежать cron (обычно `root`):
 
 ```bash
@@ -886,6 +888,18 @@ PHP-FPM и cron должны запускаться от `www-data` и имет�
 ```bash
 sudo install -d -o www-data -g www-data -m 0775 /var/www/html/vr/calltrack/storage /var/www/html/vr/calltrack/storage/logs
 ```
+
+После обновления создайте постоянные каталоги и при наличии перенесите последний рабочий основной кэш и телефонный индекс из `/tmp` безопасным идемпотентным скриптом. Скрипт сравнивает копии и не удаляет исходники:
+
+```bash
+sudo mkdir -p /var/www/html/vr/calltrack/storage/cache/clients/{shards,temp}
+sudo chown -R www-data:www-data /var/www/html/vr/calltrack/storage
+sudo find /var/www/html/vr/calltrack/storage -type d -exec chmod 775 {} \;
+sudo find /var/www/html/vr/calltrack/storage -type f -exec chmod 664 {} \;
+sudo bash /var/www/html/vr/calltrack/scripts/migrate_clients_cache_from_tmp.sh /var/www/html/vr/calltrack
+```
+
+После успешного полного refresh старые файлы `/tmp/calltrack_clients_*` можно удалить вручную. Deploy и миграция автоматически их не удаляют.
 
 Файл `/etc/calltrack/clients-cache-cron.installed` подтверждает, что установщик cron выполнялся. Панель считает cron работающим только при наличии этого маркера и свежего heartbeat от запуска с источником `cron`; отдельно показывает состояния «Настроен», «Работает», «Нет данных» и «Просрочен». Перезапуск PHP-FPM или Nginx после `git pull` не требуется, если сервер не использует агрессивный OPcache без проверки временных меток.
 
