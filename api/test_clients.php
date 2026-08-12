@@ -112,7 +112,13 @@ function testClientPhone(string $rawPhone, array $clients): array
 {
     $normalized = normalizeClientPhone($rawPhone);
     $displayPhone = strlen($normalized) === 10 ? '+7' . $normalized : $rawPhone;
-    if (strlen($normalized) !== 10) return testClientPhoneAgainstApi($rawPhone, '');
+    if (strlen($normalized) !== 10) {
+        return [
+            'found'=>false, 'phone'=>$displayPhone, 'normalized'=>$normalized,
+            'matches'=>[], 'matches_count'=>0,
+            'reason'=>'После удаления форматирования номер должен содержать 10 цифр.',
+        ];
+    }
     $matches = findClientsByPhone($clients, $normalized);
     return [
         'found'=>(bool)$matches,
@@ -130,8 +136,18 @@ function testClientPhone(string $rawPhone, array $clients): array
 
 function startClientsCacheRefresh(): bool
 {
+    if (!function_exists('exec')) return false;
     $script = __DIR__ . '/refresh_clients_cache.php';
-    $command = sprintf('%s %s >/dev/null 2>&1 &', escapeshellarg(PHP_BINARY), escapeshellarg($script));
+    $configuredBinary = trim((string)(getenv('CALLTRACK_PHP_CLI') ?: ''));
+    $candidates = array_filter([$configuredBinary, '/usr/bin/php', PHP_BINDIR . '/php']);
+    $phpCli = '';
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate) && is_executable($candidate)) {$phpCli=$candidate;break;}
+    }
+    if ($phpCli === '') return false;
+
+    writeClientsRefreshStatus(['status'=>'starting', 'php_cli'=>$phpCli]);
+    $command = sprintf('%s %s >/dev/null 2>&1 &', escapeshellarg($phpCli), escapeshellarg($script));
     exec($command, $output, $exitCode);
     return $exitCode === 0;
 }
@@ -151,12 +167,20 @@ try {
     }
     $clients = readClientsCache();
     if (!$clients) {
-        if (!startClientsCacheRefresh()) {
-            throw new RuntimeException('Не удалось запустить фоновое обновление справочника Clients');
+        $refreshStatus = readClientsRefreshStatus();
+        if (($refreshStatus['status'] ?? '') === 'error') {
+            throw new RuntimeException('Фоновая загрузка Clients завершилась ошибкой: ' . ($refreshStatus['message'] ?? 'без описания'));
+        }
+        $refreshUpdatedAt = strtotime((string)($refreshStatus['updated_at'] ?? '')) ?: 0;
+        $refreshRunning = in_array($refreshStatus['status'] ?? '', ['starting','running'], true)
+            && $refreshUpdatedAt > time() - CLIENTS_API_TIMEOUT - 30;
+        if (!$refreshRunning && !startClientsCacheRefresh()) {
+            throw new RuntimeException('Не удалось запустить фоновое обновление Clients: проверьте PHP CLI, exec и CALLTRACK_PHP_CLI');
         }
         sendJson(['status'=>'success', 'data'=>[
             'pending'=>true,
             'reason'=>'Справочник Clients загружается в фоне. Ожидайте завершения.',
+            'refresh_status'=>readClientsRefreshStatus(),
         ]], 202);
     }
     sendJson(['status'=>'success', 'data'=>testClientPhone($phone, $clients)]);

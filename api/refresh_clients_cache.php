@@ -14,16 +14,13 @@ $lock = fopen($lockPath, 'c');
 if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) exit(0);
 
 try {
+    writeClientsRefreshStatus(['status'=>'running']);
     $url = trim((string)(getenv('CALLTRACK_CLIENTS_API_URL') ?: CLIENTS_API_URL));
     $clients = fetchClientsApiRows($url);
     writeClientsCache($clients);
-    file_put_contents($lockPath . '.status', json_encode([
-        'status'=>'success', 'updated_at'=>date(DATE_ATOM), 'clients'=>count($clients),
-    ], JSON_UNESCAPED_UNICODE));
+    writeClientsRefreshStatus(['status'=>'success', 'clients'=>count($clients)]);
 } catch (Throwable $e) {
-    file_put_contents($lockPath . '.status', json_encode([
-        'status'=>'error', 'updated_at'=>date(DATE_ATOM), 'message'=>$e->getMessage(),
-    ], JSON_UNESCAPED_UNICODE));
+    writeClientsRefreshStatus(['status'=>'error', 'message'=>$e->getMessage()]);
     error_log('Clients cache refresh failed: ' . $e->getMessage());
     exit(1);
 } finally {

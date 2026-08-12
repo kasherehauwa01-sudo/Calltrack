@@ -9,3 +9,5 @@ define('DB_PASS', 'YOUR_PASSWORD');
 // «Наименование» и «Телефоны» (либо name и phones).
 define('CLIENTS_API_URL', 'http://127.0.0.1:8015/api/get_clients.php');
 define('CLIENTS_API_TIMEOUT', 120);
+// При нестандартном расположении PHP CLI:
+// putenv('CALLTRACK_PHP_CLI=/usr/bin/php');

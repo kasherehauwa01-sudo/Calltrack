@@ -81,6 +81,29 @@ function clientsCacheFile(): string
     return sys_get_temp_dir() . '/calltrack_clients_' . sha1(implode('|', clientsApiUrls())) . '.json';
 }
 
+function clientsRefreshStatusFile(): string
+{
+    return sys_get_temp_dir() . '/calltrack_clients_refresh.status.json';
+}
+
+function readClientsRefreshStatus(): array
+{
+    $statusFile = clientsRefreshStatusFile();
+    if (!is_file($statusFile)) return [];
+    $status = json_decode((string)file_get_contents($statusFile), true);
+    return is_array($status) ? $status : [];
+}
+
+function writeClientsRefreshStatus(array $status): void
+{
+    $status['updated_at'] = date(DATE_ATOM);
+    @file_put_contents(
+        clientsRefreshStatusFile(),
+        json_encode($status, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        LOCK_EX
+    );
+}
+
 function readClientsCache(): array
 {
     $cacheFile = clientsCacheFile();
