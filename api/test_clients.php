@@ -134,6 +134,29 @@ function testClientPhone(string $rawPhone, array $clients): array
     ];
 }
 
+function testClientPhoneFromCache(string $rawPhone): ?array
+{
+    $normalized = normalizeClientPhone($rawPhone);
+    $displayPhone = strlen($normalized) === 10 ? '+7' . $normalized : $rawPhone;
+    if (strlen($normalized) !== 10) {
+        return [
+            'found'=>false, 'phone'=>$displayPhone, 'normalized'=>$normalized,
+            'matches'=>[], 'matches_count'=>0,
+            'reason'=>'После удаления форматирования номер должен содержать 10 цифр.',
+        ];
+    }
+    $matches = readClientMatchesCache($normalized);
+    if ($matches === null) return null;
+    return [
+        'found'=>(bool)$matches,
+        'phone'=>$displayPhone,
+        'normalized'=>$normalized,
+        'matches'=>$matches,
+        'matches_count'=>count($matches),
+        'reason'=>$matches ? '' : sprintf('Номер %s не найден в колонке «Телефоны».', $displayPhone),
+    ];
+}
+
 function startClientsCacheRefresh(): bool
 {
     if (!function_exists('exec')) return false;
@@ -165,8 +188,10 @@ try {
     if ($phone === '') {
         sendJson(['status'=>'error', 'message'=>'Передайте номер телефона'], 400);
     }
-    $clients = readClientsCache();
-    if (!$clients) {
+    // Не читаем полный кэш карточек: на рабочем справочнике его декодирование
+    // могло превышать memory_limit PHP и завершать endpoint ответом HTTP 500.
+    $cachedResult = testClientPhoneFromCache($phone);
+    if ($cachedResult === null) {
         $refreshStatus = readClientsRefreshStatus();
         if (($refreshStatus['status'] ?? '') === 'error') {
             throw new RuntimeException('Фоновая загрузка Clients завершилась ошибкой: ' . ($refreshStatus['message'] ?? 'без описания'));
@@ -183,7 +208,7 @@ try {
             'refresh_status'=>readClientsRefreshStatus(),
         ]], 202);
     }
-    sendJson(['status'=>'success', 'data'=>testClientPhone($phone, $clients)]);
+    sendJson(['status'=>'success', 'data'=>$cachedResult]);
 } catch (Throwable $e) {
     error_log('Clients API test failed: ' . $e->getMessage());
     sendJson(['status'=>'error', 'message'=>$e->getMessage()], 502);

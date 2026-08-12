@@ -109,6 +109,17 @@ function clientsPhoneIndexCacheFile(): string
     return sys_get_temp_dir() . '/calltrack_clients_phone_index_' . sha1(implode('|', clientsApiUrls())) . '.json';
 }
 
+function clientsLookupShardFile(string $normalizedPhone): string
+{
+    $shard = substr(sha1($normalizedPhone), 0, 2);
+    return sys_get_temp_dir() . '/calltrack_clients_lookup_' . sha1(implode('|', clientsApiUrls())) . '_' . $shard . '.json';
+}
+
+function clientsLookupReadyFile(): string
+{
+    return sys_get_temp_dir() . '/calltrack_clients_lookup_' . sha1(implode('|', clientsApiUrls())) . '.ready';
+}
+
 function clientsRefreshStatusFile(): string
 {
     return sys_get_temp_dir() . '/calltrack_clients_refresh.status.json';
@@ -148,6 +159,16 @@ function readClientsPhoneIndexCache(): array
     return is_array($index) ? $index : [];
 }
 
+function readClientMatchesCache(string $normalizedPhone): ?array
+{
+    $cacheFile = clientsLookupShardFile($normalizedPhone);
+    if (!is_file($cacheFile)) return is_file(clientsLookupReadyFile()) ? [] : null;
+    $shard = json_decode((string)file_get_contents($cacheFile), true);
+    if (!is_array($shard)) return null;
+    $matches = $shard[$normalizedPhone] ?? [];
+    return is_array($matches) ? $matches : [];
+}
+
 function writeClientsCache(array $clients): void
 {
     $json = json_encode($clients, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -160,6 +181,36 @@ function writeClientsCache(array $clients): void
     $indexJson = json_encode(buildClientPhoneIndex($clients), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($indexJson === false || @file_put_contents(clientsPhoneIndexCacheFile(), $indexJson, LOCK_EX) === false) {
         throw new RuntimeException('Не удалось сохранить индекс телефонов Clients');
+    }
+
+
+    // Полные карточки разбиваются на небольшие файлы. Тест одного номера
+    // читает только один shard и не декодирует весь многомегабайтный справочник.
+    $shards = [];
+    foreach ($clients as $client) {
+        if (!is_array($client)) continue;
+        foreach (($client['phones'] ?? []) as $phone) {
+            $phone = (string)$phone;
+            if ($phone === '') continue;
+            $shards[substr(sha1($phone), 0, 2)][$phone][] = [
+                'phone'=>'+7' . $phone,
+                'name'=>(string)($client['name'] ?? ''),
+                'fields'=>is_array($client['fields'] ?? null) ? $client['fields'] : [],
+            ];
+        }
+    }
+    $shardPattern = sys_get_temp_dir() . '/calltrack_clients_lookup_' . sha1(implode('|', clientsApiUrls())) . '_*.json';
+    foreach (glob($shardPattern) ?: [] as $oldShard) @unlink($oldShard);
+    @unlink(clientsLookupReadyFile());
+    foreach ($shards as $shardRows) {
+        $firstPhone = (string)array_key_first($shardRows);
+        $shardJson = json_encode($shardRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($shardJson === false || @file_put_contents(clientsLookupShardFile($firstPhone), $shardJson, LOCK_EX) === false) {
+            throw new RuntimeException('Не удалось сохранить индекс карточек Clients');
+        }
+    }
+    if (@file_put_contents(clientsLookupReadyFile(), date(DATE_ATOM), LOCK_EX) === false) {
+        throw new RuntimeException('Не удалось завершить индекс карточек Clients');
     }
 }
 
