@@ -395,15 +395,19 @@
             <section class="cache-refresh-card" aria-labelledby="clientsCacheRefreshTitle">
               <h3 id="clientsCacheRefreshTitle">Обновление кэша</h3>
               <div class="cache-refresh-grid">
-                <div class="cache-refresh-item"><span class="cache-refresh-label">Автоматическое обновление</span><span class="cache-refresh-value" id="clientsCacheSchedule">Ежедневно в 04:00 МСК</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Режим ежедневного обновления</span><span class="cache-refresh-value">Инкрементальный</span></div>
                 <div class="cache-refresh-item"><span class="cache-refresh-label">Статус cron</span><span class="cache-refresh-value" id="clientsCacheCronState">Загрузка...</span></div>
-                <div class="cache-refresh-item"><span class="cache-refresh-label">Последнее обновление</span><span class="cache-refresh-value" id="clientsCacheLastUpdate">Нет данных</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Последнее delta-обновление</span><span class="cache-refresh-value" id="clientsCacheLastUpdate">Нет данных</span></div>
                 <div class="cache-refresh-item"><span class="cache-refresh-label">Статус последнего обновления</span><span class="cache-refresh-value" id="clientsCacheLastStatus">Нет данных</span></div>
-                <div class="cache-refresh-item"><span class="cache-refresh-label">Получено клиентов</span><span class="cache-refresh-value" id="clientsCacheCount">Нет данных</span></div>
-                <div class="cache-refresh-item"><span class="cache-refresh-label">Следующее обновление</span><span class="cache-refresh-value" id="clientsCacheNextRun">Нет данных</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Обработано изменений</span><span class="cache-refresh-value" id="clientsCacheCount">0</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Upsert / Delete</span><span class="cache-refresh-value" id="clientsCacheOperations">0 / 0</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Текущий cursor</span><span class="cache-refresh-value" id="clientsCacheCursor">Нет данных</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Последнее полное обновление</span><span class="cache-refresh-value" id="clientsCacheLastFull">Нет данных</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Следующее delta</span><span class="cache-refresh-value" id="clientsCacheNextRun">04:00 МСК</span></div>
+                <div class="cache-refresh-item"><span class="cache-refresh-label">Следующее полное</span><span class="cache-refresh-value" id="clientsCacheNextFull">воскресенье 03:00 МСК</span></div>
                 <div class="cache-refresh-item" id="clientsCacheErrorRow" hidden><span class="cache-refresh-label">Последняя ошибка</span><span class="cache-refresh-value error" id="clientsCacheError"></span></div>
               </div>
-              <div class="updates-actions"><button class="registry-refresh-btn" id="clientsCacheRefreshBtn" type="button">Обновить кэш сейчас</button></div>
+              <div class="updates-actions"><button class="registry-refresh-btn" id="clientsCacheRefreshBtn" type="button">Обновить изменения сейчас</button><button class="registry-refresh-btn" id="clientsCacheFullRefreshBtn" type="button">Полное обновление</button></div>
               <div class="cache-refresh-feedback" id="clientsCacheRefreshStatus" role="status" aria-live="assertive">
                 <span class="cache-refresh-spinner" id="clientsCacheRefreshSpinner" hidden aria-hidden="true"></span>
                 <span id="clientsCacheRefreshMessage">Готово к обновлению</span>
@@ -642,6 +646,7 @@ function bindAdminPanel(){
   if(adminEls.emailSettingsTable) adminEls.emailSettingsTable.addEventListener('click',(e)=>{const edit=e.target.closest('[data-email-edit]');const del=e.target.closest('[data-email-delete]');if(edit){const item=emailSettings.find((row)=>String(row.id)===String(edit.dataset.emailEdit));if(item) openEmailSettingsModal(item);} if(del) deleteEmailSettings(del.dataset.emailDelete);});
   if(adminEls.clientsApiTestForm) adminEls.clientsApiTestForm.addEventListener('submit',testClientsApiPhone);
   document.getElementById('clientsCacheRefreshBtn')?.addEventListener('click',refreshClientsCacheNow);
+  document.getElementById('clientsCacheFullRefreshBtn')?.addEventListener('click',()=>{if(confirm('Полное обновление может занять несколько минут.'))refreshClientsCacheNow('full');});
   if(adminEls.clientsApiTestCloseBtn) adminEls.clientsApiTestCloseBtn.addEventListener('click',closeClientsApiTestModal);
   if(adminEls.clientsApiTestBackBtn) adminEls.clientsApiTestBackBtn.addEventListener('click',renderClientsApiTestMatches);
   if(adminEls.clientsApiTestResult) adminEls.clientsApiTestResult.addEventListener('click',(event)=>{const row=event.target.closest('[data-clients-match-index]');if(row) renderClientsApiClientCard(Number(row.dataset.clientsMatchIndex));});
@@ -668,14 +673,17 @@ function setActiveAdminTab(tab){
 
 function renderClientsCacheStatus(data={}){
   const cronLabels={working:'Работает',configured:'Настроен, ожидается первый запуск',overdue:'Просрочен',no_data:'Нет данных'};
-  document.getElementById('clientsCacheSchedule').textContent=data.schedule||'Ежедневно в 04:00 МСК';
   document.getElementById('clientsCacheCronState').textContent=cronLabels[data.cron_state]||'Нет данных';
-  document.getElementById('clientsCacheLastUpdate').textContent=data.finished_at?formatDateTimeDisplay(data.finished_at):'Нет данных';
+  document.getElementById('clientsCacheLastUpdate').textContent=data.last_delta_finished_at?formatDateTimeDisplay(data.last_delta_finished_at):'Нет данных';
   const status=document.getElementById('clientsCacheLastStatus');
   status.textContent=data.status==='success'?'Успешно':data.status==='error'?'Ошибка':data.status==='running'?'Выполняется':'Нет данных';
   status.className=`cache-refresh-value ${data.status==='success'?'success':data.status==='error'?'error':''}`;
-  document.getElementById('clientsCacheCount').textContent=Number.isFinite(Number(data.clients))&&data.clients!==null?Number(data.clients).toLocaleString('ru-RU'):'Нет данных';
+  document.getElementById('clientsCacheCount').textContent=Number(data.changes_processed||0).toLocaleString('ru-RU');
+  document.getElementById('clientsCacheOperations').textContent=`${Number(data.upserts||0).toLocaleString('ru-RU')} / ${Number(data.deletes||0).toLocaleString('ru-RU')}`;
+  document.getElementById('clientsCacheCursor').textContent=data.last_change_id??'Нет данных';
+  document.getElementById('clientsCacheLastFull').textContent=data.last_full_finished_at?formatDateTimeDisplay(data.last_full_finished_at):'Нет данных';
   document.getElementById('clientsCacheNextRun').textContent=data.next_run_at?`${data.next_run_at.slice(0,16)} МСК`:'Нет данных';
+  document.getElementById('clientsCacheNextFull').textContent=data.next_full_run_at?`${data.next_full_run_at.slice(0,16)} МСК`:'Нет данных';
   const errorRow=document.getElementById('clientsCacheErrorRow');
   errorRow.hidden=!data.error;
   document.getElementById('clientsCacheError').textContent=data.error||'';
@@ -686,8 +694,8 @@ async function loadClientsCacheStatus(){
   try{renderClientsCacheStatus(await window.calltrackApi.clientsCacheStatus(adminPasswordValue));if(!feedback.classList.contains('running'))message.textContent='Статус кэша загружен';}
   catch(error){feedback.className='cache-refresh-feedback error';message.textContent=`Не удалось получить статус: ${error.message}`;}
 }
-async function refreshClientsCacheNow(){
-  const button=document.getElementById('clientsCacheRefreshBtn');
+async function refreshClientsCacheNow(mode='delta'){
+  const button=document.getElementById(mode==='full'?'clientsCacheFullRefreshBtn':'clientsCacheRefreshBtn');
   const feedback=document.getElementById('clientsCacheRefreshStatus');
   const spinner=document.getElementById('clientsCacheRefreshSpinner');
   const message=document.getElementById('clientsCacheRefreshMessage');
@@ -697,7 +705,7 @@ async function refreshClientsCacheNow(){
   feedback.className='cache-refresh-feedback running';spinner.hidden=false;
   message.textContent='Запуск обновления кэша Clients...';
   try{
-    const launched=await window.calltrackApi.refreshClientsCache(adminPasswordValue);
+    const launched=await window.calltrackApi.refreshClientsCache(adminPasswordValue,mode);
     renderClientsCacheStatus(launched.data);button.textContent='Обновление выполняется...';
     message.textContent='Обновление кэша запущено';
     while(Date.now()-startedAt<pollingTimeoutMs){
@@ -706,7 +714,7 @@ async function refreshClientsCacheNow(){
       renderClientsCacheStatus(status);
       if(status.status==='success'){
         feedback.className='cache-refresh-feedback success';
-        message.textContent=`Кэш успешно обновлен. Получено клиентов: ${Number(status.clients||0).toLocaleString('ru-RU')}`;
+        message.textContent=mode==='delta'?`Обработано изменений: ${Number(status.changes_processed||0).toLocaleString('ru-RU')}; Upsert: ${Number(status.upserts||0)}; Delete: ${Number(status.deletes||0)}; новый cursor: ${status.last_change_id??'—'}`:`Полный кэш успешно обновлен. Клиентов: ${Number(status.clients||0).toLocaleString('ru-RU')}`;
         return;
       }
       if(status.status==='error') throw new Error(status.error||'Неизвестная ошибка обновления Clients');
@@ -718,7 +726,7 @@ async function refreshClientsCacheNow(){
     feedback.className='cache-refresh-feedback error';message.textContent=`Обновление завершилось с ошибкой: ${error.message}`;
     try{renderClientsCacheStatus(await window.calltrackApi.clientsCacheStatus(adminPasswordValue));}catch(statusError){console.error(statusError);}
   }finally{
-    spinner.hidden=true;button.disabled=false;button.textContent='Обновить кэш сейчас';
+    spinner.hidden=true;button.disabled=false;button.textContent=mode==='full'?'Полное обновление':'Обновить изменения сейчас';
   }
 }
 
