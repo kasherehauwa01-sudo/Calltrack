@@ -4,6 +4,12 @@ require_once dirname(__DIR__).'/api/clients_cache_refresh.php';
 function deltaExpect(bool $condition,string $message):void { if(!$condition)throw new RuntimeException($message); }
 $root='/var/tmp/calltrack_delta_test_'.getmypid();mkdir($root,0777,true);putenv('CALLTRACK_STORAGE_DIR='.$root.'/storage');
 $pdo=clientsOpenSqlite();
+$previousPaginated=getenv('CALLTRACK_CLIENTS_PAGINATED_API_URL');
+putenv('CALLTRACK_CLIENTS_CHANGES_API_URL');
+putenv('CALLTRACK_CLIENTS_PAGINATED_API_URL=http://127.0.0.1:8015/api/clients?ignored=1');
+deltaExpect(clientsChangesBaseUrl()==='http://127.0.0.1:8015/api/clients/changes','Delta URL должен использовать тот же Clients endpoint, что и full');
+if($previousPaginated===false)putenv('CALLTRACK_CLIENTS_PAGINATED_API_URL');else putenv('CALLTRACK_CLIENTS_PAGINATED_API_URL='.$previousPaginated);
+deltaExpect(clientsRefreshFailureMessage(['status'=>'error','error'=>'Причина сбоя'])==='Причина сбоя','Тест API должен показывать поле error статуса refresh');
 $page=fn(array $items,int $after,int $next,bool $more=false):array=>['status'=>'success','items'=>$items,'next_after_id'=>$next,'has_more'=>$more];
 $upsert=fn(int $change,string $id,string $name,array $phones):array=>['change_id'=>$change,'changed_at'=>'2026-08-13T12:00:00','operation'=>'upsert','client_id'=>$id,'client'=>['id'=>$id,'name'=>$name,'phones'=>$phones,'company'=>$name]];
 $delete=fn(int $change,string $id):array=>['change_id'=>$change,'changed_at'=>'2026-08-13T12:00:00','operation'=>'delete','client_id'=>$id];

@@ -31,7 +31,22 @@ function clientsRefreshStatusPayload(array $status): array
         'next_run_at'=>formatClientsRefreshTime(clientsNextRefresh($now)),'next_full_run_at'=>formatClientsRefreshTime(clientsNextFullRefresh($now))];
 }
 
-function clientsChangesBaseUrl(): string { return rtrim(trim((string)(getenv('CALLTRACK_CLIENTS_CHANGES_API_URL') ?: 'https://kvasmix.ru/vr/clients/api/clients/changes')),'/'); }
+function clientsChangesBaseUrl(): string
+{
+    $configured = trim((string)(getenv('CALLTRACK_CLIENTS_CHANGES_API_URL') ?: ''));
+    if ($configured !== '') return rtrim($configured, '/');
+
+    // Delta является частью того же фактического /clients API. В production
+    // полный endpoint часто настроен на локальный порт Clients, поэтому нельзя
+    // обходить его жёстко заданным публичным доменом.
+    $fullUrl = trim((string)(getenv('CALLTRACK_CLIENTS_PAGINATED_API_URL') ?: CLIENTS_PAGINATED_API_URL));
+    $parts = parse_url($fullUrl);
+    if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
+        throw new RuntimeException('Некорректно настроен CLIENTS_PAGINATED_API_URL');
+    }
+    $authority = $parts['scheme'] . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '');
+    return $authority . rtrim((string)($parts['path'] ?? ''), '/') . '/changes';
+}
 function fetchClientsChangesJson(string $url): array
 {
     $context=stream_context_create(['http'=>['timeout'=>30,'ignore_errors'=>true,'follow_location'=>0,'header'=>"Accept: application/json\r\nConnection: close\r\n"]]);
