@@ -33,8 +33,9 @@
         android:layout_height="40dp"
         android:layout_marginTop="8dp"
         android:layout_marginEnd="8dp"
+        android:elevation="12dp"
         app:layout_constraintEnd_toStartOf="@id/notificationButtonContainer"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toBottomOf="@id/statusBarOverlay">
 
         <ImageButton
             android:id="@+id/btnAnalytics"
@@ -53,8 +54,9 @@
         android:layout_height="40dp"
         android:layout_marginTop="8dp"
         android:layout_marginEnd="8dp"
+        android:elevation="12dp"
         app:layout_constraintEnd_toStartOf="@id/btnSettings"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toBottomOf="@id/statusBarOverlay">
 
         <ImageButton
             android:id="@+id/btnNotifications"
@@ -83,13 +85,21 @@
         android:layout_height="40dp"
         android:layout_marginTop="8dp"
         android:layout_marginEnd="8dp"
+        android:elevation="12dp"
         android:background="@drawable/bg_input"
         android:contentDescription="@string/settings"
         android:padding="8dp"
         android:src="@drawable/ic_more_vert"
         android:tint="@color/textPrimary"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/statusBarOverlay" />
+
+    <androidx.constraintlayout.widget.Barrier
+        android:id="@+id/topActionsBarrier"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:barrierDirection="bottom"
+        app:constraint_referenced_ids="tvWarning,analyticsButtonContainer,notificationButtonContainer,btnSettings" />
 
     <FrameLayout
         android:id="@+id/fragmentContainer"
@@ -98,7 +108,7 @@
         app:layout_constraintBottom_toTopOf="@id/bottomNav"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvWarning" />
+        app:layout_constraintTop_toBottomOf="@id/topActionsBarrier" />
 
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottomNav"

@@ -4,6 +4,19 @@ plugins {
     id 'com.google.devtools.ksp'
 }
 
+// version.properties хранит последнюю успешно созданную публикационную версию.
+// Чтение файла не меняет счётчик при Sync, Run, clean, тестах или assembleRelease.
+def versionFile = rootProject.file('version.properties')
+def versionState = new Properties()
+if (!versionFile.isFile()) throw new GradleException("Не найден ${versionFile}")
+versionFile.withInputStream { versionState.load(it) }
+def storedVersionCodeText = versionState.getProperty('VERSION_CODE', '').trim()
+def versionNamePrefix = versionState.getProperty('VERSION_NAME_PREFIX', '').trim()
+if (!(storedVersionCodeText ==~ /[1-9]\d*/)) throw new GradleException('VERSION_CODE должен быть положительным Integer')
+if (!(versionNamePrefix ==~ /\d+\.\d+/)) throw new GradleException('VERSION_NAME_PREFIX должен иметь формат X.Y')
+def storedVersionCode = storedVersionCodeText.toInteger()
+def storedVersionName = "${versionNamePrefix}.${storedVersionCode}"
+
 android {
     namespace 'com.example.calltrack'
     compileSdk 35
@@ -11,10 +24,10 @@ android {
     defaultConfig {
         def releaseVersionCode = (project.findProperty("calltrackVersionCode")
                 ?: System.getenv("CALLTRACK_VERSION_CODE")
-                ?: "13").toString().toInteger()
+                ?: storedVersionCode).toString().toInteger()
         def releaseVersionName = (project.findProperty("calltrackVersionName")
                 ?: System.getenv("CALLTRACK_VERSION_NAME")
-                ?: "1.0.13").toString()
+                ?: storedVersionName).toString()
         applicationId "com.example.calltrack"
         minSdk 26
         targetSdk 35
@@ -50,6 +63,13 @@ android {
             output.outputFileName = "calltrack_v${variant.versionName}_${variant.versionCode}.apk"
         }
     }
+}
+
+tasks.register('publishReleaseApk', Exec) {
+    group = 'publishing'
+    description = 'Последовательно увеличивает версию, собирает и проверяет release APK, затем фиксирует счётчик.'
+    workingDir rootProject.projectDir
+    commandLine 'bash', rootProject.file('scripts/publish_android_apk.sh').absolutePath
 }
 
 dependencies {

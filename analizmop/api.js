@@ -62,10 +62,11 @@ window.calltrackApi.clientsCacheStatus = async function clientsCacheStatus(passw
   return payload.data || {};
 };
 
-window.calltrackApi.refreshClientsCache = async function refreshClientsCache(password) {
+window.calltrackApi.refreshClientsCache = async function refreshClientsCache(password, mode = 'delta') {
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientsCache, {
     method: 'POST',
-    headers: { 'X-Calltrack-Admin-Password': password }
+    headers: { 'X-Calltrack-Admin-Password': password, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode })
   });
 };
 

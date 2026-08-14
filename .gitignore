@@ -3,3 +3,10 @@ api/config.local.php
 logs/
 updates/
 api/config.local.php
+
+# Межпроцессная блокировка публикационной Android-сборки
+.version.properties.lock
+version.properties.tmp.*
+/.gradle/
+/build/
+/app/build/
