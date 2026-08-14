@@ -70,6 +70,25 @@ function nextUpdateVersion(PDO $pdo): array
     return ['version_name' => $versionName, 'version_code' => $nextCode];
 }
 
+function validateUpdateVersionName(string $versionName): string
+{
+    $versionName = trim($versionName);
+    if (!preg_match('/^\d+\.\d+\.\d+$/', $versionName)) {
+        throw new InvalidArgumentException('Версия должна быть указана в формате X.Y.Z, например 1.0.14');
+    }
+    return $versionName;
+}
+
+function resolveEditedUpdateVersion(array $current, array $automatic, string $requestedName): array
+{
+    $currentName = (string)$current['version_name'];
+    $versionName = trim($requestedName) !== '' ? validateUpdateVersionName($requestedName) : $currentName;
+    return [
+        'version_name'=>$versionName,
+        'version_code'=>$versionName !== $currentName ? (int)$automatic['version_code'] : (int)$current['version_code'],
+    ];
+}
+
 function cleanupDir(string $dir): void
 {
     if (!is_dir($dir)) {
@@ -120,6 +139,8 @@ function listUpdates(PDO $pdo): void
     }, $stmt->fetchAll());
     sendJson(['status' => 'success', 'data' => $updates]);
 }
+
+if (defined('CALLTRACK_ADMIN_UPDATES_FUNCTIONS_ONLY')) return;
 
 try {
     $pdo = getPdo();
@@ -260,8 +281,11 @@ try {
         }
     }
     if ($current) {
-        $versionName = $versionName !== '' ? $versionName : (string)$current['version_name'];
-        $versionCode = $versionCode > 0 ? $versionCode : (int)$current['version_code'];
+        $resolvedVersion = resolveEditedUpdateVersion($current, $autoVersion, $versionName);
+        // VersionCode не редактируется вручную: любое изменение VersionName
+        // получает следующий глобальный код и сразу попадает в update.json.
+        $versionName = $resolvedVersion['version_name'];
+        $versionCode = $resolvedVersion['version_code'];
     } else {
         $versionName = $autoVersion['version_name'];
         $versionCode = $autoVersion['version_code'];
