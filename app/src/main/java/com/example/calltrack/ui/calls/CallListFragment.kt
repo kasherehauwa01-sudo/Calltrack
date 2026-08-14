@@ -66,7 +66,7 @@ class CallListFragment : Fragment() {
         binding.recyclerView.adapter = adapter
         attachSwipeToCall()
 
-        // При открытии экрана «Последние» подтягиваем записи из стандартной звонилки Android.
+        // При открытии экрана «История» подтягиваем записи из стандартной звонилки Android.
         // SQL API здесь не читаем: таблица нужна только для отправки/истории, а список берём из CallLog.
         viewLifecycleOwner.lifecycleScope.launch {
             runCatching { viewModel.refreshRecentCallsFromDevice() }

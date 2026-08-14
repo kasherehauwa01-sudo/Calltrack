@@ -73,7 +73,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     suspend fun sync() = repository.syncPending()
     suspend fun sendUserTelemetry() = repository.sendUserTelemetry()
 
-    // Экран «Последние» обновляем из стандартной звонилки Android, а не из SQL API.
+    // Экран «История» обновляем из стандартной звонилки Android, а не из SQL API.
     suspend fun refreshRecentCallsFromDevice() = repository.importRecentCallsFromDevice()
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> = repository.loadHistoryFromRemote(phone)
     suspend fun getDeviceCallHistory(phone: String): List<CallHistoryEntity> = repository.getDeviceCallHistory(phone)

@@ -15,5 +15,9 @@ if (!str_contains($activity, 'navigationInitialBottomPadding + bars.bottom')) {
 if (!str_contains($activity, 'root.setPadding(0, 0, 0, 0)')) {
     throw new RuntimeException('Общий нижний inset всё ещё отрывает фон панели от края экрана');
 }
+$menu = (string)file_get_contents(dirname(__DIR__) . '/app/src/main/res/menu/menu_bottom_nav.xml');
+if (!str_contains($menu, 'android:id="@+id/nav_recent"') || !str_contains($menu, 'android:title="История"')) {
+    throw new RuntimeException('Кнопка nav_recent должна называться «История»');
+}
 
 echo "android_dial_layout_test: OK\n";
