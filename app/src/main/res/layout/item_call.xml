@@ -50,6 +50,14 @@
         </LinearLayout>
 
         <TextView
+            android:id="@+id/tvClient1c"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:textColor="@color/textSecondary"
+            android:textSize="14sp" />
+
+        <TextView
             android:id="@+id/tvPhone"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

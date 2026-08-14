@@ -70,6 +70,25 @@ function nextUpdateVersion(PDO $pdo): array
     return ['version_name' => $versionName, 'version_code' => $nextCode];
 }
 
+function validateUpdateVersionName(string $versionName): string
+{
+    $versionName = trim($versionName);
+    if (!preg_match('/^\d+\.\d+\.\d+$/', $versionName)) {
+        throw new InvalidArgumentException('Версия должна быть указана в формате X.Y.Z, например 1.0.14');
+    }
+    return $versionName;
+}
+
+function resolveEditedUpdateVersion(array $current, array $automatic, string $requestedName): array
+{
+    $currentName = (string)$current['version_name'];
+    $versionName = trim($requestedName) !== '' ? validateUpdateVersionName($requestedName) : $currentName;
+    return [
+        'version_name'=>$versionName,
+        'version_code'=>$versionName !== $currentName ? (int)$automatic['version_code'] : (int)$current['version_code'],
+    ];
+}
+
 function cleanupDir(string $dir): void
 {
     if (!is_dir($dir)) {
@@ -121,6 +140,8 @@ function listUpdates(PDO $pdo): void
     sendJson(['status' => 'success', 'data' => $updates]);
 }
 
+if (defined('CALLTRACK_ADMIN_UPDATES_FUNCTIONS_ONLY')) return;
+
 try {
     $pdo = getPdo();
     ensureAppUpdatesTable($pdo);
@@ -164,6 +185,7 @@ try {
         $totalChunks = (int)($data['total_chunks'] ?? 0);
         $originalName = (string)($data['filename'] ?? '');
         $releaseNotes = trim((string)($data['release_notes'] ?? ''));
+        $requestedVersionName = trim((string)($data['version_name'] ?? ''));
         $id = (int)($data['id'] ?? 0);
         if ($uploadId === '' || $chunkIndex < 0 || $totalChunks <= 0 || $chunkIndex >= $totalChunks) {
             sendJson(['status' => 'error', 'message' => 'Некорректные параметры chunk upload'], 400);
@@ -202,7 +224,10 @@ try {
             }
         }
         $apkVersion = apkVersionFromFilename($originalName);
-        assertApkVersionMatchesCurrent($apkVersion, $current ?: null);
+        if ($current) {
+            $expectedVersion = resolveEditedUpdateVersion($current, nextUpdateVersion($pdo), $requestedVersionName);
+            assertApkVersionMatchesCurrent($apkVersion, $expectedVersion);
+        }
         $versionName = $apkVersion['version_name'];
         $versionCode = $apkVersion['version_code'];
         $newFilename = safeApkFilename($versionName, $versionCode, $originalName);
@@ -232,8 +257,8 @@ try {
         $fileSize = @filesize($target) ?: 0;
         $uploadedAt = date('Y-m-d H:i:s');
         if ($current) {
-            $stmt = $pdo->prepare('UPDATE app_updates SET filename=:filename, release_notes=:release_notes, mandatory=0, file_size=:file_size, uploaded_at=:uploaded_at WHERE id=:id');
-            $stmt->execute([':filename' => $newFilename, ':release_notes' => $releaseNotes, ':file_size' => $fileSize, ':uploaded_at' => $uploadedAt, ':id' => $id]);
+            $stmt = $pdo->prepare('UPDATE app_updates SET filename=:filename, version_name=:version_name, version_code=:version_code, release_notes=:release_notes, mandatory=0, file_size=:file_size, uploaded_at=:uploaded_at WHERE id=:id');
+            $stmt->execute([':filename' => $newFilename, ':version_name'=>$versionName, ':version_code'=>$versionCode, ':release_notes' => $releaseNotes, ':file_size' => $fileSize, ':uploaded_at' => $uploadedAt, ':id' => $id]);
         } else {
             $stmt = $pdo->prepare('INSERT INTO app_updates (filename, version_name, version_code, release_notes, mandatory, file_size, uploaded_at) VALUES (:filename, :version_name, :version_code, :release_notes, 0, :file_size, :uploaded_at)');
             $stmt->execute([':filename' => $newFilename, ':version_name' => $versionName, ':version_code' => $versionCode, ':release_notes' => $releaseNotes, ':file_size' => $fileSize, ':uploaded_at' => $uploadedAt]);
@@ -260,8 +285,11 @@ try {
         }
     }
     if ($current) {
-        $versionName = $versionName !== '' ? $versionName : (string)$current['version_name'];
-        $versionCode = $versionCode > 0 ? $versionCode : (int)$current['version_code'];
+        $resolvedVersion = resolveEditedUpdateVersion($current, $autoVersion, $versionName);
+        // VersionCode не редактируется вручную: любое изменение VersionName
+        // получает следующий глобальный код и сразу попадает в update.json.
+        $versionName = $resolvedVersion['version_name'];
+        $versionCode = $resolvedVersion['version_code'];
     } else {
         $versionName = $autoVersion['version_name'];
         $versionCode = $autoVersion['version_code'];
@@ -280,7 +308,7 @@ try {
             sendJson(['status' => 'error', 'message' => 'Можно загружать только .apk файлы'], 400);
         }
         $apkVersion = apkVersionFromFilename($originalName);
-        assertApkVersionMatchesCurrent($apkVersion, $current ?: null);
+        assertApkVersionMatchesCurrent($apkVersion, $current ? ['version_name'=>$versionName, 'version_code'=>$versionCode] : null);
         $versionName = $apkVersion['version_name'];
         $versionCode = $apkVersion['version_code'];
         $tmp = (string)($file['tmp_name'] ?? '');
@@ -301,6 +329,8 @@ try {
         $uploadedAt = date('Y-m-d H:i:s');
     } elseif ($id <= 0) {
         sendJson(['status' => 'error', 'message' => 'Загрузите APK файл. Если файл выбран, проверьте upload_max_filesize и post_max_size на сервере'], 400);
+    } elseif ($current && $versionName !== (string)$current['version_name']) {
+        sendJson(['status'=>'error','message'=>'Для изменения версии загрузите APK, внутри которого указаны такие же versionName и versionCode. Изменение записи не изменяет подписанный APK-файл.'],400);
     }
 
     if ($id > 0) {

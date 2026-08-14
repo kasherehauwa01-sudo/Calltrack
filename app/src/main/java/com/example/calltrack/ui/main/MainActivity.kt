@@ -10,12 +10,17 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.PopupMenu
+import android.widget.LinearLayout
+import android.widget.ProgressBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.App
 import com.example.calltrack.BuildConfig
@@ -52,8 +57,10 @@ class MainActivity : BaseActivity() {
     private var pendingInstallApk: File? = null
     private var pendingInstallVersionCode: Int? = null
     private var pendingInstallVersionName: String? = null
-    private var updateCheckHandled = false
     private var updateOperationRunning = false
+    private var updateProgressDialog: AlertDialog? = null
+    private var updateProgressBar: ProgressBar? = null
+    private var updateProgressStatus: TextView? = null
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
@@ -72,6 +79,7 @@ class MainActivity : BaseActivity() {
             installApkFile(apkFile)
         } else {
             updateOperationRunning = false
+            hideUpdateProgress()
             AppLogger.log(this, "WARN", "Разрешение на установку APK не предоставлено")
         }
     }
@@ -79,6 +87,7 @@ class MainActivity : BaseActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         updateOperationRunning = false
+        hideUpdateProgress()
         AppLogger.log(this, "UPDATE", "Системный установщик APK завершён: resultCode=${result.resultCode}")
         if (result.resultCode != RESULT_OK) {
             Toast.makeText(this, "Установка не завершена. Проверьте сообщение системного установщика.", Toast.LENGTH_LONG).show()
@@ -132,7 +141,23 @@ class MainActivity : BaseActivity() {
         super.onPause()
     }
 
-    private fun applyWindowInsets() = applyInsets(binding.root, binding.statusBarOverlay)
+    private fun applyWindowInsets() {
+        val navigationInitialBottomPadding = binding.bottomNav.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { root, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            // Фон нижней панели доходит до физического края экрана, а её
+            // содержимое поднимается над системной навигацией внутренним padding.
+            root.setPadding(0, 0, 0, 0)
+            binding.statusBarOverlay.layoutParams = binding.statusBarOverlay.layoutParams.apply { height = bars.top }
+            binding.bottomNav.setPadding(
+                binding.bottomNav.paddingLeft,
+                binding.bottomNav.paddingTop,
+                binding.bottomNav.paddingRight,
+                navigationInitialBottomPadding + bars.bottom
+            )
+            insets
+        }
+    }
 
     private fun handleExternalNavigation(intent: Intent?) {
         val phone = intent?.getStringExtra(EXTRA_OPEN_CONTACT_PHONE).orEmpty()
@@ -141,11 +166,47 @@ class MainActivity : BaseActivity() {
             return
         }
         if (intent?.getBooleanExtra(EXTRA_RUN_UPDATE_CHECK, false) == true) {
-            if (!updateCheckHandled) {
-                updateCheckHandled = true
-                checkForUpdatesAndPrompt()
-            }
+            // EXTRA приходит от явного нажатия «Обновить приложение». Удаляем
+            // его после обработки, но не блокируем последующие ручные проверки.
+            intent.removeExtra(EXTRA_RUN_UPDATE_CHECK)
+            checkForUpdatesAndPrompt()
         }
+    }
+
+    private fun showUpdateProgress(status: String, progress: Int, indeterminate: Boolean = false) {
+        if (updateProgressDialog == null) {
+            val density = resources.displayMetrics.density
+            val container = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding((24*density).toInt(), (18*density).toInt(), (24*density).toInt(), (12*density).toInt())
+            }
+            updateProgressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+                max = 100
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (4*density).toInt().coerceAtLeast(4))
+            }
+            updateProgressStatus = TextView(this).apply {
+                setPadding(0, (12*density).toInt(), 0, 0)
+                textSize = 15f
+            }
+            container.addView(updateProgressBar)
+            container.addView(updateProgressStatus)
+            updateProgressDialog = AlertDialog.Builder(this)
+                .setTitle("Обновление приложения")
+                .setView(container)
+                .setCancelable(false)
+                .create()
+            updateProgressDialog?.show()
+        }
+        updateProgressBar?.isIndeterminate = indeterminate
+        if (!indeterminate) updateProgressBar?.progress = progress.coerceIn(0, 100)
+        updateProgressStatus?.text = status
+    }
+
+    private fun hideUpdateProgress() {
+        updateProgressDialog?.dismiss()
+        updateProgressDialog = null
+        updateProgressBar = null
+        updateProgressStatus = null
     }
 
 
@@ -209,6 +270,7 @@ class MainActivity : BaseActivity() {
             return
         }
         updateOperationRunning = true
+        showUpdateProgress("Проверка актуальности", 10, indeterminate = true)
         lifecycleScope.launch {
             AppLogger.log(this@MainActivity, "UI", "Нажата кнопка: Обновить")
             AppLogger.log(this@MainActivity, "UPDATE", "Проверка обновлений через kvasmix.ru")
@@ -220,15 +282,17 @@ class MainActivity : BaseActivity() {
                 is UpdateCheckResult.NetworkError -> {
                     AppLogger.log(this@MainActivity, "ERROR", "Сервер обновлений недоступен: ${updateResult.reason}")
                     syncUpdateLogsToDashboard()
-                        Toast.makeText(this@MainActivity, "Не удалось проверить наличие обновлений.", Toast.LENGTH_LONG).show()
-                        updateOperationRunning = false
+                    hideUpdateProgress()
+                    Toast.makeText(this@MainActivity, "Не удалось проверить обновления: ${updateResult.reason}", Toast.LENGTH_LONG).show()
+                    updateOperationRunning = false
                     return@launch
                 }
                 is UpdateCheckResult.InvalidResponse -> {
                     AppLogger.log(this@MainActivity, "ERROR", "Некорректный ответ сервера обновлений: ${updateResult.reason}")
                     syncUpdateLogsToDashboard()
-                        Toast.makeText(this@MainActivity, "Некорректный ответ сервера обновлений.", Toast.LENGTH_LONG).show()
-                        updateOperationRunning = false
+                    hideUpdateProgress()
+                    Toast.makeText(this@MainActivity, "Некорректный ответ сервера: ${updateResult.reason}", Toast.LENGTH_LONG).show()
+                    updateOperationRunning = false
                     return@launch
                 }
                 is UpdateCheckResult.Success -> {
@@ -237,6 +301,7 @@ class MainActivity : BaseActivity() {
                     if (update.versionCode <= BuildConfig.VERSION_CODE) {
                         AppLogger.log(this@MainActivity, "UPDATE", "Версия актуальна")
                         syncUpdateLogsToDashboard()
+                        hideUpdateProgress()
                         AlertDialog.Builder(this@MainActivity)
                             .setMessage("У вас установлена актуальная версия приложения.")
                             .setPositiveButton("OK") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
@@ -245,6 +310,7 @@ class MainActivity : BaseActivity() {
                         return@launch
                     }
                     syncUpdateLogsToDashboard()
+                    hideUpdateProgress()
                     showUpdateDialog(update)
                 }
             }
@@ -283,10 +349,16 @@ class MainActivity : BaseActivity() {
     }
 
     private fun startApkUpdateDownload(update: UpdateInfo) {
+        showUpdateProgress("Загрузка новой версии", 25)
         lifecycleScope.launch {
             AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK с сервера kvasmix.ru: ${update.apkUrl}")
             Toast.makeText(this@MainActivity, "Загрузка обновления...", Toast.LENGTH_SHORT).show()
-            val result = withContext(Dispatchers.IO) { downloadApkToCache(update.apkDownloadUrls) }
+            val result = withContext(Dispatchers.IO) {
+                downloadApkToCache(update.apkDownloadUrls) { downloaded, total ->
+                    val percent = if (total > 0L) (25 + downloaded * 60 / total).toInt() else 45
+                    runOnUiThread { showUpdateProgress("Загрузка новой версии", percent) }
+                }
+            }
             result
                 .onSuccess { downloadedApkFile: File ->
                     AppLogger.log(this@MainActivity, "UPDATE", "APK успешно загружен в cache: ${downloadedApkFile.absolutePath}, size=${downloadedApkFile.length()}")
@@ -294,22 +366,24 @@ class MainActivity : BaseActivity() {
                     syncUpdateLogsToDashboard()
                     pendingInstallVersionCode = update.versionCode
                     pendingInstallVersionName = update.versionName
+                    showUpdateProgress("Установка новой версии", 90)
                     installApkFile(downloadedApkFile)
                 }
                 .onFailure { error ->
                     AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки обновления: ${error.message}", error)
                     syncUpdateLogsToDashboard()
-                    Toast.makeText(this@MainActivity, "Ошибка загрузки обновления.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, "Ошибка загрузки обновления: ${error.message.orEmpty()}", Toast.LENGTH_LONG).show()
                     updateOperationRunning = false
+                    hideUpdateProgress()
                 }
         }
     }
 
-    private fun downloadApkToCache(apkUrls: List<String>): Result<File> {
+    private fun downloadApkToCache(apkUrls: List<String>, onProgress: (Long, Long) -> Unit): Result<File> {
         val candidateUrls = apkUrls.distinct()
         var lastError: Throwable? = null
         candidateUrls.forEachIndexed { index, apkUrl ->
-            val result = downloadApkToCache(apkUrl)
+            val result = downloadApkToCache(apkUrl, onProgress)
             if (result.isSuccess) return result
 
             val error = result.exceptionOrNull()
@@ -327,7 +401,7 @@ class MainActivity : BaseActivity() {
         return Result.failure(lastError ?: IllegalStateException("Нет доступных ссылок APK"))
     }
 
-    private fun downloadApkToCache(apkUrl: String): Result<File> {
+    private fun downloadApkToCache(apkUrl: String, onProgress: (Long, Long) -> Unit): Result<File> {
         return runCatching {
             val request = Request.Builder()
                 .url(apkUrl)
@@ -345,9 +419,17 @@ class MainActivity : BaseActivity() {
                 val tempFile = File(cacheDir, "$APK_FILE_NAME.part").apply { delete() }
                 val apkFile = File(cacheDir, APK_FILE_NAME).apply { delete() }
                 var copiedBytes = 0L
+                val contentLength = body.contentLength()
                 body.byteStream().use { input ->
                     tempFile.outputStream().use { output ->
-                        copiedBytes = input.copyTo(output)
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            output.write(buffer, 0, read)
+                            copiedBytes += read
+                            onProgress(copiedBytes, contentLength)
+                        }
                     }
                 }
                 if (copiedBytes <= 0L || tempFile.length() <= 0L) error("APK не был записан в cache")
@@ -388,6 +470,7 @@ class MainActivity : BaseActivity() {
             AppLogger.log(this, "ERROR", "APK файл отсутствует или пустой")
             Toast.makeText(this, "Ошибка загрузки обновления.", Toast.LENGTH_SHORT).show()
             updateOperationRunning = false
+            hideUpdateProgress()
             return
         }
         val validationError = validateDownloadedApk(downloadedApkFile)
@@ -395,6 +478,7 @@ class MainActivity : BaseActivity() {
             AppLogger.log(this, "ERROR", "APK не может обновить приложение: $validationError")
             Toast.makeText(this, validationError, Toast.LENGTH_LONG).show()
             updateOperationRunning = false
+            hideUpdateProgress()
             return
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
@@ -422,6 +506,7 @@ class MainActivity : BaseActivity() {
             .onSuccess { AppLogger.log(this, "UPDATE", "Системный установщик APK открыт") }
             .onFailure {
                 updateOperationRunning = false
+                hideUpdateProgress()
                 AppLogger.log(this, "ERROR", "Не удалось открыть установщик APK: ${it.message}", it)
                 Toast.makeText(this, "Не удалось открыть установщик APK", Toast.LENGTH_LONG).show()
             }
