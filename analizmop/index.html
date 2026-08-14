@@ -976,6 +976,7 @@ async function uploadApkInChunks(file){
       formData.append('total_chunks',String(totalChunks));
       formData.append('filename',file.name);
       if(adminEls.updateId.value) formData.append('id',adminEls.updateId.value);
+      if(adminEls.updateVersionName.value.trim()) formData.append('version_name',adminEls.updateVersionName.value.trim());
       formData.append('release_notes',adminEls.updateReleaseNotes.value);
       formData.append('chunk',file.slice(index*chunkSize,Math.min(file.size,(index+1)*chunkSize)),file.name);
       result=window.calltrackApi?.saveUpdate?await window.calltrackApi.saveUpdate(formData):await fetch(ADMIN_UPDATES_API_URL,{method:'POST',body:formData}).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p;});

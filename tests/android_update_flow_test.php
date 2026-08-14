@@ -14,5 +14,8 @@ if (!str_contains($source, 'intent.removeExtra(EXTRA_RUN_UPDATE_CHECK)')) {
 if (!str_contains($source, 'onProgress(copiedBytes, contentLength)')) {
     throw new RuntimeException('Прогресс загрузки APK не передаётся в интерфейс');
 }
+if (!str_contains($source, 'archiveVersion != expectedVersion.toLong()')) {
+    throw new RuntimeException('Удалена защита от несовпадения версии update.json и APK');
+}
 
 echo "android_update_flow_test: OK\n";
