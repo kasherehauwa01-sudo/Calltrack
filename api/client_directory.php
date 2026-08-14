@@ -6,7 +6,7 @@ require_once __DIR__ . '/config.php';
 function normalizeClientPhone(string $value): string
 {
     $digits = preg_replace('/\D+/', '', $value) ?? '';
-    return strlen($digits) >= 10 ? substr($digits, -10) : $digits;
+    return strlen($digits) >= 10 ? substr($digits, -10) : '';
 }
 
 function clientValue(array $row, array $keys): string
@@ -25,8 +25,13 @@ function clientRawValue(array $row, array $keys)
     return '';
 }
 
-function splitClientPhones(string $value): array
+function splitClientPhones(string|array $value): array
 {
+    if (is_array($value)) {
+        $phones = [];
+        foreach ($value as $item) foreach (splitClientPhones((string)$item) as $phone) $phones[$phone] = $phone;
+        return array_values($phones);
+    }
     preg_match_all('/(?:\+?\d[\d\s().-]{7,}\d)/u', $value, $matches);
     $phones = [];
     foreach ($matches[0] ?? [] as $phone) {
@@ -71,7 +76,10 @@ function normalizeClientsPayload(array $rows): array
         $phones = array_values($phones);
         if ($name === '' || !$phones) continue;
         // Исходные заполненные поля сохраняются для карточки клиента в тесте API.
-        $result[] = ['name'=>$name, 'phones'=>$phones, 'fields'=>filledClientFields($row)];
+        $id = clientRawValue($row, ['id', 'client_id', 'ID']);
+        $client = ['name'=>$name, 'phones'=>$phones, 'fields'=>filledClientFields($row)];
+        if ((string)$id !== '') $client['id'] = (string)$id;
+        $result[] = $client;
     }
     return $result;
 }
@@ -106,6 +114,56 @@ function clientsCacheFile(): string
 function clientsPhoneIndexCacheFile(): string
 {
     return clientsCacheDirectory() . '/phone_index.json';
+}
+
+function clientsSqliteFile(): string
+{
+    return clientsCacheDirectory() . '/clients.sqlite';
+}
+
+function clientsSyncStateFile(): string
+{
+    return clientsCacheDirectory() . '/sync_state.json';
+}
+
+function clientsOpenSqlite(?string $path = null): PDO
+{
+    if (!extension_loaded('pdo_sqlite')) {
+        throw new RuntimeException('Для delta-обновления Clients требуется расширение pdo_sqlite');
+    }
+    $pdo = new PDO('sqlite:' . ($path ?? clientsSqliteFile()), null, null, [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+    $pdo->exec('PRAGMA busy_timeout=10000; PRAGMA foreign_keys=ON');
+    $pdo->exec('CREATE TABLE IF NOT EXISTS clients (client_id TEXT PRIMARY KEY, name TEXT NOT NULL, payload_json TEXT NOT NULL)');
+    $pdo->exec('CREATE TABLE IF NOT EXISTS client_phones (client_id TEXT NOT NULL, normalized_phone TEXT NOT NULL, shard_code TEXT NOT NULL, PRIMARY KEY(client_id, normalized_phone), FOREIGN KEY(client_id) REFERENCES clients(client_id) ON DELETE CASCADE)');
+    $columns = $pdo->query('PRAGMA table_info(client_phones)')->fetchAll(PDO::FETCH_COLUMN, 1);
+    if (!in_array('shard_code', $columns, true)) {
+        $pdo->exec("ALTER TABLE client_phones ADD COLUMN shard_code TEXT NOT NULL DEFAULT ''");
+    }
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_client_phones_phone ON client_phones(normalized_phone)');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_client_phones_shard ON client_phones(shard_code)');
+    $pdo->exec('CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    return $pdo;
+}
+
+function clientsSqliteUpsert(PDO $pdo, array $client, string $clientId): void
+{
+    $client['id'] = $clientId;
+    $json = json_encode($client, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    $statement = $pdo->prepare('INSERT INTO clients(client_id,name,payload_json) VALUES(?,?,?) ON CONFLICT(client_id) DO UPDATE SET name=excluded.name,payload_json=excluded.payload_json');
+    $statement->execute([$clientId, (string)($client['name'] ?? ''), $json]);
+    $pdo->prepare('DELETE FROM client_phones WHERE client_id=?')->execute([$clientId]);
+    $insert = $pdo->prepare('INSERT OR IGNORE INTO client_phones(client_id,normalized_phone,shard_code) VALUES(?,?,?)');
+    foreach (($client['phones'] ?? []) as $phone) if ((string)$phone !== '') $insert->execute([$clientId, (string)$phone, substr(sha1((string)$phone), 0, 2)]);
+}
+
+function clientsSqliteRows(PDO $pdo): array
+{
+    $rows = [];
+    foreach ($pdo->query('SELECT payload_json FROM clients ORDER BY client_id') as $row) {
+        $client = json_decode((string)$row['payload_json'], true);
+        if (is_array($client)) $rows[] = $client;
+    }
+    return $rows;
 }
 
 function clientsProjectStorageDirectory(): string
@@ -220,6 +278,17 @@ function readClientsPhoneIndexCache(): array
 
 function readClientMatchesCache(string $normalizedPhone): ?array
 {
+    if (is_file(clientsSqliteFile())) {
+        $pdo = clientsOpenSqlite();
+        $statement = $pdo->prepare('SELECT c.payload_json FROM client_phones p JOIN clients c ON c.client_id=p.client_id WHERE p.normalized_phone=? ORDER BY c.client_id');
+        $statement->execute([$normalizedPhone]);
+        $matches = [];
+        foreach ($statement as $row) {
+            $client = json_decode((string)$row['payload_json'], true);
+            if (is_array($client)) $matches[] = ['phone'=>'+7'.$normalizedPhone, 'name'=>(string)($client['name'] ?? ''), 'fields'=>is_array($client['fields'] ?? null) ? $client['fields'] : []];
+        }
+        return $matches;
+    }
     $cacheFile = clientsLookupShardFile($normalizedPhone);
     if (!is_file($cacheFile)) return is_file(clientsLookupReadyFile()) ? [] : null;
     $shard = json_decode((string)file_get_contents($cacheFile), true);
@@ -313,7 +382,10 @@ function clientsStreamingCacheCreate(): array
     }
     fwrite($cacheHandle, '[');
     fwrite($indexHandle, '{');
-    return ['suffix'=>$suffix, 'cache'=>$cache, 'index'=>$index, 'cache_handle'=>$cacheHandle,
+    $sqlite = clientsSqliteFile() . $suffix;
+    $sqlitePdo = clientsOpenSqlite($sqlite);
+    $sqlitePdo->beginTransaction();
+    return ['suffix'=>$suffix, 'cache'=>$cache, 'index'=>$index, 'sqlite'=>$sqlite, 'sqlite_pdo'=>$sqlitePdo, 'cache_handle'=>$cacheHandle,
         'index_handle'=>$indexHandle, 'first_client'=>true, 'first_index'=>true, 'shards'=>[], 'publish_temporary'=>[]];
 }
 
@@ -327,6 +399,9 @@ function clientsStreamingCacheAppend(array &$stream, array $clients): int
         }
         $stream['first_client'] = false;
         $written++;
+        $clientId = (string)($client['id'] ?? ($client['fields']['id'] ?? $client['fields']['client_id'] ?? ''));
+        if ($clientId === '') throw new RuntimeException('Полный ответ Clients содержит клиента без id');
+        clientsSqliteUpsert($stream['sqlite_pdo'], $client, $clientId);
         foreach (($client['phones'] ?? []) as $phone) {
             $phone = (string)$phone;
             $indexEntry = json_encode($phone, JSON_UNESCAPED_UNICODE) . ':' . json_encode((string)$client['name'], JSON_UNESCAPED_UNICODE);
@@ -353,17 +428,21 @@ function clientsStreamingCacheAppend(array &$stream, array $clients): int
 
 function clientsStreamingCacheAbort(array &$stream): void
 {
+    if (($stream['sqlite_pdo'] ?? null) instanceof PDO && $stream['sqlite_pdo']->inTransaction()) $stream['sqlite_pdo']->rollBack();
+    $stream['sqlite_pdo'] = null;
     foreach (['cache_handle', 'index_handle'] as $key) if (is_resource($stream[$key] ?? null)) fclose($stream[$key]);
     foreach ($stream['shards'] ?? [] as $shard) {
         if (is_resource($shard['handle'] ?? null)) fclose($shard['handle']);
         @unlink($shard['path']);
     }
     foreach ($stream['publish_temporary'] ?? [] as $file) @unlink($file);
-    @unlink($stream['cache'] ?? ''); @unlink($stream['index'] ?? '');
+    @unlink($stream['cache'] ?? ''); @unlink($stream['index'] ?? ''); @unlink($stream['sqlite'] ?? '');
 }
 
 function clientsStreamingCachePublish(array &$stream): void
 {
+    $stream['sqlite_pdo']->commit();
+    $stream['sqlite_pdo'] = null;
     fwrite($stream['cache_handle'], ']'); fclose($stream['cache_handle']); $stream['cache_handle'] = null;
     fwrite($stream['index_handle'], '}'); fclose($stream['index_handle']); $stream['index_handle'] = null;
     $temporaryTargets = [];
@@ -392,6 +471,9 @@ function clientsStreamingCachePublish(array &$stream): void
     }
     if (!@rename($stream['index'], clientsPhoneIndexCacheFile())) {
         throw clientsFileError('Не удалось атомарно опубликовать индекс телефонов Clients', clientsPhoneIndexCacheFile());
+    }
+    if (!@rename($stream['sqlite'], clientsSqliteFile())) {
+        throw clientsFileError('Не удалось опубликовать SQLite-кэш Clients', clientsSqliteFile());
     }
     foreach ($temporaryTargets as $file) {
         if (!rename($file['temporary'], $file['target'])) throw clientsFileError('Не удалось опубликовать shard Clients', $file['target']);
@@ -432,6 +514,7 @@ function loadClientsDirectory(PDO $pdo, bool $allowRemote = true): array
     $clients = clientsRowsFromDatabase($pdo);
     if ($clients) return $clients;
 
+    if (is_file(clientsSqliteFile())) return clientsSqliteRows(clientsOpenSqlite());
     $cacheFile = clientsCacheFile();
     if (is_file($cacheFile) && filemtime($cacheFile) !== false && filemtime($cacheFile) > time() - 300) {
         $cached = json_decode((string)file_get_contents($cacheFile), true);
