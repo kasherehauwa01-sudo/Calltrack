@@ -628,7 +628,7 @@ class CallRepository(
 
     suspend fun importRecentCallsFromDevice(limit: Int = DEVICE_RECENT_CALLS_LIMIT): Int = withContext(Dispatchers.IO) {
         if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
-            Log.w("CallRepository", "Нет разрешения READ_CALL_LOG для загрузки экрана Последние из звонилки")
+            Log.w("CallRepository", "Нет разрешения READ_CALL_LOG для загрузки экрана История из звонилки")
             return@withContext 0
         }
 
@@ -664,7 +664,7 @@ class CallRepository(
                         duration = duration,
                         note = note,
                         timestamp = timestamp,
-                        // Исторические записи из звонилки нужны для отображения на экране «Последние».
+                        // Исторические записи из звонилки нужны для отображения на экране «История».
                         // Не отправляем их пачкой в SQL API, пока пользователь не изменит заметку/напоминание.
                         uploaded = true
                     )
@@ -675,7 +675,7 @@ class CallRepository(
                         timestamp = call.timestamp
                     )
                     if (duplicate == null) {
-                        // Экран «Последние» должен брать звонки из системной звонилки,
+                        // Экран «История» должен брать звонки из системной звонилки,
                         // поэтому не прогреваем справочник клиентов из SQL API при импорте.
                         callDao.insert(call)
                     }
