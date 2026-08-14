@@ -9,10 +9,12 @@ if (PHP_SAPI !== 'cli') {
 
 try {
     $source = 'manual';
+    $mode = 'full';
     foreach (array_slice($argv ?? [], 1) as $argument) {
         if (strpos($argument, '--source=') === 0) $source = substr($argument, 9);
+        if (strpos($argument, '--mode=') === 0) $mode = substr($argument, 7);
     }
-    $result = runClientsCacheRefresh($source);
+    $result = runClientsCacheRefresh($source, $mode);
     fwrite(STDOUT, json_encode(['status'=>'success', 'data'=>$result], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL);
 } catch (Throwable $e) {
     error_log('Clients cache refresh failed: ' . $e->getMessage());
