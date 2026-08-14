@@ -35,4 +35,9 @@ $lock=fopen(clientsRefreshLockFile(),'c');flock($lock,LOCK_EX|LOCK_NB);deltaExpe
 $installer=file_get_contents(dirname(__DIR__).'/scripts/install_clients_cache_cron.sh');deltaExpect(str_contains($installer,'0 4 * * *')&&str_contains($installer,' delta '),'Daily cron не запускает delta');deltaExpect(str_contains($installer,'0 3 * * 0')&&str_contains($installer,' full '),'Weekly cron не запускает full');
 
 foreach([0,10,500,2000] as $count){$start=microtime(true);$items=[];$cursor=10000+$count;for($i=1;$i<=$count;$i++)$items[]=$upsert($cursor+$i,'p'.$count.'-'.$i,'Perf '.$i,['+7'.str_pad((string)($count*2000+$i),10,'0',STR_PAD_LEFT)]);applyClientsDeltaPage($page($items,$cursor,$cursor+$count),$cursor);printf("PERF changes=%d time=%.4fs memory=%.1fMB\n",$count,microtime(true)-$start,memory_get_peak_usage(true)/1048576);}
+putenv('CALLTRACK_CLIENTS_DISABLE_SQLITE=1');
+applyClientsDeltaPage($page([$upsert(30001,'file-1','Без SQLite',['+79991112233'])],30000,30001),30000);
+deltaExpect(readClientMatchesCache('9991112233')[0]['name']==='Без SQLite','Файловый backend не применил upsert');
+applyClientsDeltaPage($page([$delete(30002,'file-1')],30001,30002),30001);
+deltaExpect(readClientMatchesCache('9991112233')===[],'Файловый backend не применил delete');
 echo "clients_delta_refresh_test: OK\n";

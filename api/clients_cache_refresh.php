@@ -78,11 +78,58 @@ function rebuildClientsShard(PDO $pdo,string|int $code): void
     if(!$rows){@unlink($target);return;} if(file_put_contents($tmp,json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),LOCK_EX)===false||!rename($tmp,$target))throw new RuntimeException('Не удалось обновить shard Clients '.$code);
 }
 
+function writeClientsJsonAtomically(string $target, array $value): void
+{
+    $temporary = $target . '.new.' . getmypid();
+    $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    if (file_put_contents($temporary, $json, LOCK_EX) === false || !rename($temporary, $target)) {
+        @unlink($temporary);
+        throw new RuntimeException('Не удалось атомарно обновить файл Clients: ' . $target);
+    }
+}
+
+/** Файловый backend для серверов без pdo_sqlite: читает только затронутые buckets и shards. */
+function applyClientsDeltaPageToFiles(array $items, int $afterId, int $next, ?callable $beforeCursorCommit=null): array
+{
+    $recordBuckets = []; $phoneShards = []; $changedIds = []; $upserts = 0; $deletes = 0; $previous = $afterId;
+    foreach ($items as $item) {
+        if (!is_array($item) || !isset($item['change_id'], $item['operation'], $item['client_id']) || (int)$item['change_id'] <= $previous) throw new RuntimeException('Требуется полное обновление кэша: нарушен порядок change_id');
+        $previous = (int)$item['change_id']; $id = (string)$item['client_id']; $changedIds[$id] = true; $recordFile = clientsRecordShardFile($id);
+        if (!isset($recordBuckets[$recordFile])) { $value=is_file($recordFile)?json_decode((string)file_get_contents($recordFile),true):[]; $recordBuckets[$recordFile]=is_array($value)?$value:[]; }
+        $old = is_array($recordBuckets[$recordFile][$id] ?? null) ? $recordBuckets[$recordFile][$id] : null;
+        foreach (($old['phones'] ?? []) as $phone) $phoneShards[clientsLookupShardFile((string)$phone)] = true;
+        if ($item['operation'] === 'upsert') {
+            if (!is_array($item['client'] ?? null)) throw new RuntimeException('Upsert Clients не содержит client');
+            $client = normalizeDeltaClient($item['client'], $id); $recordBuckets[$recordFile][$id] = $client; $upserts++;
+            foreach ($client['phones'] as $phone) $phoneShards[clientsLookupShardFile((string)$phone)] = true;
+        } elseif ($item['operation'] === 'delete') { unset($recordBuckets[$recordFile][$id]); $deletes++; }
+        else throw new RuntimeException('Неизвестная операция Clients: ' . (string)$item['operation']);
+    }
+    if ($items && $next !== $previous) throw new RuntimeException('Требуется полное обновление кэша: next_after_id не совпадает с последним change_id');
+
+    foreach (array_keys($phoneShards) as $file) {
+        $shard = is_file($file) ? json_decode((string)file_get_contents($file), true) : [];
+        $shard = is_array($shard) ? $shard : [];
+        foreach ($shard as $phone=>$matches) {
+            $filtered = array_values(array_filter(is_array($matches)?$matches:[], fn($match)=>!is_array($match)||!isset($changedIds[(string)($match['client_id']??'')])));
+            if ($filtered) $shard[$phone]=$filtered; else unset($shard[$phone]);
+        }
+        foreach ($recordBuckets as $records) foreach ($records as $id=>$client) if(isset($changedIds[(string)$id])) foreach (($client['phones']??[]) as $phone) if (clientsLookupShardFile((string)$phone)===$file) $shard[(string)$phone][]=['phone'=>'+7'.$phone,'name'=>(string)$client['name'],'fields'=>$client['fields']??[],'client_id'=>(string)$id];
+        writeClientsJsonAtomically($file, $shard);
+    }
+    // Records публикуются после телефонных shards: при падении до этого места
+    // повтор страницы всё ещё знает старые телефоны и корректно очистит их.
+    foreach ($recordBuckets as $file=>$records) writeClientsJsonAtomically($file, $records);
+    if ($beforeCursorCommit) $beforeCursorCommit();
+    return ['changes'=>count($items),'upserts'=>$upserts,'deletes'=>$deletes,'cursor'=>$next];
+}
+
 /** Применяет одну страницу атомарно в SQLite; cursor публикуется только после shard-файлов и COMMIT. */
 function applyClientsDeltaPage(array $page,int $afterId,?callable $beforeCursorCommit=null): array
 {
     $items=$page['items']??null;$next=$page['next_after_id']??null;if(!is_array($items)||!is_numeric($next)||!isset($page['has_more']))throw new RuntimeException('Некорректная страница Clients changes');
     $next=(int)$next;if(!$items&&$next!==$afterId)throw new RuntimeException('Требуется полное обновление кэша: пустая delta-страница с невозможным cursor');
+    if (!clientsSqliteAvailable()) return applyClientsDeltaPageToFiles($items, $afterId, $next, $beforeCursorCommit);
     $pdo=clientsOpenSqlite();$pdo->beginTransaction();$upserts=0;$deletes=0;$codes=[];$previous=$afterId;
     try{
         foreach($items as $item){if(!is_array($item)||!isset($item['change_id'],$item['operation'],$item['client_id'])||(int)$item['change_id']<=$previous)throw new RuntimeException('Требуется полное обновление кэша: нарушен порядок change_id');$previous=(int)$item['change_id'];$id=(string)$item['client_id'];
@@ -125,7 +172,7 @@ function runClientsCacheRefresh(string $source,string $mode='full'): array
 {
     $source=in_array($source,['cron','manual','background_test'],true)?$source:'manual';$mode=$mode==='delta'?'delta':'full';$lock=acquireClientsRefreshLock();$started=clientsRefreshNow();$previous=readClientsRefreshStatus();$running=['status'=>'running','success'=>false,'mode'=>$mode,'source'=>$source,'started_at'=>$started->format(DATE_ATOM),'finished_at'=>null,'error'=>null];if($source==='cron')$running['last_cron_started_at']=$started->format(DATE_ATOM);elseif(isset($previous['last_cron_started_at']))$running['last_cron_started_at']=$previous['last_cron_started_at'];writeClientsRefreshStatus($running);
     try{
-        if($mode==='delta'){$state=readClientsSyncState();if(!is_numeric($state['last_change_id']??null)||!is_file(clientsSqliteFile()))throw new RuntimeException('Требуется полное обновление кэша');$stats=runClientsDeltaRefreshUnlocked($source,(int)$state['last_change_id']);$result=$running+[];$result=array_merge($result,['status'=>'success','success'=>true,'finished_at'=>clientsRefreshNow()->format(DATE_ATOM)],$stats);}
+        if($mode==='delta'){$state=readClientsSyncState();$backendReady=clientsSqliteAvailable()?is_file(clientsSqliteFile()):is_file(clientsRecordsReadyFile());if(!is_numeric($state['last_change_id']??null)||!$backendReady)throw new RuntimeException('Требуется полное обновление кэша');$stats=runClientsDeltaRefreshUnlocked($source,(int)$state['last_change_id']);$result=$running+[];$result=array_merge($result,['status'=>'success','success'=>true,'finished_at'=>clientsRefreshNow()->format(DATE_ATOM)],$stats);}
         else{$snapshot=fetchClientsChangeState();appendClientsRefreshLog('Начато полное обновление; snapshot cursor: '.$snapshot);$url=trim((string)(getenv('CALLTRACK_CLIENTS_PAGINATED_API_URL') ?: CLIENTS_PAGINATED_API_URL));$pageSize=max(100,min(2000,(int)(getenv('CALLTRACK_CLIENTS_REFRESH_PAGE_SIZE') ?: CLIENTS_REFRESH_PAGE_SIZE)));$stream=clientsStreamingCacheCreate();$count=0;$sourceCount=0;$page=1;$pages=0;$total=null;
             try{do{$batch=fetchClientsApiPage($url,$page,$pageSize);if($total!==null&&$batch['total']!==$total)throw new RuntimeException("Количество Clients изменилось во время обновления: {$total} → {$batch['total']}");$total=$batch['total'];$sourceCount+=$batch['source_count'];$count+=clientsStreamingCacheAppend($stream,$batch['clients']);$pages++;$more=(bool)$batch['has_more'];$page++;}while($more);if($total===null||$sourceCount!==$total)throw new RuntimeException("Пагинация Clients завершилась частично: обработано {$sourceCount} из {$total}");if($count===0)throw new RuntimeException('Clients API не вернул ни одной корректной записи');clientsStreamingCachePublish($stream);}catch(Throwable $e){clientsStreamingCacheAbort($stream);throw $e;}
             $state=readClientsSyncState();$state['last_change_id']=$snapshot;writeClientsSyncState($state);$catchup=runClientsDeltaRefreshUnlocked($source,$snapshot);$fullFinished=clientsRefreshNow()->format(DATE_ATOM);$state=readClientsSyncState();$state['last_full_finished_at']=$fullFinished;writeClientsSyncState($state);$result=array_merge($running,['status'=>'success','success'=>true,'finished_at'=>$fullFinished,'clients'=>$count,'processed_pages'=>$pages,'source_total'=>$total,'last_full_finished_at'=>$fullFinished,'catchup_changes'=>$catchup['changes']]);appendClientsRefreshLog('Полный кэш и delta catch-up успешно обновлены');}
@@ -135,5 +182,10 @@ function runClientsCacheRefresh(string $source,string $mode='full'): array
 function clientsRefreshIsLocked(): bool { try{$lock=acquireClientsRefreshLock();flock($lock,LOCK_UN);fclose($lock);return false;}catch(RuntimeException $e){if($e->getMessage()==='Обновление кэша Clients уже выполняется')return true;throw $e;} }
 function startClientsCacheRefreshInBackground(string $mode='delta'): array
 {
-    $mode=$mode==='full'?'full':'delta';if(!function_exists('exec'))throw new RuntimeException('Фоновый запуск недоступен: функция PHP exec отключена');if(clientsRefreshIsLocked())throw new RuntimeException('Обновление кэша Clients уже выполняется');$php=trim((string)(getenv('CALLTRACK_PHP_CLI') ?: '/usr/bin/php'));$script=__DIR__.'/refresh_clients_cache.php';if(!is_executable($php)||!is_file($script))throw new RuntimeException('Не найден PHP CLI или скрипт обновления Clients');$starting=['status'=>'starting','success'=>false,'mode'=>$mode,'source'=>'manual','started_at'=>clientsRefreshNow()->format(DATE_ATOM),'finished_at'=>null,'error'=>null];writeClientsRefreshStatus($starting);$command=sprintf('nohup %s %s --source=manual --mode=%s </dev/null >/dev/null 2>&1 & echo $!',escapeshellarg($php),escapeshellarg($script),escapeshellarg($mode));exec($command,$output,$code);$pid=ctype_digit(trim((string)($output[0]??'')))?(int)$output[0]:0;if($code!==0||$pid<=0)throw new RuntimeException('Не удалось создать фоновый процесс обновления кэша Clients');$starting['pid']=$pid;return clientsRefreshStatusPayload($starting);
+    $mode=$mode==='full'?'full':'delta';
+    // Первый запуск после обновления создаёт backend подходящего типа. Это
+    // initial sync, поэтому ручную delta-кнопку безопасно повышаем до full.
+    $backendReady=clientsSqliteAvailable()?is_file(clientsSqliteFile()):is_file(clientsRecordsReadyFile());
+    if($mode==='delta'&&!$backendReady)$mode='full';
+    if(!function_exists('exec'))throw new RuntimeException('Фоновый запуск недоступен: функция PHP exec отключена');if(clientsRefreshIsLocked())throw new RuntimeException('Обновление кэша Clients уже выполняется');$php=trim((string)(getenv('CALLTRACK_PHP_CLI') ?: '/usr/bin/php'));$script=__DIR__.'/refresh_clients_cache.php';if(!is_executable($php)||!is_file($script))throw new RuntimeException('Не найден PHP CLI или скрипт обновления Clients');$starting=['status'=>'starting','success'=>false,'mode'=>$mode,'source'=>'manual','started_at'=>clientsRefreshNow()->format(DATE_ATOM),'finished_at'=>null,'error'=>null];writeClientsRefreshStatus($starting);$command=sprintf('nohup %s %s --source=manual --mode=%s </dev/null >/dev/null 2>&1 & echo $!',escapeshellarg($php),escapeshellarg($script),escapeshellarg($mode));exec($command,$output,$code);$pid=ctype_digit(trim((string)($output[0]??'')))?(int)$output[0]:0;if($code!==0||$pid<=0)throw new RuntimeException('Не удалось создать фоновый процесс обновления кэша Clients');$starting['pid']=$pid;return clientsRefreshStatusPayload($starting);
 }

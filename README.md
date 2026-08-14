@@ -855,6 +855,8 @@ public_html/
 
 Рабочим локальным форматом Clients является `storage/cache/clients/clients.sqlite`: таблица `clients` хранит полный JSON-снимок карточки, `client_phones` — нормализованные телефоны и код shard, а `sync_state` — транзакционный cursor. Файл `storage/cache/clients/sync_state.json` содержит межпроцессный cursor и статистику для админ-панели. Старые `clients.json`, `phone_index.json` и shards по-прежнему создаются полным потоковым refresh для совместимости; delta изменяет только строки SQLite и затронутые shards.
 
+Если на сервере отсутствует PHP-расширение `pdo_sqlite`, CallTrack автоматически использует файловый backend `storage/cache/clients/records/`: клиенты распределяются по 256 небольшим JSON-buckets, а delta читает и заменяет только buckets клиентов и телефонные shards, затронутые страницей изменений. Первый ручной delta-запуск без подготовленного backend автоматически выполняет initial full sync; устанавливать `pdo_sqlite` только ради обновления кэша не требуется.
+
 Полный refresh сначала читает `GET /vr/clients/api/clients/changes/state`, затем потоково строит новый кэш в `storage/cache/clients/`, публикует его и применяет все страницы `GET /vr/clients/api/clients/changes?after_id=...&limit=500` от snapshot cursor. Поэтому изменения во время долгой загрузки не теряются. Delta применяет страницы идемпотентно: upsert заменяет карточку и все её телефонные связи, delete удаляет карточку каскадно. Cursor записывается лишь после успешных SQLite/shard изменений. Оба режима используют `storage/clients_cache_refresh.lock`.
 
 Установка cron идемпотентно создаёт delta ежедневно в 04:00 и full по воскресеньям в 03:00 в `Europe/Moscow`:
