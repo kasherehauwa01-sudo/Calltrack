@@ -19,6 +19,8 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.App
 import com.example.calltrack.BuildConfig
@@ -139,7 +141,23 @@ class MainActivity : BaseActivity() {
         super.onPause()
     }
 
-    private fun applyWindowInsets() = applyInsets(binding.root, binding.statusBarOverlay)
+    private fun applyWindowInsets() {
+        val navigationInitialBottomPadding = binding.bottomNav.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { root, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            // Фон нижней панели доходит до физического края экрана, а её
+            // содержимое поднимается над системной навигацией внутренним padding.
+            root.setPadding(0, 0, 0, 0)
+            binding.statusBarOverlay.layoutParams = binding.statusBarOverlay.layoutParams.apply { height = bars.top }
+            binding.bottomNav.setPadding(
+                binding.bottomNav.paddingLeft,
+                binding.bottomNav.paddingTop,
+                binding.bottomNav.paddingRight,
+                navigationInitialBottomPadding + bars.bottom
+            )
+            insets
+        }
+    }
 
     private fun handleExternalNavigation(intent: Intent?) {
         val phone = intent?.getStringExtra(EXTRA_OPEN_CONTACT_PHONE).orEmpty()

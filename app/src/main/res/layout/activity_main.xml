@@ -34,7 +34,7 @@
         android:layout_marginTop="8dp"
         android:layout_marginEnd="8dp"
         app:layout_constraintEnd_toStartOf="@id/notificationButtonContainer"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toBottomOf="@id/statusBarOverlay">
 
         <ImageButton
             android:id="@+id/btnAnalytics"
@@ -54,7 +54,7 @@
         android:layout_marginTop="8dp"
         android:layout_marginEnd="8dp"
         app:layout_constraintEnd_toStartOf="@id/btnSettings"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toBottomOf="@id/statusBarOverlay">
 
         <ImageButton
             android:id="@+id/btnNotifications"
@@ -89,7 +89,7 @@
         android:src="@drawable/ic_more_vert"
         android:tint="@color/textPrimary"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/statusBarOverlay" />
 
     <FrameLayout
         android:id="@+id/fragmentContainer"
