@@ -52,6 +52,13 @@ android {
     }
 }
 
+tasks.register('publishReleaseApk', Exec) {
+    group = 'publishing'
+    description = 'Последовательно увеличивает версию, собирает и проверяет release APK, затем фиксирует счётчик.'
+    workingDir rootProject.projectDir
+    commandLine 'bash', rootProject.file('scripts/publish_android_apk.sh').absolutePath
+}
+
 dependencies {
     implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.appcompat:appcompat:1.7.0'
