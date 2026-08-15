@@ -3,3 +3,7 @@ api/config.local.php
 logs/
 updates/
 api/config.local.php
+
+/.gradle/
+/build/
+/app/build/
