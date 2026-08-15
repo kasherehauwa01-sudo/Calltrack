@@ -4,35 +4,22 @@ plugins {
     id 'com.google.devtools.ksp'
 }
 
-// version.properties хранит последнюю успешно созданную публикационную версию.
-// Чтение файла не меняет счётчик при Sync, Run, clean, тестах или assembleRelease.
-def versionFile = rootProject.file('version.properties')
-def versionState = new Properties()
-if (!versionFile.isFile()) throw new GradleException("Не найден ${versionFile}")
-versionFile.withInputStream { versionState.load(it) }
-def storedVersionCodeText = versionState.getProperty('VERSION_CODE', '').trim()
-def versionNamePrefix = versionState.getProperty('VERSION_NAME_PREFIX', '').trim()
-if (!(storedVersionCodeText ==~ /[1-9]\d*/)) throw new GradleException('VERSION_CODE должен быть положительным Integer')
-if (!(versionNamePrefix ==~ /\d+\.\d+/)) throw new GradleException('VERSION_NAME_PREFIX должен иметь формат X.Y')
-def storedVersionCode = storedVersionCodeText.toInteger()
-def storedVersionName = "${versionNamePrefix}.${storedVersionCode}"
+// Unix-время в минутах компактно помещается в Android versionCode и возрастает
+// между сборками, выполненными в разные минуты. Для всех вариантов одной сборки
+// значение вычисляется один раз, на этапе конфигурации Gradle.
+def generatedVersionCode = (System.currentTimeMillis() / 60000L).toInteger()
+if (generatedVersionCode <= 0) throw new GradleException('Сгенерированный versionCode должен быть положительным Integer')
 
 android {
     namespace 'com.example.calltrack'
     compileSdk 35
 
     defaultConfig {
-        def releaseVersionCode = (project.findProperty("calltrackVersionCode")
-                ?: System.getenv("CALLTRACK_VERSION_CODE")
-                ?: storedVersionCode).toString().toInteger()
-        def releaseVersionName = (project.findProperty("calltrackVersionName")
-                ?: System.getenv("CALLTRACK_VERSION_NAME")
-                ?: storedVersionName).toString()
         applicationId "com.example.calltrack"
         minSdk 26
         targetSdk 35
-        versionCode releaseVersionCode
-        versionName releaseVersionName
+        versionCode generatedVersionCode
+        versionName "1.0.15"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "SQL_API_BASE_URL", '"https://kvasmix.ru/vr/calltrack/api/"'
