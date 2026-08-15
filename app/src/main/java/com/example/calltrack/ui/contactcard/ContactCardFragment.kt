@@ -120,7 +120,12 @@ class ContactCardFragment : Fragment() {
                 binding.tvContactName.text = fallbackName
             }
             if (binding.tvClient1c.text.toString() == "—") {
-                val client = viewModel.findClientName(phone)
+                // Общий справочник прогревается асинхронно и при первом открытии
+                // карточки ещё может быть пуст. Точечный запрос по телефону ждём
+                // в IO-потоке, чтобы сразу показать актуальное имя из SQLite-кэша.
+                val client = withContext(Dispatchers.IO) {
+                    viewModel.loadClientCards(phone).firstOrNull()?.name.orEmpty()
+                }
                 if (client.isNotBlank()) {
                     binding.tvClient1c.text = client
                     renderClientLinkState()

@@ -4,22 +4,22 @@ plugins {
     id 'com.google.devtools.ksp'
 }
 
+// Unix-время в минутах компактно помещается в Android versionCode и возрастает
+// между сборками, выполненными в разные минуты. Для всех вариантов одной сборки
+// значение вычисляется один раз, на этапе конфигурации Gradle.
+def generatedVersionCode = (System.currentTimeMillis() / 60000L).toInteger()
+if (generatedVersionCode <= 0) throw new GradleException('Сгенерированный versionCode должен быть положительным Integer')
+
 android {
     namespace 'com.example.calltrack'
     compileSdk 35
 
     defaultConfig {
-        def releaseVersionCode = (project.findProperty("calltrackVersionCode")
-                ?: System.getenv("CALLTRACK_VERSION_CODE")
-                ?: "13").toString().toInteger()
-        def releaseVersionName = (project.findProperty("calltrackVersionName")
-                ?: System.getenv("CALLTRACK_VERSION_NAME")
-                ?: "1.0.13").toString()
         applicationId "com.example.calltrack"
         minSdk 26
         targetSdk 35
-        versionCode releaseVersionCode
-        versionName releaseVersionName
+        versionCode generatedVersionCode
+        versionName "1.0.15"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "SQL_API_BASE_URL", '"https://kvasmix.ru/vr/calltrack/api/"'
