@@ -10,9 +10,30 @@ plugins {
 def generatedVersionCode = (System.currentTimeMillis() / 60000L).toInteger()
 if (generatedVersionCode <= 0) throw new GradleException('Сгенерированный versionCode должен быть положительным Integer')
 
+// Release-сборки всегда должны подписываться одним и тем же ключом. Секреты
+// хранятся только в локальном keystore.properties и не попадают в Git.
+def releaseSigningFile = rootProject.file('keystore.properties')
+def releaseSigning = new Properties()
+if (releaseSigningFile.isFile()) {
+    releaseSigningFile.withInputStream { releaseSigning.load(it) }
+}
+def releaseSigningKeys = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+def hasReleaseSigning = releaseSigningKeys.every { releaseSigning.getProperty(it, '').trim() }
+
 android {
     namespace 'com.example.calltrack'
     compileSdk 35
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile rootProject.file(releaseSigning.getProperty('storeFile'))
+                storePassword releaseSigning.getProperty('storePassword')
+                keyAlias releaseSigning.getProperty('keyAlias')
+                keyPassword releaseSigning.getProperty('keyPassword')
+            }
+        }
+    }
 
     defaultConfig {
         applicationId "com.example.calltrack"
@@ -28,6 +49,9 @@ android {
 
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -52,11 +76,13 @@ android {
     }
 }
 
-tasks.register('publishReleaseApk', Exec) {
-    group = 'publishing'
-    description = 'Последовательно увеличивает версию, собирает и проверяет release APK, затем фиксирует счётчик.'
-    workingDir rootProject.projectDir
-    commandLine 'bash', rootProject.file('scripts/publish_android_apk.sh').absolutePath
+// Не даём случайно опубликовать неподписанный или подписанный временным ключом
+// APK. Gradle Sync и debug/Run при этом не требуют release-секретов.
+def requestsReleaseBuild = gradle.startParameter.taskNames.any { taskName ->
+    taskName.toLowerCase().contains('release')
+}
+if (requestsReleaseBuild && !hasReleaseSigning) {
+    throw new GradleException('Для release APK настройте keystore.properties по образцу keystore.properties.example и укажите ключ, которым подписано установленное приложение.')
 }
 
 dependencies {
