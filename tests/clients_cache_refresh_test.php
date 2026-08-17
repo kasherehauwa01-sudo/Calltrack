@@ -62,7 +62,7 @@ for ($offset = 0; $offset < $expected; $offset += 500) {
     $batch = [];
     for ($index = $offset; $index < min($expected, $offset + 500); $index++) {
         $phone = str_pad((string)$index, 10, '0', STR_PAD_LEFT);
-        $batch[] = ['name'=>'Клиент ' . $index, 'phones'=>[$phone], 'fields'=>['Телефон'=>$phone]];
+        $batch[] = ['id'=>(string)$index, 'name'=>'Клиент ' . $index, 'phones'=>[$phone], 'fields'=>['id'=>$index, 'Телефон'=>$phone]];
     }
     clientsStreamingCacheAppend($stream, $batch);
     unset($batch);
@@ -73,6 +73,7 @@ refreshExpect(count($cache) === $expected, 'Потоковый кэш потер
 refreshExpect($cache[2499]['name'] === 'Клиент 2499', 'Последняя запись потокового кэша повреждена');
 @unlink(clientsCacheFile());
 @unlink(clientsPhoneIndexCacheFile());
+@unlink(clientsSqliteFile());
 @unlink(clientsLookupReadyFile());
 foreach (glob(clientsCacheShardsDirectory() . '/*.json') ?: [] as $file) @unlink($file);
 @rmdir(clientsCacheTempDirectory());
