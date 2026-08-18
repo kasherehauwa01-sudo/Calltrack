@@ -20,7 +20,8 @@
             android:contentDescription="Назад"
             android:padding="10dp"
             android:src="@drawable/ic_arrow_back"
-            android:tint="@color/textPrimary" />
+            android:tint="@color/textPrimary"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/tvTitle"
