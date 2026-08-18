@@ -15,7 +15,7 @@ try {
     }
 
     $fields = [
-        'manager','last_activity','app_version','installed_at','app_updated_at','last_launch_at','launch_count',
+        'manager','last_activity','app_version','app_version_code','installed_at','app_updated_at','last_launch_at','launch_count',
         'device_manufacturer','device_model','android_version','api_level','ram_total','storage_free','screen_resolution',
         'device_language','timezone','calls_permission','notifications_permission','contacts_permission','background_permission',
         'battery_optimization_ignored','google_play_services','sync_errors_count','local_db_size','last_error','last_server_response'
@@ -50,7 +50,7 @@ try {
         }
     }
 
-    $cmdStmt = $pdo->prepare("SELECT id, command FROM app_user_commands WHERE user_phone = :user_phone AND status = 'pending' ORDER BY id ASC LIMIT 10");
+    $cmdStmt = $pdo->prepare("SELECT id, command, target_version_code, target_version_name FROM app_user_commands WHERE user_phone = :user_phone AND status = 'pending' ORDER BY id ASC LIMIT 10");
     $cmdStmt->execute([':user_phone' => $userPhone]);
     sendJson(['status' => 'success', 'commands' => $cmdStmt->fetchAll()]);
 } catch (Throwable $e) {
