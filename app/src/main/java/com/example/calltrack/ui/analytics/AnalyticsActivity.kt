@@ -58,7 +58,7 @@ class AnalyticsActivity : BaseActivity() {
     }
 
     private fun buildLayout() {
-        val scroll = ScrollView(this)
+        val scroll = ScrollView(this).apply { isFillViewport = true }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), statusBarHeight() + dp(16), dp(16), dp(16))
@@ -67,13 +67,17 @@ class AnalyticsActivity : BaseActivity() {
         scroll.addView(root)
         setContentView(scroll)
 
-        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val compactHeader = resources.configuration.screenWidthDp < 380
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
         header.addView(topActionButton(R.drawable.ic_arrow_back, getString(R.string.back)) {
             openMain(MainActivity.EXTRA_OPEN_DIAL)
         })
         header.addView(TextView(this).apply {
             text = "Аналитика"
-            textSize = 28f
+            textSize = if (compactHeader) 18f else 24f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(getColor(R.color.white))
             setPadding(dp(12), 0, 0, 0)
@@ -125,7 +129,9 @@ class AnalyticsActivity : BaseActivity() {
             setPadding(dp(8))
             background = rounded(getColor(R.color.surface), dp(12))
             setOnClickListener { view -> action(view) }
-            layoutParams = LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(8) }
+            layoutParams = LinearLayout.LayoutParams(dp(40), dp(40)).apply {
+                marginEnd = dp(if (resources.configuration.screenWidthDp < 380) 4 else 8)
+            }
         }
 
     private fun openMain(destinationExtra: String) {
