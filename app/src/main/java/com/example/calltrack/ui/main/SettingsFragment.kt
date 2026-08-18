@@ -29,6 +29,10 @@ class SettingsFragment : Fragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        binding.btnBack.setOnClickListener {
+            (requireActivity() as MainActivity).openDialScreen()
+        }
+
         viewModel.themeMode.observe(viewLifecycleOwner) { mode ->
             binding.tvThemeMode.text = themeTitle(mode)
         }

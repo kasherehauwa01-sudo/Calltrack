@@ -14,7 +14,8 @@ window.calltrackApi.endpoints = Object.assign({
   clientDirectory: '/vr/calltrack/api/client_directory.php',
   testClients: '/vr/calltrack/api/test_clients.php',
   clientsCache: '/vr/calltrack/api/admin_clients_cache.php',
-  userCommand: '/vr/calltrack/api/user_command.php'
+  userCommand: '/vr/calltrack/api/user_command.php',
+  installLatestUpdate: '/vr/calltrack/api/admin_install_update.php'
 }, window.calltrackApi.endpoints || {});
 window.calltrackApi.requestJson = async function requestJson(url, options = {}) {
   const response = await fetch(url, options);
@@ -62,10 +63,19 @@ window.calltrackApi.clientsCacheStatus = async function clientsCacheStatus(passw
   return payload.data || {};
 };
 
-window.calltrackApi.refreshClientsCache = async function refreshClientsCache(password) {
+window.calltrackApi.refreshClientsCache = async function refreshClientsCache(password, mode = 'delta') {
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientsCache, {
     method: 'POST',
-    headers: { 'X-Calltrack-Admin-Password': password }
+    headers: { 'X-Calltrack-Admin-Password': password, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode })
+  });
+};
+
+window.calltrackApi.installLatestUpdateForAll = async function installLatestUpdateForAll(password) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.installLatestUpdate, {
+    method: 'POST',
+    headers: { 'X-Calltrack-Admin-Password': password, 'Content-Type': 'application/json' },
+    body: '{}'
   });
 };
 

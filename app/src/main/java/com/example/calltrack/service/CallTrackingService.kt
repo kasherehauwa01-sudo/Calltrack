@@ -74,10 +74,11 @@ class CallTrackingService : Service() {
         super.onCreate()
         createChannel()
 
-        val started = runCatching {
+        val foregroundResult = runCatching {
             startForeground(101, createNotification("Приложение активно"))
-        }.isSuccess
-        if (!started) {
+        }
+        if (foregroundResult.isFailure) {
+            AppLogger.log(this, "ERROR", "Не удалось перевести сервис в foreground: ${foregroundResult.exceptionOrNull()?.message}", foregroundResult.exceptionOrNull())
             stopSelf()
             return
         }
@@ -128,7 +129,12 @@ class CallTrackingService : Service() {
                 }
             }
         }
-        tracker.start()
+        runCatching { tracker.start() }
+            .onSuccess { AppLogger.log(this, "STABILITY", "Отслеживание звонков запущено") }
+            .onFailure { error ->
+                AppLogger.log(this, "ERROR", "Не удалось подписаться на состояние звонков: ${error.message}", error)
+                stopSelf()
+            }
     }
 
     private suspend fun captureLatestCallWithRetry() {
@@ -499,9 +505,11 @@ class CallTrackingService : Service() {
     }
 
     override fun onDestroy() {
+        AppLogger.log(this, "STABILITY", "Сервис отслеживания остановлен; восстановление контролирует WorkManager")
         scope.cancel()
         if (::tracker.isInitialized) {
-            tracker.stop()
+            runCatching { tracker.stop() }
+                .onFailure { error -> AppLogger.log(this, "WARN", "Ошибка остановки наблюдения за звонками: ${error.message}", error) }
         }
         super.onDestroy()
     }
