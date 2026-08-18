@@ -261,6 +261,21 @@ function resolveUpdateApk(PDO $pdo, int $versionCode = 0): array
         $stmt = $pdo->query('SELECT filename, version_code FROM app_updates ORDER BY version_code DESC, uploaded_at DESC, id DESC LIMIT 1');
     }
     $row = $stmt->fetch();
+    // update.json is generated together with every uploaded APK and is the
+    // public source of update metadata. After a hosting restore the DB can be
+    // temporarily out of sync while the APK and update.json are still present.
+    // Do not turn a valid download link into an incorrect 404 in that case.
+    if (!$row) {
+        $metadataPath = dirname(__DIR__) . '/updates/update.json';
+        $metadata = is_file($metadataPath)
+            ? json_decode((string)file_get_contents($metadataPath), true)
+            : null;
+        $metadataCode = is_array($metadata) ? (int)($metadata['versionCode'] ?? 0) : 0;
+        $metadataFilename = is_array($metadata) ? basename((string)($metadata['filename'] ?? '')) : '';
+        if ($metadataFilename !== '' && ($versionCode <= 0 || $metadataCode === $versionCode)) {
+            $row = ['filename' => $metadataFilename, 'version_code' => $metadataCode];
+        }
+    }
     if (!$row) {
         sendJson(['status' => 'error', 'message' => 'APK update not found'], 404);
     }
