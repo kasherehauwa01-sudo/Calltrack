@@ -225,6 +225,15 @@ function startClientsCacheRefresh(): bool
     return $exitCode === 0;
 }
 
+function clientsRefreshFailureMessage(array $status): string
+{
+    foreach (['error', 'message', 'last_error'] as $key) {
+        $message = trim((string)($status[$key] ?? ''));
+        if ($message !== '') return $message;
+    }
+    return 'без описания; проверьте storage/logs/clients_cache_refresh.log';
+}
+
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) !== __FILE__) return;
 
 try {
@@ -244,7 +253,10 @@ try {
     if ($cachedResult === null) {
         $refreshStatus = readClientsRefreshStatus();
         if (($refreshStatus['status'] ?? '') === 'error') {
-            throw new RuntimeException('Фоновая загрузка Clients завершилась ошибкой: ' . ($refreshStatus['message'] ?? 'без описания'));
+            // Рабочего кэша ещё нет: это initial sync, а не fallback с delta на
+            // full. После исправления временной причины разрешаем новый запуск,
+            // иначе старый error навсегда блокировал кнопку «Тест API».
+            error_log('Previous Clients initial sync failed: ' . clientsRefreshFailureMessage($refreshStatus));
         }
         $refreshUpdatedAt = strtotime((string)($refreshStatus['updated_at'] ?? '')) ?: 0;
         $refreshRunning = in_array($refreshStatus['status'] ?? '', ['starting','running'], true)
