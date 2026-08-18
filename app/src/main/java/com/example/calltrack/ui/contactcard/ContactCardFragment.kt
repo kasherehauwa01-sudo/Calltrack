@@ -16,6 +16,7 @@ import android.widget.Toast
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.ProgressBar
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -47,6 +48,7 @@ class ContactCardFragment : Fragment() {
     private var currentPhone: String = ""
     private var isPersonalContact: Boolean = false
     private var clientCardLoading: Boolean = false
+    private var clientCardLoadingDialog: AlertDialog? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentContactCardBinding.inflate(inflater, container, false)
@@ -59,7 +61,7 @@ class ContactCardFragment : Fragment() {
         binding.tvContactPhone.text = phone
         binding.tvContactName.text = phone
         binding.tvClient1c.text = viewModel.findClientName(phone).ifBlank { "—" }
-        binding.tvClient1c.setOnClickListener {
+        binding.rowClient1c.setOnClickListener {
             val clientName = binding.tvClient1c.text.toString().trim()
             if (clientName.isNotBlank() && clientName != "—" && clientName != "Личный") {
                 showClientCard(phone, clientName)
@@ -148,8 +150,12 @@ class ContactCardFragment : Fragment() {
     private fun renderClientLinkState() {
         val name = binding.tvClient1c.text.toString().trim()
         val clickable = name.isNotBlank() && name != "—" && name != "Личный"
-        binding.tvClient1c.isClickable = clickable
-        binding.tvClient1c.isFocusable = clickable
+        // Нажатие обрабатывает вся строка, иначе дочерний TextView перехватывает
+        // событие и обработчик карточки не вызывается.
+        binding.tvClient1c.isClickable = false
+        binding.tvClient1c.isFocusable = false
+        binding.rowClient1c.isClickable = clickable
+        binding.rowClient1c.isFocusable = clickable
         binding.tvClient1c.text = if (clickable) {
             SpannableString(name).apply { setSpan(UnderlineSpan(), 0, length, 0) }
         } else {
@@ -160,18 +166,29 @@ class ContactCardFragment : Fragment() {
     private fun showClientCard(phone: String, clientName: String) {
         if (clientCardLoading) return
         clientCardLoading = true
+        clientCardLoadingDialog = AlertDialog.Builder(requireContext())
+            .setTitle("Карточка клиента")
+            .setMessage("Загрузка данных...")
+            .setView(ProgressBar(requireContext()))
+            .setCancelable(false)
+            .show()
         viewLifecycleOwner.lifecycleScope.launch {
             val cards = runCatching { viewModel.loadClientCards(phone) }.getOrElse { error ->
                 clientCardLoading = false
+                clientCardLoadingDialog?.dismiss()
+                clientCardLoadingDialog = null
                 Toast.makeText(requireContext(), "Не удалось загрузить карточку: ${error.message}", Toast.LENGTH_LONG).show()
                 return@launch
             }
             clientCardLoading = false
+            clientCardLoadingDialog?.dismiss()
+            clientCardLoadingDialog = null
             val card = cards.firstOrNull { it.name == clientName } ?: cards.firstOrNull()
-            if (card == null) {
-                Toast.makeText(requireContext(), "Карточка клиента не найдена", Toast.LENGTH_SHORT).show()
-                return@launch
-            }
+                ?: com.example.calltrack.data.repository.ClientCard(
+                    name = clientName,
+                    phone = phone,
+                    fields = linkedMapOf("Наименование клиента в 1с" to clientName, "Телефон" to phone)
+                )
             val padding = (16 * resources.displayMetrics.density).toInt()
             val content = LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.VERTICAL
@@ -332,6 +349,8 @@ class ContactCardFragment : Fragment() {
     private fun normalizePhone(value: String): String = value.filter { it.isDigit() }
 
     override fun onDestroyView() {
+        clientCardLoadingDialog?.dismiss()
+        clientCardLoadingDialog = null
         _binding = null
         super.onDestroyView()
     }

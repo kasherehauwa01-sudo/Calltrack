@@ -17,7 +17,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.PopupMenu
-import androidx.activity.addCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.setPadding
 import androidx.lifecycle.lifecycleScope
@@ -73,7 +72,7 @@ class AnalyticsActivity : BaseActivity() {
             gravity = android.view.Gravity.CENTER_VERTICAL
         }
         header.addView(topActionButton(R.drawable.ic_arrow_back, getString(R.string.back)) {
-            openMain(MainActivity.EXTRA_OPEN_DIAL)
+            finish()
         })
         header.addView(TextView(this).apply {
             text = "Аналитика"

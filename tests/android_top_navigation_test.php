@@ -23,10 +23,13 @@ foreach (['R.drawable.ic_arrow_back', 'R.drawable.ic_analytics', 'R.drawable.ic_
         throw new RuntimeException("На экране аналитики отсутствует {$icon}");
     }
 }
-foreach ([$main, $about, $analytics] as $source) {
-    if (!str_contains($source, 'EXTRA_OPEN_DIAL')) {
-        throw new RuntimeException('Возврат не направляет пользователя на экран набора');
-    }
+if (!str_contains($main, 'binding.btnTopBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }') ||
+    !str_contains($main, '.addToBackStack(null)')) {
+    throw new RuntimeException('Верхняя стрелка не возвращает предыдущий Fragment');
+}
+if (!str_contains($about, 'binding.btnBack.setOnClickListener { finish() }') ||
+    !str_contains($analytics, "getString(R.string.back)) {\n            finish()")) {
+    throw new RuntimeException('Стрелка отдельного Activity не возвращает на предыдущий экран');
 }
 foreach (['EXTRA_OPEN_NOTIFICATIONS', 'EXTRA_OPEN_SETTINGS', 'EXTRA_OPEN_USER'] as $extra) {
     if (!str_contains($main, $extra)) {

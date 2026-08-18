@@ -133,16 +133,8 @@ class MainActivity : BaseActivity() {
         setupSettingsButton()
         setupAnalyticsButton()
         setupNotificationButton()
-        binding.btnTopBack.setOnClickListener { openDialScreen() }
-        onBackPressedDispatcher.addCallback(this) {
-            val current = supportFragmentManager.findFragmentById(R.id.fragmentContainer)
-            if (current !is DialPadFragment || binding.bottomNav.selectedItemId != R.id.nav_dial) {
-                openDialScreen()
-            } else {
-                isEnabled = false
-                onBackPressedDispatcher.onBackPressed()
-            }
-        }
+        binding.btnTopBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
+        supportFragmentManager.addOnBackStackChangedListener { updateTopBackVisibility() }
         handleExternalNavigation(intent)
 
         viewModel.onboardingCompleted.observe(this) { completed ->
@@ -837,7 +829,15 @@ class MainActivity : BaseActivity() {
         binding.btnTopBack.visibility = android.view.View.VISIBLE
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragmentContainer, fragment)
+            .addToBackStack(null)
             .commit()
+    }
+
+    private fun updateTopBackVisibility() {
+        binding.btnTopBack.visibility = when (supportFragmentManager.findFragmentById(R.id.fragmentContainer)) {
+            is SettingsFragment, is UserFragment, is NotificationsFragment -> android.view.View.VISIBLE
+            else -> android.view.View.GONE
+        }
     }
 
     fun openContactCard(phone: String) {

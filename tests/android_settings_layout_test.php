@@ -12,8 +12,8 @@ foreach (['android:id="@+id/btnBack"', 'android:src="@drawable/ic_arrow_back"', 
 }
 
 if (!str_contains($fragment, 'binding.btnBack.setOnClickListener') ||
-    !str_contains($fragment, 'openDialScreen()')) {
-    throw new RuntimeException('Стрелка назад на экране настроек не возвращает на экран набора');
+    !str_contains($fragment, 'onBackPressedDispatcher.onBackPressed()')) {
+    throw new RuntimeException('Стрелка назад на экране настроек не возвращает на предыдущий экран');
 }
 
 echo "android_settings_layout_test: OK\n";

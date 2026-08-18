@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.PopupMenu
-import androidx.activity.addCallback
 import com.example.calltrack.R
 import com.example.calltrack.ui.analytics.AnalyticsActivity
 import com.example.calltrack.BuildConfig
@@ -38,7 +37,7 @@ class AboutActivity : BaseActivity() {
         binding.tvVersionValue.text = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
         binding.tvReleaseDateValue.text = formatter.format(Date(updatedAtMillis))
 
-        binding.btnBack.setOnClickListener { openMain(MainActivity.EXTRA_OPEN_DIAL) }
+        binding.btnBack.setOnClickListener { finish() }
         binding.btnAnalytics.setOnClickListener { startActivity(Intent(this, AnalyticsActivity::class.java)); finish() }
         binding.btnNotifications.setOnClickListener { openMain(MainActivity.EXTRA_OPEN_NOTIFICATIONS) }
         binding.btnMenu.setOnClickListener { anchor ->
