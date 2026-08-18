@@ -17,5 +17,25 @@ if (!str_contains($source, 'onProgress(copiedBytes, contentLength)')) {
 if (!str_contains($source, 'archiveVersion != expectedVersion.toLong()')) {
     throw new RuntimeException('Удалена защита от несовпадения версии update.json и APK');
 }
+foreach ([
+    'private val updateHttpClient = OkHttpClient()',
+    'private val updateDownloadHttpClient = updateHttpClient.newBuilder()',
+    '.connectTimeout(30, TimeUnit.SECONDS)',
+    '.readTimeout(5, TimeUnit.MINUTES)',
+    '.writeTimeout(30, TimeUnit.SECONDS)',
+    '.callTimeout(6, TimeUnit.MINUTES)',
+    'private const val APK_DOWNLOAD_MAX_ATTEMPTS = 2',
+    'private const val APK_DOWNLOAD_RETRY_DELAY_MS = 2_000L',
+    'error !is IOException',
+    'copiedBytes != contentLength',
+    'File(cacheDir, "$APK_FILE_NAME.part").delete()',
+] as $expected) {
+    if (!str_contains($source, $expected)) {
+        throw new RuntimeException("Отсутствует требование надёжной загрузки APK: {$expected}");
+    }
+}
+if (!str_contains($source, 'updateDownloadHttpClient.newCall(request)')) {
+    throw new RuntimeException('APK загружается не выделенным HTTP-клиентом');
+}
 
 echo "android_update_flow_test: OK\n";

@@ -49,7 +49,9 @@ import okhttp3.Request
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
 
 class MainActivity : BaseActivity() {
 
@@ -65,6 +67,13 @@ class MainActivity : BaseActivity() {
         MainViewModel.Factory((application as App).repository)
     }
     private val updateHttpClient = OkHttpClient()
+    private val updateDownloadHttpClient = updateHttpClient.newBuilder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.MINUTES)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(6, TimeUnit.MINUTES)
+        .retryOnConnectionFailure(false)
+        .build()
 
     private val permissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -381,22 +390,23 @@ class MainActivity : BaseActivity() {
 
     private fun downloadApkToCache(apkUrls: List<String>, onProgress: (Long, Long) -> Unit): Result<File> {
         val candidateUrls = apkUrls.distinct()
+        if (candidateUrls.isEmpty()) return Result.failure(IllegalStateException("Нет доступных ссылок APK"))
         var lastError: Throwable? = null
-        candidateUrls.forEachIndexed { index, apkUrl ->
+        repeat(APK_DOWNLOAD_MAX_ATTEMPTS) { attemptIndex ->
+            val attempt = attemptIndex + 1
+            val apkUrl = candidateUrls[attemptIndex.coerceAtMost(candidateUrls.lastIndex)]
+            AppLogger.log(this, "UPDATE", "Загрузка APK, попытка $attempt/$APK_DOWNLOAD_MAX_ATTEMPTS: $apkUrl")
             val result = downloadApkToCache(apkUrl, onProgress)
             if (result.isSuccess) return result
 
             val error = result.exceptionOrNull()
             lastError = error
-            val nextUrl = candidateUrls.getOrNull(index + 1)
-            if (nextUrl != null) {
-                AppLogger.log(
-                    this,
-                    "WARN",
-                    "Не удалось скачать APK по ссылке $apkUrl: ${error?.message}. Пробуем резервную ссылку: $nextUrl",
-                    error
-                )
+            AppLogger.log(this, "WARN", "Попытка $attempt завершилась: ${error?.message.orEmpty()}", error)
+            if (error !is IOException || attempt >= APK_DOWNLOAD_MAX_ATTEMPTS) {
+                return result
             }
+            AppLogger.log(this, "UPDATE", "Повтор загрузки через ${APK_DOWNLOAD_RETRY_DELAY_MS / 1000} сек.")
+            Thread.sleep(APK_DOWNLOAD_RETRY_DELAY_MS)
         }
         return Result.failure(lastError ?: IllegalStateException("Нет доступных ссылок APK"))
     }
@@ -408,18 +418,20 @@ class MainActivity : BaseActivity() {
                 .addHeader("Accept", APK_MIME_TYPE)
                 .build()
 
-            val downloadedApk: File = updateHttpClient.newCall(request).execute().use { response ->
+            val tempFile = File(cacheDir, "$APK_FILE_NAME.part").apply { delete() }
+            val apkFile = File(cacheDir, APK_FILE_NAME).apply { delete() }
+            val downloadedApk: File = updateDownloadHttpClient.newCall(request).execute().use { response ->
                 AppLogger.log(
                     this,
                     "UPDATE",
                     "Ответ загрузки APK: code=${response.code}, contentType=${response.header("Content-Type").orEmpty()}, contentLength=${response.body?.contentLength() ?: -1}"
                 )
-                if (!response.isSuccessful) error("HTTP ${response.code}")
-                val body = response.body ?: error("Пустое тело APK")
-                val tempFile = File(cacheDir, "$APK_FILE_NAME.part").apply { delete() }
-                val apkFile = File(cacheDir, APK_FILE_NAME).apply { delete() }
+                if (!response.isSuccessful) throw ApkHttpException(response.code)
+                val body = response.body ?: throw IOException("Пустое тело APK")
                 var copiedBytes = 0L
                 val contentLength = body.contentLength()
+                var nextProgressLogBytes = APK_DOWNLOAD_LOG_STEP_BYTES
+                AppLogger.log(this, "UPDATE", "Ожидаемый размер APK: $contentLength bytes")
                 body.byteStream().use { input ->
                     tempFile.outputStream().use { output ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -429,23 +441,34 @@ class MainActivity : BaseActivity() {
                             output.write(buffer, 0, read)
                             copiedBytes += read
                             onProgress(copiedBytes, contentLength)
+                            if (copiedBytes >= nextProgressLogBytes) {
+                                AppLogger.log(this, "UPDATE", "Загружено: $copiedBytes / $contentLength bytes")
+                                nextProgressLogBytes = ((copiedBytes / APK_DOWNLOAD_LOG_STEP_BYTES) + 1) * APK_DOWNLOAD_LOG_STEP_BYTES
+                            }
                         }
                     }
                 }
-                if (copiedBytes <= 0L || tempFile.length() <= 0L) error("APK не был записан в cache")
+                if (copiedBytes <= 0L || tempFile.length() <= 0L) throw IOException("APK не был записан в cache")
+                if (contentLength >= 0L && copiedBytes != contentLength) {
+                    throw IOException("APK загружен не полностью: ожидалось $contentLength bytes, получено $copiedBytes bytes")
+                }
                 if (!tempFile.hasApkZipSignature()) {
                     val preview = tempFile.readTextPreview(MAX_UPDATE_LOG_BODY_CHARS)
                     tempFile.delete()
                     error("Сервер вернул не APK: contentType=${response.header("Content-Type").orEmpty()}, bytes=$copiedBytes, bodyPreview=$preview")
                 }
                 if (!tempFile.renameTo(apkFile)) error("Не удалось подготовить APK файл")
-                AppLogger.log(this, "UPDATE", "APK записан в cache: bytes=$copiedBytes, file=${apkFile.absolutePath}")
+                AppLogger.log(this, "UPDATE", "APK полностью загружен: $copiedBytes bytes, file=${apkFile.absolutePath}")
                 apkFile
             }
 
             downloadedApk
+        }.onFailure {
+            File(cacheDir, "$APK_FILE_NAME.part").delete()
         }
     }
+
+    private class ApkHttpException(code: Int) : Exception("HTTP $code")
 
     private fun File.hasApkZipSignature(): Boolean {
         // APK — это ZIP-архив, поэтому первые байты должны начинаться с PK.
@@ -851,6 +874,9 @@ class MainActivity : BaseActivity() {
         private const val APK_FILE_NAME = "calltrack-update.apk"
         private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
         private const val MAX_UPDATE_LOG_BODY_CHARS = 1000
+        private const val APK_DOWNLOAD_MAX_ATTEMPTS = 2
+        private const val APK_DOWNLOAD_RETRY_DELAY_MS = 2_000L
+        private const val APK_DOWNLOAD_LOG_STEP_BYTES = 1024L * 1024L
     }
 
     private sealed interface UpdateCheckResult {
