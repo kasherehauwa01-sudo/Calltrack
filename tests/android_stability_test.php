@@ -9,6 +9,8 @@ $logger = (string)file_get_contents($root . '/app/src/main/java/com/example/call
 $manifest = (string)file_get_contents($root . '/app/src/main/AndroidManifest.xml');
 $analytics = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/ui/analytics/AnalyticsActivity.kt');
 $aboutLayout = (string)file_get_contents($root . '/app/src/main/res/layout/activity_about.xml');
+$main = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/ui/main/MainActivity.kt');
+$onboarding = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/ui/onboarding/OnboardingFragment.kt');
 
 foreach (['PeriodicWorkRequestBuilder<CalltrackStabilityWorker>(15, TimeUnit.MINUTES)', 'ExistingPeriodicWorkPolicy.KEEP', 'repository.syncPending()', 'repository.sendUserTelemetry()'] as $expected) {
     if (!str_contains($worker, $expected)) throw new RuntimeException("Нет механизма восстановления: {$expected}");
@@ -21,6 +23,12 @@ if (str_contains($app, 'Thread.setDefaultUncaughtExceptionHandler')) {
 }
 foreach (['RECEIVE_BOOT_COMPLETED', '.service.BootReceiver'] as $expected) {
     if (!str_contains($manifest, $expected)) throw new RuntimeException("Нет восстановления после перезагрузки: {$expected}");
+}
+foreach (['REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', 'ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', 'isIgnoringBatteryOptimizations'] as $expected) {
+    if (!str_contains($manifest . $main, $expected)) throw new RuntimeException("Нет подсказки для фоновой работы: {$expected}");
+}
+if (!str_contains($onboarding, 'Stage.BATTERY') || !str_contains($onboarding, 'Продолжить без разрешения')) {
+    throw new RuntimeException('Запрос фоновой работы не включён в пошаговую первичную настройку');
 }
 if (!str_contains($service, 'runCatching { tracker.start() }') || !str_contains($logger, 'PRUNE_INTERVAL_MS')) {
     throw new RuntimeException('Не добавлена защита сервиса или экономное обслуживание журнала');

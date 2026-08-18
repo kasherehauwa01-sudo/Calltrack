@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.widget.PopupMenu
 import android.widget.LinearLayout
@@ -64,6 +65,7 @@ class MainActivity : BaseActivity() {
     private var updateProgressDialog: AlertDialog? = null
     private var updateProgressBar: ProgressBar? = null
     private var updateProgressStatus: TextView? = null
+    private var batteryOptimizationPromptShown = false
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
@@ -78,7 +80,10 @@ class MainActivity : BaseActivity() {
 
     private val permissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { updateWarningState() }
+    ) {
+        updateWarningState()
+        (supportFragmentManager.findFragmentById(R.id.fragmentContainer) as? OnboardingFragment)?.onPermissionsUpdated()
+    }
     private val unknownAppsLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
@@ -92,6 +97,17 @@ class MainActivity : BaseActivity() {
             hideUpdateProgress()
             AppLogger.log(this, "WARN", "Разрешение на установку APK не предоставлено")
         }
+    }
+    private val batteryOptimizationLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        updateWarningState()
+        AppLogger.log(
+            this,
+            "STABILITY",
+            if (isBatteryOptimizationDisabled()) "Фоновая работа без ограничений разрешена" else "Исключение из оптимизации батареи не предоставлено"
+        )
+        (supportFragmentManager.findFragmentById(R.id.fragmentContainer) as? OnboardingFragment)?.onPermissionsUpdated()
     }
     private val apkInstallerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -140,6 +156,7 @@ class MainActivity : BaseActivity() {
                 refreshPersonalContactsAfterAuthorization()
                 lifecycleScope.launch { viewModel.sendUserTelemetry() }
                 startTrackingService()
+                requestBatteryOptimizationIfNeeded()
             }
             updateWarningState()
         }
@@ -880,6 +897,7 @@ class MainActivity : BaseActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
                 add("Разрешите установку из неизвестных источников")
             }
+            if (!isBatteryOptimizationDisabled()) add("Разрешите CallTrack работать без ограничения батареи")
         }
         val warningText = messages.joinToString("\n")
         binding.tvWarning.text = warningText
@@ -894,6 +912,27 @@ class MainActivity : BaseActivity() {
             Uri.parse("package:$packageName")
         )
         unknownAppsLauncher.launch(intent)
+    }
+
+    fun isBatteryOptimizationDisabled(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        val powerManager = getSystemService(PowerManager::class.java)
+        return powerManager.isIgnoringBatteryOptimizations(packageName)
+    }
+
+    fun requestBatteryOptimizationIfNeeded(force: Boolean = false) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || isBatteryOptimizationDisabled() || (!force && batteryOptimizationPromptShown)) return
+        batteryOptimizationPromptShown = true
+        AppLogger.log(this, "STABILITY", "Запрос разрешения на фоновую работу без ограничения батареи")
+        val directRequest = Intent(
+            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            Uri.parse("package:$packageName")
+        )
+        runCatching { batteryOptimizationLauncher.launch(directRequest) }
+            .onFailure {
+                AppLogger.log(this, "WARN", "Прямой запрос оптимизации батареи недоступен, открываем список настроек", it)
+                batteryOptimizationLauncher.launch(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
     }
 
     private fun startTrackingService() {

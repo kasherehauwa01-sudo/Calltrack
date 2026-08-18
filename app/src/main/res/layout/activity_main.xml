@@ -43,22 +43,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/statusBarOverlay" />
 
-    <ImageButton
-        android:id="@+id/btnTopBack"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="8dp"
-        android:background="@drawable/bg_input"
-        android:contentDescription="@string/back"
-        android:elevation="12dp"
-        android:padding="8dp"
-        android:src="@drawable/ic_arrow_back"
-        android:tint="@color/textPrimary"
-        android:visibility="gone"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/statusBarOverlay" />
-
     <FrameLayout
         android:id="@+id/analyticsButtonContainer"
         android:layout_width="40dp"
