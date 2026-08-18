@@ -15,6 +15,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.addCallback
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
@@ -116,6 +117,16 @@ class MainActivity : BaseActivity() {
         setupSettingsButton()
         setupAnalyticsButton()
         setupNotificationButton()
+        binding.btnTopBack.setOnClickListener { openDialScreen() }
+        onBackPressedDispatcher.addCallback(this) {
+            val current = supportFragmentManager.findFragmentById(R.id.fragmentContainer)
+            if (current !is DialPadFragment || binding.bottomNav.selectedItemId != R.id.nav_dial) {
+                openDialScreen()
+            } else {
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+            }
+        }
         handleExternalNavigation(intent)
 
         viewModel.onboardingCompleted.observe(this) { completed ->
@@ -169,6 +180,28 @@ class MainActivity : BaseActivity() {
     }
 
     private fun handleExternalNavigation(intent: Intent?) {
+        when {
+            intent?.getBooleanExtra(EXTRA_OPEN_DIAL, false) == true -> {
+                intent.removeExtra(EXTRA_OPEN_DIAL)
+                openDialScreen()
+                return
+            }
+            intent?.getBooleanExtra(EXTRA_OPEN_NOTIFICATIONS, false) == true -> {
+                intent.removeExtra(EXTRA_OPEN_NOTIFICATIONS)
+                openNotificationsScreen()
+                return
+            }
+            intent?.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) == true -> {
+                intent.removeExtra(EXTRA_OPEN_SETTINGS)
+                openSecondaryFragment(SettingsFragment.newInstance())
+                return
+            }
+            intent?.getBooleanExtra(EXTRA_OPEN_USER, false) == true -> {
+                intent.removeExtra(EXTRA_OPEN_USER)
+                openSecondaryFragment(UserFragment.newInstance())
+                return
+            }
+        }
         val phone = intent?.getStringExtra(EXTRA_OPEN_CONTACT_PHONE).orEmpty()
         if (phone.isNotBlank()) {
             openContactCard(phone)
@@ -233,10 +266,7 @@ class MainActivity : BaseActivity() {
     private fun setupNotificationButton() {
         binding.btnNotifications.setOnClickListener {
             AppLogger.log(this, "UI", "Открыт экран: Уведомления")
-            supportFragmentManager.beginTransaction()
-                .replace(R.id.fragmentContainer, NotificationsFragment.newInstance())
-                .addToBackStack(null)
-                .commit()
+            openNotificationsScreen()
         }
         NotificationBadgeManager(
             lifecycleOwner = this,
@@ -258,11 +288,11 @@ class MainActivity : BaseActivity() {
                         MENU_ABOUT_ID -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
                         MENU_SETTINGS_ID -> {
                             AppLogger.log(this@MainActivity, "UI", "Открыт экран: Настройки")
-                            openFragment(SettingsFragment.newInstance())
+                            openSecondaryFragment(SettingsFragment.newInstance())
                         }
                         MENU_USER_ID -> {
                             AppLogger.log(this@MainActivity, "UI", "Открыт экран: Пользователь")
-                            openFragment(UserFragment.newInstance())
+                            openSecondaryFragment(UserFragment.newInstance())
                         }
                         else -> false
                     }
@@ -721,15 +751,18 @@ class MainActivity : BaseActivity() {
         binding.bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_dial -> {
+                    binding.btnTopBack.visibility = android.view.View.GONE
                     openFragment(DialPadFragment.newInstance())
                     true
                 }
                 R.id.nav_recent -> {
+                    binding.btnTopBack.visibility = android.view.View.GONE
                     AppLogger.log(this, "UI", "Открыт экран: История звонков")
                     openFragment(CallListFragment.newInstance())
                     true
                 }
                 R.id.nav_contacts -> {
+                    binding.btnTopBack.visibility = android.view.View.GONE
                     AppLogger.log(this, "UI", "Открыт экран: Контакты")
                     openFragment(ContactsFragment.newInstance())
                     true
@@ -767,6 +800,27 @@ class MainActivity : BaseActivity() {
     fun setDialNumber(number: String) {
         viewModel.setDialNumber(number)
         binding.bottomNav.selectedItemId = R.id.nav_dial
+    }
+
+    fun openDialScreen() {
+        supportFragmentManager.popBackStack(null, androidx.fragment.app.FragmentManager.POP_BACK_STACK_INCLUSIVE)
+        binding.btnTopBack.visibility = android.view.View.GONE
+        if (binding.bottomNav.selectedItemId == R.id.nav_dial) {
+            openFragment(DialPadFragment.newInstance())
+        } else {
+            binding.bottomNav.selectedItemId = R.id.nav_dial
+        }
+    }
+
+    private fun openNotificationsScreen() {
+        openSecondaryFragment(NotificationsFragment.newInstance())
+    }
+
+    private fun openSecondaryFragment(fragment: androidx.fragment.app.Fragment) {
+        binding.btnTopBack.visibility = android.view.View.VISIBLE
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragmentContainer, fragment)
+            .commit()
     }
 
     fun openContactCard(phone: String) {
@@ -867,6 +921,10 @@ class MainActivity : BaseActivity() {
     companion object {
         const val EXTRA_OPEN_CONTACT_PHONE = "extra_open_contact_phone"
         const val EXTRA_RUN_UPDATE_CHECK = "extra_run_update_check"
+        const val EXTRA_OPEN_DIAL = "extra_open_dial"
+        const val EXTRA_OPEN_NOTIFICATIONS = "extra_open_notifications"
+        const val EXTRA_OPEN_SETTINGS = "extra_open_settings"
+        const val EXTRA_OPEN_USER = "extra_open_user"
         private const val MENU_ABOUT_ID = 1001
         private const val MENU_SETTINGS_ID = 1002
         private const val MENU_USER_ID = 1003

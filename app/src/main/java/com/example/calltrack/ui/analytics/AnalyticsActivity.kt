@@ -6,14 +6,18 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.HorizontalScrollView
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.PopupMenu
+import androidx.activity.addCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.setPadding
 import androidx.lifecycle.lifecycleScope
@@ -21,6 +25,8 @@ import com.example.calltrack.R
 import com.example.calltrack.data.local.CallDatabase
 import com.example.calltrack.data.local.CallEntity
 import com.example.calltrack.ui.base.BaseActivity
+import com.example.calltrack.ui.main.AboutActivity
+import com.example.calltrack.ui.main.MainActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -47,6 +53,7 @@ class AnalyticsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildLayout()
+        onBackPressedDispatcher.addCallback(this) { openMain(MainActivity.EXTRA_OPEN_DIAL) }
         loadData()
     }
 
@@ -61,12 +68,9 @@ class AnalyticsActivity : BaseActivity() {
         setContentView(scroll)
 
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        header.addView(Button(this).apply {
-            text = "←"
-            textSize = 20f
-            background = rounded(getColor(R.color.surface), dp(16))
-            setOnClickListener { finish() }
-        }, LinearLayout.LayoutParams(dp(52), dp(44)))
+        header.addView(topActionButton(R.drawable.ic_arrow_back, getString(R.string.back)) {
+            openMain(MainActivity.EXTRA_OPEN_DIAL)
+        })
         header.addView(TextView(this).apply {
             text = "Аналитика"
             textSize = 28f
@@ -74,6 +78,26 @@ class AnalyticsActivity : BaseActivity() {
             setTextColor(getColor(R.color.white))
             setPadding(dp(12), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(topActionButton(R.drawable.ic_analytics, "Аналитика") { })
+        header.addView(topActionButton(R.drawable.ic_notifications, "Уведомления") {
+            openMain(MainActivity.EXTRA_OPEN_NOTIFICATIONS)
+        })
+        header.addView(topActionButton(R.drawable.ic_more_vert, "Меню") { anchor ->
+            PopupMenu(this, anchor).apply {
+                menu.add(0, 1, 0, getString(R.string.about_app))
+                menu.add(0, 2, 1, getString(R.string.settings))
+                menu.add(0, 3, 2, getString(R.string.user))
+                setOnMenuItemClickListener { item ->
+                    when (item.itemId) {
+                        1 -> { startActivity(Intent(this@AnalyticsActivity, AboutActivity::class.java)); finish() }
+                        2 -> openMain(MainActivity.EXTRA_OPEN_SETTINGS)
+                        3 -> openMain(MainActivity.EXTRA_OPEN_USER)
+                    }
+                    true
+                }
+                show()
+            }
+        })
         root.addView(header)
 
         tabRow = LinearLayout(this).apply {
@@ -91,6 +115,26 @@ class AnalyticsActivity : BaseActivity() {
         content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(content)
         renderControls()
+    }
+
+    private fun topActionButton(icon: Int, description: String, action: (View) -> Unit): ImageButton =
+        ImageButton(this).apply {
+            setImageResource(icon)
+            contentDescription = description
+            setColorFilter(getColor(R.color.textPrimary))
+            setPadding(dp(8))
+            background = rounded(getColor(R.color.surface), dp(12))
+            setOnClickListener { view -> action(view) }
+            layoutParams = LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(8) }
+        }
+
+    private fun openMain(destinationExtra: String) {
+        startActivity(
+            Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .putExtra(destinationExtra, true)
+        )
+        finish()
     }
 
     private fun renderTabs() {

@@ -30,7 +30,7 @@ class SettingsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         binding.btnBack.setOnClickListener {
-            requireActivity().onBackPressedDispatcher.onBackPressed()
+            (requireActivity() as MainActivity).openDialScreen()
         }
 
         viewModel.themeMode.observe(viewLifecycleOwner) { mode ->
