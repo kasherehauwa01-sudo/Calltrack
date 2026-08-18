@@ -11,7 +11,6 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.widget.PopupMenu
-import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -222,28 +221,26 @@ class MainActivity : BaseActivity() {
             intent.removeExtra(EXTRA_RUN_UPDATE_CHECK)
             checkForUpdatesAndPrompt()
         }
+        updateProgressBar?.isIndeterminate = indeterminate
+        if (!indeterminate) updateProgressBar?.progress = progress.coerceIn(0, 100)
+        updateProgressStatus?.text = status
+    }
+
+    private fun hideUpdateProgress() {
+        updateProgressDialog?.dismiss()
+        updateProgressDialog = null
+        updateProgressBar = null
+        updateProgressStatus = null
     }
 
     private fun showUpdateProgress(status: String, progress: Int, indeterminate: Boolean = false) {
         if (updateProgressDialog == null) {
-            val density = resources.displayMetrics.density
-            val container = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding((24*density).toInt(), (18*density).toInt(), (24*density).toInt(), (12*density).toInt())
-            }
-            updateProgressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-                max = 100
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (4*density).toInt().coerceAtLeast(4))
-            }
-            updateProgressStatus = TextView(this).apply {
-                setPadding(0, (12*density).toInt(), 0, 0)
-                textSize = 15f
-            }
-            container.addView(updateProgressBar)
-            container.addView(updateProgressStatus)
+            val content = layoutInflater.inflate(R.layout.dialog_update_progress, null)
+            updateProgressBar = content.findViewById(R.id.updateProgressBar)
+            updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
                 .setTitle("Обновление приложения")
-                .setView(container)
+                .setView(content)
                 .setCancelable(false)
                 .create()
             updateProgressDialog?.show()

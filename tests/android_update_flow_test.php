@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 $source = (string)file_get_contents(dirname(__DIR__) . '/app/src/main/java/com/example/calltrack/ui/main/MainActivity.kt');
+$layout = (string)file_get_contents(dirname(__DIR__) . '/app/src/main/res/layout/dialog_update_progress.xml');
 foreach (['Проверка актуальности', 'Загрузка новой версии', 'Установка новой версии'] as $status) {
     if (!str_contains($source, $status)) throw new RuntimeException("Отсутствует статус прогресса: {$status}");
 }
@@ -36,6 +37,14 @@ foreach ([
 }
 if (!str_contains($source, 'updateDownloadHttpClient.newCall(request)')) {
     throw new RuntimeException('APK загружается не выделенным HTTP-клиентом');
+}
+foreach (['@string/update_install_instruction', '@drawable/update_install_step_1', '@drawable/update_install_step_2'] as $expected) {
+    if (!str_contains($layout, $expected)) {
+        throw new RuntimeException("На экране загрузки отсутствует инструкция: {$expected}");
+    }
+}
+if (!str_contains($source, 'R.layout.dialog_update_progress')) {
+    throw new RuntimeException('Экран загрузки не использует разметку с инструкцией');
 }
 
 echo "android_update_flow_test: OK\n";

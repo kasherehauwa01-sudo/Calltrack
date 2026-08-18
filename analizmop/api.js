@@ -1,4 +1,15 @@
 
+// Удаляем остатки прежней вкладки даже при смешивании новой статики со старым HTML в кэше.
+function removeLegacyHelpTab() {
+  document.querySelectorAll('[data-tab="help"], #helpView').forEach((element) => element.remove());
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', removeLegacyHelpTab, { once: true });
+} else {
+  removeLegacyHelpTab();
+}
+
 // Общие API-методы дашборда используются встроенным скриптом админ-панели.
 window.calltrackApi = window.calltrackApi || {};
 window.calltrackApi.endpoints = Object.assign({
