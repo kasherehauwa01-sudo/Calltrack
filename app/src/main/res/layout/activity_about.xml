@@ -29,13 +29,48 @@
             android:tint="@color/textPrimary" />
 
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
             android:text="@string/about_app"
             android:textColor="@color/white"
-            android:textSize="20sp"
+            android:textSize="18sp"
             android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/btnAnalytics"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_input"
+            android:contentDescription="Аналитика"
+            android:padding="8dp"
+            android:src="@drawable/ic_analytics"
+            android:tint="@color/textPrimary" />
+
+        <ImageButton
+            android:id="@+id/btnNotifications"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_input"
+            android:contentDescription="Уведомления"
+            android:padding="8dp"
+            android:src="@drawable/ic_notifications"
+            android:tint="@color/textPrimary" />
+
+        <ImageButton
+            android:id="@+id/btnMenu"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/bg_input"
+            android:contentDescription="Меню"
+            android:padding="8dp"
+            android:src="@drawable/ic_more_vert"
+            android:tint="@color/textPrimary" />
     </LinearLayout>
 
     <TextView

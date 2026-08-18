@@ -18,6 +18,7 @@ class OnboardingFragment : Fragment() {
     private val binding get() = _binding!!
     private var stage: Stage = Stage.PERMISSIONS
     private var permissionsRequested = false
+    private var batteryOptimizationSkipped = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -30,7 +31,7 @@ class OnboardingFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val host = requireActivity() as MainActivity
-        stage = if (host.hasAllPermissions()) Stage.AUTH else Stage.PERMISSIONS
+        stage = nextStage(host)
         updateUi()
 
         binding.btnPrimary.setOnClickListener {
@@ -39,15 +40,22 @@ class OnboardingFragment : Fragment() {
                     host.requestRequiredPermissions()
                     permissionsRequested = true
                 }
+                Stage.BATTERY -> host.requestBatteryOptimizationIfNeeded(force = true)
                 Stage.AUTH -> submitManagerName()
             }
         }
 
         binding.btnSecondary.setOnClickListener {
-            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", requireContext().packageName, null)
+            if (stage == Stage.BATTERY) {
+                batteryOptimizationSkipped = true
+                stage = Stage.AUTH
+                updateUi()
+            } else {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", requireContext().packageName, null)
+                }
+                startActivity(intent)
             }
-            startActivity(intent)
         }
 
         if (stage == Stage.PERMISSIONS && !permissionsRequested) {
@@ -58,8 +66,15 @@ class OnboardingFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        onPermissionsUpdated()
+    }
+
+    fun onPermissionsUpdated() {
         val host = activity as? MainActivity ?: return
         if (stage == Stage.PERMISSIONS && host.hasAllPermissions()) {
+            stage = nextStage(host)
+            updateUi()
+        } else if (stage == Stage.BATTERY && host.isBatteryOptimizationDisabled()) {
             stage = Stage.AUTH
             updateUi()
         }
@@ -105,7 +120,23 @@ class OnboardingFragment : Fragment() {
                 binding.btnPrimary.visibility = View.VISIBLE
                 binding.btnSecondary.visibility = View.GONE
             }
+            Stage.BATTERY -> {
+                binding.tvTitle.text = "Работа в фоне"
+                binding.tvDescription.text = "Разрешите CallTrack работать без ограничения батареи, чтобы звонки продолжали фиксироваться и отправляться на дашборд."
+                binding.etManager.visibility = View.GONE
+                binding.etManagerPhone.visibility = View.GONE
+                binding.btnPrimary.text = "Разрешить"
+                binding.btnPrimary.visibility = View.VISIBLE
+                binding.btnSecondary.text = "Продолжить без разрешения"
+                binding.btnSecondary.visibility = View.VISIBLE
+            }
         }
+    }
+
+    private fun nextStage(host: MainActivity): Stage = when {
+        !host.hasAllPermissions() -> Stage.PERMISSIONS
+        !batteryOptimizationSkipped && !host.isBatteryOptimizationDisabled() -> Stage.BATTERY
+        else -> Stage.AUTH
     }
 
     override fun onDestroyView() {
@@ -119,6 +150,7 @@ class OnboardingFragment : Fragment() {
 
     private enum class Stage {
         PERMISSIONS,
+        BATTERY,
         AUTH
     }
 }
