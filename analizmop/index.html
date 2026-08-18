@@ -367,6 +367,10 @@
           </section>
           <section class="admin-panel" id="adminUpdatesPanel" hidden>
             <p>Загрузка новых APK на сервер и публикация обновлений для Android-приложения.</p>
+            <div class="updates-actions">
+              <button class="registry-refresh-btn" id="installLatestUpdateForAllBtn" type="button">Установить всем пользователям последнее обновление</button>
+            </div>
+            <div class="updates-status" id="installLatestUpdateForAllStatus" aria-live="polite"></div>
             <div class="updates-layout">
               <form class="updates-form" id="updateForm">
                 <input id="updateId" type="hidden" />
@@ -701,6 +705,7 @@ function bindAdminPanel(){
   adminEls.userCard.addEventListener('click',(e)=>{const action=e.target.closest('.user-action-btn'); const logFilter=e.target.closest('.user-log-filter'); if(action) sendUserAction(action.dataset.command, action); if(logFilter) renderUserLogs(logFilter.dataset.filter);});
   if(adminEls.updateForm) adminEls.updateForm.addEventListener('submit',saveAppUpdate);
   if(adminEls.updateFormResetBtn) adminEls.updateFormResetBtn.addEventListener('click',resetUpdateForm);
+  document.getElementById('installLatestUpdateForAllBtn')?.addEventListener('click',installLatestUpdateForAll);
   if(adminEls.updatesTable) adminEls.updatesTable.addEventListener('click',(e)=>{const edit=e.target.closest('[data-update-edit]');const del=e.target.closest('[data-update-delete]');if(edit) editAppUpdate(edit.dataset.updateEdit);if(del) deleteAppUpdate(del.dataset.updateDelete);});
   if(adminEls.updateVersionName) adminEls.updateVersionName.addEventListener('input',previewEditedVersionCode);
   if(adminEls.emailRefreshBtn) adminEls.emailRefreshBtn.addEventListener('click',()=>loadEmailModule(true));
@@ -970,6 +975,22 @@ function updateDownloadUrl(versionCode){
   const base=window.calltrackApi?.endpoints?.update||'/vr/calltrack/api/update.php';
   const separator=base.includes('?')?'&':'?';
   return `${base}${separator}download=1&versionCode=${encodeURIComponent(versionCode)}`;
+}
+async function installLatestUpdateForAll(){
+  const button=document.getElementById('installLatestUpdateForAllBtn');
+  const status=document.getElementById('installLatestUpdateForAllStatus');
+  if(!button||!status) return;
+  if(!confirm('Отправить уведомление «Обновите приложение» всем пользователям с устаревшей версией?')) return;
+  button.disabled=true;
+  status.textContent='Формирование очереди уведомлений...';
+  try{
+    const result=await window.calltrackApi.installLatestUpdateForAll(adminPasswordValue);
+    status.textContent=`Версия ${result.version_name} (${result.version_code}): поставлено в очередь ${Number(result.queued||0)} из ${Number(result.eligible_users||0)} пользователей.${Number(result.without_version_code||0)>0?` Без данных VersionCode: ${Number(result.without_version_code)}.`:''}`;
+  }catch(error){
+    status.textContent=`Ошибка отправки уведомлений: ${error.message}`;
+  }finally{
+    button.disabled=false;
+  }
 }
 function renderUpdates(){
   if(!updates.length){adminEls.updatesTable.innerHTML='<div class="registry-empty">APK ещё не загружены</div>';return;}

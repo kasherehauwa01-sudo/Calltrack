@@ -881,6 +881,9 @@ class MainActivity : BaseActivity() {
                     binding.bottomNav.selectedItemId = R.id.nav_recent
                 }
             }
+            NotificationTargets.APP_UPDATE -> {
+                startActivity(Intent(this, AboutActivity::class.java))
+            }
             else -> binding.bottomNav.selectedItemId = R.id.nav_recent
         }
     }
