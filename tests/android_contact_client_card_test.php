@@ -8,7 +8,7 @@ $source = (string)file_get_contents($root . '/app/src/main/java/com/example/call
 foreach (['android:id="@+id/rowClient1c"', 'android:clickable="true"', 'android:foreground="?attr/selectableItemBackground"'] as $expected) {
     if (!str_contains($layout, $expected)) throw new RuntimeException("Строка клиента не содержит: {$expected}");
 }
-foreach (['binding.rowClient1c.setOnClickListener', 'showClientCard(phone, clientName)', 'Загрузка данных...', 'ClientCard(', 'Наименование клиента в 1с'] as $expected) {
+foreach (['binding.rowClient1c.setOnClickListener', 'showClientCard(phone, clientName)', 'Загрузка данных...', 'Карточка отсутствует в локальном кэше Clients'] as $expected) {
     if (!str_contains($source, $expected)) throw new RuntimeException("Открытие карточки не содержит: {$expected}");
 }
 if (!str_contains($source, 'binding.tvClient1c.isClickable = false')) {

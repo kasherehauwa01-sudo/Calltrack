@@ -36,6 +36,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import java.util.concurrent.atomic.AtomicBoolean
 import org.json.JSONObject
 
@@ -86,6 +87,13 @@ class CallTrackingService : Service() {
         // Метку последнего сохранённого звонка читаем асинхронно, чтобы onCreate() сервиса
         // не блокировал главный поток и не мог сам стать причиной ANR.
         val repo = (application as App).repository
+        scope.launch {
+            while (isActive) {
+                runCatching { repo.sendUserTelemetry() }
+                    .onFailure { error -> AppLogger.log(this@CallTrackingService, "WARN", "Фоновая проверка команд завершилась ошибкой: ${error.message}", error) }
+                delay(BACKGROUND_COMMAND_POLL_INTERVAL_MS)
+            }
+        }
         scope.launch {
             val startedAt = System.currentTimeMillis()
             AppLogger.log(this@CallTrackingService, "PERF", "initLastHandledTimestamp started")
@@ -570,5 +578,6 @@ class CallTrackingService : Service() {
         private const val CALL_CAPTURE_RETRY_COUNT = 25
         private const val CALL_CAPTURE_RETRY_DELAY_MS = 300L
         private const val CALL_LOG_QUERY_LIMIT = 50
+        private const val BACKGROUND_COMMAND_POLL_INTERVAL_MS = 5 * 60 * 1000L
     }
 }

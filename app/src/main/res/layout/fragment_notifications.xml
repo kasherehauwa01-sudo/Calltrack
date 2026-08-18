@@ -57,11 +57,18 @@
             app:singleSelection="true">
 
             <com.google.android.material.chip.Chip
-                android:id="@+id/chipClientNotFound"
+                android:id="@+id/chipAll"
                 style="@style/Widget.Material3.Chip.Filter"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:checked="true"
+                android:text="Все" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipClientNotFound"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:text="Клиент не найден" />
 
             <com.google.android.material.chip.Chip
@@ -70,6 +77,13 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Результат звонка" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipAppUpdates"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Обновления" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chipUnread"

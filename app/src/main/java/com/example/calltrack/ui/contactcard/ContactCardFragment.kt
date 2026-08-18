@@ -184,11 +184,10 @@ class ContactCardFragment : Fragment() {
             clientCardLoadingDialog?.dismiss()
             clientCardLoadingDialog = null
             val card = cards.firstOrNull { it.name == clientName } ?: cards.firstOrNull()
-                ?: com.example.calltrack.data.repository.ClientCard(
-                    name = clientName,
-                    phone = phone,
-                    fields = linkedMapOf("Наименование клиента в 1с" to clientName, "Телефон" to phone)
-                )
+            if (card == null) {
+                Toast.makeText(requireContext(), "Карточка отсутствует в локальном кэше Clients", Toast.LENGTH_LONG).show()
+                return@launch
+            }
             val padding = (16 * resources.displayMetrics.density).toInt()
             val content = LinearLayout(requireContext()).apply {
                 orientation = LinearLayout.VERTICAL
