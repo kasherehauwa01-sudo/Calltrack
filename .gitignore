@@ -1,5 +1,12 @@
 # Локальные настройки окружения
 api/config.local.php
+keystore.properties
+*.jks
+*.keystore
 logs/
 updates/
 api/config.local.php
+
+/.gradle/
+/build/
+/app/build/
