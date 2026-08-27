@@ -37,7 +37,7 @@ if (($emailDetails['unknown@example.ru'] ?? null) !== []) {
 
 $html = (string)file_get_contents($root . '/analizmop/index.html');
 $api = (string)file_get_contents($root . '/analizmop/api.js');
-foreach (['loadClientNamesForCalls', 'loadClientNamesForCalls([])', 'getCachedClientName', 'clientNamesByEmail', 'result.emailClients', 'normalizeClientLookupEmail', 'group.displayName', "formatPhoneForDisplay(call?.phone)||existing||'Без номера телефона'", 'fetchClientOutgoingEmails', 'Email отправлен', 'Отправлено email:', 'data-email-id', 'background:#fef3c7', 'border:1px solid #f59e0b'] as $required) {
+foreach (['api.js?v=20260827-client-email-timeline', 'loadClientNamesForCalls', 'loadClientNamesForCalls([])', 'getCachedClientName', 'clientNamesByEmail', 'result.emailClients', 'normalizeClientLookupEmail', 'group.displayName', "formatPhoneForDisplay(call?.phone)||existing||'Без номера телефона'", 'fetchClientOutgoingEmails', 'ADMIN_EMAIL_API_URL}?direction=outgoing', "cache:'no-store'", 'Email отправлен', 'Отправлено email:', 'data-email-id', 'background:#fef3c7', 'border:1px solid #f59e0b'] as $required) {
     if (!str_contains($html, $required)) throw new RuntimeException("Вкладка звонков не использует Clients: {$required}");
 }
 if (!str_contains($api, 'lookupClientNames') || !str_contains($api, 'JSON.stringify({ phones, emails })')) {

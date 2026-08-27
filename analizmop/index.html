@@ -9,7 +9,7 @@
   <title>Дашборд отдела продаж</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23f8fafc%22/%3E%3Cg%20fill%3D%22%2316a34a%22%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2024%2022%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2040%2022%29%22/%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2024%2038%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2040%2038%29%22/%3E%3C/g%3E%3Cpath%20d%3D%22M32%2032%20C38%2040%2043%2049%2048%2058%22%20fill%3D%22none%22%20stroke%3D%22%2315803d%22%20stroke-width%3D%225%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="api.js?v=20260818-remove-help"></script>
+  <script src="api.js?v=20260827-client-email-timeline"></script>
   <style>
     :root { --bg:#f4f6fb; --card:#fff; --text:#1f2a37; --muted:#6b7280; --shadow:0 10px 30px rgba(15,23,42,.08); --radius:14px; }
     *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
@@ -1678,7 +1678,9 @@ function renderClientRow(group){
 }
 function renderClientCalls(){
   const groups=groupCallsByClient(allCalls);
-  els.clientCallsList.innerHTML=groups.length?groups.map(renderClientRow).join(''):'<div class="client-empty">Нет звонков и отправленных email за выбранный период</div>';
+  const emailError=String(els.clientCallsList.dataset.emailError||'').trim();
+  const warning=emailError?`<div class="client-empty">${escapeHtml(emailError)}</div>`:'';
+  els.clientCallsList.innerHTML=warning+(groups.length?groups.map(renderClientRow).join(''):'<div class="client-empty">Нет звонков и отправленных email за выбранный период</div>');
 }
 
 function openClientHistoryModal(clientKey){
@@ -1933,11 +1935,18 @@ async function fetchCallsPayload(){
 }
 async function fetchClientOutgoingEmails(){
   try{
-    return window.calltrackApi?.getEmailMessages
+    const rows=window.calltrackApi?.getEmailMessages
       ? await window.calltrackApi.getEmailMessages({direction:'outgoing'})
-      : [];
+      : await fetch(`${ADMIN_EMAIL_API_URL}?direction=outgoing`,{cache:'no-store'}).then(async(response)=>{
+          const payload=await response.json().catch(()=>null);
+          if(!response.ok||payload?.status==='error') throw new Error(payload?.message||`HTTP ${response.status}`);
+          return Array.isArray(payload?.data)?payload.data:[];
+        });
+    if(els.clientCallsList) delete els.clientCallsList.dataset.emailError;
+    return rows;
   }catch(error){
     console.error('Не удалось загрузить отправленные email для вкладки звонков клиентов:',error);
+    if(els.clientCallsList) els.clientCallsList.dataset.emailError=`Отправленные email не загружены: ${error.message}`;
     return [];
   }
 }

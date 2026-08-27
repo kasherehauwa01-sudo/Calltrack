@@ -158,7 +158,7 @@ window.calltrackApi.deleteUpdate = window.calltrackApi.deleteUpdate || (async fu
 window.calltrackApi.getEmailMessages = window.calltrackApi.getEmailMessages || (async function getEmailMessages(params = {}) {
   const query = new URLSearchParams(params);
   const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
-  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${query.toString() ? separator + query.toString() : ''}`);
+  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${query.toString() ? separator + query.toString() : ''}`, { cache: 'no-store' });
   return Array.isArray(payload.data) ? payload.data : [];
 });
 

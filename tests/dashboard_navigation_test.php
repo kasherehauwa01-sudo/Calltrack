@@ -21,7 +21,7 @@ foreach (['function removeLegacyHelpTab()', "document.addEventListener('DOMConte
     }
 }
 
-if (!str_contains($html, 'api.js?v=20260818-remove-help')) {
+if (!str_contains($html, 'api.js?v=20260827-client-email-timeline')) {
     throw new RuntimeException('Не обновлена версия подключаемого JavaScript');
 }
 
