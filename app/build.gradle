@@ -4,22 +4,43 @@ plugins {
     id 'com.google.devtools.ksp'
 }
 
+// Unix-время в минутах компактно помещается в Android versionCode и возрастает
+// между сборками, выполненными в разные минуты. Для всех вариантов одной сборки
+// значение вычисляется один раз, на этапе конфигурации Gradle.
+def generatedVersionCode = (System.currentTimeMillis() / 60000L).toInteger()
+if (generatedVersionCode <= 0) throw new GradleException('Сгенерированный versionCode должен быть положительным Integer')
+
+// Release-сборки всегда должны подписываться одним и тем же ключом. Секреты
+// хранятся только в локальном keystore.properties и не попадают в Git.
+def releaseSigningFile = rootProject.file('keystore.properties')
+def releaseSigning = new Properties()
+if (releaseSigningFile.isFile()) {
+    releaseSigningFile.withInputStream { releaseSigning.load(it) }
+}
+def releaseSigningKeys = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+def hasReleaseSigning = releaseSigningKeys.every { releaseSigning.getProperty(it, '').trim() }
+
 android {
     namespace 'com.example.calltrack'
     compileSdk 35
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile rootProject.file(releaseSigning.getProperty('storeFile'))
+                storePassword releaseSigning.getProperty('storePassword')
+                keyAlias releaseSigning.getProperty('keyAlias')
+                keyPassword releaseSigning.getProperty('keyPassword')
+            }
+        }
+    }
+
     defaultConfig {
-        def releaseVersionCode = (project.findProperty("calltrackVersionCode")
-                ?: System.getenv("CALLTRACK_VERSION_CODE")
-                ?: "13").toString().toInteger()
-        def releaseVersionName = (project.findProperty("calltrackVersionName")
-                ?: System.getenv("CALLTRACK_VERSION_NAME")
-                ?: "1.0.13").toString()
         applicationId "com.example.calltrack"
         minSdk 26
         targetSdk 35
-        versionCode releaseVersionCode
-        versionName releaseVersionName
+        versionCode generatedVersionCode
+        versionName "1.0.15"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "SQL_API_BASE_URL", '"https://kvasmix.ru/vr/calltrack/api/"'
@@ -28,6 +49,9 @@ android {
 
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -50,6 +74,15 @@ android {
             output.outputFileName = "calltrack_v${variant.versionName}_${variant.versionCode}.apk"
         }
     }
+}
+
+// Не даём случайно опубликовать неподписанный или подписанный временным ключом
+// APK. Gradle Sync и debug/Run при этом не требуют release-секретов.
+def requestsReleaseBuild = gradle.startParameter.taskNames.any { taskName ->
+    taskName.toLowerCase().contains('release')
+}
+if (requestsReleaseBuild && !hasReleaseSigning) {
+    throw new GradleException('Для release APK настройте keystore.properties по образцу keystore.properties.example и укажите ключ, которым подписано установленное приложение.')
 }
 
 dependencies {

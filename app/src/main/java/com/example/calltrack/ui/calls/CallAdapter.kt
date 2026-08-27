@@ -59,6 +59,7 @@ class CallAdapter(
 
         fun bind(item: RecentCallListItem.CallRow) {
             binding.tvName.text = item.contactName
+            binding.tvClient1c.text = item.client1cName
             binding.tvPhone.text = item.call.phone
             val callTime = timeFormat.format(Date(item.call.timestamp))
             binding.tvType.text = "${item.call.type} • ${item.call.duration} сек • $callTime"
