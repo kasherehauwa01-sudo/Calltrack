@@ -16,6 +16,14 @@ if (imapConnectionFlags(['imap_ssl'=>1, 'imap_port'=>143]) !== '/imap/tls/readon
 if (findImapFolder(['INBOX', 'Черновики', 'Отправленные'], 'Sent', 'outgoing') !== 'Отправленные') {
     throw new RuntimeException('Не определяется локализованная папка отправленных');
 }
+$singleParameter = (object)['attribute'=>'filename', 'value'=>'report.pdf'];
+if (normalizeImapParameters($singleParameter) !== [$singleParameter]) {
+    throw new RuntimeException('Одиночный stdClass параметр IMAP не нормализуется');
+}
+$parameterContainer = (object)['0'=>$singleParameter];
+if (normalizeImapParameters($parameterContainer) !== [$singleParameter]) {
+    throw new RuntimeException('Контейнер stdClass параметров IMAP не нормализуется');
+}
 
 $api = (string)file_get_contents($root . '/api/admin_email.php');
 foreach (['action === \'test\'', 'testImapMailbox(', 'resolveEmailMailboxPassword('] as $required) {

@@ -137,6 +137,20 @@ function isImapMessageSeen($imap, int $uid): bool
     return !empty($overview[0]->seen);
 }
 
+function normalizeImapParameters($value): array
+{
+    if ($value === null) return [];
+    if (is_array($value)) return array_values($value);
+    if ($value instanceof Traversable) return array_values(iterator_to_array($value));
+    if (is_object($value)) {
+        // Некоторые версии PHP IMAP возвращают один параметр как stdClass,
+        // а не как массив из одного элемента.
+        if (isset($value->attribute) || isset($value->value)) return [$value];
+        return array_values((array)$value);
+    }
+    return [];
+}
+
 function collectImapParts($imap, int $messageNumber, object $part, string $section, array &$content, array &$attachments): void
 {
     if (!empty($part->parts)) {
@@ -147,10 +161,14 @@ function collectImapParts($imap, int $messageNumber, object $part, string $secti
     }
     $body = fetchImapBodyWithoutMarkingRead($imap, $messageNumber, $section);
     $body = decodeImapBody($body, (int)($part->encoding ?? 0));
-    $params = array_merge($part->parameters ?? [], $part->dparameters ?? []);
+    $params = array_merge(
+        normalizeImapParameters($part->parameters ?? null),
+        normalizeImapParameters($part->dparameters ?? null)
+    );
     $filename = '';
     foreach ($params as $param) {
-        if (in_array(strtolower((string)$param->attribute), ['filename', 'name'], true)) $filename = decodeImapText((string)$param->value);
+        if (!is_object($param)) continue;
+        if (in_array(strtolower((string)($param->attribute ?? '')), ['filename', 'name'], true)) $filename = decodeImapText((string)($param->value ?? ''));
     }
     if ($filename !== '') {
         $attachments[] = ['filename'=>$filename, 'mime_type'=>strtolower((string)($part->subtype ?? 'application/octet-stream')), 'file_size'=>strlen($body)];
