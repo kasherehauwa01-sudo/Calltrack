@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS app_user_reports (
     manager VARCHAR(255),
     last_activity DATETIME,
     app_version VARCHAR(50),
+    app_version_code BIGINT NULL,
     installed_at DATETIME NULL,
     app_updated_at DATETIME NULL,
     last_launch_at DATETIME NULL,
@@ -189,12 +190,21 @@ CREATE TABLE IF NOT EXISTS app_user_commands (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_phone VARCHAR(30) NOT NULL,
     command VARCHAR(100) NOT NULL,
+    target_version_code BIGINT NULL,
+    target_version_name VARCHAR(50) NULL,
     status VARCHAR(30) NOT NULL DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     executed_at DATETIME NULL,
     INDEX idx_user_commands_phone_status (user_phone, status)
 )
 SQL);
+    foreach ([
+        'ALTER TABLE app_user_reports ADD COLUMN app_version_code BIGINT NULL AFTER app_version',
+        'ALTER TABLE app_user_commands ADD COLUMN target_version_code BIGINT NULL AFTER command',
+        'ALTER TABLE app_user_commands ADD COLUMN target_version_name VARCHAR(50) NULL AFTER target_version_code',
+    ] as $migration) {
+        try { $pdo->exec($migration); } catch (Throwable $e) { /* Колонка уже существует. */ }
+    }
     $pdo->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS app_user_states (
     user_phone VARCHAR(30) PRIMARY KEY,
