@@ -15,6 +15,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.addCallback
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
@@ -220,6 +221,40 @@ class MainActivity : BaseActivity() {
             intent.removeExtra(EXTRA_RUN_UPDATE_CHECK)
             checkForUpdatesAndPrompt()
         }
+        updateProgressBar?.isIndeterminate = indeterminate
+        if (!indeterminate) updateProgressBar?.progress = progress.coerceIn(0, 100)
+        updateProgressStatus?.text = status
+    }
+
+    private fun hideUpdateProgress() {
+        updateProgressDialog?.dismiss()
+        updateProgressDialog = null
+        updateProgressBar = null
+        updateProgressStatus = null
+    }
+
+    private fun showUpdateProgress(status: String, progress: Int, indeterminate: Boolean = false) {
+        if (updateProgressDialog == null) {
+            val content = layoutInflater.inflate(R.layout.dialog_update_progress, null)
+            updateProgressBar = content.findViewById(R.id.updateProgressBar)
+            updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
+            updateProgressDialog = AlertDialog.Builder(this)
+                .setTitle("Обновление приложения")
+                .setView(content)
+                .setCancelable(false)
+                .create()
+            updateProgressDialog?.show()
+        }
+        updateProgressBar?.isIndeterminate = indeterminate
+        if (!indeterminate) updateProgressBar?.progress = progress.coerceIn(0, 100)
+        updateProgressStatus?.text = status
+    }
+
+    private fun hideUpdateProgress() {
+        updateProgressDialog?.dismiss()
+        updateProgressDialog = null
+        updateProgressBar = null
+        updateProgressStatus = null
     }
 
     private fun showUpdateProgress(status: String, progress: Int, indeterminate: Boolean = false) {
