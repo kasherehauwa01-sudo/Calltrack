@@ -52,6 +52,7 @@ class AnalyticsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildLayout()
+        onBackPressedDispatcher.addCallback(this) { openMain(MainActivity.EXTRA_OPEN_DIAL) }
         loadData()
     }
 
