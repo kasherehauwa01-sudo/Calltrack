@@ -67,13 +67,13 @@ window.calltrackApi.testClientPhone = window.calltrackApi.testClientPhone || (as
   return payload.data || null;
 });
 
-window.calltrackApi.lookupClientNames = window.calltrackApi.lookupClientNames || (async function lookupClientNames(phones) {
+window.calltrackApi.lookupClientNames = window.calltrackApi.lookupClientNames || (async function lookupClientNames(phones = [], emails = []) {
   const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientDirectory, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
-    body: JSON.stringify({ phones })
+    body: JSON.stringify({ phones, emails })
   });
-  return { names: payload.data || {}, clients: payload.clients || {} };
+  return { names: payload.data || {}, clients: payload.clients || {}, emailClients: payload.email_clients || {} };
 });
 
 window.calltrackApi.clientsCacheStatus = async function clientsCacheStatus(password) {

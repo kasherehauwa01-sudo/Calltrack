@@ -1565,6 +1565,7 @@ function formatPhoneForDisplay(value){
   return value?String(value):'';
 }
 const normalizeClientLookupPhone=(value)=>{const digits=String(value||'').replace(/\D+/g,'');return digits.length>=10?digits.slice(-10):'';};
+const normalizeClientLookupEmail=(value)=>{const match=String(value||'').toLowerCase().match(/[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}/i);return match?match[0]:'';};
 const looksLikePhone=(value)=>{const raw=String(value||'').trim();return raw!==''&&raw.replace(/\D+/g,'').length>=10;};
 function getCachedClientName(call){
   const names=clientNamesByPhone.get(normalizeClientLookupPhone(call?.phone))||[];
@@ -1582,15 +1583,20 @@ async function loadClientNamesForCalls(calls){
   clientNamesByPhone.clear();
   clientNamesByEmail.clear();
   const phones=[...new Set(calls.map((call)=>normalizeClientLookupPhone(call?.phone)).filter(Boolean))];
-  if(!phones.length){renderClientCalls();return;}
+  const emails=[...new Set(clientOutgoingEmails.map((email)=>normalizeClientLookupEmail(email?.client_email||email?.to_emails)).filter(Boolean))];
+  if(!phones.length&&!emails.length){renderClientCalls();return;}
   els.clientCallsList.innerHTML='<div class="client-empty">Поиск клиентов в локальном кэше Clients...</div>';
   try{
-    for(let offset=0;offset<phones.length;offset+=500){
-      const result=await window.calltrackApi.lookupClientNames(phones.slice(offset,offset+500));
+    for(let offset=0;offset<Math.max(phones.length,emails.length);offset+=500){
+      const result=await window.calltrackApi.lookupClientNames(phones.slice(offset,offset+500),emails.slice(offset,offset+500));
       if(requestId!==clientNamesRequestId) return;
       Object.entries(result.names||{}).forEach(([phone,names])=>clientNamesByPhone.set(phone,Array.isArray(names)?names:[]));
       Object.values(result.clients||{}).flat().forEach((client)=>{
         (client.emails||[]).forEach((email)=>clientNamesByEmail.set(String(email).trim().toLowerCase(),String(client.name||'').trim()));
+      });
+      Object.entries(result.emailClients||{}).forEach(([email,clients])=>{
+        const names=(Array.isArray(clients)?clients:[]).map((client)=>String(client?.name||'').trim()).filter(Boolean);
+        if(names.length) clientNamesByEmail.set(String(email).trim().toLowerCase(),names.join(' / '));
       });
     }
   }catch(error){console.error('Не удалось получить наименования из локального кэша Clients:',error);}
@@ -1635,8 +1641,8 @@ function groupCallsByClient(calls){
     if(manager!==activeClientManager) return;
     const dt=normalizeDateTime(email?.sent_at,email?.sent_at)||parseLocalDate(String(email?.sent_at||'').slice(0,10));
     if(!inDateRange(dt,range.from,range.to)) return;
-    const recipientEmail=String(email?.client_email||'').trim().toLowerCase().split(/[\s,;]+/)[0]||'';
-    const displayName=clientNamesByEmail.get(recipientEmail)||String(email?.client_name||'').trim()||recipientEmail||'Получатель не указан';
+    const recipientEmail=normalizeClientLookupEmail(email?.client_email||email?.to_emails);
+    const displayName=clientNamesByEmail.get(recipientEmail)||recipientEmail||'Получатель не указан';
     const clientKey=displayName;
     if(!grouped.has(clientKey)) grouped.set(clientKey,{client:clientKey,displayName,lastDate:dt,calls:[],emails:[]});
     const row=grouped.get(clientKey);
@@ -1942,7 +1948,7 @@ function applyCallsPayload(callsPayload){
     nonEmptyTime: allCalls.filter((c)=>String(c.time||'').trim()!=='').length,
     nonEmptyManager: allCalls.filter((c)=>String(c.manager||'').trim()!=='').length
   });
-  if(!allCalls.length){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();renderAdminRegistry();populateClientManagers([]);renderClientCalls();return;}
+  if(!allCalls.length){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();renderAdminRegistry();populateClientManagers([]);renderClientCalls();loadClientNamesForCalls([]);return;}
   populateManagers(allCalls);
   populateClientManagers(allCalls);
   loadClientNamesForCalls(allCalls);

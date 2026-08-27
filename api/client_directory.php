@@ -376,6 +376,57 @@ function lookupClientDetailsByPhones(array $phones): array
     return $result;
 }
 
+function normalizeClientEmail(string $value): string
+{
+    $email = strtolower(trim($value, " \t\n\r\0\x0B<>\"'"));
+    return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+}
+
+function clientsCacheRowsForEmailLookup(): iterable
+{
+    if (clientsSqliteAvailable() && is_file(clientsSqliteFile())) {
+        foreach (clientsOpenSqlite()->query('SELECT payload_json FROM clients') as $row) {
+            $client = json_decode((string)$row['payload_json'], true);
+            if (is_array($client)) yield $client;
+        }
+        return;
+    }
+    if (is_file(clientsRecordsReadyFile())) {
+        foreach (glob(clientsRecordsDirectory() . '/*.json') ?: [] as $file) {
+            $records = json_decode((string)file_get_contents($file), true);
+            if (!is_array($records)) continue;
+            foreach ($records as $client) if (is_array($client)) yield $client;
+        }
+        return;
+    }
+    if (!is_file(clientsCacheFile())) throw new RuntimeException('Локальный кэш Clients ещё не готов');
+    $clients = json_decode((string)file_get_contents(clientsCacheFile()), true);
+    if (!is_array($clients)) throw new RuntimeException('Локальный кэш Clients повреждён');
+    foreach ($clients as $client) if (is_array($client)) yield $client;
+}
+
+function lookupClientDetailsByEmails(array $emails): array
+{
+    $requested = [];
+    foreach (array_slice(array_values(array_unique($emails)), 0, 2000) as $email) {
+        $normalized = normalizeClientEmail((string)$email);
+        if ($normalized !== '') $requested[$normalized] = true;
+    }
+    $result = array_fill_keys(array_keys($requested), []);
+    if (!$requested) return $result;
+    foreach (clientsCacheRowsForEmailLookup() as $client) {
+        $name = trim((string)($client['name'] ?? ''));
+        if ($name === '') continue;
+        $clientEmails = clientEmailsFromFields(is_array($client['fields'] ?? null) ? $client['fields'] : []);
+        foreach ($clientEmails as $email) {
+            if (!isset($requested[$email])) continue;
+            $result[$email][$name] = ['name'=>$name, 'emails'=>$clientEmails];
+        }
+    }
+    foreach ($result as $email=>$matches) $result[$email] = array_values($matches);
+    return $result;
+}
+
 function writeClientsCache(array $clients): void
 {
     $json = json_encode($clients, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -691,13 +742,16 @@ if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
         if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $body = readJsonBody();
             $phones = $body['phones'] ?? [];
+            $emails = $body['emails'] ?? [];
             if (!is_array($phones)) sendJson(['status'=>'error', 'message'=>'Поле phones должно быть массивом'], 400);
+            if (!is_array($emails)) sendJson(['status'=>'error', 'message'=>'Поле emails должно быть массивом'], 400);
             $clients = lookupClientDetailsByPhones($phones);
+            $emailClients = lookupClientDetailsByEmails($emails);
             $names = [];
             foreach ($clients as $phone=>$matches) {
                 $names[$phone] = array_values(array_unique(array_column($matches, 'name')));
             }
-            sendJson(['status'=>'success', 'data'=>$names, 'clients'=>$clients, 'total'=>count($names)]);
+            sendJson(['status'=>'success', 'data'=>$names, 'clients'=>$clients, 'email_clients'=>$emailClients, 'total'=>count($names) + count($emailClients)]);
         }
         $pdo = getPdo();
         $clients = loadClientsDirectory($pdo);
