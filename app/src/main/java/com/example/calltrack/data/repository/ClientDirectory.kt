@@ -13,6 +13,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 data class ClientCard(
     val name: String,
@@ -58,10 +59,15 @@ class ClientDirectory(context: Context) {
     fun loadClientCards(rawPhone: String): List<ClientCard> {
         val normalized = normalizePhone(rawPhone)
         if (normalized.length != 10) return emptyList()
+        synchronized(lock) {
+            clientCards[normalized]?.takeIf { System.currentTimeMillis() - it.first < CARD_CACHE_TTL_MS }?.let { return it.second }
+        }
+        // test_clients.php читает карточку из локального кэша Clients на сервере
+        // CallTrack и не обращается к удалённому справочнику при каждом нажатии.
         val baseUrl = BuildConfig.SQL_API_BASE_URL.trimEnd('/')
         val url = "$baseUrl/test_clients.php?phone=${java.net.URLEncoder.encode(rawPhone, "UTF-8")}"
         val request = Request.Builder().url(url).build()
-        return runCatching {
+        val cards = runCatching {
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) error("HTTP ${response.code}")
                 val payload = JSONObject(response.body?.string().orEmpty())
@@ -76,6 +82,8 @@ class ClientDirectory(context: Context) {
         }.onFailure {
             Log.e("ClientDirectory", "Ошибка загрузки карточек Clients", it)
         }.getOrDefault(emptyList())
+        if (cards.isNotEmpty()) synchronized(lock) { clientCards[normalized] = System.currentTimeMillis() to cards }
+        return cards
     }
 
     private fun parseClientCards(matches: JSONArray): List<ClientCard> = buildList {
@@ -150,5 +158,6 @@ class ClientDirectory(context: Context) {
 
     companion object {
         private const val CACHE_TTL_MS = 5 * 60 * 1000L
+        private const val CARD_CACHE_TTL_MS = 5 * 60 * 1000L
     }
 }

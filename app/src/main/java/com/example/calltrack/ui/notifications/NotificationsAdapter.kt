@@ -76,6 +76,7 @@ class NotificationsAdapter(
             "PERSONAL_CONTACT" -> "Личный контакт"
             "CALLBACK" -> "Обратный звонок"
             "SYNC_ERROR" -> "Ошибка синхронизации"
+            "APP_UPDATE" -> "Обновление"
             else -> type
         }
     }
