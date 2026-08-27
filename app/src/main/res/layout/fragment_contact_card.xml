@@ -74,20 +74,31 @@
                         android:textSize="22sp"
                         android:textStyle="bold" />
 
-                    <TextView
+                    <LinearLayout
+                        android:id="@+id/rowClient1c"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:text="Наименование клиента в 1с"
-                        android:textColor="@color/textSecondary"
-                        android:textSize="15sp" />
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:foreground="?attr/selectableItemBackground"
+                        android:orientation="vertical"
+                        android:paddingVertical="4dp">
 
-                    <TextView
-                        android:id="@+id/tvClient1c"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textColor="@color/textPrimary"
-                        android:textSize="18sp" />
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Наименование клиента в 1с"
+                            android:textColor="@color/textSecondary"
+                            android:textSize="15sp" />
+
+                        <TextView
+                            android:id="@+id/tvClient1c"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/textPrimary"
+                            android:textSize="18sp" />
+                    </LinearLayout>
 
                     <Button
                         android:id="@+id/btnMarkPersonal"
