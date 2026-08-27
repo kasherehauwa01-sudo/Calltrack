@@ -35,7 +35,7 @@ class UserFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         binding.btnBack.setOnClickListener {
-            requireActivity().onBackPressedDispatcher.onBackPressed()
+            (requireActivity() as MainActivity).openDialScreen()
         }
         viewModel.managerName.observe(viewLifecycleOwner) { name ->
             binding.tvCurrentUser.text = name.ifBlank { "Не указан" }
