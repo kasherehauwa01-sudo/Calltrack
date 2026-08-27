@@ -15,12 +15,21 @@ function sendEmailRegistryPayload(PDO $pdo): void
     ensureEmailTables($pdo);
     $where = [];
     $params = [];
-    foreach (['manager' => 'email_messages.manager_name', 'direction' => 'email_messages.direction', 'client_status' => 'email_messages.client_status'] as $param => $column) {
+    foreach (['manager' => 'email_messages.manager_name', 'client_status' => 'email_messages.client_status'] as $param => $column) {
         $value = trim((string)($_GET[$param] ?? ''));
         if ($value !== '') {
             $where[] = "$column = :$param";
             $params[":$param"] = $value;
         }
+    }
+    $direction = trim((string)($_GET['direction'] ?? ''));
+    $outgoingCondition = "(email_messages.direction = 'outgoing' OR (email_messages.from_email <> '' AND LOWER(email_messages.from_email) = LOWER(email_mailboxes.email)))";
+    if ($direction === 'outgoing') {
+        // Старые письма могли быть импортированы из неверно названной Sent-папки
+        // как incoming. Адрес отправителя надёжно определяет письмо менеджера.
+        $where[] = $outgoingCondition;
+    } elseif ($direction === 'incoming') {
+        $where[] = 'NOT ' . $outgoingCondition;
     }
     if (!empty($_GET['has_attachments'])) {
         $where[] = 'email_messages.has_attachments = :has_attachments';
@@ -40,7 +49,7 @@ function sendEmailRegistryPayload(PDO $pdo): void
         $params[':search'] = '%' . $search . '%';
     }
     $sqlWhere = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
-    $stmt = $pdo->prepare('SELECT email_messages.id, email_messages.sent_at, email_messages.manager_name, email_mailboxes.email AS manager_email, email_messages.direction, email_messages.client_name, email_messages.client_email, email_messages.subject, email_messages.client_status, email_messages.incoming_status, email_messages.outgoing_status, email_messages.message_size, email_messages.has_attachments, email_messages.attachment_count, email_messages.imap_uid FROM email_messages LEFT JOIN email_mailboxes ON email_mailboxes.id = email_messages.mailbox_id' . $sqlWhere . ' ORDER BY email_messages.sent_at DESC, email_messages.id DESC LIMIT 1000');
+    $stmt = $pdo->prepare("SELECT email_messages.id, email_messages.sent_at, email_messages.manager_name, email_mailboxes.email AS manager_email, CASE WHEN {$outgoingCondition} THEN 'outgoing' ELSE 'incoming' END AS direction, email_messages.client_name, CASE WHEN {$outgoingCondition} THEN COALESCE(NULLIF(email_messages.to_emails, ''), email_messages.client_email) ELSE email_messages.client_email END AS client_email, email_messages.subject, email_messages.client_status, email_messages.incoming_status, email_messages.outgoing_status, email_messages.message_size, email_messages.has_attachments, email_messages.attachment_count, email_messages.imap_uid FROM email_messages LEFT JOIN email_mailboxes ON email_mailboxes.id = email_messages.mailbox_id" . $sqlWhere . ' ORDER BY email_messages.sent_at DESC, email_messages.id DESC LIMIT 1000');
     $stmt->execute($params);
     sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
 }

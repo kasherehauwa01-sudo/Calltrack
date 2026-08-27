@@ -1612,7 +1612,7 @@ function groupCallsByClient(calls){
     if(manager!==activeClientManager) return;
     const dt=normalizeDateTime(email?.sent_at,email?.sent_at)||parseLocalDate(String(email?.sent_at||'').slice(0,10));
     if(!inDateRange(dt,range.from,range.to)) return;
-    const recipientEmail=String(email?.client_email||'').trim().toLowerCase();
+    const recipientEmail=String(email?.client_email||'').trim().toLowerCase().split(/[\s,;]+/)[0]||'';
     const displayName=clientNamesByEmail.get(recipientEmail)||String(email?.client_name||'').trim()||recipientEmail||'Получатель не указан';
     const clientKey=displayName;
     if(!grouped.has(clientKey)) grouped.set(clientKey,{client:clientKey,displayName,lastDate:dt,calls:[],emails:[]});
@@ -1644,7 +1644,7 @@ function renderClientRow(group){
 }
 function renderClientCalls(){
   const groups=groupCallsByClient(allCalls);
-  els.clientCallsList.innerHTML=groups.length?groups.map(renderClientRow).join(''):'<div class="client-empty">Нет звонков клиентов за выбранный период</div>';
+  els.clientCallsList.innerHTML=groups.length?groups.map(renderClientRow).join(''):'<div class="client-empty">Нет звонков и отправленных email за выбранный период</div>';
 }
 
 function openClientHistoryModal(clientKey){

@@ -21,6 +21,9 @@ $api = (string)file_get_contents($root . '/api/admin_email.php');
 foreach (['action === \'test\'', 'testImapMailbox(', 'resolveEmailMailboxPassword('] as $required) {
     if (!str_contains($api, $required)) throw new RuntimeException("В API отсутствует проверка IMAP: {$required}");
 }
+foreach (["email_messages.direction = 'outgoing'", 'LOWER(email_messages.from_email) = LOWER(email_mailboxes.email)', "THEN 'outgoing' ELSE 'incoming' END AS direction", "COALESCE(NULLIF(email_messages.to_emails, ''), email_messages.client_email)"] as $required) {
+    if (!str_contains($api, $required)) throw new RuntimeException("Реестр не распознаёт исходящее письмо менеджера: {$required}");
+}
 
 $sync = (string)file_get_contents($root . '/api/email_sync.php');
 foreach (['OP_READONLY', 'FT_PEEK', 'fetchImapBodyWithoutMarkingRead', 'imap_fetch_overview($imap, (string)$uid, FT_UID)'] as $required) {
