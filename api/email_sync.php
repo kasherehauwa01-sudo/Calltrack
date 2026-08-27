@@ -54,8 +54,11 @@ function normalizeImapHost(string $host): string
 
 function imapConnectionFlags(array $mailbox): string
 {
-    if (empty($mailbox['imap_ssl'])) return '/imap/notls';
-    return (int)($mailbox['imap_port'] ?? 993) === 993 ? '/imap/ssl' : '/imap/tls';
+    $transport = empty($mailbox['imap_ssl'])
+        ? '/imap/notls'
+        : ((int)($mailbox['imap_port'] ?? 993) === 993 ? '/imap/ssl' : '/imap/tls');
+    // /readonly и OP_READONLY ниже независимо запрещают менять флаги писем.
+    return $transport . '/readonly';
 }
 
 function imapServerPrefix(array $mailbox): string
@@ -119,6 +122,21 @@ function testImapMailbox(array $mailbox, string $password): array
     }
 }
 
+function fetchImapBodyWithoutMarkingRead($imap, int $messageNumber, string $section): string
+{
+    // FT_PEEK загружает содержимое, не устанавливая серверный флаг \Seen.
+    return (string)($section === ''
+        ? imap_body($imap, $messageNumber, FT_PEEK)
+        : imap_fetchbody($imap, $messageNumber, $section, FT_PEEK));
+}
+
+function isImapMessageSeen($imap, int $uid): bool
+{
+    // Обзор по UID не открывает тело письма и не меняет его состояние.
+    $overview = imap_fetch_overview($imap, (string)$uid, FT_UID);
+    return !empty($overview[0]->seen);
+}
+
 function collectImapParts($imap, int $messageNumber, object $part, string $section, array &$content, array &$attachments): void
 {
     if (!empty($part->parts)) {
@@ -127,8 +145,8 @@ function collectImapParts($imap, int $messageNumber, object $part, string $secti
         }
         return;
     }
-    $body = $section === '' ? imap_body($imap, $messageNumber, FT_PEEK) : imap_fetchbody($imap, $messageNumber, $section, FT_PEEK);
-    $body = decodeImapBody((string)$body, (int)($part->encoding ?? 0));
+    $body = fetchImapBodyWithoutMarkingRead($imap, $messageNumber, $section);
+    $body = decodeImapBody($body, (int)($part->encoding ?? 0));
     $params = array_merge($part->parameters ?? [], $part->dparameters ?? []);
     $filename = '';
     foreach ($params as $param) {
@@ -157,6 +175,7 @@ function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $dire
             $exists->execute([':mailbox_id'=>$mailbox['id'], ':folder'=>$folder, ':uid'=>$uid]);
             if ($exists->fetchColumn()) continue;
             $number = imap_msgno($imap, (int)$uid);
+            $wasSeen = isImapMessageSeen($imap, (int)$uid);
             $header = imap_headerinfo($imap, $number);
             $structure = imap_fetchstructure($imap, $number);
             $content = ['text'=>'', 'html'=>'']; $attachments = [];
@@ -164,7 +183,7 @@ function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $dire
             $clientEmail = $direction === 'incoming' ? imapAddress($header, 'from') : imapAddress($header, 'to');
             $date = date('Y-m-d H:i:s', isset($header->udate) ? (int)$header->udate : time());
             $stmt = $pdo->prepare('INSERT INTO email_messages (mailbox_id,manager_name,direction,sent_at,from_email,from_name,to_emails,cc_emails,client_email,subject,body_text,body_html,message_size,has_attachments,attachment_count,imap_uid,imap_folder,message_id,incoming_status,outgoing_status) VALUES (:mailbox_id,:manager_name,:direction,:sent_at,:from_email,:from_name,:to_emails,:cc_emails,:client_email,:subject,:body_text,:body_html,:message_size,:has_attachments,:attachment_count,:imap_uid,:imap_folder,:message_id,:incoming_status,:outgoing_status)');
-            $stmt->execute([':mailbox_id'=>$mailbox['id'], ':manager_name'=>$mailbox['manager_name'], ':direction'=>$direction, ':sent_at'=>$date, ':from_email'=>imapAddress($header, 'from'), ':from_name'=>decodeImapText((string)($header->fromaddress ?? '')), ':to_emails'=>imapAddresses($header, 'to'), ':cc_emails'=>imapAddresses($header, 'cc'), ':client_email'=>$clientEmail, ':subject'=>decodeImapText((string)($header->subject ?? '')), ':body_text'=>$content['text'], ':body_html'=>$content['html'], ':message_size'=>(int)($header->Size ?? 0), ':has_attachments'=>$attachments ? 1 : 0, ':attachment_count'=>count($attachments), ':imap_uid'=>$uid, ':imap_folder'=>$folder, ':message_id'=>(string)($header->message_id ?? ''), ':incoming_status'=>$direction === 'incoming' && empty($header->Unseen) ? 'read' : 'unread', ':outgoing_status'=>$direction === 'outgoing' ? 'delivered' : null]);
+            $stmt->execute([':mailbox_id'=>$mailbox['id'], ':manager_name'=>$mailbox['manager_name'], ':direction'=>$direction, ':sent_at'=>$date, ':from_email'=>imapAddress($header, 'from'), ':from_name'=>decodeImapText((string)($header->fromaddress ?? '')), ':to_emails'=>imapAddresses($header, 'to'), ':cc_emails'=>imapAddresses($header, 'cc'), ':client_email'=>$clientEmail, ':subject'=>decodeImapText((string)($header->subject ?? '')), ':body_text'=>$content['text'], ':body_html'=>$content['html'], ':message_size'=>(int)($header->Size ?? 0), ':has_attachments'=>$attachments ? 1 : 0, ':attachment_count'=>count($attachments), ':imap_uid'=>$uid, ':imap_folder'=>$folder, ':message_id'=>(string)($header->message_id ?? ''), ':incoming_status'=>$direction === 'incoming' && !$wasSeen ? 'unread' : 'read', ':outgoing_status'=>$direction === 'outgoing' ? 'delivered' : null]);
             $messageId = (int)$pdo->lastInsertId();
             foreach ($attachments as $attachment) {
                 $pdo->prepare('INSERT INTO email_attachments (message_id,filename,mime_type,file_size) VALUES (:message_id,:filename,:mime_type,:file_size)')->execute([':message_id'=>$messageId] + $attachment);
