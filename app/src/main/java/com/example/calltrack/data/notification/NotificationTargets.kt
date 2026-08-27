@@ -6,4 +6,5 @@ object NotificationTargets {
     const val REMINDER = "REMINDER"
     const val PERSONAL_CONTACT = "PERSONAL_CONTACT"
     const val CONTACT_CARD = "CONTACT_CARD"
+    const val APP_UPDATE = "APP_UPDATE"
 }
