@@ -21,7 +21,7 @@ if (($result[$phone] ?? []) !== ['ООО Ромашка']) {
 
 $html = (string)file_get_contents($root . '/analizmop/index.html');
 $api = (string)file_get_contents($root . '/analizmop/api.js');
-foreach (['loadClientNamesForCalls', 'getCachedClientName', 'group.displayName', 'Клиент не найден'] as $required) {
+foreach (['loadClientNamesForCalls', 'getCachedClientName', 'group.displayName', "formatPhoneForDisplay(call?.phone)||existing||'Без номера телефона'", 'fetchClientOutgoingEmails', 'Email отправлен', 'Отправлено email:', 'data-email-id'] as $required) {
     if (!str_contains($html, $required)) throw new RuntimeException("Вкладка звонков не использует Clients: {$required}");
 }
 if (!str_contains($api, 'lookupClientNames')) {
