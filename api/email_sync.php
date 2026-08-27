@@ -60,6 +60,23 @@ function normalizeImapContentText(string $value, string $declaredCharset = ''): 
     return $converted !== false ? $converted : (@iconv('UTF-8', 'UTF-8//IGNORE', $value) ?: '');
 }
 
+function executeEmailMessageInsert(PDOStatement $statement, array $messageData): bool
+{
+    try {
+        $statement->execute($messageData);
+        return true;
+    } catch (PDOException $error) {
+        // На старых таблицах/серверах MySQL отдельное MIME-тело может всё равно
+        // содержать неподдерживаемую последовательность. Не теряем из-за этого
+        // само письмо: повторно сохраняем заголовки и адреса без проблемного тела.
+        if (!str_contains($error->getMessage(), 'Incorrect string value')) throw $error;
+        $messageData[':body_text'] = '';
+        $messageData[':body_html'] = '';
+        $statement->execute($messageData);
+        return false;
+    }
+}
+
 function normalizeImapHost(string $host): string
 {
     $host = trim($host);
@@ -272,7 +289,7 @@ function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $dire
                 foreach ([':manager_name', ':from_email', ':from_name', ':to_emails', ':cc_emails', ':client_email', ':subject', ':body_text', ':body_html', ':imap_folder', ':message_id'] as $textKey) {
                     $messageData[$textKey] = normalizeImapContentText((string)$messageData[$textKey]);
                 }
-                $stmt->execute($messageData);
+                executeEmailMessageInsert($stmt, $messageData);
                 $messageId = (int)$pdo->lastInsertId();
                 foreach ($attachments as $attachment) {
                     $attachment['filename'] = normalizeImapContentText((string)$attachment['filename']);

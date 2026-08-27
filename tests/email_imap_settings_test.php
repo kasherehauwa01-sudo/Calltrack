@@ -61,6 +61,9 @@ foreach (['rsort($uids, SORT_NUMERIC)', 'catch (Throwable $e)', '$messageErrors[
 foreach (['normalizeImapContentText($body, $charset)', "if (\$attribute === 'charset')"] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("Тело IMAP-письма не нормализуется перед записью: {$required}");
 }
+foreach (['executeEmailMessageInsert(', "str_contains(\$error->getMessage(), 'Incorrect string value')", "\$messageData[':body_text'] = ''", "\$messageData[':body_html'] = ''"] as $required) {
+    if (!str_contains($sync, $required)) throw new RuntimeException("Ошибка кодировки тела всё ещё блокирует импорт письма: {$required}");
+}
 
 $html = (string)file_get_contents($root . '/analizmop/index.html');
 $js = (string)file_get_contents($root . '/analizmop/api.js');
