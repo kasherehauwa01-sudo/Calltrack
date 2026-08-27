@@ -2,6 +2,10 @@ package com.example.calltrack.data.repository
 
 import android.Manifest
 import android.app.ActivityManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
@@ -11,6 +15,7 @@ import android.content.pm.PackageManager
 import android.provider.CallLog
 import android.util.Log
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationCompat
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.data.local.CallDao
 import com.example.calltrack.data.local.CallEntity
@@ -24,9 +29,13 @@ import com.example.calltrack.data.local.ReminderDao
 import com.example.calltrack.data.local.ReminderEntity
 import com.example.calltrack.data.local.PersonalContactDao
 import com.example.calltrack.data.local.PersonalContactEntity
+import com.example.calltrack.data.local.NotificationEntity
+import com.example.calltrack.data.local.NotificationType
+import com.example.calltrack.data.notification.NotificationTargets
 import com.example.calltrack.data.remote.WebhookApi
 import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.logging.AppLogger
+import com.example.calltrack.ui.main.AboutActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -106,8 +115,57 @@ class CallRepository(
                     AppLogger.log(appContext, "USER", "Пользователь разблокирован в админ-панели")
                     markUserCommandDone(command.optInt("id"))
                 }
+                "install_update" -> {
+                    val targetVersionCode = command.optLong("target_version_code", 0L)
+                    if (targetVersionCode > BuildConfig.VERSION_CODE.toLong()) {
+                        showUpdateAvailableNotification(targetVersionCode, command.optString("target_version_name"))
+                    }
+                    markUserCommandDone(command.optInt("id"))
+                }
             }
         }
+    }
+
+    private suspend fun showUpdateAvailableNotification(targetVersionCode: Long, targetVersionName: String) {
+        val app = appContext as com.example.calltrack.App
+        app.notificationRepository.insertNotification(
+            NotificationEntity(
+                title = "Обновите приложение",
+                message = "Доступна версия ${targetVersionName.ifBlank { targetVersionCode.toString() }}",
+                type = NotificationType.APP_UPDATE,
+                targetScreen = NotificationTargets.APP_UPDATE,
+                payloadJson = JSONObject().put("version_code", targetVersionCode).toString()
+            )
+        )
+
+        val manager = appContext.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(
+                NotificationChannel(UPDATE_NOTIFICATION_CHANNEL, "Обновления CallTrack", NotificationManager.IMPORTANCE_HIGH)
+            )
+        }
+        val openUpdate = PendingIntent.getActivity(
+            appContext,
+            UPDATE_NOTIFICATION_ID,
+            Intent(appContext, AboutActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        runCatching {
+            manager.notify(
+                UPDATE_NOTIFICATION_ID,
+                NotificationCompat.Builder(appContext, UPDATE_NOTIFICATION_CHANNEL)
+                    .setSmallIcon(com.example.calltrack.R.drawable.ic_clover)
+                    .setContentTitle("Обновите приложение")
+                    .setContentText("Нажмите, чтобы открыть экран обновления")
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setAutoCancel(true)
+                    .setContentIntent(openUpdate)
+                    .build()
+            )
+        }.onFailure { error ->
+            AppLogger.log(appContext, "WARN", "Системное уведомление об обновлении недоступно: ${error.message}", error)
+        }
+        AppLogger.log(appContext, "UPDATE", "Показано уведомление об обновлении до $targetVersionCode")
     }
 
     private suspend fun markUserCommandDone(id: Int) {
@@ -136,6 +194,7 @@ class CallRepository(
             put("manager", prefs.getManagerName())
             put("last_activity", sqlDateTime(System.currentTimeMillis()))
             put("app_version", BuildConfig.VERSION_NAME)
+            put("app_version_code", BuildConfig.VERSION_CODE)
             put("installed_at", sqlDateTime(packageInfo.firstInstallTime))
             put("app_updated_at", sqlDateTime(packageInfo.lastUpdateTime))
             put("last_launch_at", sqlDateTime(System.currentTimeMillis()))
@@ -628,7 +687,7 @@ class CallRepository(
 
     suspend fun importRecentCallsFromDevice(limit: Int = DEVICE_RECENT_CALLS_LIMIT): Int = withContext(Dispatchers.IO) {
         if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
-            Log.w("CallRepository", "Нет разрешения READ_CALL_LOG для загрузки экрана Последние из звонилки")
+            Log.w("CallRepository", "Нет разрешения READ_CALL_LOG для загрузки экрана История из звонилки")
             return@withContext 0
         }
 
@@ -664,7 +723,7 @@ class CallRepository(
                         duration = duration,
                         note = note,
                         timestamp = timestamp,
-                        // Исторические записи из звонилки нужны для отображения на экране «Последние».
+                        // Исторические записи из звонилки нужны для отображения на экране «История».
                         // Не отправляем их пачкой в SQL API, пока пользователь не изменит заметку/напоминание.
                         uploaded = true
                     )
@@ -675,7 +734,7 @@ class CallRepository(
                         timestamp = call.timestamp
                     )
                     if (duplicate == null) {
-                        // Экран «Последние» должен брать звонки из системной звонилки,
+                        // Экран «История» должен брать звонки из системной звонилки,
                         // поэтому не прогреваем справочник клиентов из SQL API при импорте.
                         callDao.insert(call)
                     }
@@ -1268,5 +1327,7 @@ class CallRepository(
         private const val DEVICE_CONTACT_HISTORY_LIMIT = 100
         private const val CALL_HISTORY_MIN_ARRAY_COLUMNS = 5
         private const val PERSONAL_CALL_CLIENT_VALUE = "Личный звонок"
+        private const val UPDATE_NOTIFICATION_CHANNEL = "calltrack_updates"
+        private const val UPDATE_NOTIFICATION_ID = 70101
     }
 }

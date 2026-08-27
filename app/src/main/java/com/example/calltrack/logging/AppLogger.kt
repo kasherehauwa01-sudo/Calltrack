@@ -21,6 +21,7 @@ object AppLogger {
 
     @Volatile
     private var installed = false
+    private var lastPruneAt = 0L
 
     fun install(context: Context) {
         if (installed) return
@@ -31,6 +32,7 @@ object AppLogger {
         installNetworkLogging(context)
     }
 
+    @Synchronized
     fun log(context: Context, level: String, message: String, tr: Throwable? = null) {
         val ts = tsFormat.format(Date())
         val line = buildString {
@@ -41,7 +43,10 @@ object AppLogger {
         runCatching {
             val file = File(context.filesDir, LOG_FILE)
             file.appendText(line)
-            pruneOldEntries(file)
+            if (System.currentTimeMillis() - lastPruneAt >= PRUNE_INTERVAL_MS) {
+                pruneOldEntries(file)
+                lastPruneAt = System.currentTimeMillis()
+            }
             trimIfTooLarge(file)
         }
         when (level) {
@@ -51,6 +56,7 @@ object AppLogger {
         }
     }
 
+    @Synchronized
     fun readLogs(context: Context): String {
         val file = File(context.filesDir, LOG_FILE)
         if (!file.exists()) return "Логи пока отсутствуют"
@@ -139,4 +145,6 @@ object AppLogger {
         val prefix = line.substring(0, 23)
         return runCatching { tsFormat.parse(prefix)?.time }.getOrNull()
     }
+
+    private const val PRUNE_INTERVAL_MS = 60_000L
 }
