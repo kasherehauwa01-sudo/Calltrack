@@ -41,6 +41,84 @@ function decodeImapBody(string $body, int $encoding): string
     return $body;
 }
 
+function normalizeImapHost(string $host): string
+{
+    $host = trim($host);
+    $host = preg_replace('~^(?:imap|imaps|ssl|tls)://~i', '', $host) ?? $host;
+    $host = trim($host, " \t\n\r\0\x0B{}/");
+    if (str_contains($host, ':')) {
+        $host = explode(':', $host, 2)[0];
+    }
+    return $host;
+}
+
+function imapConnectionFlags(array $mailbox): string
+{
+    if (empty($mailbox['imap_ssl'])) return '/imap/notls';
+    return (int)($mailbox['imap_port'] ?? 993) === 993 ? '/imap/ssl' : '/imap/tls';
+}
+
+function imapServerPrefix(array $mailbox): string
+{
+    return sprintf('{%s:%d%s}', normalizeImapHost((string)$mailbox['imap_host']), (int)$mailbox['imap_port'], imapConnectionFlags($mailbox));
+}
+
+function decodeImapFolderName(string $folder): string
+{
+    return function_exists('imap_utf7_decode') ? (imap_utf7_decode($folder) ?: $folder) : $folder;
+}
+
+function encodeImapFolderName(string $folder): string
+{
+    return function_exists('imap_utf7_encode') ? (imap_utf7_encode($folder) ?: $folder) : $folder;
+}
+
+function listImapFolders($imap, string $prefix): array
+{
+    $folders = imap_list($imap, $prefix, '*') ?: [];
+    return array_values(array_map(static function (string $folder) use ($prefix): string {
+        $name = str_starts_with($folder, $prefix) ? substr($folder, strlen($prefix)) : $folder;
+        return decodeImapFolderName($name);
+    }, $folders));
+}
+
+function findImapFolder(array $folders, string $requested, string $direction): string
+{
+    $lower = static fn(string $value): string => function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+    foreach ($folders as $folder) {
+        if ($lower($folder) === $lower($requested)) return $folder;
+    }
+    if ($direction === 'outgoing') {
+        foreach ($folders as $folder) {
+            if (preg_match('/(?:^|[\\/.])(sent(?: messages| mail)?|отправленные)$/iu', $folder)) return $folder;
+        }
+    }
+    return $requested;
+}
+
+function testImapMailbox(array $mailbox, string $password): array
+{
+    if (!function_exists('imap_open')) throw new RuntimeException('На сервере не установлено PHP-расширение IMAP');
+    if ($password === '') throw new RuntimeException('Введите пароль почтового ящика или пароль приложения');
+    $prefix = imapServerPrefix($mailbox);
+    imap_timeout(IMAP_OPENTIMEOUT, 15);
+    $imap = @imap_open($prefix . 'INBOX', (string)$mailbox['username'], $password, OP_READONLY, 1);
+    if ($imap === false) {
+        $detail = imap_last_error() ?: 'сервер не сообщил причину';
+        throw new RuntimeException('IMAP-подключение не установлено: ' . $detail . '. Проверьте логин, пароль приложения, порт и SSL/TLS');
+    }
+    try {
+        $folders = listImapFolders($imap, $prefix);
+        return [
+            'folders' => $folders,
+            'inbox_folder' => findImapFolder($folders, (string)($mailbox['inbox_folder'] ?? 'INBOX'), 'incoming'),
+            'sent_folder' => findImapFolder($folders, (string)($mailbox['sent_folder'] ?? 'Sent'), 'outgoing'),
+        ];
+    } finally {
+        imap_close($imap);
+    }
+}
+
 function collectImapParts($imap, int $messageNumber, object $part, string $section, array &$content, array &$attachments): void
 {
     if (!empty($part->parts)) {
@@ -68,8 +146,7 @@ function collectImapParts($imap, int $messageNumber, object $part, string $secti
 
 function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $direction): int
 {
-    $flags = !empty($mailbox['imap_ssl']) ? '/imap/ssl' : '/imap/notls';
-    $server = sprintf('{%s:%d%s}%s', $mailbox['imap_host'], (int)$mailbox['imap_port'], $flags, $folder);
+    $server = imapServerPrefix($mailbox) . encodeImapFolderName($folder);
     $imap = @imap_open($server, $mailbox['username'], decryptSecret($mailbox['password_encrypted']), OP_READONLY, 1);
     if ($imap === false) throw new RuntimeException('Не удалось подключиться к папке ' . $folder . ': ' . (imap_last_error() ?: 'ошибка IMAP'));
     $imported = 0;

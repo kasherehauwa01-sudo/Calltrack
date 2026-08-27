@@ -84,17 +84,34 @@ function saveEmailMailbox(PDO $pdo): void
     $id = (int)($data['id'] ?? 0);
     $manager = trim((string)($data['manager_name'] ?? ''));
     $email = trim((string)($data['email'] ?? ''));
-    $host = trim((string)($data['imap_host'] ?? ''));
+    $host = normalizeImapHost((string)($data['imap_host'] ?? ''));
     $port = (int)($data['imap_port'] ?? 993);
     $username = trim((string)($data['username'] ?? ''));
     $password = (string)($data['password'] ?? '');
     if ($manager === '' || $email === '' || $host === '' || $username === '') {
         sendJson(['status' => 'error', 'message' => 'Заполните ФИО, Email, IMAP Host и Логин'], 400);
     }
+    if ($port < 1 || $port > 65535) {
+        sendJson(['status' => 'error', 'message' => 'IMAP Port должен быть от 1 до 65535'], 400);
+    }
+    if ($password === '' && $id <= 0) {
+        sendJson(['status' => 'error', 'message' => 'Для нового почтового ящика обязательно введите пароль'], 400);
+    }
+    $inboxFolder = trim((string)($data['inbox_folder'] ?? 'INBOX')) ?: 'INBOX';
+    $sentFolder = trim((string)($data['sent_folder'] ?? 'Sent')) ?: 'Sent';
+    $effectivePassword = resolveEmailMailboxPassword($pdo, $id, $password);
+    if (!empty($data['enabled'])) {
+        $test = testImapMailbox([
+            'imap_host'=>$host, 'imap_port'=>$port, 'imap_ssl'=>!empty($data['imap_ssl']) ? 1 : 0,
+            'username'=>$username, 'inbox_folder'=>$inboxFolder, 'sent_folder'=>$sentFolder,
+        ], $effectivePassword);
+        $inboxFolder = (string)$test['inbox_folder'];
+        $sentFolder = (string)$test['sent_folder'];
+    }
     $encryptedPassword = $password !== '' ? encryptSecret($password) : null;
     if ($id > 0) {
         $sql = 'UPDATE email_mailboxes SET manager_name=:manager_name,email=:email,imap_host=:imap_host,imap_port=:imap_port,imap_ssl=:imap_ssl,username=:username,inbox_folder=:inbox_folder,sent_folder=:sent_folder,enabled=:enabled,updated_at=NOW()';
-        $params = [':manager_name'=>$manager, ':email'=>$email, ':imap_host'=>$host, ':imap_port'=>$port, ':imap_ssl'=>!empty($data['imap_ssl']) ? 1 : 0, ':username'=>$username, ':inbox_folder'=>trim((string)($data['inbox_folder'] ?? 'INBOX')) ?: 'INBOX', ':sent_folder'=>trim((string)($data['sent_folder'] ?? 'Sent')) ?: 'Sent', ':enabled'=>!empty($data['enabled']) ? 1 : 0, ':id'=>$id];
+        $params = [':manager_name'=>$manager, ':email'=>$email, ':imap_host'=>$host, ':imap_port'=>$port, ':imap_ssl'=>!empty($data['imap_ssl']) ? 1 : 0, ':username'=>$username, ':inbox_folder'=>$inboxFolder, ':sent_folder'=>$sentFolder, ':enabled'=>!empty($data['enabled']) ? 1 : 0, ':id'=>$id];
         if ($encryptedPassword !== null) {
             $sql .= ',password_encrypted=:password_encrypted';
             $params[':password_encrypted'] = $encryptedPassword;
@@ -102,14 +119,48 @@ function saveEmailMailbox(PDO $pdo): void
         $pdo->prepare($sql . ' WHERE id=:id')->execute($params);
     } else {
         $pdo->prepare('INSERT INTO email_mailboxes (manager_name,email,imap_host,imap_port,imap_ssl,username,password_encrypted,inbox_folder,sent_folder,enabled) VALUES (:manager_name,:email,:imap_host,:imap_port,:imap_ssl,:username,:password_encrypted,:inbox_folder,:sent_folder,:enabled)')
-            ->execute([':manager_name'=>$manager, ':email'=>$email, ':imap_host'=>$host, ':imap_port'=>$port, ':imap_ssl'=>!empty($data['imap_ssl']) ? 1 : 0, ':username'=>$username, ':password_encrypted'=>$encryptedPassword ?? '', ':inbox_folder'=>trim((string)($data['inbox_folder'] ?? 'INBOX')) ?: 'INBOX', ':sent_folder'=>trim((string)($data['sent_folder'] ?? 'Sent')) ?: 'Sent', ':enabled'=>!empty($data['enabled']) ? 1 : 0]);
+            ->execute([':manager_name'=>$manager, ':email'=>$email, ':imap_host'=>$host, ':imap_port'=>$port, ':imap_ssl'=>!empty($data['imap_ssl']) ? 1 : 0, ':username'=>$username, ':password_encrypted'=>$encryptedPassword ?? '', ':inbox_folder'=>$inboxFolder, ':sent_folder'=>$sentFolder, ':enabled'=>!empty($data['enabled']) ? 1 : 0]);
     }
     sendJson(['status' => 'success']);
+}
+
+function resolveEmailMailboxPassword(PDO $pdo, int $id, string $password): string
+{
+    if ($password !== '') return $password;
+    if ($id <= 0) return '';
+    $stmt = $pdo->prepare('SELECT password_encrypted FROM email_mailboxes WHERE id=:id');
+    $stmt->execute([':id' => $id]);
+    $encrypted = (string)($stmt->fetchColumn() ?: '');
+    return $encrypted !== '' ? decryptSecret($encrypted) : '';
+}
+
+function testEmailMailboxSettings(PDO $pdo): void
+{
+    ensureEmailTables($pdo);
+    $data = readJsonBody();
+    $id = (int)($data['id'] ?? 0);
+    $password = resolveEmailMailboxPassword($pdo, $id, (string)($data['password'] ?? ''));
+    $mailbox = [
+        'imap_host' => normalizeImapHost((string)($data['imap_host'] ?? '')),
+        'imap_port' => (int)($data['imap_port'] ?? 993),
+        'imap_ssl' => !empty($data['imap_ssl']) ? 1 : 0,
+        'username' => trim((string)($data['username'] ?? '')),
+        'inbox_folder' => trim((string)($data['inbox_folder'] ?? 'INBOX')) ?: 'INBOX',
+        'sent_folder' => trim((string)($data['sent_folder'] ?? 'Sent')) ?: 'Sent',
+    ];
+    if ($mailbox['imap_host'] === '' || $mailbox['username'] === '') {
+        sendJson(['status'=>'error', 'message'=>'Заполните IMAP Host и Логин'], 400);
+    }
+    $result = testImapMailbox($mailbox, $password);
+    sendJson(['status'=>'success', 'data'=>$result]);
 }
 
 try {
     $pdo = getPdo();
     $action = (string)($_GET['action'] ?? 'emails');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'test') {
+        testEmailMailboxSettings($pdo);
+    }
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         saveEmailMailbox($pdo);
     }
