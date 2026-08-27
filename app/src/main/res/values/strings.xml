@@ -7,6 +7,9 @@
     <string name="release_date_label">Дата последнего обновления</string>
     <string name="back">Назад</string>
     <string name="update_app">Обновить приложение</string>
+    <string name="update_install_instruction">После загрузки обновления выполните следующие действия</string>
+    <string name="update_install_step_one">Шаг 1: нажмите «Подробнее»</string>
+    <string name="update_install_step_two">Шаг 2: нажмите «Установить без проверки»</string>
     <string name="update_soon">Скоро здесь появится ссылка на обновление</string>
     <string name="switch_user">Сменить пользователя</string>
     <string name="user">Пользователь</string>
