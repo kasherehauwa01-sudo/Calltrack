@@ -51,9 +51,11 @@ class NotificationsFragment : Fragment() {
     private fun setupFilters() {
         binding.chipGroupFilters.setOnCheckedStateChangeListener { _, checkedIds ->
             val filter = when (checkedIds.firstOrNull()) {
+                R.id.chipAll -> NotificationFilter.ALL
                 R.id.chipCallResult -> NotificationFilter.CALL_RESULT
+                R.id.chipAppUpdates -> NotificationFilter.APP_UPDATE
                 R.id.chipUnread -> NotificationFilter.UNREAD
-                else -> NotificationFilter.CLIENT_NOT_FOUND
+                else -> NotificationFilter.ALL
             }
             viewModel.setFilter(filter)
         }
