@@ -225,11 +225,11 @@ function normalizeImapParameters($value): array
     return [];
 }
 
-function collectImapParts($imap, int $messageNumber, object $part, string $section, array &$content, array &$attachments): void
+function collectImapParts($imap, int $messageNumber, object $part, string $section, array &$content, array &$attachments, bool $fetchTextBodies = true): void
 {
     if (!empty($part->parts)) {
         foreach ($part->parts as $index => $child) {
-            collectImapParts($imap, $messageNumber, $child, $section === '' ? (string)($index + 1) : $section . '.' . ($index + 1), $content, $attachments);
+            collectImapParts($imap, $messageNumber, $child, $section === '' ? (string)($index + 1) : $section . '.' . ($index + 1), $content, $attachments, $fetchTextBodies);
         }
         return;
     }
@@ -251,7 +251,7 @@ function collectImapParts($imap, int $messageNumber, object $part, string $secti
         $attachments[] = ['filename'=>$filename, 'mime_type'=>strtolower((string)($part->subtype ?? 'application/octet-stream')), 'file_size'=>(int)($part->bytes ?? 0)];
         return;
     }
-    if ((int)($part->type ?? 0) === 0) {
+    if ($fetchTextBodies && (int)($part->type ?? 0) === 0) {
         $body = fetchImapBodyWithoutMarkingRead($imap, $messageNumber, $section);
         $body = decodeImapBody($body, (int)($part->encoding ?? 0));
         $subtype = strtoupper((string)($part->subtype ?? 'PLAIN'));
@@ -261,6 +261,8 @@ function collectImapParts($imap, int $messageNumber, object $part, string $secti
 
 function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $direction, array &$messageErrors = [], int $limit = 50): int
 {
+    imap_timeout(IMAP_OPENTIMEOUT, 10);
+    imap_timeout(IMAP_READTIMEOUT, 10);
     $server = imapServerPrefix($mailbox) . encodeImapFolderName($folder);
     $imap = @imap_open($server, $mailbox['username'], decryptSecret($mailbox['password_encrypted']), OP_READONLY, 1);
     if ($imap === false) throw new RuntimeException('Не удалось подключиться к папке ' . $folder . ': ' . (imap_last_error() ?: 'ошибка IMAP'));
@@ -287,7 +289,10 @@ function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $dire
                 $structure = imap_fetchstructure($imap, $number);
                 if (!is_object($header) || !is_object($structure)) throw new RuntimeException('IMAP не вернул заголовок или структуру письма');
                 $content = ['text'=>'', 'html'=>'']; $attachments = [];
-                collectImapParts($imap, $number, $structure, '', $content, $attachments);
+                // Реестр и временная шкала используют заголовки, адреса и тему.
+                // Тела писем не скачиваем в HTTP-запросе синхронизации: именно
+                // медленная загрузка MIME-тел приводила к тайм-ауту прокси 504.
+                collectImapParts($imap, $number, $structure, '', $content, $attachments, false);
                 $clientEmail = $direction === 'incoming' ? imapAddress($header, 'from') : imapAddress($header, 'to');
                 $date = date('Y-m-d H:i:s', isset($header->udate) ? (int)$header->udate : time());
                 $stmt = $pdo->prepare('INSERT INTO email_messages (mailbox_id,manager_name,direction,sent_at,from_email,from_name,to_emails,cc_emails,client_email,subject,body_text,body_html,message_size,has_attachments,attachment_count,imap_uid,imap_folder,message_id,incoming_status,outgoing_status) VALUES (:mailbox_id,:manager_name,:direction,:sent_at,:from_email,:from_name,:to_emails,:cc_emails,:client_email,:subject,:body_text,:body_html,:message_size,:has_attachments,:attachment_count,:imap_uid,:imap_folder,:message_id,:incoming_status,:outgoing_status)');
@@ -320,10 +325,10 @@ function syncEmailMailboxes(PDO $pdo, ?int $mailboxId = null): array
     $result = ['imported'=>0, 'mailboxes'=>0, 'errors'=>[]];
     foreach ($stmt->fetchAll() as $mailbox) {
         try {
-            $password = decryptSecret($mailbox['password_encrypted']);
-            $folders = testImapMailbox($mailbox, $password);
-            $mailbox['inbox_folder'] = $folders['inbox_folder'];
-            $mailbox['sent_folder'] = $folders['sent_folder'];
+            // Папки уже проверяются при сохранении настроек. Повторный обход всех
+            // папок и поиск самой новой Sent при каждом нажатии был слишком долгим.
+            $mailbox['inbox_folder'] = trim((string)($mailbox['inbox_folder'] ?? '')) ?: 'INBOX';
+            $mailbox['sent_folder'] = trim((string)($mailbox['sent_folder'] ?? '')) ?: 'Sent';
             $messageErrors = [];
             $count = importImapFolder($pdo, $mailbox, $mailbox['inbox_folder'], 'incoming', $messageErrors);
             if ($mailbox['sent_folder'] !== $mailbox['inbox_folder']) $count += importImapFolder($pdo, $mailbox, $mailbox['sent_folder'], 'outgoing', $messageErrors);
