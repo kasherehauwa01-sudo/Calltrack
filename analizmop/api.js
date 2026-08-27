@@ -179,6 +179,16 @@ window.calltrackApi.saveEmailSettings = window.calltrackApi.saveEmailSettings ||
   });
 });
 
+window.calltrackApi.testEmailSettings = window.calltrackApi.testEmailSettings || (async function testEmailSettings(data) {
+  const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
+  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify(data)
+  });
+  return payload.data || {};
+});
+
 window.calltrackApi.deleteEmailSettings = window.calltrackApi.deleteEmailSettings || (async function deleteEmailSettings(id) {
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.email, {
     method: 'POST',
