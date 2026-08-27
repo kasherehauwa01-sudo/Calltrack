@@ -44,9 +44,12 @@ foreach (['imap_setflag_full', 'imap_clearflag_full', 'imap_delete', 'imap_mail_
     if (str_contains($sync, $forbidden)) throw new RuntimeException("IMAP-синхронизация изменяет почтовый ящик: {$forbidden}");
 }
 if (!str_contains($sync, 'newestImapFolder(') ||
-    !str_contains($sync, "importImapFolder(\$pdo, \$mailbox, \$mailbox['inbox_folder'], 'incoming')") ||
-    !str_contains($sync, "importImapFolder(\$pdo, \$mailbox, \$mailbox['sent_folder'], 'outgoing')")) {
+    !str_contains($sync, "\$mailbox['inbox_folder'], 'incoming', \$messageErrors") ||
+    !str_contains($sync, "\$mailbox['sent_folder'], 'outgoing', \$messageErrors")) {
     throw new RuntimeException('Сервис не импортирует одновременно входящие и исходящие письма');
+}
+foreach (['rsort($uids, SORT_NUMERIC)', 'catch (Throwable $e)', '$messageErrors[]', 'if ($imported >= $limit) break'] as $required) {
+    if (!str_contains($sync, $required)) throw new RuntimeException("Ошибка одного старого письма может заблокировать загрузку новых: {$required}");
 }
 
 $html = (string)file_get_contents($root . '/analizmop/index.html');
@@ -55,5 +58,8 @@ foreach (['emailTestConnectionBtn', 'Проверить подключение',
     if (!str_contains($html, $required)) throw new RuntimeException("В интерфейсе отсутствует проверка IMAP: {$required}");
 }
 if (!str_contains($js, 'action=test')) throw new RuntimeException('Клиент не вызывает IMAP test endpoint');
+foreach (['emailSyncNewBtn', 'Подгрузить новые письма', 'emailSyncProgress', 'Подгружаем новые письма', 'syncErrors.slice(0,2)'] as $required) {
+    if (!str_contains($html, $required)) throw new RuntimeException("В реестре нет управления или прогресса синхронизации: {$required}");
+}
 
 echo "email_imap_settings_test: OK\n";

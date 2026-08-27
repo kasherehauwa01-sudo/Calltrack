@@ -218,7 +218,7 @@ function collectImapParts($imap, int $messageNumber, object $part, string $secti
     }
 }
 
-function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $direction): int
+function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $direction, array &$messageErrors = [], int $limit = 500): int
 {
     $server = imapServerPrefix($mailbox) . encodeImapFolderName($folder);
     $imap = @imap_open($server, $mailbox['username'], decryptSecret($mailbox['password_encrypted']), OP_READONLY, 1);
@@ -226,25 +226,36 @@ function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $dire
     $imported = 0;
     try {
         $uids = imap_search($imap, 'ALL', SE_UID) ?: [];
+        // Новые UID обрабатываем первыми: пользователь сразу увидит свежие письма,
+        // даже если в большом архиве синхронизация займёт несколько запусков.
+        rsort($uids, SORT_NUMERIC);
         foreach ($uids as $uid) {
+            if ($imported >= $limit) break;
             $exists = $pdo->prepare('SELECT 1 FROM email_messages WHERE mailbox_id=:mailbox_id AND imap_folder=:folder AND imap_uid=:uid');
             $exists->execute([':mailbox_id'=>$mailbox['id'], ':folder'=>$folder, ':uid'=>$uid]);
             if ($exists->fetchColumn()) continue;
-            $number = imap_msgno($imap, (int)$uid);
-            $wasSeen = isImapMessageSeen($imap, (int)$uid);
-            $header = imap_headerinfo($imap, $number);
-            $structure = imap_fetchstructure($imap, $number);
-            $content = ['text'=>'', 'html'=>'']; $attachments = [];
-            collectImapParts($imap, $number, $structure, '', $content, $attachments);
-            $clientEmail = $direction === 'incoming' ? imapAddress($header, 'from') : imapAddress($header, 'to');
-            $date = date('Y-m-d H:i:s', isset($header->udate) ? (int)$header->udate : time());
-            $stmt = $pdo->prepare('INSERT INTO email_messages (mailbox_id,manager_name,direction,sent_at,from_email,from_name,to_emails,cc_emails,client_email,subject,body_text,body_html,message_size,has_attachments,attachment_count,imap_uid,imap_folder,message_id,incoming_status,outgoing_status) VALUES (:mailbox_id,:manager_name,:direction,:sent_at,:from_email,:from_name,:to_emails,:cc_emails,:client_email,:subject,:body_text,:body_html,:message_size,:has_attachments,:attachment_count,:imap_uid,:imap_folder,:message_id,:incoming_status,:outgoing_status)');
-            $stmt->execute([':mailbox_id'=>$mailbox['id'], ':manager_name'=>$mailbox['manager_name'], ':direction'=>$direction, ':sent_at'=>$date, ':from_email'=>imapAddress($header, 'from'), ':from_name'=>decodeImapText((string)($header->fromaddress ?? '')), ':to_emails'=>imapAddresses($header, 'to'), ':cc_emails'=>imapAddresses($header, 'cc'), ':client_email'=>$clientEmail, ':subject'=>decodeImapText((string)($header->subject ?? '')), ':body_text'=>$content['text'], ':body_html'=>$content['html'], ':message_size'=>(int)($header->Size ?? 0), ':has_attachments'=>$attachments ? 1 : 0, ':attachment_count'=>count($attachments), ':imap_uid'=>$uid, ':imap_folder'=>$folder, ':message_id'=>(string)($header->message_id ?? ''), ':incoming_status'=>$direction === 'incoming' && !$wasSeen ? 'unread' : 'read', ':outgoing_status'=>$direction === 'outgoing' ? 'delivered' : null]);
-            $messageId = (int)$pdo->lastInsertId();
-            foreach ($attachments as $attachment) {
-                $pdo->prepare('INSERT INTO email_attachments (message_id,filename,mime_type,file_size) VALUES (:message_id,:filename,:mime_type,:file_size)')->execute([':message_id'=>$messageId] + $attachment);
+            try {
+                $number = imap_msgno($imap, (int)$uid);
+                if ($number < 1) throw new RuntimeException('IMAP не вернул номер сообщения');
+                $wasSeen = isImapMessageSeen($imap, (int)$uid);
+                $header = imap_headerinfo($imap, $number);
+                $structure = imap_fetchstructure($imap, $number);
+                if (!is_object($header) || !is_object($structure)) throw new RuntimeException('IMAP не вернул заголовок или структуру письма');
+                $content = ['text'=>'', 'html'=>'']; $attachments = [];
+                collectImapParts($imap, $number, $structure, '', $content, $attachments);
+                $clientEmail = $direction === 'incoming' ? imapAddress($header, 'from') : imapAddress($header, 'to');
+                $date = date('Y-m-d H:i:s', isset($header->udate) ? (int)$header->udate : time());
+                $stmt = $pdo->prepare('INSERT INTO email_messages (mailbox_id,manager_name,direction,sent_at,from_email,from_name,to_emails,cc_emails,client_email,subject,body_text,body_html,message_size,has_attachments,attachment_count,imap_uid,imap_folder,message_id,incoming_status,outgoing_status) VALUES (:mailbox_id,:manager_name,:direction,:sent_at,:from_email,:from_name,:to_emails,:cc_emails,:client_email,:subject,:body_text,:body_html,:message_size,:has_attachments,:attachment_count,:imap_uid,:imap_folder,:message_id,:incoming_status,:outgoing_status)');
+                $stmt->execute([':mailbox_id'=>$mailbox['id'], ':manager_name'=>$mailbox['manager_name'], ':direction'=>$direction, ':sent_at'=>$date, ':from_email'=>imapAddress($header, 'from'), ':from_name'=>decodeImapText((string)($header->fromaddress ?? '')), ':to_emails'=>imapAddresses($header, 'to'), ':cc_emails'=>imapAddresses($header, 'cc'), ':client_email'=>$clientEmail, ':subject'=>decodeImapText((string)($header->subject ?? '')), ':body_text'=>$content['text'], ':body_html'=>$content['html'], ':message_size'=>(int)($header->Size ?? 0), ':has_attachments'=>$attachments ? 1 : 0, ':attachment_count'=>count($attachments), ':imap_uid'=>$uid, ':imap_folder'=>$folder, ':message_id'=>(string)($header->message_id ?? ''), ':incoming_status'=>$direction === 'incoming' && !$wasSeen ? 'unread' : 'read', ':outgoing_status'=>$direction === 'outgoing' ? 'delivered' : null]);
+                $messageId = (int)$pdo->lastInsertId();
+                foreach ($attachments as $attachment) {
+                    $pdo->prepare('INSERT INTO email_attachments (message_id,filename,mime_type,file_size) VALUES (:message_id,:filename,:mime_type,:file_size)')->execute([':message_id'=>$messageId] + $attachment);
+                }
+                $imported++;
+            } catch (Throwable $e) {
+                // Одно повреждённое письмо не должно блокировать все более новые UID.
+                $messageErrors[] = ['folder'=>$folder, 'uid'=>(int)$uid, 'message'=>$e->getMessage()];
             }
-            $imported++;
         }
     } finally { imap_close($imap); }
     return $imported;
@@ -263,10 +274,14 @@ function syncEmailMailboxes(PDO $pdo, ?int $mailboxId = null): array
             $folders = testImapMailbox($mailbox, $password);
             $mailbox['inbox_folder'] = $folders['inbox_folder'];
             $mailbox['sent_folder'] = $folders['sent_folder'];
-            $count = importImapFolder($pdo, $mailbox, $mailbox['inbox_folder'], 'incoming');
-            if ($mailbox['sent_folder'] !== $mailbox['inbox_folder']) $count += importImapFolder($pdo, $mailbox, $mailbox['sent_folder'], 'outgoing');
-            $pdo->prepare("UPDATE email_mailboxes SET inbox_folder=:inbox_folder,sent_folder=:sent_folder,last_sync_at=NOW(),sync_status='success',sync_error=NULL WHERE id=:id")->execute([':inbox_folder'=>$mailbox['inbox_folder'], ':sent_folder'=>$mailbox['sent_folder'], ':id'=>$mailbox['id']]);
+            $messageErrors = [];
+            $count = importImapFolder($pdo, $mailbox, $mailbox['inbox_folder'], 'incoming', $messageErrors);
+            if ($mailbox['sent_folder'] !== $mailbox['inbox_folder']) $count += importImapFolder($pdo, $mailbox, $mailbox['sent_folder'], 'outgoing', $messageErrors);
+            $syncError = $messageErrors ? implode('; ', array_map(static fn(array $error): string => sprintf('%s UID %d: %s', $error['folder'], $error['uid'], $error['message']), array_slice($messageErrors, 0, 5))) : null;
+            $syncStatus = $messageErrors ? 'error' : 'success';
+            $pdo->prepare("UPDATE email_mailboxes SET inbox_folder=:inbox_folder,sent_folder=:sent_folder,last_sync_at=NOW(),sync_status=:sync_status,sync_error=:sync_error WHERE id=:id")->execute([':inbox_folder'=>$mailbox['inbox_folder'], ':sent_folder'=>$mailbox['sent_folder'], ':sync_status'=>$syncStatus, ':sync_error'=>$syncError, ':id'=>$mailbox['id']]);
             $result['imported'] += $count; $result['mailboxes']++;
+            foreach ($messageErrors as $error) $result['errors'][] = ['id'=>$mailbox['id']] + $error;
         } catch (Throwable $e) {
             $pdo->prepare("UPDATE email_mailboxes SET last_sync_at=NOW(),sync_status='error',sync_error=:error WHERE id=:id")->execute([':id'=>$mailbox['id'], ':error'=>$e->getMessage()]);
             $result['errors'][] = ['id'=>$mailbox['id'], 'message'=>$e->getMessage()];
