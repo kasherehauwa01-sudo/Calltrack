@@ -907,13 +907,17 @@ async function loadEmailModule(runSync=false){
   const params={search:adminEls.emailSearch?.value||'',direction:adminEls.emailDirectionFilter?.value||''};
   try{
     let syncResult=null;
-    if(runSync&&window.calltrackApi?.syncEmail) syncResult=await window.calltrackApi.syncEmail();
+    let syncError=null;
+    if(runSync&&window.calltrackApi?.syncEmail){
+      try{syncResult=await window.calltrackApi.syncEmail();}
+      catch(error){syncError=error;}
+    }
     emailMessages=window.calltrackApi?.getEmailMessages?await window.calltrackApi.getEmailMessages(params):await fetch(`${ADMIN_EMAIL_API_URL}?${new URLSearchParams(params)}`).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p.data||[];});
     renderEmailMessages();
     await loadEmailSettings();
     emailLoaded=true;
     const syncErrors=Array.isArray(syncResult?.errors)?syncResult.errors:[];
-    const syncText=syncResult?` Подгружено новых: ${syncResult.imported||0}.${syncErrors.length?` Не удалось обработать: ${syncErrors.length}. ${syncErrors.slice(0,2).map((item)=>item.message||'Неизвестная ошибка IMAP').join(' ')}`:''}`:'';
+    const syncText=syncError?` Не удалось завершить текущую порцию синхронизации: ${syncError.message}. Нажмите «Подгрузить новые письма» ещё раз.`:(syncResult?` Подгружено новых: ${syncResult.imported||0}.${syncErrors.length?` Не удалось обработать: ${syncErrors.length}. ${syncErrors.slice(0,2).map((item)=>item.message||'Неизвестная ошибка IMAP').join(' ')}`:''}`:'');
     adminEls.emailStatus.textContent=`Писем в реестре: ${emailMessages.length}.${syncText}`;
   }catch(error){
     adminEls.emailStatus.textContent=`Ошибка загрузки email: ${error.message}`;

@@ -55,8 +55,11 @@ if (!str_contains($sync, 'newestImapFolder(') ||
     !str_contains($sync, "\$mailbox['sent_folder'], 'outgoing', \$messageErrors")) {
     throw new RuntimeException('Сервис не импортирует одновременно входящие и исходящие письма');
 }
-foreach (['rsort($uids, SORT_NUMERIC)', 'catch (Throwable $e)', '$messageErrors[]', 'if ($imported >= $limit) break'] as $required) {
+foreach (['rsort($uids, SORT_NUMERIC)', 'catch (Throwable $e)', '$messageErrors[]', 'if ($imported >= $limit) break', 'array_fill_keys', 'if (++$attempted > $limit * 2) break'] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("Ошибка одного старого письма может заблокировать загрузку новых: {$required}");
+}
+foreach (["int \$limit = 50", "'file_size'=>(int)(\$part->bytes ?? 0)", 'Загрузка бинарного тела'] as $required) {
+    if (!str_contains($sync, $required)) throw new RuntimeException("IMAP-синхронизация может превысить тайм-аут шлюза: {$required}");
 }
 foreach (['normalizeImapContentText($body, $charset)', "if (\$attribute === 'charset')"] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("Тело IMAP-письма не нормализуется перед записью: {$required}");
@@ -71,7 +74,7 @@ foreach (['emailTestConnectionBtn', 'Проверить подключение',
     if (!str_contains($html, $required)) throw new RuntimeException("В интерфейсе отсутствует проверка IMAP: {$required}");
 }
 if (!str_contains($js, 'action=test')) throw new RuntimeException('Клиент не вызывает IMAP test endpoint');
-foreach (['emailSyncNewBtn', 'Подгрузить новые письма', 'emailSyncProgress', 'Подгружаем новые письма', 'syncErrors.slice(0,2)'] as $required) {
+foreach (['emailSyncNewBtn', 'Подгрузить новые письма', 'emailSyncProgress', 'Подгружаем новые письма', 'syncErrors.slice(0,2)', 'catch(error){syncError=error;}', 'Не удалось завершить текущую порцию синхронизации'] as $required) {
     if (!str_contains($html, $required)) throw new RuntimeException("В реестре нет управления или прогресса синхронизации: {$required}");
 }
 

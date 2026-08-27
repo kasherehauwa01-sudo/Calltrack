@@ -233,8 +233,6 @@ function collectImapParts($imap, int $messageNumber, object $part, string $secti
         }
         return;
     }
-    $body = fetchImapBodyWithoutMarkingRead($imap, $messageNumber, $section);
-    $body = decodeImapBody($body, (int)($part->encoding ?? 0));
     $params = array_merge(
         normalizeImapParameters($part->parameters ?? null),
         normalizeImapParameters($part->dparameters ?? null)
@@ -248,16 +246,20 @@ function collectImapParts($imap, int $messageNumber, object $part, string $secti
         if ($attribute === 'charset') $charset = (string)($param->value ?? '');
     }
     if ($filename !== '') {
-        $attachments[] = ['filename'=>$filename, 'mime_type'=>strtolower((string)($part->subtype ?? 'application/octet-stream')), 'file_size'=>strlen($body)];
+        // Для реестра нужны только метаданные вложения. Загрузка бинарного тела
+        // больших файлов замедляла HTTP-запрос и приводила к ответу 504.
+        $attachments[] = ['filename'=>$filename, 'mime_type'=>strtolower((string)($part->subtype ?? 'application/octet-stream')), 'file_size'=>(int)($part->bytes ?? 0)];
         return;
     }
     if ((int)($part->type ?? 0) === 0) {
+        $body = fetchImapBodyWithoutMarkingRead($imap, $messageNumber, $section);
+        $body = decodeImapBody($body, (int)($part->encoding ?? 0));
         $subtype = strtoupper((string)($part->subtype ?? 'PLAIN'));
         $content[$subtype === 'HTML' ? 'html' : 'text'] .= normalizeImapContentText($body, $charset);
     }
 }
 
-function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $direction, array &$messageErrors = [], int $limit = 500): int
+function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $direction, array &$messageErrors = [], int $limit = 50): int
 {
     $server = imapServerPrefix($mailbox) . encodeImapFolderName($folder);
     $imap = @imap_open($server, $mailbox['username'], decryptSecret($mailbox['password_encrypted']), OP_READONLY, 1);
@@ -268,11 +270,15 @@ function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $dire
         // Новые UID обрабатываем первыми: пользователь сразу увидит свежие письма,
         // даже если в большом архиве синхронизация займёт несколько запусков.
         rsort($uids, SORT_NUMERIC);
+        $existingStatement = $pdo->prepare('SELECT imap_uid FROM email_messages WHERE mailbox_id=:mailbox_id AND imap_folder=:folder');
+        $existingStatement->execute([':mailbox_id'=>$mailbox['id'], ':folder'=>$folder]);
+        $existingUids = array_fill_keys(array_map('intval', $existingStatement->fetchAll(PDO::FETCH_COLUMN)), true);
+        $attempted = 0;
         foreach ($uids as $uid) {
             if ($imported >= $limit) break;
-            $exists = $pdo->prepare('SELECT 1 FROM email_messages WHERE mailbox_id=:mailbox_id AND imap_folder=:folder AND imap_uid=:uid');
-            $exists->execute([':mailbox_id'=>$mailbox['id'], ':folder'=>$folder, ':uid'=>$uid]);
-            if ($exists->fetchColumn()) continue;
+            $uid = (int)$uid;
+            if (isset($existingUids[$uid])) continue;
+            if (++$attempted > $limit * 2) break;
             try {
                 $number = imap_msgno($imap, (int)$uid);
                 if ($number < 1) throw new RuntimeException('IMAP не вернул номер сообщения');
