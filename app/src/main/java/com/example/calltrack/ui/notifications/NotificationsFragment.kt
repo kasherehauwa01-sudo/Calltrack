@@ -43,7 +43,7 @@ class NotificationsFragment : Fragment() {
         binding.recyclerNotifications.adapter = adapter
         setupSwipeActions()
         setupFilters()
-        binding.btnBack.setOnClickListener { requireActivity().onBackPressedDispatcher.onBackPressed() }
+        binding.btnBack.setOnClickListener { (requireActivity() as MainActivity).openDialScreen() }
         binding.btnMarkAllRead.setOnClickListener { viewModel.markAllAsRead() }
         collectNotifications()
     }
