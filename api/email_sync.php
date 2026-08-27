@@ -99,6 +99,43 @@ function findImapFolder(array $folders, string $requested, string $direction): s
     return $requested;
 }
 
+function sentImapFolderCandidates(array $folders, string $requested): array
+{
+    $candidates = [];
+    foreach ($folders as $folder) {
+        if (strcasecmp($folder, $requested) === 0 || preg_match('/(?:^|[\\/.])(sent(?: messages| mail)?|отправленные)$/iu', $folder)) {
+            $candidates[$folder] = $folder;
+        }
+    }
+    return array_values($candidates);
+}
+
+function newestImapFolder(array $mailbox, string $password, array $folders, string $fallback): string
+{
+    $candidates = sentImapFolderCandidates($folders, $fallback);
+    if (!$candidates) return $fallback;
+    if (count($candidates) === 1) return $candidates[0];
+    $bestFolder = $fallback;
+    $bestTimestamp = -1;
+    foreach ($candidates as $folder) {
+        $imap = @imap_open(imapServerPrefix($mailbox) . encodeImapFolderName($folder), (string)$mailbox['username'], $password, OP_READONLY, 1);
+        if ($imap === false) continue;
+        try {
+            $uids = imap_search($imap, 'ALL', SE_UID) ?: [];
+            $latestUid = $uids ? max(array_map('intval', $uids)) : 0;
+            $overview = $latestUid > 0 ? imap_fetch_overview($imap, (string)$latestUid, FT_UID) : [];
+            $timestamp = (int)($overview[0]->udate ?? 0);
+            if ($timestamp > $bestTimestamp) {
+                $bestTimestamp = $timestamp;
+                $bestFolder = $folder;
+            }
+        } finally {
+            imap_close($imap);
+        }
+    }
+    return $bestFolder;
+}
+
 function testImapMailbox(array $mailbox, string $password): array
 {
     if (!function_exists('imap_open')) throw new RuntimeException('На сервере не установлено PHP-расширение IMAP');
@@ -112,10 +149,11 @@ function testImapMailbox(array $mailbox, string $password): array
     }
     try {
         $folders = listImapFolders($imap, $prefix);
+        $sentFallback = findImapFolder($folders, (string)($mailbox['sent_folder'] ?? 'Sent'), 'outgoing');
         return [
             'folders' => $folders,
             'inbox_folder' => findImapFolder($folders, (string)($mailbox['inbox_folder'] ?? 'INBOX'), 'incoming'),
-            'sent_folder' => findImapFolder($folders, (string)($mailbox['sent_folder'] ?? 'Sent'), 'outgoing'),
+            'sent_folder' => newestImapFolder($mailbox, $password, $folders, $sentFallback),
         ];
     } finally {
         imap_close($imap);
@@ -221,9 +259,13 @@ function syncEmailMailboxes(PDO $pdo, ?int $mailboxId = null): array
     $result = ['imported'=>0, 'mailboxes'=>0, 'errors'=>[]];
     foreach ($stmt->fetchAll() as $mailbox) {
         try {
+            $password = decryptSecret($mailbox['password_encrypted']);
+            $folders = testImapMailbox($mailbox, $password);
+            $mailbox['inbox_folder'] = $folders['inbox_folder'];
+            $mailbox['sent_folder'] = $folders['sent_folder'];
             $count = importImapFolder($pdo, $mailbox, $mailbox['inbox_folder'], 'incoming');
             if ($mailbox['sent_folder'] !== $mailbox['inbox_folder']) $count += importImapFolder($pdo, $mailbox, $mailbox['sent_folder'], 'outgoing');
-            $pdo->prepare("UPDATE email_mailboxes SET last_sync_at=NOW(),sync_status='success',sync_error=NULL WHERE id=:id")->execute([':id'=>$mailbox['id']]);
+            $pdo->prepare("UPDATE email_mailboxes SET inbox_folder=:inbox_folder,sent_folder=:sent_folder,last_sync_at=NOW(),sync_status='success',sync_error=NULL WHERE id=:id")->execute([':inbox_folder'=>$mailbox['inbox_folder'], ':sent_folder'=>$mailbox['sent_folder'], ':id'=>$mailbox['id']]);
             $result['imported'] += $count; $result['mailboxes']++;
         } catch (Throwable $e) {
             $pdo->prepare("UPDATE email_mailboxes SET last_sync_at=NOW(),sync_status='error',sync_error=:error WHERE id=:id")->execute([':id'=>$mailbox['id'], ':error'=>$e->getMessage()]);

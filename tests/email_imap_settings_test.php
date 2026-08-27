@@ -16,6 +16,9 @@ if (imapConnectionFlags(['imap_ssl'=>1, 'imap_port'=>143]) !== '/imap/tls/readon
 if (findImapFolder(['INBOX', 'Черновики', 'Отправленные'], 'Sent', 'outgoing') !== 'Отправленные') {
     throw new RuntimeException('Не определяется локализованная папка отправленных');
 }
+if (sentImapFolderCandidates(['INBOX', 'Sent', 'Отправленные', 'Черновики'], 'Sent') !== ['Sent', 'Отправленные']) {
+    throw new RuntimeException('Не обнаруживаются все возможные папки отправленных писем');
+}
 $singleParameter = (object)['attribute'=>'filename', 'value'=>'report.pdf'];
 if (normalizeImapParameters($singleParameter) !== [$singleParameter]) {
     throw new RuntimeException('Одиночный stdClass параметр IMAP не нормализуется');
@@ -40,7 +43,8 @@ foreach (['OP_READONLY', 'FT_PEEK', 'fetchImapBodyWithoutMarkingRead', 'imap_fet
 foreach (['imap_setflag_full', 'imap_clearflag_full', 'imap_delete', 'imap_mail_move'] as $forbidden) {
     if (str_contains($sync, $forbidden)) throw new RuntimeException("IMAP-синхронизация изменяет почтовый ящик: {$forbidden}");
 }
-if (!str_contains($sync, "importImapFolder(\$pdo, \$mailbox, \$mailbox['inbox_folder'], 'incoming')") ||
+if (!str_contains($sync, 'newestImapFolder(') ||
+    !str_contains($sync, "importImapFolder(\$pdo, \$mailbox, \$mailbox['inbox_folder'], 'incoming')") ||
     !str_contains($sync, "importImapFolder(\$pdo, \$mailbox, \$mailbox['sent_folder'], 'outgoing')")) {
     throw new RuntimeException('Сервис не импортирует одновременно входящие и исходящие письма');
 }
