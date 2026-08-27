@@ -6,6 +6,7 @@ sealed interface RecentCallListItem {
     data class Header(val title: String) : RecentCallListItem
     data class CallRow(
         val call: CallEntity,
-        val contactName: String
+        val contactName: String,
+        val client1cName: String
     ) : RecentCallListItem
 }
