@@ -27,6 +27,13 @@ $parameterContainer = (object)['0'=>$singleParameter];
 if (normalizeImapParameters($parameterContainer) !== [$singleParameter]) {
     throw new RuntimeException('Контейнер stdClass параметров IMAP не нормализуется');
 }
+$cp1251 = iconv('UTF-8', 'Windows-1251', 'Проверка кодировки');
+if ($cp1251 === false || normalizeImapContentText($cp1251, 'windows-1251') !== 'Проверка кодировки') {
+    throw new RuntimeException('Тело письма Windows-1251 не преобразуется в UTF-8');
+}
+if (preg_match('//u', normalizeImapContentText("Текст\xA7\xE5", '')) !== 1) {
+    throw new RuntimeException('Некорректные байты тела письма попадают в базу данных');
+}
 
 $api = (string)file_get_contents($root . '/api/admin_email.php');
 foreach (['action === \'test\'', 'testImapMailbox(', 'resolveEmailMailboxPassword('] as $required) {
@@ -50,6 +57,9 @@ if (!str_contains($sync, 'newestImapFolder(') ||
 }
 foreach (['rsort($uids, SORT_NUMERIC)', 'catch (Throwable $e)', '$messageErrors[]', 'if ($imported >= $limit) break'] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("Ошибка одного старого письма может заблокировать загрузку новых: {$required}");
+}
+foreach (['normalizeImapContentText($body, $charset)', "if (\$attribute === 'charset')"] as $required) {
+    if (!str_contains($sync, $required)) throw new RuntimeException("Тело IMAP-письма не нормализуется перед записью: {$required}");
 }
 
 $html = (string)file_get_contents($root . '/analizmop/index.html');

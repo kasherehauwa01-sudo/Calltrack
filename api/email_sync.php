@@ -41,6 +41,25 @@ function decodeImapBody(string $body, int $encoding): string
     return $body;
 }
 
+function normalizeImapContentText(string $value, string $declaredCharset = ''): string
+{
+    if ($value === '') return '';
+    $charset = strtoupper(trim($declaredCharset, " \t\n\r\0\x0B\"'"));
+    if ($charset !== '' && !in_array($charset, ['UTF-8', 'UTF8', 'US-ASCII', 'ASCII', 'DEFAULT'], true)) {
+        $converted = @iconv($charset, 'UTF-8//IGNORE', $value);
+        if ($converted !== false) return $converted;
+    }
+    if (function_exists('mb_check_encoding') && mb_check_encoding($value, 'UTF-8')) return $value;
+    if (preg_match('//u', $value) === 1) return $value;
+    if (function_exists('mb_detect_encoding') && function_exists('mb_convert_encoding')) {
+        $detected = mb_detect_encoding($value, ['Windows-1251', 'KOI8-R', 'ISO-8859-1'], true);
+        if ($detected !== false) return mb_convert_encoding($value, 'UTF-8', $detected);
+    }
+    // Старые русскоязычные письма часто не содержат charset, хотя тело записано в CP1251.
+    $converted = @iconv('Windows-1251', 'UTF-8//IGNORE', $value);
+    return $converted !== false ? $converted : (@iconv('UTF-8', 'UTF-8//IGNORE', $value) ?: '');
+}
+
 function normalizeImapHost(string $host): string
 {
     $host = trim($host);
@@ -204,9 +223,12 @@ function collectImapParts($imap, int $messageNumber, object $part, string $secti
         normalizeImapParameters($part->dparameters ?? null)
     );
     $filename = '';
+    $charset = '';
     foreach ($params as $param) {
         if (!is_object($param)) continue;
-        if (in_array(strtolower((string)($param->attribute ?? '')), ['filename', 'name'], true)) $filename = decodeImapText((string)($param->value ?? ''));
+        $attribute = strtolower((string)($param->attribute ?? ''));
+        if (in_array($attribute, ['filename', 'name'], true)) $filename = decodeImapText((string)($param->value ?? ''));
+        if ($attribute === 'charset') $charset = (string)($param->value ?? '');
     }
     if ($filename !== '') {
         $attachments[] = ['filename'=>$filename, 'mime_type'=>strtolower((string)($part->subtype ?? 'application/octet-stream')), 'file_size'=>strlen($body)];
@@ -214,7 +236,7 @@ function collectImapParts($imap, int $messageNumber, object $part, string $secti
     }
     if ((int)($part->type ?? 0) === 0) {
         $subtype = strtoupper((string)($part->subtype ?? 'PLAIN'));
-        $content[$subtype === 'HTML' ? 'html' : 'text'] .= $body;
+        $content[$subtype === 'HTML' ? 'html' : 'text'] .= normalizeImapContentText($body, $charset);
     }
 }
 
@@ -246,9 +268,14 @@ function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $dire
                 $clientEmail = $direction === 'incoming' ? imapAddress($header, 'from') : imapAddress($header, 'to');
                 $date = date('Y-m-d H:i:s', isset($header->udate) ? (int)$header->udate : time());
                 $stmt = $pdo->prepare('INSERT INTO email_messages (mailbox_id,manager_name,direction,sent_at,from_email,from_name,to_emails,cc_emails,client_email,subject,body_text,body_html,message_size,has_attachments,attachment_count,imap_uid,imap_folder,message_id,incoming_status,outgoing_status) VALUES (:mailbox_id,:manager_name,:direction,:sent_at,:from_email,:from_name,:to_emails,:cc_emails,:client_email,:subject,:body_text,:body_html,:message_size,:has_attachments,:attachment_count,:imap_uid,:imap_folder,:message_id,:incoming_status,:outgoing_status)');
-                $stmt->execute([':mailbox_id'=>$mailbox['id'], ':manager_name'=>$mailbox['manager_name'], ':direction'=>$direction, ':sent_at'=>$date, ':from_email'=>imapAddress($header, 'from'), ':from_name'=>decodeImapText((string)($header->fromaddress ?? '')), ':to_emails'=>imapAddresses($header, 'to'), ':cc_emails'=>imapAddresses($header, 'cc'), ':client_email'=>$clientEmail, ':subject'=>decodeImapText((string)($header->subject ?? '')), ':body_text'=>$content['text'], ':body_html'=>$content['html'], ':message_size'=>(int)($header->Size ?? 0), ':has_attachments'=>$attachments ? 1 : 0, ':attachment_count'=>count($attachments), ':imap_uid'=>$uid, ':imap_folder'=>$folder, ':message_id'=>(string)($header->message_id ?? ''), ':incoming_status'=>$direction === 'incoming' && !$wasSeen ? 'unread' : 'read', ':outgoing_status'=>$direction === 'outgoing' ? 'delivered' : null]);
+                $messageData = [':mailbox_id'=>$mailbox['id'], ':manager_name'=>$mailbox['manager_name'], ':direction'=>$direction, ':sent_at'=>$date, ':from_email'=>imapAddress($header, 'from'), ':from_name'=>decodeImapText((string)($header->fromaddress ?? '')), ':to_emails'=>imapAddresses($header, 'to'), ':cc_emails'=>imapAddresses($header, 'cc'), ':client_email'=>$clientEmail, ':subject'=>decodeImapText((string)($header->subject ?? '')), ':body_text'=>$content['text'], ':body_html'=>$content['html'], ':message_size'=>(int)($header->Size ?? 0), ':has_attachments'=>$attachments ? 1 : 0, ':attachment_count'=>count($attachments), ':imap_uid'=>$uid, ':imap_folder'=>$folder, ':message_id'=>(string)($header->message_id ?? ''), ':incoming_status'=>$direction === 'incoming' && !$wasSeen ? 'unread' : 'read', ':outgoing_status'=>$direction === 'outgoing' ? 'delivered' : null];
+                foreach ([':manager_name', ':from_email', ':from_name', ':to_emails', ':cc_emails', ':client_email', ':subject', ':body_text', ':body_html', ':imap_folder', ':message_id'] as $textKey) {
+                    $messageData[$textKey] = normalizeImapContentText((string)$messageData[$textKey]);
+                }
+                $stmt->execute($messageData);
                 $messageId = (int)$pdo->lastInsertId();
                 foreach ($attachments as $attachment) {
+                    $attachment['filename'] = normalizeImapContentText((string)$attachment['filename']);
                     $pdo->prepare('INSERT INTO email_attachments (message_id,filename,mime_type,file_size) VALUES (:message_id,:filename,:mime_type,:file_size)')->execute([':message_id'=>$messageId] + $attachment);
                 }
                 $imported++;
