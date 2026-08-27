@@ -73,7 +73,7 @@ window.calltrackApi.lookupClientNames = window.calltrackApi.lookupClientNames ||
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: JSON.stringify({ phones })
   });
-  return payload.data || {};
+  return { names: payload.data || {}, clients: payload.clients || {} };
 });
 
 window.calltrackApi.clientsCacheStatus = async function clientsCacheStatus(password) {
