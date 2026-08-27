@@ -17,7 +17,13 @@ import java.util.concurrent.TimeUnit
 class CalltrackStabilityWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val app = applicationContext as App
+        val heartbeatAge = StabilityDiagnostics.serviceHeartbeatAgeMs(app)
+        StabilityDiagnostics.mark(app, "worker_started", "heartbeat_age_ms=$heartbeatAge; attempt=$runAttemptCount")
         AppLogger.log(app, "STABILITY", "Периодическая проверка фоновой работы")
+
+        if (heartbeatAge > STALE_HEARTBEAT_MS) {
+            AppLogger.log(app, "STABILITY_GAP", "Heartbeat сервиса отсутствовал ${heartbeatAge / 1000} сек.; WorkManager восстанавливает сервис")
+        }
 
         if (ContextCompat.checkSelfPermission(app, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED) {
             runCatching {
@@ -30,9 +36,11 @@ class CalltrackStabilityWorker(context: Context, params: WorkerParameters) : Cor
         return runCatching {
             app.repository.syncPending()
             app.repository.sendUserTelemetry()
+            StabilityDiagnostics.mark(app, "worker_finished", "success")
             AppLogger.log(app, "STABILITY", "Фоновая синхронизация завершена")
             Result.success()
         }.getOrElse { error ->
+            StabilityDiagnostics.mark(app, "sync_failed", "worker: ${error.message}")
             AppLogger.log(app, "ERROR", "Ошибка фоновой синхронизации: ${error.message}", error)
             Result.retry()
         }
@@ -40,6 +48,7 @@ class CalltrackStabilityWorker(context: Context, params: WorkerParameters) : Cor
 
     companion object {
         private const val WORK_NAME = "calltrack-stability"
+        private val STALE_HEARTBEAT_MS = TimeUnit.MINUTES.toMillis(3)
 
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<CalltrackStabilityWorker>(15, TimeUnit.MINUTES).build()

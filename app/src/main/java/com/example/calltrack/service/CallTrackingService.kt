@@ -73,6 +73,8 @@ class CallTrackingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        StabilityDiagnostics.mark(this, "service_started", "pid=${android.os.Process.myPid()}")
+        StabilityDiagnostics.increment(this, "service_restart_count")
         createChannel()
 
         val foregroundResult = runCatching {
@@ -87,6 +89,12 @@ class CallTrackingService : Service() {
         // Метку последнего сохранённого звонка читаем асинхронно, чтобы onCreate() сервиса
         // не блокировал главный поток и не мог сам стать причиной ANR.
         val repo = (application as App).repository
+        scope.launch {
+            while (isActive) {
+                StabilityDiagnostics.serviceHeartbeat(this@CallTrackingService)
+                delay(SERVICE_HEARTBEAT_INTERVAL_MS)
+            }
+        }
         scope.launch {
             while (isActive) {
                 runCatching { repo.sendUserTelemetry() }
@@ -119,6 +127,7 @@ class CallTrackingService : Service() {
         }
 
         tracker = CallStateTracker(this) { state, _ ->
+            StabilityDiagnostics.mark(this, "tracker_event", "state=$state")
             when (state) {
                 TelephonyManager.CALL_STATE_RINGING,
                 TelephonyManager.CALL_STATE_OFFHOOK -> {
@@ -138,7 +147,10 @@ class CallTrackingService : Service() {
             }
         }
         runCatching { tracker.start() }
-            .onSuccess { AppLogger.log(this, "STABILITY", "Отслеживание звонков запущено") }
+            .onSuccess {
+                StabilityDiagnostics.mark(this, "tracker_started")
+                AppLogger.log(this, "STABILITY", "Отслеживание звонков запущено")
+            }
             .onFailure { error ->
                 AppLogger.log(this, "ERROR", "Не удалось подписаться на состояние звонков: ${error.message}", error)
                 stopSelf()
@@ -152,6 +164,7 @@ class CallTrackingService : Service() {
         }
 
         val startedAt = System.currentTimeMillis()
+        StabilityDiagnostics.mark(this, "call_capture_started")
         var attempts = 0
         var captured = false
         AppLogger.log(this, "PERF", "captureLatestCallWithRetry started")
@@ -172,6 +185,7 @@ class CallTrackingService : Service() {
                 "PERF",
                 "captureLatestCallWithRetry finished in ${System.currentTimeMillis() - startedAt} ms, attempts=$attempts, captured=$captured"
             )
+            StabilityDiagnostics.mark(this, "call_capture_finished", "attempts=$attempts; captured=$captured")
             captureInProgress.set(false)
         }
     }
@@ -508,11 +522,13 @@ class CallTrackingService : Service() {
     override fun onTimeout(startId: Int, fgsType: Int) {
         // Android 15 завершает foreground service с тайм-аутом, если приложение само не остановится.
         // Явно убираем сервис из foreground и завершаем его, чтобы система не уронила процесс.
+        StabilityDiagnostics.mark(this, "service_timeout", "startId=$startId; type=$fgsType")
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf(startId)
     }
 
     override fun onDestroy() {
+        StabilityDiagnostics.mark(this, "service_destroyed")
         AppLogger.log(this, "STABILITY", "Сервис отслеживания остановлен; восстановление контролирует WorkManager")
         scope.cancel()
         if (::tracker.isInitialized) {
@@ -520,6 +536,11 @@ class CallTrackingService : Service() {
                 .onFailure { error -> AppLogger.log(this, "WARN", "Ошибка остановки наблюдения за звонками: ${error.message}", error) }
         }
         super.onDestroy()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        StabilityDiagnostics.mark(this, "task_removed")
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -565,6 +586,7 @@ class CallTrackingService : Service() {
     }
 
     companion object {
+        private const val SERVICE_HEARTBEAT_INTERVAL_MS = 60_000L
         const val ACTION_MARK_PERSONAL_FROM_NOTIFICATION =
             "com.example.calltrack.ACTION_MARK_PERSONAL_FROM_NOTIFICATION"
 

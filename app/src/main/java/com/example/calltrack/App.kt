@@ -7,6 +7,7 @@ import com.example.calltrack.data.notification.NotificationRepository
 import com.example.calltrack.data.repository.CallRepository
 import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.service.CalltrackStabilityWorker
+import com.example.calltrack.service.StabilityDiagnostics
 import com.google.android.material.color.DynamicColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +24,7 @@ class App : Application() {
         super.onCreate()
         DynamicColors.applyToActivitiesIfAvailable(this)
         AppLogger.install(this)
+        StabilityDiagnostics.mark(this, "app_started", "pid=${android.os.Process.myPid()}")
         // AppLogger сохраняет падение и обязательно передаёт его системному
         // обработчику Android. Не заменяем этот обработчик повторно.
         val db = CallDatabase.getInstance(this)

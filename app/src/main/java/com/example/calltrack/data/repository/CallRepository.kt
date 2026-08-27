@@ -35,6 +35,7 @@ import com.example.calltrack.data.notification.NotificationTargets
 import com.example.calltrack.data.remote.WebhookApi
 import com.example.calltrack.data.remote.CallHistoryItem
 import com.example.calltrack.logging.AppLogger
+import com.example.calltrack.service.StabilityDiagnostics
 import com.example.calltrack.ui.main.AboutActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -189,6 +190,7 @@ class CallRepository(
         val statFs = StatFs(Environment.getDataDirectory().path)
         val metrics = appContext.resources.displayMetrics
         val logs = parseLogsForServer(AppLogger.readLogs(appContext))
+        val pendingCalls = callDao.getPendingCount()
         return JSONObject().apply {
             put("user_phone", managerPhone)
             put("manager", prefs.getManagerName())
@@ -215,9 +217,9 @@ class CallRepository(
             put("battery_optimization_ignored", "Нет данных")
             put("google_play_services", "Нет данных")
             put("sync_errors_count", logs.count { it.optString("level") == "ERROR" })
-            put("local_db_size", "Нет данных")
+            put("local_db_size", "Неотправленных звонков: $pendingCalls")
             put("last_error", logs.lastOrNull { it.optString("level") == "ERROR" }?.optString("message") ?: JSONObject.NULL)
-            put("last_server_response", JSONObject.NULL)
+            put("last_server_response", StabilityDiagnostics.snapshot(appContext, pendingCalls).toString())
             put("logs", JSONArray(logs))
         }
     }
@@ -1023,6 +1025,7 @@ class CallRepository(
     }
 
     suspend fun syncCallById(callId: Long) {
+        StabilityDiagnostics.mark(appContext, "sync_started", "call_id=$callId")
         syncMutex.withLock {
             val entity = callDao.getById(callId) ?: return@withLock
             val managerName = prefs.getManagerName().ifBlank { "Не указан" }
@@ -1030,11 +1033,15 @@ class CallRepository(
             if (sendCallToWebhook(entity, managerName, managerPhone)) {
                 callDao.markUploaded(entity.id)
                 AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED BY ID: id=${entity.id}")
+                StabilityDiagnostics.mark(appContext, "sync_finished", "call_id=$callId")
+            } else {
+                StabilityDiagnostics.mark(appContext, "sync_failed", "call_id=$callId; сервер не принял звонок")
             }
         }
     }
 
     suspend fun syncPending() {
+        StabilityDiagnostics.mark(appContext, "sync_started", "pending")
         syncMutex.withLock {
             val managerName = prefs.getManagerName().ifBlank { "Не указан" }
             val managerPhone = prefs.getManagerPhone().ifBlank { "Не указан" }
@@ -1064,6 +1071,7 @@ class CallRepository(
                     )
                 }
             }
+            StabilityDiagnostics.mark(appContext, "sync_finished", "pending_before=${pending.size}")
         }
     }
 

@@ -23,6 +23,9 @@ interface CallDao {
     @Query("SELECT * FROM calls WHERE uploaded = 0")
     suspend fun getPending(): List<CallEntity>
 
+    @Query("SELECT COUNT(*) FROM calls WHERE uploaded = 0")
+    suspend fun getPendingCount(): Int
+
     @Query("SELECT * FROM calls WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): CallEntity?
 
