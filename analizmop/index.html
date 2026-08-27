@@ -26,6 +26,9 @@
     .view{display:none;grid-column:2}.view.active{display:grid;gap:20px}
     .admin-card,.placeholder-card{background:var(--card);box-shadow:var(--shadow);border-radius:var(--radius);padding:24px;border:1px solid #e5e7eb;display:grid;gap:16px;max-width:720px}
     .admin-card h2,.placeholder-card h2{font-size:1.25rem;color:#111827}.admin-card p,.placeholder-card p{color:var(--muted);line-height:1.5}
+    .help-card{background:var(--card);box-shadow:var(--shadow);border-radius:var(--radius);padding:24px;border:1px solid #e5e7eb;display:grid;gap:16px}
+    .help-folder{border:1px solid #dbe3ef;border-radius:16px;background:#f8fafc;overflow:hidden}.help-folder summary{cursor:pointer;padding:16px 18px;font-weight:700;color:#111827;list-style:none;display:flex;align-items:center;gap:10px}.help-folder summary::-webkit-details-marker{display:none}.help-folder summary::before{content:'📁';font-size:1.2rem}.help-folder[open] summary::before{content:'📂'}.help-folder[open] summary{border-bottom:1px solid #e5e7eb}
+    .help-article{padding:22px;display:grid;gap:14px;line-height:1.6;color:#374151}.help-article h2{font-size:1.35rem;color:#111827}.help-article h3{font-size:1.08rem;color:#111827;margin-top:8px}.help-article ol{padding-left:24px;display:grid;gap:9px}.help-article a{color:#2563eb;overflow-wrap:anywhere}.help-article hr{border:0;border-top:1px solid #e5e7eb}.help-article blockquote{border-left:4px solid #f59e0b;background:#fffbeb;border-radius:0 12px 12px 0;padding:12px 14px;color:#78350f}
     #adminView .admin-card{max-width:none}
     .admin-login-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     .admin-password{width:min(260px,100%);border:1px solid #d1d5db;border-radius:12px;padding:10px 12px;background:#fff;color:#111827}
@@ -140,6 +143,7 @@
       <button class="tab-btn active" data-tab="dashboard" type="button">Дашборд</button>
       <button class="tab-btn" data-tab="clientCalls" type="button">Звонки клиентам</button>
       <button class="tab-btn" data-tab="admin" type="button">Админ панель</button>
+      <button class="tab-btn" data-tab="help" type="button">Помощь</button>
     </nav>
 
     <div class="view active" id="dashboardView">
@@ -449,6 +453,64 @@
       </article>
     </section>
 
+    <section class="view" id="helpView">
+      <article class="help-card">
+        <h2>Помощь</h2>
+        <details class="help-folder">
+          <summary>Импорт в первичный счет</summary>
+          <div class="help-article">
+            <h2>Инструкция по экспорту XLS в первичный счет</h2>
+
+            <h3>1. Формирование файлов для первичного счета</h3>
+            <ol>
+              <li>Откройте сервис <strong>«Сроки годности»</strong>:<br><a href="https://kvasmix.ru/vr/sroki_godnosti/" target="_blank" rel="noopener noreferrer">https://kvasmix.ru/vr/sroki_godnosti/</a></li>
+              <li>Перейдите во вкладку <strong>«Уведомления»</strong> или <strong>«События»</strong>.</li>
+              <li>Найдите нужную запись и нажмите на нее.</li>
+              <li>Откроется окно со сводной таблицей. Нажмите кнопку <strong>«Скачать XLS»</strong>.</li>
+              <li>В появившемся окне выберите формат: <strong>«Для экспорта в первичный счет»</strong>.</li>
+              <li>Откроется список товаров, которые можно включить в экспорт. Отметьте галочками товары, по которым необходимо сформировать первичные счета.<br><br>По умолчанию выбраны все товары. При необходимости снимите галочки с тех товаров, которые не нужно выгружать.</li>
+              <li>Нажмите кнопку <strong>«Скачать XLS»</strong> и выберите место для сохранения файла.</li>
+              <li>Будет загружен ZIP-архив с названием:<br><br><strong>«Первичные счета от дд.мм.гггг»</strong><br><br>В архив попадут XLS-файлы только по тем товарам, которые были отмечены при экспорте.</li>
+            </ol>
+
+            <hr>
+            <h3>2. Распаковка архива</h3>
+            <ol>
+              <li>Перейдите в папку, в которую был загружен ZIP-архив.</li>
+              <li>Нажмите на архив <strong>правой кнопкой мыши</strong>.</li>
+              <li>Выберите:<br><br><strong>7-Zip → Распаковать в «Первичные счета от дд.мм.гггг\»</strong></li>
+              <li>Рядом с ZIP-архивом появится папка:<br><br><strong>«Первичные счета от дд.мм.гггг»</strong></li>
+              <li>Скопируйте полученную папку в место, доступное из <strong>1С</strong>.</li>
+            </ol>
+
+            <hr>
+            <h3>3. Импорт первичного счета в 1С</h3>
+            <ol>
+              <li>В 1С перейдите:<br><br><strong>Сервис → Дополнительные возможности → Импорт счетов</strong></li>
+              <li>Нажмите кнопку <strong>«Выбрать файл»</strong>.</li>
+              <li>Найдите ранее скопированную папку <strong>«Первичные счета от дд.мм.гггг»</strong>.</li>
+              <li>Откройте папку и выберите нужный XLS-файл.</li>
+              <li>Нажмите <strong>«ОК»</strong>.</li>
+              <li>Нажмите кнопку <strong>«Загрузить из файла»</strong>.</li>
+              <li>После загрузки появится печатная форма. <strong>Проверьте корректность данных перед созданием счета.</strong></li>
+              <li>Если данные указаны верно, нажмите <strong>«Записать в базу»</strong>.</li>
+              <li>Дождитесь сообщения:<br><br><strong>«Импорт завершен»</strong>.</li>
+            </ol>
+
+            <hr>
+            <h3>4. Проверка созданного счета и списание</h3>
+            <ol>
+              <li>Перейдите в <strong>«Журналы»</strong>.</li>
+              <li>Найдите созданный первичный счет.</li>
+              <li>Проверьте данные первичного счета.</li>
+              <li><strong>На основании созданного первичного счета оформите списание товара.</strong></li>
+            </ol>
+            <blockquote><strong>Важно:</strong> если в ZIP-архиве находится несколько XLS-файлов, импортируйте необходимые файлы в 1С поочередно.</blockquote>
+          </div>
+        </details>
+      </article>
+    </section>
+
     <div class="comment-modal" id="commentModal" aria-hidden="true">
       <div class="comment-dialog" role="dialog" aria-modal="true" aria-labelledby="commentModalTitle">
         <h2 id="commentModalTitle">Комментарии</h2>
@@ -547,10 +609,12 @@ function parseCallsPayload(payload){
 function setActiveTab(tab){
   const isAdmin=tab==='admin';
   const isClientCalls=tab==='clientCalls';
+  const isHelp=tab==='help';
   adminEls.tabs.forEach((btn)=>btn.classList.toggle('active',btn.dataset.tab===tab));
   els.dashboardView.classList.toggle('active',tab==='dashboard');
   els.clientCallsView.classList.toggle('active',isClientCalls);
   els.adminView.classList.toggle('active',isAdmin);
+  els.helpView.classList.toggle('active',isHelp);
   if(isAdmin&&!isAdminUnlocked) setTimeout(()=>adminEls.password.focus(),0);
 }
 
