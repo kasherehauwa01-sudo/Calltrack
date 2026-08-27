@@ -41,6 +41,42 @@ function decodeImapBody(string $body, int $encoding): string
     return $body;
 }
 
+function convertImapBodyToUtf8(string $body, object $part): string
+{
+    $charset = '';
+
+    foreach (($part->parameters ?? []) as $param) {
+        if (strtolower((string)($param->attribute ?? '')) === 'charset') {
+            $charset = trim((string)($param->value ?? ''), " \t\n\r\0\x0B\"'");
+            break;
+        }
+    }
+
+    if ($body === '') {
+        return '';
+    }
+
+    if ($charset !== '' && strcasecmp($charset, 'UTF-8') !== 0 && strcasecmp($charset, 'US-ASCII') !== 0) {
+        $converted = @iconv($charset, 'UTF-8//IGNORE', $body);
+        if ($converted !== false) {
+            return $converted;
+        }
+    }
+
+    if (preg_match('//u', $body)) {
+        return $body;
+    }
+
+    foreach (['Windows-1251', 'KOI8-R', 'ISO-8859-5'] as $fallbackCharset) {
+        $converted = @iconv($fallbackCharset, 'UTF-8//IGNORE', $body);
+        if ($converted !== false && preg_match('//u', $converted)) {
+            return $converted;
+        }
+    }
+
+    return @iconv('Windows-1251', 'UTF-8//IGNORE', $body) ?: '';
+}
+
 function normalizeImapHost(string $host): string
 {
     $host = trim($host);
@@ -147,7 +183,21 @@ function collectImapParts($imap, int $messageNumber, object $part, string $secti
     }
     $body = fetchImapBodyWithoutMarkingRead($imap, $messageNumber, $section);
     $body = decodeImapBody($body, (int)($part->encoding ?? 0));
-    $params = array_merge($part->parameters ?? [], $part->dparameters ?? []);
+    $body = convertImapBodyToUtf8($body, $part);
+    $parameters = $part->parameters ?? [];
+    $dparameters = $part->dparameters ?? [];
+
+    if (is_object($parameters)) {
+        $parameters = [$parameters];
+    }
+    if (is_object($dparameters)) {
+        $dparameters = [$dparameters];
+    }
+
+    $params = array_merge(
+        is_array($parameters) ? $parameters : [],
+        is_array($dparameters) ? $dparameters : []
+    );
     $filename = '';
     foreach ($params as $param) {
         if (in_array(strtolower((string)$param->attribute), ['filename', 'name'], true)) $filename = decodeImapText((string)$param->value);
