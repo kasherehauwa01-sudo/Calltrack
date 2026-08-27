@@ -317,6 +317,26 @@ function readClientMatchesCache(string $normalizedPhone): ?array
     return is_array($matches) ? $matches : [];
 }
 
+function lookupClientNamesByPhones(array $phones): array
+{
+    $result = [];
+    foreach (array_slice(array_values(array_unique($phones)), 0, 2000) as $phone) {
+        $normalized = normalizeClientPhone((string)$phone);
+        if ($normalized === '') continue;
+        $matches = readClientMatchesCache($normalized);
+        if ($matches === null) {
+            throw new RuntimeException('Локальный кэш Clients ещё не готов');
+        }
+        $names = [];
+        foreach ($matches as $match) {
+            $name = trim((string)($match['name'] ?? ''));
+            if ($name !== '') $names[$name] = $name;
+        }
+        $result[$normalized] = array_values($names);
+    }
+    return $result;
+}
+
 function writeClientsCache(array $clients): void
 {
     $json = json_encode($clients, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -629,6 +649,13 @@ function findClientsByPhone(array $clients, string $normalizedPhone): array
 
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
     try {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+            $body = readJsonBody();
+            $phones = $body['phones'] ?? [];
+            if (!is_array($phones)) sendJson(['status'=>'error', 'message'=>'Поле phones должно быть массивом'], 400);
+            $names = lookupClientNamesByPhones($phones);
+            sendJson(['status'=>'success', 'data'=>$names, 'total'=>count($names)]);
+        }
         $pdo = getPdo();
         $clients = loadClientsDirectory($pdo);
         sendJson(['status'=>'success', 'data'=>$clients, 'total'=>count($clients)]);

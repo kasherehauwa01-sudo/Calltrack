@@ -67,6 +67,15 @@ window.calltrackApi.testClientPhone = window.calltrackApi.testClientPhone || (as
   return payload.data || null;
 });
 
+window.calltrackApi.lookupClientNames = window.calltrackApi.lookupClientNames || (async function lookupClientNames(phones) {
+  const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientDirectory, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ phones })
+  });
+  return payload.data || {};
+});
+
 window.calltrackApi.clientsCacheStatus = async function clientsCacheStatus(password) {
   const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientsCache, {
     headers: { 'X-Calltrack-Admin-Password': password }
