@@ -36,6 +36,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import java.util.concurrent.atomic.AtomicBoolean
 import org.json.JSONObject
 
@@ -74,10 +75,11 @@ class CallTrackingService : Service() {
         super.onCreate()
         createChannel()
 
-        val started = runCatching {
+        val foregroundResult = runCatching {
             startForeground(101, createNotification("Приложение активно"))
-        }.isSuccess
-        if (!started) {
+        }
+        if (foregroundResult.isFailure) {
+            AppLogger.log(this, "ERROR", "Не удалось перевести сервис в foreground: ${foregroundResult.exceptionOrNull()?.message}", foregroundResult.exceptionOrNull())
             stopSelf()
             return
         }
@@ -85,6 +87,13 @@ class CallTrackingService : Service() {
         // Метку последнего сохранённого звонка читаем асинхронно, чтобы onCreate() сервиса
         // не блокировал главный поток и не мог сам стать причиной ANR.
         val repo = (application as App).repository
+        scope.launch {
+            while (isActive) {
+                runCatching { repo.sendUserTelemetry() }
+                    .onFailure { error -> AppLogger.log(this@CallTrackingService, "WARN", "Фоновая проверка команд завершилась ошибкой: ${error.message}", error) }
+                delay(BACKGROUND_COMMAND_POLL_INTERVAL_MS)
+            }
+        }
         scope.launch {
             val startedAt = System.currentTimeMillis()
             AppLogger.log(this@CallTrackingService, "PERF", "initLastHandledTimestamp started")
@@ -128,7 +137,12 @@ class CallTrackingService : Service() {
                 }
             }
         }
-        tracker.start()
+        runCatching { tracker.start() }
+            .onSuccess { AppLogger.log(this, "STABILITY", "Отслеживание звонков запущено") }
+            .onFailure { error ->
+                AppLogger.log(this, "ERROR", "Не удалось подписаться на состояние звонков: ${error.message}", error)
+                stopSelf()
+            }
     }
 
     private suspend fun captureLatestCallWithRetry() {
@@ -499,9 +513,11 @@ class CallTrackingService : Service() {
     }
 
     override fun onDestroy() {
+        AppLogger.log(this, "STABILITY", "Сервис отслеживания остановлен; восстановление контролирует WorkManager")
         scope.cancel()
         if (::tracker.isInitialized) {
-            tracker.stop()
+            runCatching { tracker.stop() }
+                .onFailure { error -> AppLogger.log(this, "WARN", "Ошибка остановки наблюдения за звонками: ${error.message}", error) }
         }
         super.onDestroy()
     }
@@ -562,5 +578,6 @@ class CallTrackingService : Service() {
         private const val CALL_CAPTURE_RETRY_COUNT = 25
         private const val CALL_CAPTURE_RETRY_DELAY_MS = 300L
         private const val CALL_LOG_QUERY_LIMIT = 50
+        private const val BACKGROUND_COMMAND_POLL_INTERVAL_MS = 5 * 60 * 1000L
     }
 }

@@ -66,7 +66,7 @@ class CallListFragment : Fragment() {
         binding.recyclerView.adapter = adapter
         attachSwipeToCall()
 
-        // При открытии экрана «Последние» подтягиваем записи из стандартной звонилки Android.
+        // При открытии экрана «История» подтягиваем записи из стандартной звонилки Android.
         // SQL API здесь не читаем: таблица нужна только для отправки/истории, а список берём из CallLog.
         viewLifecycleOwner.lifecycleScope.launch {
             runCatching { viewModel.refreshRecentCallsFromDevice() }
@@ -195,12 +195,28 @@ class CallListFragment : Fragment() {
             }
         }
 
+        // Имена Clients и личный признак вычисляем один раз для каждого номера.
+        // Весь блок уже выполняется на Dispatchers.IO, поэтому прогрев сетевого
+        // справочника не блокирует прокрутку и главный поток приложения.
+        val clientByPhone = mutableMapOf<String, String>()
+        calls.forEach { call ->
+            val normalized = normalizePhone(call.phone).takeLast(10)
+            if (normalized.isNotBlank() && !clientByPhone.containsKey(normalized)) {
+                clientByPhone[normalized] = if (viewModel.isPersonalContact(call.phone)) {
+                    "Личный контакт"
+                } else {
+                    viewModel.findClientName(call.phone).ifBlank { "—" }
+                }
+            }
+        }
+
         val rows = calls.map { call ->
             val normalized = normalizePhone(call.phone)
             val short = normalized.takeLast(10)
             RecentCallListItem.CallRow(
                 call = call,
-                contactName = nameByPhone[normalized] ?: nameByPhone[short] ?: call.phone
+                contactName = nameByPhone[normalized] ?: nameByPhone[short] ?: call.phone,
+                client1cName = clientByPhone[short] ?: "—"
             )
         }
 
