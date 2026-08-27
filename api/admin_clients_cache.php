@@ -19,7 +19,9 @@ try {
     }
     if ($method !== 'POST') sendJson(['status'=>'error', 'message'=>'Разрешены только GET и POST'], 405);
 
-    $result = startClientsCacheRefreshInBackground();
+    $body = json_decode((string)file_get_contents('php://input'), true);
+    $mode = is_array($body) && ($body['mode'] ?? '') === 'full' ? 'full' : 'delta';
+    $result = startClientsCacheRefreshInBackground($mode);
     sendJson(['status'=>'success', 'message'=>'Обновление запущено', 'data'=>$result], 202);
 } catch (Throwable $error) {
     $code = strpos($error->getMessage(), 'уже выполняется') !== false ? 409 : 502;
