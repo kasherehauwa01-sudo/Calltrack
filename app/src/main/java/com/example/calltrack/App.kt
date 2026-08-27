@@ -1,12 +1,13 @@
 package com.example.calltrack
 
 import android.app.Application
-import android.util.Log
 import com.example.calltrack.data.local.CallDatabase
 import com.example.calltrack.data.remote.ApiFactory
 import com.example.calltrack.data.notification.NotificationRepository
 import com.example.calltrack.data.repository.CallRepository
 import com.example.calltrack.logging.AppLogger
+import com.example.calltrack.service.CalltrackStabilityWorker
+import com.example.calltrack.service.StabilityDiagnostics
 import com.google.android.material.color.DynamicColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,9 +24,9 @@ class App : Application() {
         super.onCreate()
         DynamicColors.applyToActivitiesIfAvailable(this)
         AppLogger.install(this)
-        Thread.setDefaultUncaughtExceptionHandler { _, e ->
-            AppLogger.log(this, "CRASH", Log.getStackTraceString(e))
-        }
+        StabilityDiagnostics.mark(this, "app_started", "pid=${android.os.Process.myPid()}")
+        // AppLogger сохраняет падение и обязательно передаёт его системному
+        // обработчику Android. Не заменяем этот обработчик повторно.
         val db = CallDatabase.getInstance(this)
         notificationRepository = NotificationRepository(db.notificationDao())
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
@@ -41,5 +42,6 @@ class App : Application() {
             webhookApi = ApiFactory.createWebhookApi(),
             context = this
         )
+        CalltrackStabilityWorker.schedule(this)
     }
 }

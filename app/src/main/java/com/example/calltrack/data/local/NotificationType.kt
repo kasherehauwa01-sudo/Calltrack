@@ -6,5 +6,6 @@ enum class NotificationType {
     MISSED_CALL,
     PERSONAL_CONTACT,
     CALLBACK,
-    SYNC_ERROR
+    SYNC_ERROR,
+    APP_UPDATE
 }

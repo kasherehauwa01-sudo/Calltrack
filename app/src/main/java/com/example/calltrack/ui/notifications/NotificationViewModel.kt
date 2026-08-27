@@ -17,7 +17,7 @@ import java.util.Calendar
 class NotificationViewModel(
     private val repository: NotificationRepository
 ) : ViewModel() {
-    private val filter = MutableStateFlow(NotificationFilter.CLIENT_NOT_FOUND)
+    private val filter = MutableStateFlow(NotificationFilter.ALL)
 
     val unreadCount: StateFlow<Int> = repository.unreadCount.stateIn(
         scope = viewModelScope,
@@ -41,6 +41,7 @@ class NotificationViewModel(
 
     private fun List<NotificationEntity>.applyFilter(filter: NotificationFilter): List<NotificationEntity> {
         return when (filter) {
+            NotificationFilter.ALL -> this
             NotificationFilter.CLIENT_NOT_FOUND -> filter { notification ->
                 notification.type == NotificationType.MISSING_CLIENT || notification.hasText("клиент", "не найден")
             }
@@ -48,6 +49,7 @@ class NotificationViewModel(
                 notification.type == NotificationType.CALLBACK || notification.hasText("результат звонка")
             }
             NotificationFilter.UNREAD -> filter { !it.isRead }
+            NotificationFilter.APP_UPDATE -> filter { it.type == NotificationType.APP_UPDATE }
         }
     }
 

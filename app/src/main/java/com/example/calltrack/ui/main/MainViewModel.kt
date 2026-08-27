@@ -35,6 +35,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     fun observeReminders(phone: String): LiveData<List<ReminderEntity>> = repository.observeReminders(phone).asLiveData()
     fun observeComments(phone: String): LiveData<List<CommentEntity>> = repository.observeComments(phone).asLiveData()
     fun findClientName(phone: String): String = repository.findClientName(phone)
+    suspend fun isPersonalContact(phone: String): Boolean = repository.isPersonalContact(phone)
     suspend fun loadClientCards(phone: String): List<ClientCard> = withContext(Dispatchers.IO) {
         repository.loadClientCards(phone)
     }
@@ -72,7 +73,7 @@ class MainViewModel(private val repository: CallRepository) : ViewModel() {
     suspend fun sync() = repository.syncPending()
     suspend fun sendUserTelemetry() = repository.sendUserTelemetry()
 
-    // Экран «Последние» обновляем из стандартной звонилки Android, а не из SQL API.
+    // Экран «История» обновляем из стандартной звонилки Android, а не из SQL API.
     suspend fun refreshRecentCallsFromDevice() = repository.importRecentCallsFromDevice()
     suspend fun loadHistoryFromRemote(phone: String): List<CallHistoryItem> = repository.loadHistoryFromRemote(phone)
     suspend fun getDeviceCallHistory(phone: String): List<CallHistoryEntity> = repository.getDeviceCallHistory(phone)
