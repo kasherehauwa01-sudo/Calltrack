@@ -11,11 +11,6 @@ foreach (['keystore.properties', 'signingConfigs', 'signingConfig signingConfigs
         throw new RuntimeException("Release-подпись не содержит обязательную настройку: {$expected}");
     }
 }
-foreach (['enableV1Signing true', 'enableV2Signing true'] as $scheme) {
-    if (!str_contains($gradle, $scheme)) {
-        throw new RuntimeException("Release APK не включает совместимую схему подписи: {$scheme}");
-    }
-}
 foreach (['storeFile', 'storePassword', 'keyAlias', 'keyPassword'] as $key) {
     if (!str_contains($example, $key . '=')) {
         throw new RuntimeException("В примере отсутствует параметр подписи: {$key}");

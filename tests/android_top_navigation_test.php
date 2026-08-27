@@ -23,6 +23,18 @@ foreach (['R.drawable.ic_arrow_back', 'R.drawable.ic_analytics', 'R.drawable.ic_
         throw new RuntimeException("На экране аналитики отсутствует {$icon}");
     }
 }
+if (preg_match('/[^\x00-\x7F]/', $analytics) === 1) {
+    throw new RuntimeException('AnalyticsActivity снова содержит текст, зависящий от кодовой страницы сборщика');
+}
+foreach ([
+    '\\u0410\\u043D\\u0430\\u043B\\u0438\\u0442\\u0438\\u043A\\u0430', // Аналитика
+    '\\u0414\\u0430\\u0448\\u0431\\u043E\\u0440\\u0434', // Дашборд
+    '\\u0412\\u0445\\u043E\\u0434\\u044F\\u0449\\u0438\\u0439', // Входящий
+] as $escapedLabel) {
+    if (!str_contains($analytics, $escapedLabel)) {
+        throw new RuntimeException("На экране аналитики отсутствует ASCII-безопасная строка {$escapedLabel}");
+    }
+}
 if (!str_contains($main, 'binding.btnTopBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }') ||
     !str_contains($main, '.addToBackStack(null)')) {
     throw new RuntimeException('Верхняя стрелка не возвращает предыдущий Fragment');
