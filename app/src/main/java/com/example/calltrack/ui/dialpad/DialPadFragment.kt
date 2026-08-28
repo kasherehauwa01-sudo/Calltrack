@@ -77,7 +77,7 @@ class DialPadFragment : Fragment() {
         binding.btnCall.setOnClickListener {
             val raw = binding.tvNumber.text.toString().trim()
             if (raw.isBlank()) {
-                Toast.makeText(requireContext(), "Введите номер", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043D\u043E\u043C\u0435\u0440", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             openDial(raw)
@@ -92,14 +92,14 @@ class DialPadFragment : Fragment() {
     }
 
     private fun setupKeyLabels() {
-        setKeyLabel(binding.key2, "2", "АБВГ", "ABC")
-        setKeyLabel(binding.key3, "3", "ДЕЁЖЗ", "DEF")
-        setKeyLabel(binding.key4, "4", "ИЙКЛ", "GHI")
-        setKeyLabel(binding.key5, "5", "МНОП", "JKL")
-        setKeyLabel(binding.key6, "6", "РСТУ", "MNO")
-        setKeyLabel(binding.key7, "7", "ФХЦЧ", "PQRS")
-        setKeyLabel(binding.key8, "8", "ШЩЪЫ", "TUV")
-        setKeyLabel(binding.key9, "9", "ЬЭЮЯ", "WXYZ")
+        setKeyLabel(binding.key2, "2", "\u0410\u0411\u0412\u0413", "ABC")
+        setKeyLabel(binding.key3, "3", "\u0414\u0415\u0401\u0416\u0417", "DEF")
+        setKeyLabel(binding.key4, "4", "\u0418\u0419\u041A\u041B", "GHI")
+        setKeyLabel(binding.key5, "5", "\u041C\u041D\u041E\u041F", "JKL")
+        setKeyLabel(binding.key6, "6", "\u0420\u0421\u0422\u0423", "MNO")
+        setKeyLabel(binding.key7, "7", "\u0424\u0425\u0426\u0427", "PQRS")
+        setKeyLabel(binding.key8, "8", "\u0428\u0429\u042A\u042B", "TUV")
+        setKeyLabel(binding.key9, "9", "\u042C\u042D\u042E\u042F", "WXYZ")
         setKeyLabel(binding.key0, "0", "+", "")
     }
 

@@ -2,8 +2,9 @@
 declare(strict_types=1);
 
 $root = dirname(__DIR__);
+require_once __DIR__ . '/kotlin_source.php';
 $layout = (string)file_get_contents($root . '/app/src/main/res/layout/fragment_contact_card.xml');
-$source = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/ui/contactcard/ContactCardFragment.kt');
+$source = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/ui/contactcard/ContactCardFragment.kt');
 
 foreach (['android:id="@+id/rowClient1c"', 'android:clickable="true"', 'android:foreground="?attr/selectableItemBackground"'] as $expected) {
     if (!str_contains($layout, $expected)) throw new RuntimeException("Строка клиента не содержит: {$expected}");

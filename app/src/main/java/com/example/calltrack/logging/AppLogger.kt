@@ -27,7 +27,7 @@ object AppLogger {
         if (installed) return
         installed = true
 
-        log(context, "INFO", "Приложение запущено")
+        log(context, "INFO", "\u041F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u0437\u0430\u043F\u0443\u0449\u0435\u043D\u043E")
         installCrashHandler(context)
         installNetworkLogging(context)
     }
@@ -59,9 +59,9 @@ object AppLogger {
     @Synchronized
     fun readLogs(context: Context): String {
         val file = File(context.filesDir, LOG_FILE)
-        if (!file.exists()) return "Логи пока отсутствуют"
+        if (!file.exists()) return "\u041B\u043E\u0433\u0438 \u043F\u043E\u043A\u0430 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0442"
         runCatching { pruneOldEntries(file) }
-        return runCatching { file.readText() }.getOrElse { "Не удалось прочитать лог: ${it.message}" }
+        return runCatching { file.readText() }.getOrElse { "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0447\u0438\u0442\u0430\u0442\u044C \u043B\u043E\u0433: ${it.message}" }
     }
 
     fun logFile(context: Context): File = File(context.filesDir, LOG_FILE)
@@ -69,7 +69,7 @@ object AppLogger {
     private fun installCrashHandler(context: Context) {
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            log(context, "ERROR", "Критическое падение приложения в потоке ${thread.name}", throwable)
+            log(context, "ERROR", "\u041A\u0440\u0438\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0435 \u043F\u0430\u0434\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0432 \u043F\u043E\u0442\u043E\u043A\u0435 ${thread.name}", throwable)
             defaultHandler?.uncaughtException(thread, throwable)
         }
     }
@@ -81,22 +81,22 @@ object AppLogger {
             .build()
         cm.registerNetworkCallback(request, object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                log(context, "INFO", "Сеть доступна")
+                log(context, "INFO", "\u0421\u0435\u0442\u044C \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0430")
             }
 
             override fun onLost(network: Network) {
-                log(context, "WARN", "Потеряно сетевое соединение")
+                log(context, "WARN", "\u041F\u043E\u0442\u0435\u0440\u044F\u043D\u043E \u0441\u0435\u0442\u0435\u0432\u043E\u0435 \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435")
             }
 
             override fun onUnavailable() {
-                log(context, "WARN", "Сеть недоступна")
+                log(context, "WARN", "\u0421\u0435\u0442\u044C \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u0430")
             }
         })
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
                 override fun onLost(network: Network) {
-                    log(context, "WARN", "Потеряно основное сетевое соединение")
+                    log(context, "WARN", "\u041F\u043E\u0442\u0435\u0440\u044F\u043D\u043E \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u0435 \u0441\u0435\u0442\u0435\u0432\u043E\u0435 \u0441\u043E\u0435\u0434\u0438\u043D\u0435\u043D\u0438\u0435")
                 }
             })
         }

@@ -82,7 +82,7 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
                         phone,
                         contactName,
                         it,
-                        reminderText.ifBlank { "Перезвонить клиенту" }
+                        reminderText.ifBlank { "\u041F\u0435\u0440\u0435\u0437\u0432\u043E\u043D\u0438\u0442\u044C \u043A\u043B\u0438\u0435\u043D\u0442\u0443" }
                     )
                 }
                 dismissAllowingStateLoss()
@@ -93,27 +93,27 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
 
     private fun buildTag(): String {
         val outcome = when (binding.groupOutcome.checkedChipId) {
-            binding.chipOutcomeDeal.id -> "договорились"
-            binding.chipOutcomeDecline.id -> "отказ"
-            binding.chipOutcomeRecall.id -> "перезвонить"
-            binding.chipOutcomePotential.id -> "потенциальный клиент"
+            binding.chipOutcomeDeal.id -> "\u0434\u043E\u0433\u043E\u0432\u043E\u0440\u0438\u043B\u0438\u0441\u044C"
+            binding.chipOutcomeDecline.id -> "\u043E\u0442\u043A\u0430\u0437"
+            binding.chipOutcomeRecall.id -> "\u043F\u0435\u0440\u0435\u0437\u0432\u043E\u043D\u0438\u0442\u044C"
+            binding.chipOutcomePotential.id -> "\u043F\u043E\u0442\u0435\u043D\u0446\u0438\u0430\u043B\u044C\u043D\u044B\u0439 \u043A\u043B\u0438\u0435\u043D\u0442"
             else -> ""
         }
-        return outcome.takeIf { it.isNotBlank() }?.let { "Итог: $it" }.orEmpty()
+        return outcome.takeIf { it.isNotBlank() }?.let { "\u0418\u0442\u043E\u0433: $it" }.orEmpty()
     }
 
     private fun showReminderDialog() {
         val dialogBinding = DialogAddReminderBinding.inflate(layoutInflater)
         dialogBinding.etReminderText.filters = arrayOf(InputFilter.LengthFilter(100))
         dialogBinding.etReminderText.setText(reminderText)
-        dialogBinding.tvReminderDate.text = reminderAtMillis?.let { formatter.format(java.util.Date(it)) } ?: "Дата и время не выбраны"
+        dialogBinding.tvReminderDate.text = reminderAtMillis?.let { formatter.format(java.util.Date(it)) } ?: "\u0414\u0430\u0442\u0430 \u0438 \u0432\u0440\u0435\u043C\u044F \u043D\u0435 \u0432\u044B\u0431\u0440\u0430\u043D\u044B"
         dialogBinding.btnPickDate.setOnClickListener { pickDateTime(dialogBinding) }
 
         AlertDialog.Builder(requireContext())
-            .setTitle("Добавить напоминание")
+            .setTitle("\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435")
             .setView(dialogBinding.root)
-            .setNegativeButton("Отмена", null)
-            .setPositiveButton("Сохранить") { _, _ ->
+            .setNegativeButton("\u041E\u0442\u043C\u0435\u043D\u0430", null)
+            .setPositiveButton("\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C") { _, _ ->
                 reminderText = dialogBinding.etReminderText.text?.toString().orEmpty().trim()
                 updateReminderPreview()
                 updateSaveState()
@@ -164,7 +164,7 @@ class PostCallBottomSheet : BottomSheetDialogFragment() {
         binding.tvReminderValue.text = if (reminderAtMillis == null && reminderText.isBlank()) {
             ""
         } else {
-            "Напоминание: ${reminderText.ifBlank { "Без текста" }}\n${formatter.format(java.util.Date(reminderAtMillis ?: System.currentTimeMillis()))}"
+            "\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435: ${reminderText.ifBlank { "\u0411\u0435\u0437 \u0442\u0435\u043A\u0441\u0442\u0430" }}\n${formatter.format(java.util.Date(reminderAtMillis ?: System.currentTimeMillis()))}"
         }
     }
 

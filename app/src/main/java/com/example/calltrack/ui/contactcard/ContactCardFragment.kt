@@ -63,7 +63,7 @@ class ContactCardFragment : Fragment() {
         binding.tvClient1c.text = viewModel.findClientName(phone).ifBlank { "—" }
         binding.rowClient1c.setOnClickListener {
             val clientName = binding.tvClient1c.text.toString().trim()
-            if (clientName.isNotBlank() && clientName != "—" && clientName != "Личный") {
+            if (clientName.isNotBlank() && clientName != "—" && clientName != "\u041B\u0438\u0447\u043D\u044B\u0439") {
                 showClientCard(phone, clientName)
             }
         }
@@ -86,19 +86,19 @@ class ContactCardFragment : Fragment() {
                         isPersonalContact = false
                         renderPersonalButtonState()
                         renderClientLinkState()
-                        Toast.makeText(requireContext(), "Пометка личного контакта убрана", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "\u041F\u043E\u043C\u0435\u0442\u043A\u0430 \u043B\u0438\u0447\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430 \u0443\u0431\u0440\u0430\u043D\u0430", Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(requireContext(), "Не удалось убрать пометку личного контакта", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0443\u0431\u0440\u0430\u0442\u044C \u043F\u043E\u043C\u0435\u0442\u043A\u0443 \u043B\u0438\u0447\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430", Toast.LENGTH_SHORT).show()
                     }
                 } else {
                     if (viewModel.markAsPersonalContact(phone)) {
-                        binding.tvClient1c.text = "Личный"
+                        binding.tvClient1c.text = "\u041B\u0438\u0447\u043D\u044B\u0439"
                         isPersonalContact = true
                         renderPersonalButtonState()
                         renderClientLinkState()
-                        Toast.makeText(requireContext(), "Контакт помечен как личный", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "\u041A\u043E\u043D\u0442\u0430\u043A\u0442 \u043F\u043E\u043C\u0435\u0447\u0435\u043D \u043A\u0430\u043A \u043B\u0438\u0447\u043D\u044B\u0439", Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(requireContext(), "Не удалось пометить контакт как личный", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(requireContext(), "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u043C\u0435\u0442\u0438\u0442\u044C \u043A\u043E\u043D\u0442\u0430\u043A\u0442 \u043A\u0430\u043A \u043B\u0438\u0447\u043D\u044B\u0439", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -140,7 +140,7 @@ class ContactCardFragment : Fragment() {
             binding.tvContactName.text = contact?.name?.ifBlank { currentName } ?: currentName
             val fallbackClient = viewModel.findClientName(phone).ifBlank { "—" }
             binding.tvClient1c.text = contact?.client1c?.ifBlank { fallbackClient } ?: fallbackClient
-            isPersonalContact = binding.tvClient1c.text.toString() == "Личный"
+            isPersonalContact = binding.tvClient1c.text.toString() == "\u041B\u0438\u0447\u043D\u044B\u0439"
             renderPersonalButtonState()
             renderClientLinkState()
         }
@@ -149,7 +149,7 @@ class ContactCardFragment : Fragment() {
 
     private fun renderClientLinkState() {
         val name = binding.tvClient1c.text.toString().trim()
-        val clickable = name.isNotBlank() && name != "—" && name != "Личный"
+        val clickable = name.isNotBlank() && name != "—" && name != "\u041B\u0438\u0447\u043D\u044B\u0439"
         // Нажатие обрабатывает вся строка, иначе дочерний TextView перехватывает
         // событие и обработчик карточки не вызывается.
         binding.tvClient1c.isClickable = false
@@ -167,8 +167,8 @@ class ContactCardFragment : Fragment() {
         if (clientCardLoading) return
         clientCardLoading = true
         clientCardLoadingDialog = AlertDialog.Builder(requireContext())
-            .setTitle("Карточка клиента")
-            .setMessage("Загрузка данных...")
+            .setTitle("\u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430 \u043A\u043B\u0438\u0435\u043D\u0442\u0430")
+            .setMessage("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0434\u0430\u043D\u043D\u044B\u0445...")
             .setView(ProgressBar(requireContext()))
             .setCancelable(false)
             .show()
@@ -177,7 +177,7 @@ class ContactCardFragment : Fragment() {
                 clientCardLoading = false
                 clientCardLoadingDialog?.dismiss()
                 clientCardLoadingDialog = null
-                Toast.makeText(requireContext(), "Не удалось загрузить карточку: ${error.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(requireContext(), "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443: ${error.message}", Toast.LENGTH_LONG).show()
                 return@launch
             }
             clientCardLoading = false
@@ -185,7 +185,7 @@ class ContactCardFragment : Fragment() {
             clientCardLoadingDialog = null
             val card = cards.firstOrNull { it.name == clientName } ?: cards.firstOrNull()
             if (card == null) {
-                Toast.makeText(requireContext(), "Карточка отсутствует в локальном кэше Clients", Toast.LENGTH_LONG).show()
+                Toast.makeText(requireContext(), "\u041A\u0430\u0440\u0442\u043E\u0447\u043A\u0430 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0432 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E\u043C \u043A\u044D\u0448\u0435 Clients", Toast.LENGTH_LONG).show()
                 return@launch
             }
             val padding = (16 * resources.displayMetrics.density).toInt()
@@ -210,17 +210,17 @@ class ContactCardFragment : Fragment() {
             AlertDialog.Builder(requireContext())
                 .setTitle(card.name.ifBlank { clientName })
                 .setView(ScrollView(requireContext()).apply { addView(content) })
-                .setPositiveButton("Закрыть", null)
+                .setPositiveButton("\u0417\u0430\u043A\u0440\u044B\u0442\u044C", null)
                 .show()
         }
     }
 
     private fun renderPersonalButtonState() {
         if (isPersonalContact) {
-            binding.btnMarkPersonal.text = "Убрать пометку \"Личный контакт\""
+            binding.btnMarkPersonal.text = "\u0423\u0431\u0440\u0430\u0442\u044C \u043F\u043E\u043C\u0435\u0442\u043A\u0443 \"\u041B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\""
             binding.btnMarkPersonal.setBackgroundColor(0xFF9E9E9E.toInt())
         } else {
-            binding.btnMarkPersonal.text = "Пометить как личный контакт"
+            binding.btnMarkPersonal.text = "\u041F\u043E\u043C\u0435\u0442\u0438\u0442\u044C \u043A\u0430\u043A \u043B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442"
             binding.btnMarkPersonal.setBackgroundColor(0xFF4CAF50.toInt())
         }
     }
@@ -230,18 +230,18 @@ class ContactCardFragment : Fragment() {
         dialogBinding.etComment.filters = arrayOf(InputFilter.LengthFilter(500))
 
         AlertDialog.Builder(requireContext())
-            .setTitle("Добавить комментарий")
+            .setTitle("\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439")
             .setView(dialogBinding.root)
-            .setNegativeButton("Отменить", null)
-            .setPositiveButton("Сохранить") { _, _ ->
+            .setNegativeButton("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C", null)
+            .setPositiveButton("\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C") { _, _ ->
                 val text = dialogBinding.etComment.text?.toString().orEmpty().trim()
                 if (text.isBlank()) {
-                    Toast.makeText(requireContext(), "Комментарий пустой", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439 \u043F\u0443\u0441\u0442\u043E\u0439", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
                 viewLifecycleOwner.lifecycleScope.launch {
                     viewModel.addComment(phone, text)
-                    Toast.makeText(requireContext(), "Комментарий сохранён", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D", Toast.LENGTH_SHORT).show()
                 }
             }
             .show()
@@ -260,10 +260,10 @@ class ContactCardFragment : Fragment() {
         }
 
         AlertDialog.Builder(requireContext())
-            .setTitle("Добавить напоминание")
+            .setTitle("\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435")
             .setView(dialogBinding.root)
-            .setNegativeButton("Отменить", null)
-            .setPositiveButton("Сохранить") { _, _ ->
+            .setNegativeButton("\u041E\u0442\u043C\u0435\u043D\u0438\u0442\u044C", null)
+            .setPositiveButton("\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C") { _, _ ->
                 val reminderText = dialogBinding.etReminderText.text?.toString().orEmpty().trim()
                 val remindAt = reminderAt
                 saveReminder(phone, reminderText, remindAt)
@@ -273,11 +273,11 @@ class ContactCardFragment : Fragment() {
 
     private fun saveReminder(phone: String, reminderText: String, remindAt: Long?) {
         if (reminderText.isBlank()) {
-            Toast.makeText(requireContext(), "Введите текст напоминания", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0442\u0435\u043A\u0441\u0442 \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F", Toast.LENGTH_SHORT).show()
             return
         }
         if (remindAt == null) {
-            Toast.makeText(requireContext(), "Выберите дату и время напоминания", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u0430\u0442\u0443 \u0438 \u0432\u0440\u0435\u043C\u044F \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -285,7 +285,7 @@ class ContactCardFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.addReminder(phone, contactName, reminderText, remindAt)
             ReminderScheduler.schedule(requireContext(), phone, contactName, remindAt, reminderText)
-            Toast.makeText(requireContext(), "Напоминание сохранено", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E", Toast.LENGTH_SHORT).show()
         }
     }
 

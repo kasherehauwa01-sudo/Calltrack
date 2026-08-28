@@ -32,8 +32,8 @@ class ContactActionActivity : AppCompatActivity() {
         }
         binding.btnAddTo1c.setOnClickListener {
             AlertDialog.Builder(this)
-                .setMessage("Чтобы определить клиента, добавьте номер телефона в его карточку в 1С.")
-                .setPositiveButton("Ок", null)
+                .setMessage("\u0427\u0442\u043E\u0431\u044B \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0438\u0442\u044C \u043A\u043B\u0438\u0435\u043D\u0442\u0430, \u0434\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u043D\u043E\u043C\u0435\u0440 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430 \u0432 \u0435\u0433\u043E \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443 \u0432 1\u0421.")
+                .setPositiveButton("\u041E\u043A", null)
                 .show()
         }
 
@@ -47,11 +47,11 @@ class ContactActionActivity : AppCompatActivity() {
                 if (isPersonal) {
                     repository.unmarkPersonalContact(phone)
                     isPersonal = false
-                    Toast.makeText(this@ContactActionActivity, "Пометка личного контакта убрана", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@ContactActionActivity, "\u041F\u043E\u043C\u0435\u0442\u043A\u0430 \u043B\u0438\u0447\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430 \u0443\u0431\u0440\u0430\u043D\u0430", Toast.LENGTH_SHORT).show()
                 } else {
                     repository.markAsPersonalContact(phone)
                     isPersonal = true
-                    Toast.makeText(this@ContactActionActivity, "Контакт помечен как личный", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@ContactActionActivity, "\u041A\u043E\u043D\u0442\u0430\u043A\u0442 \u043F\u043E\u043C\u0435\u0447\u0435\u043D \u043A\u0430\u043A \u043B\u0438\u0447\u043D\u044B\u0439", Toast.LENGTH_SHORT).show()
                 }
                 renderPersonalButton()
             }
@@ -61,18 +61,18 @@ class ContactActionActivity : AppCompatActivity() {
 
     private fun showAddTo1cInfoAndClose() {
         AlertDialog.Builder(this)
-            .setMessage("Чтобы определить клиента, добавьте номер телефона в его карточку в 1С.")
-            .setPositiveButton("Ок") { _, _ -> finish() }
+            .setMessage("\u0427\u0442\u043E\u0431\u044B \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0438\u0442\u044C \u043A\u043B\u0438\u0435\u043D\u0442\u0430, \u0434\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u043D\u043E\u043C\u0435\u0440 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430 \u0432 \u0435\u0433\u043E \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443 \u0432 1\u0421.")
+            .setPositiveButton("\u041E\u043A") { _, _ -> finish() }
             .setOnCancelListener { finish() }
             .show()
     }
 
     private fun renderPersonalButton() {
         if (isPersonal) {
-            binding.btnMarkPersonal.text = "Убрать пометку \"Личный контакт\""
+            binding.btnMarkPersonal.text = "\u0423\u0431\u0440\u0430\u0442\u044C \u043F\u043E\u043C\u0435\u0442\u043A\u0443 \"\u041B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\""
             binding.btnMarkPersonal.setBackgroundColor(0xFF9E9E9E.toInt())
         } else {
-            binding.btnMarkPersonal.text = "Пометить как личный контакт"
+            binding.btnMarkPersonal.text = "\u041F\u043E\u043C\u0435\u0442\u0438\u0442\u044C \u043A\u0430\u043A \u043B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442"
             binding.btnMarkPersonal.setBackgroundColor(0xFF4CAF50.toInt())
         }
     }

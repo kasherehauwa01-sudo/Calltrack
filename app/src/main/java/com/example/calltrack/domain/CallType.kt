@@ -1,8 +1,8 @@
 package com.example.calltrack.domain
 
 enum class CallType(val title: String) {
-    INCOMING("Входящий"),
-    OUTGOING("Исходящий"),
-    MISSED("Пропущенный"),
-    UNANSWERED("Неотвеченный")
+    INCOMING("\u0412\u0445\u043E\u0434\u044F\u0449\u0438\u0439"),
+    OUTGOING("\u0418\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0439"),
+    MISSED("\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0439"),
+    UNANSWERED("\u041D\u0435\u043E\u0442\u0432\u0435\u0447\u0435\u043D\u043D\u044B\u0439")
 }

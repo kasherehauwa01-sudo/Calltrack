@@ -2,18 +2,19 @@
 declare(strict_types=1);
 
 $root = dirname(__DIR__);
-$app = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/App.kt');
-$worker = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/service/CalltrackStabilityWorker.kt');
-$service = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/service/CallTrackingService.kt');
-$logger = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/logging/AppLogger.kt');
+require_once __DIR__ . '/kotlin_source.php';
+$app = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/App.kt');
+$worker = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/service/CalltrackStabilityWorker.kt');
+$service = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/service/CallTrackingService.kt');
+$logger = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/logging/AppLogger.kt');
 $manifest = (string)file_get_contents($root . '/app/src/main/AndroidManifest.xml');
-$analytics = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/ui/analytics/AnalyticsActivity.kt');
+$analytics = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/ui/analytics/AnalyticsActivity.kt');
 $aboutLayout = (string)file_get_contents($root . '/app/src/main/res/layout/activity_about.xml');
-$main = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/ui/main/MainActivity.kt');
-$onboarding = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/ui/onboarding/OnboardingFragment.kt');
-$diagnostics = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/service/StabilityDiagnostics.kt');
-$repository = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/data/repository/CallRepository.kt');
-$callDao = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/data/local/CallDao.kt');
+$main = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/ui/main/MainActivity.kt');
+$onboarding = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/ui/onboarding/OnboardingFragment.kt');
+$diagnostics = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/service/StabilityDiagnostics.kt');
+$repository = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/data/repository/CallRepository.kt');
+$callDao = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/data/local/CallDao.kt');
 
 foreach (['PeriodicWorkRequestBuilder<CalltrackStabilityWorker>(15, TimeUnit.MINUTES)', 'ExistingPeriodicWorkPolicy.KEEP', 'repository.syncPending()', 'repository.sendUserTelemetry()'] as $expected) {
     if (!str_contains($worker, $expected)) throw new RuntimeException("Нет механизма восстановления: {$expected}");

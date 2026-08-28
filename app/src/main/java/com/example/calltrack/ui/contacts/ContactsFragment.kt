@@ -91,7 +91,7 @@ class ContactsFragment : Fragment() {
         runCatching {
             startActivity(callIntent)
         }.onFailure {
-            Toast.makeText(requireContext(), "Не удалось открыть дозвон", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u0434\u043E\u0437\u0432\u043E\u043D", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -114,7 +114,7 @@ class ContactsFragment : Fragment() {
             while (cursor.moveToNext()) {
                 list += ContactListItem(
                     contactId = cursor.getLong(idIdx),
-                    name = cursor.getString(nameIdx).orEmpty().ifBlank { "Без имени" },
+                    name = cursor.getString(nameIdx).orEmpty().ifBlank { "\u0411\u0435\u0437 \u0438\u043C\u0435\u043D\u0438" },
                     phone = cursor.getString(phoneIdx).orEmpty()
                 )
             }
