@@ -43,7 +43,7 @@ class CallListFragment : Fragment() {
     private val adapter by lazy {
         CallAdapter(
             onItemClick = { item ->
-                if (item.call.phone.isNotBlank() && item.call.phone != "Неизвестно") {
+                if (item.call.phone.isNotBlank() && item.call.phone != "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E") {
                     (requireActivity() as MainActivity).openContactCard(item.call.phone)
                 }
             },
@@ -70,7 +70,7 @@ class CallListFragment : Fragment() {
         // SQL API здесь не читаем: таблица нужна только для отправки/истории, а список берём из CallLog.
         viewLifecycleOwner.lifecycleScope.launch {
             runCatching { viewModel.refreshRecentCallsFromDevice() }
-                .onFailure { Log.e("CALL_LOG", "Ошибка загрузки последних звонков из системной звонилки", it) }
+                .onFailure { Log.e("CALL_LOG", "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0445 \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u0438\u0437 \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0439 \u0437\u0432\u043E\u043D\u0438\u043B\u043A\u0438", it) }
         }
 
         viewModel.calls.observe(viewLifecycleOwner) { calls ->
@@ -82,21 +82,21 @@ class CallListFragment : Fragment() {
 
     private fun showCommentDialog(item: RecentCallListItem.CallRow) {
         val input = EditText(requireContext()).apply {
-            hint = "Комментарий"
+            hint = "\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439"
             filters = arrayOf(InputFilter.LengthFilter(500))
             setText(item.call.note)
         }
         AlertDialog.Builder(requireContext())
-            .setTitle("Комментарий")
+            .setTitle("\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439")
             .setView(input)
-            .setPositiveButton("Ок") { dialog, _ ->
+            .setPositiveButton("\u041E\u043A") { dialog, _ ->
                 val text = input.text.toString().trim()
                 viewLifecycleOwner.lifecycleScope.launch {
                     viewModel.saveCommentForCall(item.call.id, item.call.phone, text)
                 }
                 dialog.dismiss()
             }
-            .setNegativeButton("Отмена", null)
+            .setNegativeButton("\u041E\u0442\u043C\u0435\u043D\u0430", null)
             .show()
     }
 
@@ -106,11 +106,11 @@ class CallListFragment : Fragment() {
             setPadding(40, 20, 40, 0)
         }
         val textInput = EditText(requireContext()).apply {
-            hint = "Текст напоминания"
+            hint = "\u0422\u0435\u043A\u0441\u0442 \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F"
             filters = arrayOf(InputFilter.LengthFilter(100))
         }
         val dateInput = EditText(requireContext()).apply {
-            hint = "Дата и время"
+            hint = "\u0414\u0430\u0442\u0430 \u0438 \u0432\u0440\u0435\u043C\u044F"
             isFocusable = false
             isClickable = true
         }
@@ -150,13 +150,13 @@ class CallListFragment : Fragment() {
         }
 
         AlertDialog.Builder(requireContext())
-            .setTitle("Напоминание")
+            .setTitle("\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435")
             .setView(container)
-            .setPositiveButton("Ок") { dialog, _ ->
+            .setPositiveButton("\u041E\u043A") { dialog, _ ->
                 val text = textInput.text.toString().trim()
                 val at = remindAt
                 if (text.isBlank() || at == null) {
-                    Toast.makeText(requireContext(), "Заполните текст и дату", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "\u0417\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u0442\u0435\u043A\u0441\u0442 \u0438 \u0434\u0430\u0442\u0443", Toast.LENGTH_SHORT).show()
                 } else {
                     viewLifecycleOwner.lifecycleScope.launch {
                         viewModel.saveReminderForCall(item.call.id, item.call.phone, item.contactName, text, at)
@@ -165,7 +165,7 @@ class CallListFragment : Fragment() {
                     dialog.dismiss()
                 }
             }
-            .setNegativeButton("Отмена", null)
+            .setNegativeButton("\u041E\u0442\u043C\u0435\u043D\u0430", null)
             .show()
     }
 
@@ -203,7 +203,7 @@ class CallListFragment : Fragment() {
             val normalized = normalizePhone(call.phone).takeLast(10)
             if (normalized.isNotBlank() && !clientByPhone.containsKey(normalized)) {
                 clientByPhone[normalized] = if (viewModel.isPersonalContact(call.phone)) {
-                    "Личный контакт"
+                    "\u041B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442"
                 } else {
                     viewModel.findClientName(call.phone).ifBlank { "—" }
                 }
@@ -250,8 +250,8 @@ class CallListFragment : Fragment() {
 
         val yesterday = (today.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -1) }
         return when (callDate.timeInMillis) {
-            today.timeInMillis -> "Сегодня"
-            yesterday.timeInMillis -> "Вчера"
+            today.timeInMillis -> "\u0421\u0435\u0433\u043E\u0434\u043D\u044F"
+            yesterday.timeInMillis -> "\u0412\u0447\u0435\u0440\u0430"
             else -> SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(timestamp))
         }
     }
@@ -282,14 +282,14 @@ class CallListFragment : Fragment() {
 
     private fun makeDirectCall(rawPhone: String) {
         val phone = rawPhone.trim()
-        if (phone.isBlank() || phone == "Неизвестно") return
+        if (phone.isBlank() || phone == "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E") return
 
         val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$phone"))
         val fallbackDialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
         runCatching {
             startActivity(callIntent)
         }.onFailure {
-            Toast.makeText(requireContext(), "Нет разрешения на прямой вызов, открываю набор", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "\u041D\u0435\u0442 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F \u043D\u0430 \u043F\u0440\u044F\u043C\u043E\u0439 \u0432\u044B\u0437\u043E\u0432, \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u044E \u043D\u0430\u0431\u043E\u0440", Toast.LENGTH_SHORT).show()
             runCatching { startActivity(fallbackDialIntent) }
         }
     }

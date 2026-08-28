@@ -60,7 +60,7 @@ class CallTrackingService : Service() {
                             val repository = (application as App).repository
                             repository.markAsPersonalContact(phone)
                             repository.markCallsPendingForPhoneResync(phone)
-                            AppLogger.log(this@CallTrackingService, "UI", "Пометка личного контакта из уведомления: $phone")
+                            AppLogger.log(this@CallTrackingService, "UI", "\u041F\u043E\u043C\u0435\u0442\u043A\u0430 \u043B\u0438\u0447\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430 \u0438\u0437 \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F: $phone")
                         }
                     }
                     getSystemService(NotificationManager::class.java)
@@ -78,10 +78,10 @@ class CallTrackingService : Service() {
         createChannel()
 
         val foregroundResult = runCatching {
-            startForeground(101, createNotification("Приложение активно"))
+            startForeground(101, createNotification("\u041F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u0430\u043A\u0442\u0438\u0432\u043D\u043E"))
         }
         if (foregroundResult.isFailure) {
-            AppLogger.log(this, "ERROR", "Не удалось перевести сервис в foreground: ${foregroundResult.exceptionOrNull()?.message}", foregroundResult.exceptionOrNull())
+            AppLogger.log(this, "ERROR", "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0435\u0440\u0435\u0432\u0435\u0441\u0442\u0438 \u0441\u0435\u0440\u0432\u0438\u0441 \u0432 foreground: ${foregroundResult.exceptionOrNull()?.message}", foregroundResult.exceptionOrNull())
             stopSelf()
             return
         }
@@ -98,7 +98,7 @@ class CallTrackingService : Service() {
         scope.launch {
             while (isActive) {
                 runCatching { repo.sendUserTelemetry() }
-                    .onFailure { error -> AppLogger.log(this@CallTrackingService, "WARN", "Фоновая проверка команд завершилась ошибкой: ${error.message}", error) }
+                    .onFailure { error -> AppLogger.log(this@CallTrackingService, "WARN", "\u0424\u043E\u043D\u043E\u0432\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043A\u043E\u043C\u0430\u043D\u0434 \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u043B\u0430\u0441\u044C \u043E\u0448\u0438\u0431\u043A\u043E\u0439: ${error.message}", error) }
                 delay(BACKGROUND_COMMAND_POLL_INTERVAL_MS)
             }
         }
@@ -132,13 +132,13 @@ class CallTrackingService : Service() {
                 TelephonyManager.CALL_STATE_RINGING,
                 TelephonyManager.CALL_STATE_OFFHOOK -> {
                     lastStateWasActive = true
-                    AppLogger.log(this, "CALL", "Начало звонка: unknown")
+                    AppLogger.log(this, "CALL", "\u041D\u0430\u0447\u0430\u043B\u043E \u0437\u0432\u043E\u043D\u043A\u0430: unknown")
                 }
 
                 TelephonyManager.CALL_STATE_IDLE -> {
                     if (lastStateWasActive) {
                         lastStateWasActive = false
-                        AppLogger.log(this, "CALL", "Завершение звонка: unknown")
+                        AppLogger.log(this, "CALL", "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u0435 \u0437\u0432\u043E\u043D\u043A\u0430: unknown")
                         scope.launch {
                             captureLatestCallWithRetry()
                         }
@@ -149,10 +149,10 @@ class CallTrackingService : Service() {
         runCatching { tracker.start() }
             .onSuccess {
                 StabilityDiagnostics.mark(this, "tracker_started")
-                AppLogger.log(this, "STABILITY", "Отслеживание звонков запущено")
+                AppLogger.log(this, "STABILITY", "\u041E\u0442\u0441\u043B\u0435\u0436\u0438\u0432\u0430\u043D\u0438\u0435 \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u0437\u0430\u043F\u0443\u0449\u0435\u043D\u043E")
             }
             .onFailure { error ->
-                AppLogger.log(this, "ERROR", "Не удалось подписаться на состояние звонков: ${error.message}", error)
+                AppLogger.log(this, "ERROR", "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u0434\u043F\u0438\u0441\u0430\u0442\u044C\u0441\u044F \u043D\u0430 \u0441\u043E\u0441\u0442\u043E\u044F\u043D\u0438\u0435 \u0437\u0432\u043E\u043D\u043A\u043E\u0432: ${error.message}", error)
                 stopSelf()
             }
     }
@@ -224,11 +224,11 @@ class CallTrackingService : Service() {
                 hasNewData = true
                 processedCalls++
                 lastHandledTimestamp = maxOf(lastHandledTimestamp, entity.timestamp)
-                AppLogger.log(this, "CALL", "Сохранение звонка в локальную БД")
+                AppLogger.log(this, "CALL", "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u0437\u0432\u043E\u043D\u043A\u0430 \u0432 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u0443\u044E \u0411\u0414")
                 latestSavedCallId = repo.saveCall(entity)
                 latestSavedEntity = entity
-                AppLogger.log(this, "CALL", "Завершение звонка: ${entity.phone} длительность=${entity.duration} тип=${entity.type}")
-                Log.d("WEBHOOK", "Сразу отправляем завершённый звонок в SQL API: id=$latestSavedCallId")
+                AppLogger.log(this, "CALL", "\u0417\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0438\u0435 \u0437\u0432\u043E\u043D\u043A\u0430: ${entity.phone} \u0434\u043B\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u044C=${entity.duration} \u0442\u0438\u043F=${entity.type}")
+                Log.d("WEBHOOK", "\u0421\u0440\u0430\u0437\u0443 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0435\u043C \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u044B\u0439 \u0437\u0432\u043E\u043D\u043E\u043A \u0432 SQL API: id=$latestSavedCallId")
                 val syncStartedAt = System.currentTimeMillis()
                 AppLogger.log(this, "PERF", "syncCallById started, id=$latestSavedCallId")
                 runCatching { repo.syncCallById(latestSavedCallId) }
@@ -245,7 +245,7 @@ class CallTrackingService : Service() {
                             "PERF",
                             "syncCallById failed in ${System.currentTimeMillis() - syncStartedAt} ms, id=$latestSavedCallId: ${error.message}"
                         )
-                        Log.e("WEBHOOK", "Не удалось сразу отправить звонок: id=$latestSavedCallId", error)
+                        Log.e("WEBHOOK", "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u0440\u0430\u0437\u0443 \u043E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C \u0437\u0432\u043E\u043D\u043E\u043A: id=$latestSavedCallId", error)
                     }
 
                 val isPersonal = isPersonalContactCached(entity.phone)
@@ -260,11 +260,11 @@ class CallTrackingService : Service() {
             val isFinalPersonal = isPersonalContactCached(finalEntity.phone)
             val clientName = repo.findClientName(finalEntity.phone)
 
-            Log.d("WEBHOOK", "Завершённые звонки обработаны и отправлены точечной синхронизацией")
+            Log.d("WEBHOOK", "\u0417\u0430\u0432\u0435\u0440\u0448\u0451\u043D\u043D\u044B\u0435 \u0437\u0432\u043E\u043D\u043A\u0438 \u043E\u0431\u0440\u0430\u0431\u043E\u0442\u0430\u043D\u044B \u0438 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u044B \u0442\u043E\u0447\u0435\u0447\u043D\u043E\u0439 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u0435\u0439")
 
             if (!isFinalPersonal && clientName.isBlank()) {
                 val missingClientLabel = resolveContactNameCached(finalEntity.phone)
-                AppLogger.log(this, "NOTIFY", "Показ уведомления: клиент $missingClientLabel не найден в базе 1с")
+                AppLogger.log(this, "NOTIFY", "\u041F\u043E\u043A\u0430\u0437 \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F: \u043A\u043B\u0438\u0435\u043D\u0442 $missingClientLabel \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u0432 \u0431\u0430\u0437\u0435 1\u0441")
                 showMissingClientNotification(finalEntity.phone, missingClientLabel)
             }
             Log.d("CallTrackingService", "Calls captured count=${entities.size}, latest=${finalEntity.phone}, ts=${finalEntity.timestamp}")
@@ -279,7 +279,7 @@ class CallTrackingService : Service() {
     }
 
     private fun shouldShowPostCallPrompt(callType: String): Boolean {
-        return callType !in setOf("Пропущенный", "Сброшенный", "Неотвеченный")
+        return callType !in setOf("\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0439", "\u0421\u0431\u0440\u043E\u0448\u0435\u043D\u043D\u044B\u0439", "\u041D\u0435\u043E\u0442\u0432\u0435\u0447\u0435\u043D\u043D\u044B\u0439")
     }
 
     private fun showPostCallNow(callId: Long, phone: String, contactName: String) {
@@ -303,8 +303,8 @@ class CallTrackingService : Service() {
         val vibrationPattern = longArrayOf(0, 250, 180, 250)
         val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_clover)
-            .setContentTitle("Звонок завершён")
-            .setContentText("Заполните результат звонка: $contactName")
+            .setContentTitle("\u0417\u0432\u043E\u043D\u043E\u043A \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D")
+            .setContentText("\u0417\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u0437\u0432\u043E\u043D\u043A\u0430: $contactName")
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOnlyAlertOnce(true)
@@ -318,8 +318,8 @@ class CallTrackingService : Service() {
 
         manager.notify(notificationId, notification)
         saveNotificationCenterItem(
-            title = "Звонок завершён",
-            message = "Заполните результат звонка: $contactName",
+            title = "\u0417\u0432\u043E\u043D\u043E\u043A \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D",
+            message = "\u0417\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u0437\u0432\u043E\u043D\u043A\u0430: $contactName",
             type = NotificationType.CALLBACK,
             targetScreen = NotificationTargets.CALL_DETAIL,
             entityId = callId,
@@ -334,7 +334,7 @@ class CallTrackingService : Service() {
     private fun showMissingClientNotification(phone: String, clientLabel: String) {
         val manager = getSystemService(NotificationManager::class.java)
         val displayClient = clientLabel.ifBlank { phone }
-        val message = "Клиент $displayClient не найден в базе 1с. Выберите действие"
+        val message = "\u041A\u043B\u0438\u0435\u043D\u0442 $displayClient \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u0432 \u0431\u0430\u0437\u0435 1\u0441. \u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435"
         val openIntent = Intent(this, com.example.calltrack.ui.contactcard.ContactActionActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             putExtra(com.example.calltrack.ui.contactcard.ContactActionActivity.EXTRA_PHONE, phone)
@@ -371,20 +371,20 @@ class CallTrackingService : Service() {
 
         val notification = NotificationCompat.Builder(this, POST_CALL_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_clover)
-            .setContentTitle("Клиент $displayClient не найден")
+            .setContentTitle("\u041A\u043B\u0438\u0435\u043D\u0442 $displayClient \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D")
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(openPending)
-            .addAction(0, "Пометить как личный контакт", personalPending)
-            .addAction(0, "Добавить в 1с", addTo1cPending)
+            .addAction(0, "\u041F\u043E\u043C\u0435\u0442\u0438\u0442\u044C \u043A\u0430\u043A \u043B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442", personalPending)
+            .addAction(0, "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0432 1\u0441", addTo1cPending)
             .build()
 
         manager.notify(MISSING_CLIENT_NOTIFICATION_ID, notification)
         saveNotificationCenterItem(
-            title = "Клиент $displayClient не найден",
+            title = "\u041A\u043B\u0438\u0435\u043D\u0442 $displayClient \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D",
             message = message,
             type = NotificationType.MISSING_CLIENT,
             targetScreen = NotificationTargets.PERSONAL_CONTACT,
@@ -424,7 +424,7 @@ class CallTrackingService : Service() {
     }
 
     private fun resolveContactName(phone: String): String {
-        if (phone.isBlank() || phone == "Неизвестно") return phone
+        if (phone.isBlank() || phone == "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E") return phone
         val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phone))
         val projection = arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME)
         contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
@@ -479,7 +479,7 @@ class CallTrackingService : Service() {
                         val (type, note) = mapCallType(typeInt, duration)
                         result.add(
                             CallEntity(
-                                phone = if (number.isBlank()) "Неизвестно" else number,
+                                phone = if (number.isBlank()) "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E" else number,
                                 type = type,
                                 duration = duration,
                                 note = note,
@@ -505,16 +505,16 @@ class CallTrackingService : Service() {
     private fun mapCallType(typeInt: Int, duration: Long): Pair<String, String> {
         val callTypeString = when (typeInt) {
             CallLog.Calls.INCOMING_TYPE -> {
-                if (duration < 2L) "Пропущенный" else "Входящий"
+                if (duration < 2L) "\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0439" else "\u0412\u0445\u043E\u0434\u044F\u0449\u0438\u0439"
             }
             CallLog.Calls.OUTGOING_TYPE -> {
-                if (duration < 2L) "Неотвеченный" else "Исходящий"
+                if (duration < 2L) "\u041D\u0435\u043E\u0442\u0432\u0435\u0447\u0435\u043D\u043D\u044B\u0439" else "\u0418\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0439"
             }
-            CallLog.Calls.MISSED_TYPE -> "Пропущенный"
-            CallLog.Calls.REJECTED_TYPE -> "Сброшенный"
-            else -> "Неотвеченный"
+            CallLog.Calls.MISSED_TYPE -> "\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0439"
+            CallLog.Calls.REJECTED_TYPE -> "\u0421\u0431\u0440\u043E\u0448\u0435\u043D\u043D\u044B\u0439"
+            else -> "\u041D\u0435\u043E\u0442\u0432\u0435\u0447\u0435\u043D\u043D\u044B\u0439"
         }
-        Log.d("CALL_TYPE", "Тип: $callTypeString, duration: $duration")
+        Log.d("CALL_TYPE", "\u0422\u0438\u043F: $callTypeString, duration: $duration")
         return callTypeString to ""
     }
 
@@ -529,11 +529,11 @@ class CallTrackingService : Service() {
 
     override fun onDestroy() {
         StabilityDiagnostics.mark(this, "service_destroyed")
-        AppLogger.log(this, "STABILITY", "Сервис отслеживания остановлен; восстановление контролирует WorkManager")
+        AppLogger.log(this, "STABILITY", "\u0421\u0435\u0440\u0432\u0438\u0441 \u043E\u0442\u0441\u043B\u0435\u0436\u0438\u0432\u0430\u043D\u0438\u044F \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D; \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043A\u043E\u043D\u0442\u0440\u043E\u043B\u0438\u0440\u0443\u0435\u0442 WorkManager")
         scope.cancel()
         if (::tracker.isInitialized) {
             runCatching { tracker.stop() }
-                .onFailure { error -> AppLogger.log(this, "WARN", "Ошибка остановки наблюдения за звонками: ${error.message}", error) }
+                .onFailure { error -> AppLogger.log(this, "WARN", "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0438 \u043D\u0430\u0431\u043B\u044E\u0434\u0435\u043D\u0438\u044F \u0437\u0430 \u0437\u0432\u043E\u043D\u043A\u0430\u043C\u0438: ${error.message}", error) }
         }
         super.onDestroy()
     }
