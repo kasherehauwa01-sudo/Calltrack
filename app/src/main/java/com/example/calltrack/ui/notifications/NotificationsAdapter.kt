@@ -70,13 +70,13 @@ class NotificationsAdapter(
         }
 
         private fun typeLabel(type: String): String = when (type) {
-            "MISSING_CLIENT" -> "Клиент"
-            "REMINDER" -> "Напоминание"
-            "MISSED_CALL" -> "Пропущенный"
-            "PERSONAL_CONTACT" -> "Личный контакт"
-            "CALLBACK" -> "Обратный звонок"
-            "SYNC_ERROR" -> "Ошибка синхронизации"
-            "APP_UPDATE" -> "Обновление"
+            "MISSING_CLIENT" -> "\u041A\u043B\u0438\u0435\u043D\u0442"
+            "REMINDER" -> "\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435"
+            "MISSED_CALL" -> "\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0439"
+            "PERSONAL_CONTACT" -> "\u041B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442"
+            "CALLBACK" -> "\u041E\u0431\u0440\u0430\u0442\u043D\u044B\u0439 \u0437\u0432\u043E\u043D\u043E\u043A"
+            "SYNC_ERROR" -> "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u0438"
+            "APP_UPDATE" -> "\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435"
             else -> type
         }
     }

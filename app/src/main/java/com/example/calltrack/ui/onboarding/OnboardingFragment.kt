@@ -85,11 +85,11 @@ class OnboardingFragment : Fragment() {
         val fullName = binding.etManager.text.toString().trim()
         val phone = binding.etManagerPhone.text.toString().trim()
         if (fullName.isBlank()) {
-            Toast.makeText(requireContext(), "Поле ФИО обязательно", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "\u041F\u043E\u043B\u0435 \u0424\u0418\u041E \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E", Toast.LENGTH_SHORT).show()
             return
         }
         if (phone.isBlank()) {
-            Toast.makeText(requireContext(), "Поле Номер телефона обязательно", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "\u041F\u043E\u043B\u0435 \u041D\u043E\u043C\u0435\u0440 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u043E", Toast.LENGTH_SHORT).show()
             return
         }
         host.completeOnboarding(fullName, phone)
@@ -98,36 +98,36 @@ class OnboardingFragment : Fragment() {
     private fun updateUi() {
         when (stage) {
             Stage.PERMISSIONS -> {
-                binding.tvTitle.text = "Нужны разрешения"
-                binding.tvDescription.text = "Для работы приложения выдайте необходимые разрешения."
+                binding.tvTitle.text = "\u041D\u0443\u0436\u043D\u044B \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F"
+                binding.tvDescription.text = "\u0414\u043B\u044F \u0440\u0430\u0431\u043E\u0442\u044B \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u0432\u044B\u0434\u0430\u0439\u0442\u0435 \u043D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u044B\u0435 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F."
                 binding.etManager.visibility = View.GONE
                 binding.etManagerPhone.visibility = View.GONE
-                binding.btnPrimary.text = "Повторить запрос"
+                binding.btnPrimary.text = "\u041F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0437\u0430\u043F\u0440\u043E\u0441"
                 binding.btnPrimary.visibility = View.VISIBLE
-                binding.btnSecondary.text = "Открыть настройки"
+                binding.btnSecondary.text = "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438"
                 binding.btnSecondary.visibility = View.VISIBLE
             }
             Stage.AUTH -> {
-                binding.tvTitle.text = "Авторизация"
-                binding.tvDescription.text = "Введите ФИО и номер телефона. Оба поля обязательны."
+                binding.tvTitle.text = "\u0410\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044F"
+                binding.tvDescription.text = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0424\u0418\u041E \u0438 \u043D\u043E\u043C\u0435\u0440 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430. \u041E\u0431\u0430 \u043F\u043E\u043B\u044F \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B."
                 binding.etManager.visibility = View.VISIBLE
                 binding.etManagerPhone.visibility = View.VISIBLE
                 if (binding.etManagerPhone.text.isNullOrBlank()) {
                     binding.etManagerPhone.setText("+7")
                     binding.etManagerPhone.setSelection(binding.etManagerPhone.text?.length ?: 0)
                 }
-                binding.btnPrimary.text = "Ок"
+                binding.btnPrimary.text = "\u041E\u043A"
                 binding.btnPrimary.visibility = View.VISIBLE
                 binding.btnSecondary.visibility = View.GONE
             }
             Stage.BATTERY -> {
-                binding.tvTitle.text = "Работа в фоне"
-                binding.tvDescription.text = "Разрешите CallTrack работать без ограничения батареи, чтобы звонки продолжали фиксироваться и отправляться на дашборд."
+                binding.tvTitle.text = "\u0420\u0430\u0431\u043E\u0442\u0430 \u0432 \u0444\u043E\u043D\u0435"
+                binding.tvDescription.text = "\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 CallTrack \u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0431\u0435\u0437 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F \u0431\u0430\u0442\u0430\u0440\u0435\u0438, \u0447\u0442\u043E\u0431\u044B \u0437\u0432\u043E\u043D\u043A\u0438 \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0430\u043B\u0438 \u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u0442\u044C\u0441\u044F \u0438 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0442\u044C\u0441\u044F \u043D\u0430 \u0434\u0430\u0448\u0431\u043E\u0440\u0434."
                 binding.etManager.visibility = View.GONE
                 binding.etManagerPhone.visibility = View.GONE
-                binding.btnPrimary.text = "Разрешить"
+                binding.btnPrimary.text = "\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u044C"
                 binding.btnPrimary.visibility = View.VISIBLE
-                binding.btnSecondary.text = "Продолжить без разрешения"
+                binding.btnSecondary.text = "\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u0431\u0435\u0437 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F"
                 binding.btnSecondary.visibility = View.VISIBLE
             }
         }

@@ -52,7 +52,7 @@ class ContactHistoryFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val phone = requireArguments().getString(ARG_PHONE).orEmpty()
         val type = requireArguments().getString(ARG_TYPE).orEmpty()
-        Log.d(HISTORY_LOG_TAG, "Открыт экран истории: type=$type, phone=$phone")
+        Log.d(HISTORY_LOG_TAG, "\u041E\u0442\u043A\u0440\u044B\u0442 \u044D\u043A\u0440\u0430\u043D \u0438\u0441\u0442\u043E\u0440\u0438\u0438: type=$type, phone=$phone")
 
         binding.btnBack.setOnClickListener {
             requireActivity().onBackPressedDispatcher.onBackPressed()
@@ -60,15 +60,15 @@ class ContactHistoryFragment : Fragment() {
 
         when (type) {
             TYPE_CALLS -> {
-                binding.tvTitle.text = "История звонков"
+                binding.tvTitle.text = "\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0437\u0432\u043E\u043D\u043A\u043E\u0432"
                 loadStyledCallHistory(phone)
             }
             TYPE_REMINDERS -> {
-                binding.tvTitle.text = "История напоминаний"
+                binding.tvTitle.text = "\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439"
                 loadRemoteReminders(phone)
             }
             else -> {
-                binding.tvTitle.text = "История комментариев"
+                binding.tvTitle.text = "\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u0432"
                 loadRemoteComments(phone)
             }
         }
@@ -81,14 +81,14 @@ class ContactHistoryFragment : Fragment() {
     }
 
     private fun formatCalls(calls: List<CallEntity>): String {
-        if (calls.isEmpty()) return "Нет данных"
+        if (calls.isEmpty()) return "\u041D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445"
         return calls.joinToString("\n") {
-            "• ${it.type} | ${dateTimeFormat.format(Date(it.timestamp))} | ${it.duration} сек"
+            "• ${it.type} | ${dateTimeFormat.format(Date(it.timestamp))} | ${it.duration} \u0441\u0435\u043A"
         }
     }
 
     private fun loadStyledCallHistory(phone: String) {
-        renderHistoryCards(listOf("Загрузка..."))
+        renderHistoryCards(listOf("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430..."))
         lifecycleScope.launch {
             val calls = withContext(Dispatchers.IO) { viewModel.getDeviceCallHistory(phone) }
             renderCallCards(calls)
@@ -96,12 +96,12 @@ class ContactHistoryFragment : Fragment() {
     }
 
     private fun loadRemoteReminders(phone: String) {
-        Log.d(HISTORY_LOG_TAG, "Начало загрузки истории напоминаний: phone=$phone")
-        renderHistoryCards(listOf("Загрузка..."))
+        Log.d(HISTORY_LOG_TAG, "\u041D\u0430\u0447\u0430\u043B\u043E \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439: phone=$phone")
+        renderHistoryCards(listOf("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430..."))
         lifecycleScope.launch {
             runCatching {
                 val cached = withContext(Dispatchers.IO) { viewModel.getStoredReminders(phone) }
-                Log.d(HISTORY_LOG_TAG, "Напоминания из внутренней памяти: records=${cached.size}, phone=$phone")
+                Log.d(HISTORY_LOG_TAG, "\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F \u0438\u0437 \u0432\u043D\u0443\u0442\u0440\u0435\u043D\u043D\u0435\u0439 \u043F\u0430\u043C\u044F\u0442\u0438: records=${cached.size}, phone=$phone")
                 renderReminderCards(cached)
 
                 val refreshResult = runCatching {
@@ -109,15 +109,15 @@ class ContactHistoryFragment : Fragment() {
                 }
                 if (refreshResult.isSuccess) {
                     val updated = refreshResult.getOrDefault(emptyList<ReminderEntity>())
-                    Log.d(HISTORY_LOG_TAG, "Напоминания из таблицы сохранены в память: records=${updated.size}, phone=$phone")
+                    Log.d(HISTORY_LOG_TAG, "\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F \u0438\u0437 \u0442\u0430\u0431\u043B\u0438\u0446\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B \u0432 \u043F\u0430\u043C\u044F\u0442\u044C: records=${updated.size}, phone=$phone")
                     renderReminderCards(updated)
                 } else {
-                    Log.e(HISTORY_LOG_TAG, "Ошибка обновления напоминаний из таблицы: phone=$phone", refreshResult.exceptionOrNull())
-                    if (cached.isEmpty()) renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
+                    Log.e(HISTORY_LOG_TAG, "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u0437 \u0442\u0430\u0431\u043B\u0438\u0446\u044B: phone=$phone", refreshResult.exceptionOrNull())
+                    if (cached.isEmpty()) renderHistoryCards(listOf("\u041D\u0435\u0442 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442\u0430 \u0438\u043B\u0438 \u043E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438"))
                 }
             }.onFailure {
-                Log.e(HISTORY_LOG_TAG, "Ошибка coroutine на экране истории напоминаний: phone=$phone", it)
-                renderHistoryCards(listOf("Ошибка загрузки истории"))
+                Log.e(HISTORY_LOG_TAG, "\u041E\u0448\u0438\u0431\u043A\u0430 coroutine \u043D\u0430 \u044D\u043A\u0440\u0430\u043D\u0435 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439: phone=$phone", it)
+                renderHistoryCards(listOf("\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0438\u0441\u0442\u043E\u0440\u0438\u0438"))
             }
         }
     }
@@ -127,9 +127,9 @@ class ContactHistoryFragment : Fragment() {
             .filter { it.message.isNotBlank() }
             .sortedByDescending { it.remindAt }
             .take(20)
-        Log.d(HISTORY_LOG_TAG, "Записей напоминаний после фильтрации UI: ${latestReminders.size}, source=${reminders.size}")
+        Log.d(HISTORY_LOG_TAG, "\u0417\u0430\u043F\u0438\u0441\u0435\u0439 \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u043F\u043E\u0441\u043B\u0435 \u0444\u0438\u043B\u044C\u0442\u0440\u0430\u0446\u0438\u0438 UI: ${latestReminders.size}, source=${reminders.size}")
         if (latestReminders.isEmpty()) {
-            renderHistoryCards(listOf("Нет истории"))
+            renderHistoryCards(listOf("\u041D\u0435\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438"))
             return
         }
         renderHistoryCards(
@@ -140,12 +140,12 @@ class ContactHistoryFragment : Fragment() {
     }
 
     private fun loadRemoteComments(phone: String) {
-        Log.d(HISTORY_LOG_TAG, "Начало загрузки истории комментариев: phone=$phone")
-        renderHistoryCards(listOf("Загрузка..."))
+        Log.d(HISTORY_LOG_TAG, "\u041D\u0430\u0447\u0430\u043B\u043E \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u0432: phone=$phone")
+        renderHistoryCards(listOf("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430..."))
         lifecycleScope.launch {
             runCatching {
                 val cached = withContext(Dispatchers.IO) { viewModel.getStoredComments(phone) }
-                Log.d(HISTORY_LOG_TAG, "Комментарии из внутренней памяти: records=${cached.size}, phone=$phone")
+                Log.d(HISTORY_LOG_TAG, "\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0438 \u0438\u0437 \u0432\u043D\u0443\u0442\u0440\u0435\u043D\u043D\u0435\u0439 \u043F\u0430\u043C\u044F\u0442\u0438: records=${cached.size}, phone=$phone")
                 renderCommentCards(cached)
 
                 val refreshResult = runCatching {
@@ -153,15 +153,15 @@ class ContactHistoryFragment : Fragment() {
                 }
                 if (refreshResult.isSuccess) {
                     val updated = refreshResult.getOrDefault(emptyList<CommentEntity>())
-                    Log.d(HISTORY_LOG_TAG, "Комментарии из таблицы сохранены в память: records=${updated.size}, phone=$phone")
+                    Log.d(HISTORY_LOG_TAG, "\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0438 \u0438\u0437 \u0442\u0430\u0431\u043B\u0438\u0446\u044B \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B \u0432 \u043F\u0430\u043C\u044F\u0442\u044C: records=${updated.size}, phone=$phone")
                     renderCommentCards(updated)
                 } else {
-                    Log.e(HISTORY_LOG_TAG, "Ошибка обновления комментариев из таблицы: phone=$phone", refreshResult.exceptionOrNull())
-                    if (cached.isEmpty()) renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
+                    Log.e(HISTORY_LOG_TAG, "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u0432 \u0438\u0437 \u0442\u0430\u0431\u043B\u0438\u0446\u044B: phone=$phone", refreshResult.exceptionOrNull())
+                    if (cached.isEmpty()) renderHistoryCards(listOf("\u041D\u0435\u0442 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442\u0430 \u0438\u043B\u0438 \u043E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438"))
                 }
             }.onFailure {
-                Log.e(HISTORY_LOG_TAG, "Ошибка coroutine на экране истории комментариев: phone=$phone", it)
-                renderHistoryCards(listOf("Ошибка загрузки истории"))
+                Log.e(HISTORY_LOG_TAG, "\u041E\u0448\u0438\u0431\u043A\u0430 coroutine \u043D\u0430 \u044D\u043A\u0440\u0430\u043D\u0435 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u0432: phone=$phone", it)
+                renderHistoryCards(listOf("\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0438\u0441\u0442\u043E\u0440\u0438\u0438"))
             }
         }
     }
@@ -171,9 +171,9 @@ class ContactHistoryFragment : Fragment() {
             .filter { it.text.isNotBlank() }
             .sortedByDescending { it.createdAt }
             .take(20)
-        Log.d(HISTORY_LOG_TAG, "Записей комментариев после фильтрации UI: ${latestComments.size}, source=${comments.size}")
+        Log.d(HISTORY_LOG_TAG, "\u0417\u0430\u043F\u0438\u0441\u0435\u0439 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u0432 \u043F\u043E\u0441\u043B\u0435 \u0444\u0438\u043B\u044C\u0442\u0440\u0430\u0446\u0438\u0438 UI: ${latestComments.size}, source=${comments.size}")
         if (latestComments.isEmpty()) {
-            renderHistoryCards(listOf("Нет истории"))
+            renderHistoryCards(listOf("\u041D\u0435\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438"))
             return
         }
         renderHistoryCards(
@@ -188,25 +188,25 @@ class ContactHistoryFragment : Fragment() {
         historyType: String,
         onSuccess: (List<CallHistoryEntity>) -> List<String>
     ) {
-        renderHistoryCards(listOf("Загрузка..."))
+        renderHistoryCards(listOf("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430..."))
         lifecycleScope.launch {
             runCatching {
                 val cached = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-                Log.d(HISTORY_LOG_TAG, "Кэш истории $historyType: records=${cached.size}, phone=$phone")
+                Log.d(HISTORY_LOG_TAG, "\u041A\u044D\u0448 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 $historyType: records=${cached.size}, phone=$phone")
                 renderHistoryCards(onSuccess(cached))
 
                 val refreshResult = runCatching { withContext(Dispatchers.IO) { viewModel.refreshHistory(phone) } }
                 if (refreshResult.isSuccess) {
                     val updated = withContext(Dispatchers.IO) { viewModel.getHistory(phone) }
-                    Log.d(HISTORY_LOG_TAG, "Успешная загрузка истории $historyType: records=${updated.size}, phone=$phone")
+                    Log.d(HISTORY_LOG_TAG, "\u0423\u0441\u043F\u0435\u0448\u043D\u0430\u044F \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 $historyType: records=${updated.size}, phone=$phone")
                     renderHistoryCards(onSuccess(updated))
                 } else {
-                    Log.e(HISTORY_LOG_TAG, "Ошибка обновления истории $historyType: phone=$phone", refreshResult.exceptionOrNull())
-                    if (cached.isEmpty()) renderHistoryCards(listOf("Нет интернета или ошибка загрузки"))
+                    Log.e(HISTORY_LOG_TAG, "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0438\u0441\u0442\u043E\u0440\u0438\u0438 $historyType: phone=$phone", refreshResult.exceptionOrNull())
+                    if (cached.isEmpty()) renderHistoryCards(listOf("\u041D\u0435\u0442 \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442\u0430 \u0438\u043B\u0438 \u043E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438"))
                 }
             }.onFailure {
-                Log.e(HISTORY_LOG_TAG, "Ошибка coroutine на экране истории $historyType: phone=$phone", it)
-                renderHistoryCards(listOf("Ошибка загрузки истории"))
+                Log.e(HISTORY_LOG_TAG, "\u041E\u0448\u0438\u0431\u043A\u0430 coroutine \u043D\u0430 \u044D\u043A\u0440\u0430\u043D\u0435 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 $historyType: phone=$phone", it)
+                renderHistoryCards(listOf("\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0438\u0441\u0442\u043E\u0440\u0438\u0438"))
             }
         }
     }
@@ -217,7 +217,7 @@ class ContactHistoryFragment : Fragment() {
             .sortedByDescending { parseHistoryDateTime(it.date, it.time) }
             .take(20)
         if (latestCalls.isEmpty()) {
-            renderHistoryCards(listOf("Нет истории"))
+            renderHistoryCards(listOf("\u041D\u0435\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438"))
             return
         }
         binding.historyContainer.removeAllViews()
@@ -313,15 +313,15 @@ class ContactHistoryFragment : Fragment() {
         val totalSeconds = duration.toLongOrNull() ?: return duration
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
-        return if (minutes > 0) "${minutes} мин ${seconds} сек" else "${seconds} сек"
+        return if (minutes > 0) "${minutes} \u043C\u0438\u043D ${seconds} \u0441\u0435\u043A" else "${seconds} \u0441\u0435\u043A"
     }
 
     private fun dayLabel(timestamp: Long): String {
         val nowDays = TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis())
         val itemDays = TimeUnit.MILLISECONDS.toDays(timestamp)
         return when (nowDays - itemDays) {
-            0L -> "Сегодня"
-            1L -> "Вчера"
+            0L -> "\u0421\u0435\u0433\u043E\u0434\u043D\u044F"
+            1L -> "\u0412\u0447\u0435\u0440\u0430"
             else -> dayFormat.format(Date(timestamp))
         }
     }
@@ -332,9 +332,9 @@ class ContactHistoryFragment : Fragment() {
 
     private fun typeStyle(type: String): Pair<String, Int> {
         return when (type.lowercase(Locale.getDefault())) {
-            "входящий" -> "📥" to com.example.calltrack.R.color.buttonColor
-            "исходящий" -> "📤" to android.R.color.holo_blue_dark
-            "пропущенный", "неотвеченный", "сброшенный" -> "📵" to android.R.color.holo_red_dark
+            "\u0432\u0445\u043E\u0434\u044F\u0449\u0438\u0439" -> "📥" to com.example.calltrack.R.color.buttonColor
+            "\u0438\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0439" -> "📤" to android.R.color.holo_blue_dark
+            "\u043F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0439", "\u043D\u0435\u043E\u0442\u0432\u0435\u0447\u0435\u043D\u043D\u044B\u0439", "\u0441\u0431\u0440\u043E\u0448\u0435\u043D\u043D\u044B\u0439" -> "📵" to android.R.color.holo_red_dark
             else -> "📞" to com.example.calltrack.R.color.textPrimary
         }
     }
@@ -371,14 +371,14 @@ class ContactHistoryFragment : Fragment() {
     }
 
     private fun formatReminders(reminders: List<ReminderEntity>): String {
-        if (reminders.isEmpty()) return "Нет данных"
+        if (reminders.isEmpty()) return "\u041D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445"
         return reminders.joinToString("\n") {
             "• ${dateTimeFormat.format(Date(it.remindAt))} | ${it.status} | ${it.message}"
         }
     }
 
     private fun formatComments(comments: List<CommentEntity>): String {
-        if (comments.isEmpty()) return "Нет данных"
+        if (comments.isEmpty()) return "\u041D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445"
         return comments.joinToString("\n") {
             "• ${it.text} (${dateTimeFormat.format(Date(it.createdAt))})"
         }

@@ -94,7 +94,7 @@ class CallRepository(
                     handleUserCommands(bodyText)
                 }
             }
-        }.onFailure { AppLogger.log(appContext, "ERROR", "Ошибка отправки диагностики пользователя: ${it.message}") }
+        }.onFailure { AppLogger.log(appContext, "ERROR", "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0442\u043F\u0440\u0430\u0432\u043A\u0438 \u0434\u0438\u0430\u0433\u043D\u043E\u0441\u0442\u0438\u043A\u0438 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F: ${it.message}") }
     }
 
     private suspend fun handleUserCommands(bodyText: String) {
@@ -104,16 +104,16 @@ class CallRepository(
             val command = commands.optJSONObject(i) ?: continue
             when (command.optString("command")) {
                 "force_sync" -> {
-                    AppLogger.log(appContext, "SYNC", "Получена команда принудительной синхронизации")
+                    AppLogger.log(appContext, "SYNC", "\u041F\u043E\u043B\u0443\u0447\u0435\u043D\u0430 \u043A\u043E\u043C\u0430\u043D\u0434\u0430 \u043F\u0440\u0438\u043D\u0443\u0434\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0439 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0430\u0446\u0438\u0438")
                     syncPending()
                     markUserCommandDone(command.optInt("id"))
                 }
                 "block_user" -> {
-                    AppLogger.log(appContext, "USER", "Пользователь заблокирован в админ-панели")
+                    AppLogger.log(appContext, "USER", "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C \u0437\u0430\u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u0430\u043D \u0432 \u0430\u0434\u043C\u0438\u043D-\u043F\u0430\u043D\u0435\u043B\u0438")
                     markUserCommandDone(command.optInt("id"))
                 }
                 "unblock_user" -> {
-                    AppLogger.log(appContext, "USER", "Пользователь разблокирован в админ-панели")
+                    AppLogger.log(appContext, "USER", "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C \u0440\u0430\u0437\u0431\u043B\u043E\u043A\u0438\u0440\u043E\u0432\u0430\u043D \u0432 \u0430\u0434\u043C\u0438\u043D-\u043F\u0430\u043D\u0435\u043B\u0438")
                     markUserCommandDone(command.optInt("id"))
                 }
                 "install_update" -> {
@@ -131,8 +131,8 @@ class CallRepository(
         val app = appContext as com.example.calltrack.App
         app.notificationRepository.insertNotification(
             NotificationEntity(
-                title = "Обновите приложение",
-                message = "Доступна версия ${targetVersionName.ifBlank { targetVersionCode.toString() }}",
+                title = "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435",
+                message = "\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u0430 \u0432\u0435\u0440\u0441\u0438\u044F ${targetVersionName.ifBlank { targetVersionCode.toString() }}",
                 type = NotificationType.APP_UPDATE,
                 targetScreen = NotificationTargets.APP_UPDATE,
                 payloadJson = JSONObject().put("version_code", targetVersionCode).toString()
@@ -142,7 +142,7 @@ class CallRepository(
         val manager = appContext.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
-                NotificationChannel(UPDATE_NOTIFICATION_CHANNEL, "Обновления CallTrack", NotificationManager.IMPORTANCE_HIGH)
+                NotificationChannel(UPDATE_NOTIFICATION_CHANNEL, "\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F CallTrack", NotificationManager.IMPORTANCE_HIGH)
             )
         }
         val openUpdate = PendingIntent.getActivity(
@@ -156,17 +156,17 @@ class CallRepository(
                 UPDATE_NOTIFICATION_ID,
                 NotificationCompat.Builder(appContext, UPDATE_NOTIFICATION_CHANNEL)
                     .setSmallIcon(com.example.calltrack.R.drawable.ic_clover)
-                    .setContentTitle("Обновите приложение")
-                    .setContentText("Нажмите, чтобы открыть экран обновления")
+                    .setContentTitle("\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435")
+                    .setContentText("\u041D\u0430\u0436\u043C\u0438\u0442\u0435, \u0447\u0442\u043E\u0431\u044B \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u044D\u043A\u0440\u0430\u043D \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F")
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setAutoCancel(true)
                     .setContentIntent(openUpdate)
                     .build()
             )
         }.onFailure { error ->
-            AppLogger.log(appContext, "WARN", "Системное уведомление об обновлении недоступно: ${error.message}", error)
+            AppLogger.log(appContext, "WARN", "\u0421\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0435 \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u0435 \u043E\u0431 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0438 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u043E: ${error.message}", error)
         }
-        AppLogger.log(appContext, "UPDATE", "Показано уведомление об обновлении до $targetVersionCode")
+        AppLogger.log(appContext, "UPDATE", "\u041F\u043E\u043A\u0430\u0437\u0430\u043D\u043E \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u0435 \u043E\u0431 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0438 \u0434\u043E $targetVersionCode")
     }
 
     private suspend fun markUserCommandDone(id: Int) {
@@ -211,13 +211,13 @@ class CallRepository(
             put("device_language", Locale.getDefault().toLanguageTag())
             put("timezone", TimeZone.getDefault().id)
             put("calls_permission", permissionStatus(Manifest.permission.READ_CALL_LOG))
-            put("notifications_permission", if (Build.VERSION.SDK_INT >= 33) permissionStatus(Manifest.permission.POST_NOTIFICATIONS) else "Да")
+            put("notifications_permission", if (Build.VERSION.SDK_INT >= 33) permissionStatus(Manifest.permission.POST_NOTIFICATIONS) else "\u0414\u0430")
             put("contacts_permission", permissionStatus(Manifest.permission.READ_CONTACTS))
-            put("background_permission", "Да")
-            put("battery_optimization_ignored", "Нет данных")
-            put("google_play_services", "Нет данных")
+            put("background_permission", "\u0414\u0430")
+            put("battery_optimization_ignored", "\u041D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445")
+            put("google_play_services", "\u041D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445")
             put("sync_errors_count", logs.count { it.optString("level") == "ERROR" })
-            put("local_db_size", "Неотправленных звонков: $pendingCalls")
+            put("local_db_size", "\u041D\u0435\u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043D\u044B\u0445 \u0437\u0432\u043E\u043D\u043A\u043E\u0432: $pendingCalls")
             put("last_error", logs.lastOrNull { it.optString("level") == "ERROR" }?.optString("message") ?: JSONObject.NULL)
             put("last_server_response", StabilityDiagnostics.snapshot(appContext, pendingCalls).toString())
             put("logs", JSONArray(logs))
@@ -234,11 +234,11 @@ class CallRepository(
         }
     }
 
-    private fun permissionStatus(permission: String): String = if (ContextCompat.checkSelfPermission(appContext, permission) == PackageManager.PERMISSION_GRANTED) "Да" else "Нет"
+    private fun permissionStatus(permission: String): String = if (ContextCompat.checkSelfPermission(appContext, permission) == PackageManager.PERMISSION_GRANTED) "\u0414\u0430" else "\u041D\u0435\u0442"
     private fun sqlDateTime(ms: Long): String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(ms))
     private fun formatBytes(bytes: Long): String {
         val mb = bytes / 1024.0 / 1024.0
-        return if (mb >= 1024) String.format(Locale.US, "%.1f ГБ", mb / 1024.0) else String.format(Locale.US, "%.0f МБ", mb)
+        return if (mb >= 1024) String.format(Locale.US, "%.1f \u0413\u0411", mb / 1024.0) else String.format(Locale.US, "%.0f \u041C\u0411", mb)
     }
 
     fun observeCalls(): Flow<List<CallEntity>> = callDao.observeAll()
@@ -255,7 +255,7 @@ class CallRepository(
         clientDirectory.loadClientCards(rawPhone = phone)
 
     suspend fun isPersonalContact(phone: String): Boolean {
-        if (phone.isBlank() || phone == "Неизвестно") return false
+        if (phone.isBlank() || phone == "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E") return false
 
         val normalized = normalizePhone(phone)
         if (normalized.isBlank()) return false
@@ -264,10 +264,10 @@ class CallRepository(
         if (cachedFlag != null) return cachedFlag == 1
 
         val direct = contactDao.findByPhone(phone)
-        if (direct?.client1c == "Личный") return true
+        if (direct?.client1c == "\u041B\u0438\u0447\u043D\u044B\u0439") return true
 
         return contactDao.findAll().any { contact ->
-            contact.client1c == "Личный" && normalizePhone(contact.phone) == normalized
+            contact.client1c == "\u041B\u0438\u0447\u043D\u044B\u0439" && normalizePhone(contact.phone) == normalized
         }
     }
 
@@ -280,19 +280,19 @@ class CallRepository(
         val apiUserPhone = normalizePhoneForHistoryApi(prefs.getManagerPhone())
         Log.d(
             HISTORY_LOG_TAG,
-            "Начало загрузки истории из Calltrack: rawPhone=$phone, normalizedPhone=$normalizedPhone, apiPhone=$apiPhone, " +
+            "\u041D\u0430\u0447\u0430\u043B\u043E \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0438\u0437 Calltrack: rawPhone=$phone, normalizedPhone=$normalizedPhone, apiPhone=$apiPhone, " +
                 "managerPhone=$managerPhone, apiUserPhone=$apiUserPhone"
         )
-        AppLogger.log(appContext, "API", "Запрос истории звонков из таблицы Calltrack")
+        AppLogger.log(appContext, "API", "\u0417\u0430\u043F\u0440\u043E\u0441 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u0438\u0437 \u0442\u0430\u0431\u043B\u0438\u0446\u044B Calltrack")
 
         val sqlUrl = buildSqlHistoryUrl(apiPhone.ifBlank { normalizedPhone }, apiUserPhone.ifBlank { managerPhone })
         val sqlLoaded = fetchHistoryFromUrl(sqlUrl, normalizedPhone)
         if (sqlLoaded.isNotEmpty()) {
-            Log.d(HISTORY_LOG_TAG, "Успешная загрузка истории из SQL API: url=$sqlUrl, records=${sqlLoaded.size}")
+            Log.d(HISTORY_LOG_TAG, "\u0423\u0441\u043F\u0435\u0448\u043D\u0430\u044F \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0438\u0437 SQL API: url=$sqlUrl, records=${sqlLoaded.size}")
             return sqlLoaded
         }
 
-        Log.d(HISTORY_LOG_TAG, "История из SQL API не найдена: rawPhone=$phone, normalizedPhone=$normalizedPhone, apiPhone=$apiPhone")
+        Log.d(HISTORY_LOG_TAG, "\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437 SQL API \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430: rawPhone=$phone, normalizedPhone=$normalizedPhone, apiPhone=$apiPhone")
         return emptyList()
     }
 
@@ -304,13 +304,13 @@ class CallRepository(
     suspend fun refreshPersonalContactsFromSql(): Int {
         val userPhone = normalizePhone(prefs.getManagerPhone())
         if (userPhone.isBlank()) {
-            Log.w("PERSONAL_CONTACTS", "Не загружаем личные контакты: номер пользователя не указан")
+            Log.w("PERSONAL_CONTACTS", "\u041D\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0430\u0435\u043C \u043B\u0438\u0447\u043D\u044B\u0435 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u044B: \u043D\u043E\u043C\u0435\u0440 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u043D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D")
             return 0
         }
 
         val url = sqlApiUrl("get_personal_contacts.php") + "?user_phone=${urlEncode(userPhone)}"
-        Log.d("PERSONAL_CONTACTS", "Загрузка списка личных контактов: url=$url")
-        AppLogger.log(appContext, "API", "Загрузка личных контактов из SQL API")
+        Log.d("PERSONAL_CONTACTS", "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0441\u043F\u0438\u0441\u043A\u0430 \u043B\u0438\u0447\u043D\u044B\u0445 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u043E\u0432: url=$url")
+        AppLogger.log(appContext, "API", "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043B\u0438\u0447\u043D\u044B\u0445 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u043E\u0432 \u0438\u0437 SQL API")
 
         return runCatching {
             val body = withContext(Dispatchers.IO) {
@@ -319,7 +319,7 @@ class CallRepository(
                     val bodyText = response.body?.string().orEmpty()
                     Log.d(
                         "PERSONAL_CONTACTS",
-                        "Ответ get_personal_contacts.php: code=${response.code}, body=${bodyText.take(400)}"
+                        "\u041E\u0442\u0432\u0435\u0442 get_personal_contacts.php: code=${response.code}, body=${bodyText.take(400)}"
                     )
                     if (!isSqlApiAccepted(response.isSuccessful, bodyText)) {
                         throw IllegalStateException("SQL API personal contacts rejected: code=${response.code}, body=${bodyText.take(400)}")
@@ -330,18 +330,18 @@ class CallRepository(
             val contacts = parsePersonalContactsResponse(body)
             personalContactDao.clearAll()
             contactDao.findAll()
-                .filter { contact -> contact.client1c == "Личный" }
+                .filter { contact -> contact.client1c == "\u041B\u0438\u0447\u043D\u044B\u0439" }
                 .forEach { contact -> contactDao.updateClient1c(contact.id, "") }
             personalContactDao.upsertAll(contacts)
             contacts.forEach { item ->
                 updatePersonalContactLocal(item.contactPhone, item.personalFlag == 1)
             }
-            AppLogger.log(appContext, "API", "Личные контакты загружены: ${contacts.size}")
-            Log.d("PERSONAL_CONTACTS", "Локальный кэш личных контактов обновлён: count=${contacts.size}")
+            AppLogger.log(appContext, "API", "\u041B\u0438\u0447\u043D\u044B\u0435 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u044B \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u044B: ${contacts.size}")
+            Log.d("PERSONAL_CONTACTS", "\u041B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u043A\u044D\u0448 \u043B\u0438\u0447\u043D\u044B\u0445 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u043E\u0432 \u043E\u0431\u043D\u043E\u0432\u043B\u0451\u043D: count=${contacts.size}")
             contacts.size
         }.onFailure {
-            Log.e("PERSONAL_CONTACTS", "Ошибка загрузки личных контактов", it)
-            AppLogger.log(appContext, "ERROR", "Ошибка загрузки личных контактов: ${it.message}")
+            Log.e("PERSONAL_CONTACTS", "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u043B\u0438\u0447\u043D\u044B\u0445 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u043E\u0432", it)
+            AppLogger.log(appContext, "ERROR", "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u043B\u0438\u0447\u043D\u044B\u0445 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u043E\u0432: ${it.message}")
         }.getOrDefault(0)
     }
 
@@ -364,21 +364,21 @@ class CallRepository(
     }
 
     private suspend fun fetchHistoryFromUrl(url: String, normalizedPhone: String): List<CallHistoryItem> {
-        Log.d(HISTORY_LOG_TAG, "URL запроса истории: $url")
+        Log.d(HISTORY_LOG_TAG, "URL \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u0438\u0441\u0442\u043E\u0440\u0438\u0438: $url")
         val result: Result<List<CallHistoryItem>> = runCatching {
             withContext(Dispatchers.IO) {
                 val request = Request.Builder().url(url).get().build()
                 val response = personalContactsHttpClient.newCall(request).execute()
                 try {
                     val body = response.body?.string().orEmpty()
-                    Log.d(HISTORY_LOG_TAG, "Код ответа истории: code=${response.code}, url=$url")
-                    Log.d(HISTORY_LOG_TAG, "Полный JSON ответа истории: $body")
+                    Log.d(HISTORY_LOG_TAG, "\u041A\u043E\u0434 \u043E\u0442\u0432\u0435\u0442\u0430 \u0438\u0441\u0442\u043E\u0440\u0438\u0438: code=${response.code}, url=$url")
+                    Log.d(HISTORY_LOG_TAG, "\u041F\u043E\u043B\u043D\u044B\u0439 JSON \u043E\u0442\u0432\u0435\u0442\u0430 \u0438\u0441\u0442\u043E\u0440\u0438\u0438: $body")
                     AppLogger.log(appContext, "API", "RAW Calltrack history response: ${body.take(500)}")
 
                     val parsed: List<CallHistoryItem> = parseHistoryResponse(body)
-                    Log.d(HISTORY_LOG_TAG, "Количество записей после парсинга: ${parsed.size}, url=$url")
+                    Log.d(HISTORY_LOG_TAG, "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u0437\u0430\u043F\u0438\u0441\u0435\u0439 \u043F\u043E\u0441\u043B\u0435 \u043F\u0430\u0440\u0441\u0438\u043D\u0433\u0430: ${parsed.size}, url=$url")
                     val filtered: List<CallHistoryItem> = parsed.filterForHistoryScreen(normalizedPhone)
-                    Log.d(HISTORY_LOG_TAG, "Количество записей после фильтрации: ${filtered.size}, url=$url")
+                    Log.d(HISTORY_LOG_TAG, "\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u0437\u0430\u043F\u0438\u0441\u0435\u0439 \u043F\u043E\u0441\u043B\u0435 \u0444\u0438\u043B\u044C\u0442\u0440\u0430\u0446\u0438\u0438: ${filtered.size}, url=$url")
                     filtered
                 } finally {
                     response.close()
@@ -386,9 +386,9 @@ class CallRepository(
             }
         }
         result.onFailure {
-            Log.e(HISTORY_LOG_TAG, "Ошибка HTTP/coroutine/Gson при загрузке истории: url=$url", it)
-            Log.e("CallRepository", "Fallback загрузки истории из Calltrack не удался", it)
-            AppLogger.log(appContext, "ERROR", "Ошибка загрузки истории: ${it.message}")
+            Log.e(HISTORY_LOG_TAG, "\u041E\u0448\u0438\u0431\u043A\u0430 HTTP/coroutine/Gson \u043F\u0440\u0438 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0435 \u0438\u0441\u0442\u043E\u0440\u0438\u0438: url=$url", it)
+            Log.e("CallRepository", "Fallback \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0438\u0437 Calltrack \u043D\u0435 \u0443\u0434\u0430\u043B\u0441\u044F", it)
+            AppLogger.log(appContext, "ERROR", "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0438\u0441\u0442\u043E\u0440\u0438\u0438: ${it.message}")
         }
         return result.getOrElse { emptyList<CallHistoryItem>() }
     }
@@ -442,10 +442,10 @@ class CallRepository(
     }
 
     private fun CallHistoryItem.isHeaderRow(): Boolean {
-        return normalizeHeader(date) == "дата" ||
-            normalizeHeader(phone) in setOf("номертелефона", "телефон", "phone", "contactphone") ||
-            normalizeHeader(note) in setOf("комментарий", "комментарии", "коментарий", "коментарии", "comment", "comments") ||
-            normalizeHeader(reminder) in setOf("напоминание", "напоминания", "reminder", "reminders")
+        return normalizeHeader(date) == "\u0434\u0430\u0442\u0430" ||
+            normalizeHeader(phone) in setOf("\u043D\u043E\u043C\u0435\u0440\u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430", "\u0442\u0435\u043B\u0435\u0444\u043E\u043D", "phone", "contactphone") ||
+            normalizeHeader(note) in setOf("\u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439", "\u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0438", "\u043A\u043E\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439", "\u043A\u043E\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0438", "comment", "comments") ||
+            normalizeHeader(reminder) in setOf("\u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435", "\u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F", "reminder", "reminders")
     }
 
     private fun normalizeHeader(value: String): String {
@@ -455,19 +455,19 @@ class CallRepository(
 
     private fun jsonObjectToCallHistoryItem(json: JSONObject): CallHistoryItem {
         return CallHistoryItem(
-            date = firstJsonString(json, "date", "call_date", "Дата"),
-            time = firstJsonString(json, "time", "call_time", "Время"),
-            phone = firstJsonString(json, "phone", "contact_phone", "Номер телефона", "Телефон"),
-            type = firstJsonString(json, "type", "call_type", "Тип звонка", "Тип"),
-            duration = firstJsonString(json, "duration", "Длительность"),
-            manager = firstJsonString(json, "manager", "Менеджер"),
-            note = firstJsonString(json, "note", "comment", "comments", "comment_text", "Комментарий", "Комментарии", "Коментарий", "Коментарии"),
-            tag = firstJsonString(json, "tag", "tags", "Тег", "Теги"),
-            reminder = firstJsonString(json, "reminder", "reminders", "Напоминание", "Напоминания"),
-            reminderText = firstJsonString(json, "reminder_text", "reminderText", "reminder_texts", "Текст напоминания", "Тексты напоминаний"),
-            client = firstJsonString(json, "client", "Клиент"),
+            date = firstJsonString(json, "date", "call_date", "\u0414\u0430\u0442\u0430"),
+            time = firstJsonString(json, "time", "call_time", "\u0412\u0440\u0435\u043C\u044F"),
+            phone = firstJsonString(json, "phone", "contact_phone", "\u041D\u043E\u043C\u0435\u0440 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430", "\u0422\u0435\u043B\u0435\u0444\u043E\u043D"),
+            type = firstJsonString(json, "type", "call_type", "\u0422\u0438\u043F \u0437\u0432\u043E\u043D\u043A\u0430", "\u0422\u0438\u043F"),
+            duration = firstJsonString(json, "duration", "\u0414\u043B\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u044C"),
+            manager = firstJsonString(json, "manager", "\u041C\u0435\u043D\u0435\u0434\u0436\u0435\u0440"),
+            note = firstJsonString(json, "note", "comment", "comments", "comment_text", "\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439", "\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0438", "\u041A\u043E\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439", "\u041A\u043E\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0438"),
+            tag = firstJsonString(json, "tag", "tags", "\u0422\u0435\u0433", "\u0422\u0435\u0433\u0438"),
+            reminder = firstJsonString(json, "reminder", "reminders", "\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435", "\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F"),
+            reminderText = firstJsonString(json, "reminder_text", "reminderText", "reminder_texts", "\u0422\u0435\u043A\u0441\u0442 \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F", "\u0422\u0435\u043A\u0441\u0442\u044B \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439"),
+            client = firstJsonString(json, "client", "\u041A\u043B\u0438\u0435\u043D\u0442"),
             callId = firstJsonString(json, "call_id", "ID", "id"),
-            userPhone = firstJsonString(json, "user_phone", "manager_phone", "Номер телефона пользователя")
+            userPhone = firstJsonString(json, "user_phone", "manager_phone", "\u041D\u043E\u043C\u0435\u0440 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u0430 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F")
         )
     }
 
@@ -532,11 +532,11 @@ class CallRepository(
         val normalizedPhone = normalizePhone(phone)
         if (normalizedPhone.isBlank()) return@withContext emptyList<ReminderEntity>()
 
-        Log.d(HISTORY_LOG_TAG, "Начало импорта напоминаний из Calltrack во внутреннюю память: phone=$phone, normalized=$normalizedPhone")
+        Log.d(HISTORY_LOG_TAG, "\u041D\u0430\u0447\u0430\u043B\u043E \u0438\u043C\u043F\u043E\u0440\u0442\u0430 \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u0437 Calltrack \u0432\u043E \u0432\u043D\u0443\u0442\u0440\u0435\u043D\u043D\u044E\u044E \u043F\u0430\u043C\u044F\u0442\u044C: phone=$phone, normalized=$normalizedPhone")
         val remoteItems = loadHistoryFromRemote(phone)
         val remoteReminders = remoteItems
             .mapNotNull { item -> item.toReminderEntity(normalizedPhone) }
-        Log.d(HISTORY_LOG_TAG, "Напоминаний из таблицы после парсинга: ${remoteReminders.size}, phone=$phone")
+        Log.d(HISTORY_LOG_TAG, "\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0438\u0437 \u0442\u0430\u0431\u043B\u0438\u0446\u044B \u043F\u043E\u0441\u043B\u0435 \u043F\u0430\u0440\u0441\u0438\u043D\u0433\u0430: ${remoteReminders.size}, phone=$phone")
 
         val existingFingerprints = reminderDao.getAllOnce()
             .filter { reminder -> normalizePhone(reminder.phone) == normalizedPhone }
@@ -554,7 +554,7 @@ class CallRepository(
                 inserted++
             }
         }
-        Log.d(HISTORY_LOG_TAG, "Импорт напоминаний завершён: inserted=$inserted, totalRemote=${remoteReminders.size}, phone=$phone")
+        Log.d(HISTORY_LOG_TAG, "\u0418\u043C\u043F\u043E\u0440\u0442 \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0439 \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D: inserted=$inserted, totalRemote=${remoteReminders.size}, phone=$phone")
         getStoredReminders(normalizedPhone)
     }
 
@@ -571,7 +571,7 @@ class CallRepository(
         val normalizedPhone = normalizePhone(phone)
         if (normalizedPhone.isBlank()) return@withContext emptyList<CommentEntity>()
 
-        Log.d(HISTORY_LOG_TAG, "Начало импорта комментариев из Calltrack во внутреннюю память: phone=$phone, normalized=$normalizedPhone")
+        Log.d(HISTORY_LOG_TAG, "\u041D\u0430\u0447\u0430\u043B\u043E \u0438\u043C\u043F\u043E\u0440\u0442\u0430 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u0432 \u0438\u0437 Calltrack \u0432\u043E \u0432\u043D\u0443\u0442\u0440\u0435\u043D\u043D\u044E\u044E \u043F\u0430\u043C\u044F\u0442\u044C: phone=$phone, normalized=$normalizedPhone")
         val remoteItems = loadHistoryFromRemote(phone)
         val remoteComments = remoteItems
             .filter { item -> item.note.isNotBlank() }
@@ -582,7 +582,7 @@ class CallRepository(
                     createdAt = parseHistoryTimestamp(item.date, item.time)
                 )
             }
-        Log.d(HISTORY_LOG_TAG, "Комментариев из таблицы после парсинга: ${remoteComments.size}, phone=$phone")
+        Log.d(HISTORY_LOG_TAG, "\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u0432 \u0438\u0437 \u0442\u0430\u0431\u043B\u0438\u0446\u044B \u043F\u043E\u0441\u043B\u0435 \u043F\u0430\u0440\u0441\u0438\u043D\u0433\u0430: ${remoteComments.size}, phone=$phone")
 
         val existingFingerprints = commentDao.getAllOnce()
             .filter { comment -> normalizePhone(comment.phone) == normalizedPhone }
@@ -600,7 +600,7 @@ class CallRepository(
                 inserted++
             }
         }
-        Log.d(HISTORY_LOG_TAG, "Импорт комментариев завершён: inserted=$inserted, totalRemote=${remoteComments.size}, phone=$phone")
+        Log.d(HISTORY_LOG_TAG, "\u0418\u043C\u043F\u043E\u0440\u0442 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u0432 \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D: inserted=$inserted, totalRemote=${remoteComments.size}, phone=$phone")
         getStoredComments(normalizedPhone)
     }
 
@@ -609,7 +609,7 @@ class CallRepository(
             val normalizedPhone = normalizePhone(phone)
             if (normalizedPhone.isBlank()) return@withContext emptyList()
             if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
-                Log.w("CallRepository", "Нет разрешения READ_CALL_LOG для истории звонков карточки контакта")
+                Log.w("CallRepository", "\u041D\u0435\u0442 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F READ_CALL_LOG \u0434\u043B\u044F \u0438\u0441\u0442\u043E\u0440\u0438\u0438 \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0438 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430")
                 return@withContext emptyList()
             }
 
@@ -660,7 +660,7 @@ class CallRepository(
                     }
                 }
             }.onFailure {
-                Log.e("CallRepository", "Не удалось загрузить историю звонков контакта из стандартной звонилки", it)
+                Log.e("CallRepository", "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0438\u0441\u0442\u043E\u0440\u0438\u044E \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430 \u0438\u0437 \u0441\u0442\u0430\u043D\u0434\u0430\u0440\u0442\u043D\u043E\u0439 \u0437\u0432\u043E\u043D\u0438\u043B\u043A\u0438", it)
             }
 
             result
@@ -681,7 +681,7 @@ class CallRepository(
             // он мог быть помечен uploaded=true. При реальном завершении звонка возвращаем его в очередь,
             // чтобы syncPending отправил запись в SQL API.
             callDao.markPending(duplicate.id)
-            Log.d("CallRepository", "Пропускаем дубль звонка, используем id=${duplicate.id} и ставим его в очередь отправки")
+            Log.d("CallRepository", "\u041F\u0440\u043E\u043F\u0443\u0441\u043A\u0430\u0435\u043C \u0434\u0443\u0431\u043B\u044C \u0437\u0432\u043E\u043D\u043A\u0430, \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u043C id=${duplicate.id} \u0438 \u0441\u0442\u0430\u0432\u0438\u043C \u0435\u0433\u043E \u0432 \u043E\u0447\u0435\u0440\u0435\u0434\u044C \u043E\u0442\u043F\u0440\u0430\u0432\u043A\u0438")
             return duplicate.id
         }
         return callDao.insert(call)
@@ -689,7 +689,7 @@ class CallRepository(
 
     suspend fun importRecentCallsFromDevice(limit: Int = DEVICE_RECENT_CALLS_LIMIT): Int = withContext(Dispatchers.IO) {
         if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
-            Log.w("CallRepository", "Нет разрешения READ_CALL_LOG для загрузки экрана История из звонилки")
+            Log.w("CallRepository", "\u041D\u0435\u0442 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F READ_CALL_LOG \u0434\u043B\u044F \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u044D\u043A\u0440\u0430\u043D\u0430 \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437 \u0437\u0432\u043E\u043D\u0438\u043B\u043A\u0438")
             return@withContext 0
         }
 
@@ -715,7 +715,7 @@ class CallRepository(
                 val dateIdx = cursor.getColumnIndexOrThrow(CallLog.Calls.DATE)
 
                 while (cursor.moveToNext() && scanned < limit) {
-                    val phone = cursor.getString(numberIdx).orEmpty().ifBlank { "Неизвестно" }
+                    val phone = cursor.getString(numberIdx).orEmpty().ifBlank { "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E" }
                     val duration = cursor.getLong(durationIdx)
                     val timestamp = cursor.getLong(dateIdx)
                     val (type, note) = mapDeviceCallType(cursor.getInt(typeIdx), duration)
@@ -744,7 +744,7 @@ class CallRepository(
                 }
             }
         }.onFailure {
-            Log.e("CallRepository", "Не удалось загрузить последние звонки из системной звонилки", it)
+            Log.e("CallRepository", "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0435 \u0437\u0432\u043E\u043D\u043A\u0438 \u0438\u0437 \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0439 \u0437\u0432\u043E\u043D\u0438\u043B\u043A\u0438", it)
         }
 
         scanned
@@ -759,7 +759,7 @@ class CallRepository(
         tag: String,
         reminderMillis: Long?,
         note: String,
-        reminderMessage: String = "Перезвонить"
+        reminderMessage: String = "\u041F\u0435\u0440\u0435\u0437\u0432\u043E\u043D\u0438\u0442\u044C"
     ) {
         ensureContact(phone)
         val reminderValue = reminderMillis?.let {
@@ -777,9 +777,9 @@ class CallRepository(
                 ReminderEntity(
                     phone = phone,
                     contactName = contactName,
-                    message = reminderMessage.ifBlank { "Перезвонить" },
+                    message = reminderMessage.ifBlank { "\u041F\u0435\u0440\u0435\u0437\u0432\u043E\u043D\u0438\u0442\u044C" },
                     remindAt = reminderMillis,
-                    status = "Активно"
+                    status = "\u0410\u043A\u0442\u0438\u0432\u043D\u043E"
                 )
             )
         }
@@ -794,7 +794,7 @@ class CallRepository(
 
         val latestCall = findLatestCallForPhone(phone)
         if (latestCall == null) {
-            Log.w("CallRepository", "Комментарий сохранён локально, но звонок для отправки в таблицу не найден: phone=$phone")
+            Log.w("CallRepository", "\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E, \u043D\u043E \u0437\u0432\u043E\u043D\u043E\u043A \u0434\u043B\u044F \u043E\u0442\u043F\u0440\u0430\u0432\u043A\u0438 \u0432 \u0442\u0430\u0431\u043B\u0438\u0446\u0443 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D: phone=$phone")
             return
         }
 
@@ -813,13 +813,13 @@ class CallRepository(
                 contactName = contactName,
                 message = text,
                 remindAt = remindAt,
-                status = "Активно"
+                status = "\u0410\u043A\u0442\u0438\u0432\u043D\u043E"
             )
         )
 
         val latestCall = findLatestCallForPhone(phone)
         if (latestCall == null) {
-            Log.w("CallRepository", "Напоминание сохранено локально, но звонок для отправки в таблицу не найден: phone=$phone")
+            Log.w("CallRepository", "\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E, \u043D\u043E \u0437\u0432\u043E\u043D\u043E\u043A \u0434\u043B\u044F \u043E\u0442\u043F\u0440\u0430\u0432\u043A\u0438 \u0432 \u0442\u0430\u0431\u043B\u0438\u0446\u0443 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D: phone=$phone")
             return
         }
 
@@ -831,28 +831,28 @@ class CallRepository(
     }
 
     suspend fun markAsPersonalContact(phone: String): Boolean {
-        if (phone.isBlank() || phone == "Неизвестно") return false
+        if (phone.isBlank() || phone == "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E") return false
         ensureContact(phone)
         if (!syncPersonalContactToRemote(phone, true, enqueueOnFailure = true)) return false
         val pendingCount = markCallsPendingForNormalizedPhone(phone)
-        Log.d("CallRepository", "Личный контакт: поставили в очередь $pendingCount звонков для обновления колонки Клиент")
+        Log.d("CallRepository", "\u041B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442: \u043F\u043E\u0441\u0442\u0430\u0432\u0438\u043B\u0438 \u0432 \u043E\u0447\u0435\u0440\u0435\u0434\u044C $pendingCount \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u0434\u043B\u044F \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u043A\u043E\u043B\u043E\u043D\u043A\u0438 \u041A\u043B\u0438\u0435\u043D\u0442")
         syncPending()
         flushPendingPersonalContactsSync()
         return true
     }
 
     suspend fun markCallsPendingForPhoneResync(phone: String) {
-        if (phone.isBlank() || phone == "Неизвестно") return
+        if (phone.isBlank() || phone == "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E") return
         markCallsPendingForNormalizedPhone(phone)
         syncPending()
     }
 
     suspend fun unmarkPersonalContact(phone: String): Boolean {
-        if (phone.isBlank() || phone == "Неизвестно") return false
+        if (phone.isBlank() || phone == "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E") return false
         ensureContact(phone)
         if (!syncPersonalContactToRemote(phone, false, enqueueOnFailure = true)) return false
         val pendingCount = markCallsPendingForNormalizedPhone(phone)
-        Log.d("CallRepository", "Личный контакт снят: поставили в очередь $pendingCount звонков для очистки колонки Клиент")
+        Log.d("CallRepository", "\u041B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442 \u0441\u043D\u044F\u0442: \u043F\u043E\u0441\u0442\u0430\u0432\u0438\u043B\u0438 \u0432 \u043E\u0447\u0435\u0440\u0435\u0434\u044C $pendingCount \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u0434\u043B\u044F \u043E\u0447\u0438\u0441\u0442\u043A\u0438 \u043A\u043E\u043B\u043E\u043D\u043A\u0438 \u041A\u043B\u0438\u0435\u043D\u0442")
         syncPending()
         flushPendingPersonalContactsSync()
         return true
@@ -860,7 +860,7 @@ class CallRepository(
 
     private suspend fun updatePersonalContactLocal(phone: String, isPersonal: Boolean) {
         val normalizedPhone = normalizePhone(phone)
-        val value = if (isPersonal) "Личный" else ""
+        val value = if (isPersonal) "\u041B\u0438\u0447\u043D\u044B\u0439" else ""
         contactDao.updateClient1cByPhone(phone, value)
         contactDao.findAll()
             .filter { contact -> normalizePhone(contact.phone) == normalizedPhone }
@@ -888,11 +888,11 @@ class CallRepository(
             put("contact_phone", normalizedContactPhone)
             put("personal_flag", personalFlag)
         }
-        Log.d("PERSONAL_CONTACTS", "Изменение признака личного контакта: $payload")
+        Log.d("PERSONAL_CONTACTS", "\u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u0437\u043D\u0430\u043A\u0430 \u043B\u0438\u0447\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430: $payload")
         AppLogger.log(
             appContext,
             "API",
-            "Отправка личного контакта: phone=$normalizedContactPhone, flag=$personalFlag"
+            "\u041E\u0442\u043F\u0440\u0430\u0432\u043A\u0430 \u043B\u0438\u0447\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430: phone=$normalizedContactPhone, flag=$personalFlag"
         )
 
         val ok = runCatching {
@@ -906,7 +906,7 @@ class CallRepository(
                     val accepted = isSqlApiAccepted(response.isSuccessful, bodyText)
                     Log.d(
                         "PERSONAL_CONTACTS",
-                        "Ответ personal_contact.php: code=${response.code}, accepted=$accepted, body=${bodyText.take(400)}"
+                        "\u041E\u0442\u0432\u0435\u0442 personal_contact.php: code=${response.code}, accepted=$accepted, body=${bodyText.take(400)}"
                     )
                     if (!accepted) {
                         throw IllegalStateException("SQL API personal_contact rejected: code=${response.code}, body=${bodyText.take(400)}")
@@ -915,8 +915,8 @@ class CallRepository(
                 }
             }
         }.onFailure {
-            Log.e("PERSONAL_CONTACTS", "Ошибка сети при изменении личного контакта", it)
-            AppLogger.log(appContext, "ERROR", "Ошибка личного контакта: ${it.message}")
+            Log.e("PERSONAL_CONTACTS", "\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u0435\u0442\u0438 \u043F\u0440\u0438 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0438 \u043B\u0438\u0447\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430", it)
+            AppLogger.log(appContext, "ERROR", "\u041E\u0448\u0438\u0431\u043A\u0430 \u043B\u0438\u0447\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430: ${it.message}")
             if (enqueueOnFailure) {
                 enqueuePendingPersonalSync(
                     PersonalSyncItem(
@@ -932,7 +932,7 @@ class CallRepository(
         if (ok) {
             personalContactDao.upsert(PersonalContactEntity(normalizedContactPhone, personalFlag))
             updatePersonalContactLocal(normalizedContactPhone, isPersonal)
-            AppLogger.log(appContext, "API", "Личный контакт сохранён: flag=$personalFlag")
+            AppLogger.log(appContext, "API", "\u041B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D: flag=$personalFlag")
         }
         return ok
     }
@@ -1017,7 +1017,7 @@ class CallRepository(
                 contactName = contactName,
                 message = text,
                 remindAt = remindAt,
-                status = "Активно"
+                status = "\u0410\u043A\u0442\u0438\u0432\u043D\u043E"
             )
         )
         // Напоминание меняет конкретный звонок, поэтому отправляем в таблицу строку с тем же call_id.
@@ -1028,14 +1028,14 @@ class CallRepository(
         StabilityDiagnostics.mark(appContext, "sync_started", "call_id=$callId")
         syncMutex.withLock {
             val entity = callDao.getById(callId) ?: return@withLock
-            val managerName = prefs.getManagerName().ifBlank { "Не указан" }
-            val managerPhone = prefs.getManagerPhone().ifBlank { "Не указан" }
+            val managerName = prefs.getManagerName().ifBlank { "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D" }
+            val managerPhone = prefs.getManagerPhone().ifBlank { "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D" }
             if (sendCallToWebhook(entity, managerName, managerPhone)) {
                 callDao.markUploaded(entity.id)
                 AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED BY ID: id=${entity.id}")
                 StabilityDiagnostics.mark(appContext, "sync_finished", "call_id=$callId")
             } else {
-                StabilityDiagnostics.mark(appContext, "sync_failed", "call_id=$callId; сервер не принял звонок")
+                StabilityDiagnostics.mark(appContext, "sync_failed", "call_id=$callId; \u0441\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u0440\u0438\u043D\u044F\u043B \u0437\u0432\u043E\u043D\u043E\u043A")
             }
         }
     }
@@ -1043,8 +1043,8 @@ class CallRepository(
     suspend fun syncPending() {
         StabilityDiagnostics.mark(appContext, "sync_started", "pending")
         syncMutex.withLock {
-            val managerName = prefs.getManagerName().ifBlank { "Не указан" }
-            val managerPhone = prefs.getManagerPhone().ifBlank { "Не указан" }
+            val managerName = prefs.getManagerName().ifBlank { "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D" }
+            val managerPhone = prefs.getManagerPhone().ifBlank { "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D" }
             val pending = callDao.getPending()
             val groupedPending = pending.groupBy { entity ->
                 // Антидубль: на некоторых устройствах один завершённый звонок может попасть в БД несколько раз
@@ -1076,7 +1076,7 @@ class CallRepository(
     }
 
     private suspend fun sendCallToWebhook(entity: CallEntity, managerName: String, managerPhone: String): Boolean {
-        Log.d("WEBHOOK", "Отправка звонка в SQL API: $entity")
+        Log.d("WEBHOOK", "\u041E\u0442\u043F\u0440\u0430\u0432\u043A\u0430 \u0437\u0432\u043E\u043D\u043A\u0430 \u0432 SQL API: $entity")
         val personalMarked = isPersonalContact(entity.phone)
         val clientName = if (personalMarked) PERSONAL_CALL_CLIENT_VALUE else findClientName(entity.phone)
         val reminderText = extractReminderText(entity.reminder)
@@ -1084,7 +1084,7 @@ class CallRepository(
 
         val sent = sendCallToSqlApi(entity, managerName, managerPhone, clientName, reminderText, callId)
         if (!sent) {
-            Log.w("WEBHOOK", "SQL API не принял звонок id=${entity.id}; запись остаётся pending для повторной отправки")
+            Log.w("WEBHOOK", "SQL API \u043D\u0435 \u043F\u0440\u0438\u043D\u044F\u043B \u0437\u0432\u043E\u043D\u043E\u043A id=${entity.id}; \u0437\u0430\u043F\u0438\u0441\u044C \u043E\u0441\u0442\u0430\u0451\u0442\u0441\u044F pending \u0434\u043B\u044F \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u043E\u0439 \u043E\u0442\u043F\u0440\u0430\u0432\u043A\u0438")
         }
         return sent
     }
@@ -1121,7 +1121,7 @@ class CallRepository(
             AppLogger.log(
                 appContext,
                 "API",
-                "Отправка данных в SQL API: call_id=$callId, phone=${entity.phone}, type=${entity.type}"
+                "\u041E\u0442\u043F\u0440\u0430\u0432\u043A\u0430 \u0434\u0430\u043D\u043D\u044B\u0445 \u0432 SQL API: call_id=$callId, phone=${entity.phone}, type=${entity.type}"
             )
             withContext(Dispatchers.IO) {
                 val request = Request.Builder()
@@ -1135,15 +1135,15 @@ class CallRepository(
                             "SQL API rejected: code=${response.code}, body=${bodyText.take(400)}"
                         )
                     }
-                    AppLogger.log(appContext, "API", "Ответ SQL API: code=${response.code}")
-                    Log.d("WEBHOOK", "Отправлено в SQL API: phone=${entity.phone}, id=${entity.id}, call_id=$callId")
+                    AppLogger.log(appContext, "API", "\u041E\u0442\u0432\u0435\u0442 SQL API: code=${response.code}")
+                    Log.d("WEBHOOK", "\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0432 SQL API: phone=${entity.phone}, id=${entity.id}, call_id=$callId")
                     true
                 }
             }
         }.onFailure {
-            Log.e("WEBHOOK", "Ошибка отправки в SQL API: id=${entity.id}", it)
+            Log.e("WEBHOOK", "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0442\u043F\u0440\u0430\u0432\u043A\u0438 \u0432 SQL API: id=${entity.id}", it)
             Log.e("CallRepository", "SQL API send failed for id=${entity.id}", it)
-            AppLogger.log(appContext, "ERROR", "Ошибка SQL API: ${it.message}")
+            AppLogger.log(appContext, "ERROR", "\u041E\u0448\u0438\u0431\u043A\u0430 SQL API: ${it.message}")
         }.getOrDefault(false)
     }
 
@@ -1171,13 +1171,13 @@ class CallRepository(
     private fun isWebhookAccepted(isSuccessful: Boolean, bodyText: String): Boolean {
         if (!isSuccessful) return false
         val normalized = bodyText.lowercase(Locale.getDefault())
-        if (normalized.contains("не удалось найти функцию скрипта")) return false
-        if (normalized.contains("ошибка")) return false
+        if (normalized.contains("\u043D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043D\u0430\u0439\u0442\u0438 \u0444\u0443\u043D\u043A\u0446\u0438\u044E \u0441\u043A\u0440\u0438\u043F\u0442\u0430")) return false
+        if (normalized.contains("\u043E\u0448\u0438\u0431\u043A\u0430")) return false
         return true
     }
 
     private suspend fun ensureContact(phone: String) {
-        if (phone.isBlank() || phone == "Неизвестно") return
+        if (phone.isBlank() || phone == "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E") return
         val client1c = clientDirectory.findClientName(phone)
         val exists = contactDao.findByPhone(phone)
         if (exists == null) {
@@ -1250,7 +1250,7 @@ class CallRepository(
             contactName = client,
             message = message,
             remindAt = remindAt,
-            status = "Активно",
+            status = "\u0410\u043A\u0442\u0438\u0432\u043D\u043E",
             createdAt = parseHistoryTimestamp(date, time)
         )
     }
@@ -1273,11 +1273,11 @@ class CallRepository(
 
     private fun mapDeviceCallType(typeInt: Int, duration: Long): Pair<String, String> {
         val callTypeString = when (typeInt) {
-            CallLog.Calls.INCOMING_TYPE -> if (duration < 2L) "Пропущенный" else "Входящий"
-            CallLog.Calls.OUTGOING_TYPE -> if (duration < 2L) "Неотвеченный" else "Исходящий"
-            CallLog.Calls.MISSED_TYPE -> "Пропущенный"
-            CallLog.Calls.REJECTED_TYPE -> "Сброшенный"
-            else -> "Неотвеченный"
+            CallLog.Calls.INCOMING_TYPE -> if (duration < 2L) "\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0439" else "\u0412\u0445\u043E\u0434\u044F\u0449\u0438\u0439"
+            CallLog.Calls.OUTGOING_TYPE -> if (duration < 2L) "\u041D\u0435\u043E\u0442\u0432\u0435\u0447\u0435\u043D\u043D\u044B\u0439" else "\u0418\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0439"
+            CallLog.Calls.MISSED_TYPE -> "\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0439"
+            CallLog.Calls.REJECTED_TYPE -> "\u0421\u0431\u0440\u043E\u0448\u0435\u043D\u043D\u044B\u0439"
+            else -> "\u041D\u0435\u043E\u0442\u0432\u0435\u0447\u0435\u043D\u043D\u044B\u0439"
         }
         return callTypeString to ""
     }
@@ -1334,7 +1334,7 @@ class CallRepository(
         private const val DEVICE_RECENT_CALLS_LIMIT = 100
         private const val DEVICE_CONTACT_HISTORY_LIMIT = 100
         private const val CALL_HISTORY_MIN_ARRAY_COLUMNS = 5
-        private const val PERSONAL_CALL_CLIENT_VALUE = "Личный звонок"
+        private const val PERSONAL_CALL_CLIENT_VALUE = "\u041B\u0438\u0447\u043D\u044B\u0439 \u0437\u0432\u043E\u043D\u043E\u043A"
         private const val UPDATE_NOTIFICATION_CHANNEL = "calltrack_updates"
         private const val UPDATE_NOTIFICATION_ID = 70101
     }

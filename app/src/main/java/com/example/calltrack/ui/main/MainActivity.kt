@@ -89,12 +89,12 @@ class MainActivity : BaseActivity() {
         updateWarningState()
         val apkFile = pendingInstallApk
         if (apkFile != null && (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls())) {
-            AppLogger.log(this, "UPDATE", "Разрешение на установку APK получено, повторный запуск установки")
+            AppLogger.log(this, "UPDATE", "\u0420\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u0435 \u043D\u0430 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0443 APK \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u043E, \u043F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0439 \u0437\u0430\u043F\u0443\u0441\u043A \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0438")
             installApkFile(apkFile)
         } else {
             updateOperationRunning = false
             hideUpdateProgress()
-            AppLogger.log(this, "WARN", "Разрешение на установку APK не предоставлено")
+            AppLogger.log(this, "WARN", "\u0420\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u0435 \u043D\u0430 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0443 APK \u043D\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043E")
         }
     }
     private val batteryOptimizationLauncher = registerForActivityResult(
@@ -104,7 +104,7 @@ class MainActivity : BaseActivity() {
         AppLogger.log(
             this,
             "STABILITY",
-            if (isBatteryOptimizationDisabled()) "Фоновая работа без ограничений разрешена" else "Исключение из оптимизации батареи не предоставлено"
+            if (isBatteryOptimizationDisabled()) "\u0424\u043E\u043D\u043E\u0432\u0430\u044F \u0440\u0430\u0431\u043E\u0442\u0430 \u0431\u0435\u0437 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u0439 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0430" else "\u0418\u0441\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0438\u0437 \u043E\u043F\u0442\u0438\u043C\u0438\u0437\u0430\u0446\u0438\u0438 \u0431\u0430\u0442\u0430\u0440\u0435\u0438 \u043D\u0435 \u043F\u0440\u0435\u0434\u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u043E"
         )
         (supportFragmentManager.findFragmentById(R.id.fragmentContainer) as? OnboardingFragment)?.onPermissionsUpdated()
     }
@@ -113,9 +113,9 @@ class MainActivity : BaseActivity() {
     ) { result ->
         updateOperationRunning = false
         hideUpdateProgress()
-        AppLogger.log(this, "UPDATE", "Системный установщик APK завершён: resultCode=${result.resultCode}")
+        AppLogger.log(this, "UPDATE", "\u0421\u0438\u0441\u0442\u0435\u043C\u043D\u044B\u0439 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u0449\u0438\u043A APK \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D: resultCode=${result.resultCode}")
         if (result.resultCode != RESULT_OK) {
-            Toast.makeText(this, "Установка не завершена. Проверьте сообщение системного установщика.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "\u0423\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u043D\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u0430. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435 \u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u0433\u043E \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u0449\u0438\u043A\u0430.", Toast.LENGTH_LONG).show()
         }
         lifecycleScope.launch { syncUpdateLogsToDashboard() }
     }
@@ -123,7 +123,7 @@ class MainActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         applySavedTheme()
         super.onCreate(savedInstanceState)
-        AppLogger.log(this, "APP", "MainActivity создана")
+        AppLogger.log(this, "APP", "MainActivity \u0441\u043E\u0437\u0434\u0430\u043D\u0430")
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -160,12 +160,12 @@ class MainActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
-        AppLogger.log(this, "APP", "Приложение на экране")
+        AppLogger.log(this, "APP", "\u041F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u043D\u0430 \u044D\u043A\u0440\u0430\u043D\u0435")
         lifecycleScope.launch { viewModel.sendUserTelemetry() }
     }
 
     override fun onPause() {
-        AppLogger.log(this, "APP", "Приложение свернуто")
+        AppLogger.log(this, "APP", "\u041F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435 \u0441\u0432\u0435\u0440\u043D\u0443\u0442\u043E")
         super.onPause()
     }
 
@@ -239,7 +239,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -263,7 +263,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -287,7 +287,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -311,7 +311,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -335,7 +335,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -359,7 +359,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -383,7 +383,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -407,7 +407,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -431,7 +431,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -455,7 +455,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -479,7 +479,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -503,7 +503,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -527,7 +527,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -551,7 +551,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -575,7 +575,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -599,7 +599,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -623,7 +623,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -647,7 +647,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -671,7 +671,7 @@ class MainActivity : BaseActivity() {
             updateProgressBar = content.findViewById(R.id.updateProgressBar)
             updateProgressStatus = content.findViewById(R.id.updateProgressStatus)
             updateProgressDialog = AlertDialog.Builder(this)
-                .setTitle("Обновление приложения")
+                .setTitle("\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F")
                 .setView(content)
                 .setCancelable(false)
                 .create()
@@ -696,14 +696,14 @@ class MainActivity : BaseActivity() {
 
     private fun setupAnalyticsButton() {
         binding.btnAnalytics.setOnClickListener {
-            AppLogger.log(this, "UI", "Открыт экран: Аналитика")
+            AppLogger.log(this, "UI", "\u041E\u0442\u043A\u0440\u044B\u0442 \u044D\u043A\u0440\u0430\u043D: \u0410\u043D\u0430\u043B\u0438\u0442\u0438\u043A\u0430")
             startActivity(Intent(this, AnalyticsActivity::class.java))
         }
     }
 
     private fun setupNotificationButton() {
         binding.btnNotifications.setOnClickListener {
-            AppLogger.log(this, "UI", "Открыт экран: Уведомления")
+            AppLogger.log(this, "UI", "\u041E\u0442\u043A\u0440\u044B\u0442 \u044D\u043A\u0440\u0430\u043D: \u0423\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F")
             openNotificationsScreen()
         }
         NotificationBadgeManager(
@@ -716,7 +716,7 @@ class MainActivity : BaseActivity() {
 
     private fun setupSettingsButton() {
         binding.btnSettings.setOnClickListener { anchor ->
-            AppLogger.log(this, "UI", "Нажата кнопка: Настройки")
+            AppLogger.log(this, "UI", "\u041D\u0430\u0436\u0430\u0442\u0430 \u043A\u043D\u043E\u043F\u043A\u0430: \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438")
             PopupMenu(this, anchor).apply {
                 menu.add(0, MENU_ABOUT_ID, 0, getString(R.string.about_app))
                 menu.add(0, MENU_SETTINGS_ID, 1, getString(R.string.settings))
@@ -725,11 +725,11 @@ class MainActivity : BaseActivity() {
                     when (menuItem.itemId) {
                         MENU_ABOUT_ID -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
                         MENU_SETTINGS_ID -> {
-                            AppLogger.log(this@MainActivity, "UI", "Открыт экран: Настройки")
+                            AppLogger.log(this@MainActivity, "UI", "\u041E\u0442\u043A\u0440\u044B\u0442 \u044D\u043A\u0440\u0430\u043D: \u041D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438")
                             openSecondaryFragment(SettingsFragment.newInstance())
                         }
                         MENU_USER_ID -> {
-                            AppLogger.log(this@MainActivity, "UI", "Открыт экран: Пользователь")
+                            AppLogger.log(this@MainActivity, "UI", "\u041E\u0442\u043A\u0440\u044B\u0442 \u044D\u043A\u0440\u0430\u043D: \u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C")
                             openSecondaryFragment(UserFragment.newInstance())
                         }
                         else -> false
@@ -743,44 +743,44 @@ class MainActivity : BaseActivity() {
 
     private fun checkForUpdatesAndPrompt() {
         if (updateOperationRunning) {
-            AppLogger.log(this, "UPDATE", "Повторный запуск обновления пропущен: операция уже выполняется")
+            AppLogger.log(this, "UPDATE", "\u041F\u043E\u0432\u0442\u043E\u0440\u043D\u044B\u0439 \u0437\u0430\u043F\u0443\u0441\u043A \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u043F\u0440\u043E\u043F\u0443\u0449\u0435\u043D: \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u044F \u0443\u0436\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F")
             return
         }
         updateOperationRunning = true
-        showUpdateProgress("Проверка актуальности", 10, indeterminate = true)
+        showUpdateProgress("\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0430\u043A\u0442\u0443\u0430\u043B\u044C\u043D\u043E\u0441\u0442\u0438", 10, indeterminate = true)
         lifecycleScope.launch {
-            AppLogger.log(this@MainActivity, "UI", "Нажата кнопка: Обновить")
-            AppLogger.log(this@MainActivity, "UPDATE", "Проверка обновлений через kvasmix.ru")
-            AppLogger.log(this@MainActivity, "UPDATE", "Текущая версия: ${BuildConfig.VERSION_CODE} (${BuildConfig.VERSION_NAME})")
-            Toast.makeText(this@MainActivity, "Проверка обновлений...", Toast.LENGTH_SHORT).show()
+            AppLogger.log(this@MainActivity, "UI", "\u041D\u0430\u0436\u0430\u0442\u0430 \u043A\u043D\u043E\u043F\u043A\u0430: \u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C")
+            AppLogger.log(this@MainActivity, "UPDATE", "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0439 \u0447\u0435\u0440\u0435\u0437 kvasmix.ru")
+            AppLogger.log(this@MainActivity, "UPDATE", "\u0422\u0435\u043A\u0443\u0449\u0430\u044F \u0432\u0435\u0440\u0441\u0438\u044F: ${BuildConfig.VERSION_CODE} (${BuildConfig.VERSION_NAME})")
+            Toast.makeText(this@MainActivity, "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0439...", Toast.LENGTH_SHORT).show()
 
             val updateResult = withContext(Dispatchers.IO) { fetchLatestUpdateInfo() }
             when (updateResult) {
                 is UpdateCheckResult.NetworkError -> {
-                    AppLogger.log(this@MainActivity, "ERROR", "Сервер обновлений недоступен: ${updateResult.reason}")
+                    AppLogger.log(this@MainActivity, "ERROR", "\u0421\u0435\u0440\u0432\u0435\u0440 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0439 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D: ${updateResult.reason}")
                     syncUpdateLogsToDashboard()
                     hideUpdateProgress()
-                    Toast.makeText(this@MainActivity, "Не удалось проверить обновления: ${updateResult.reason}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: ${updateResult.reason}", Toast.LENGTH_LONG).show()
                     updateOperationRunning = false
                     return@launch
                 }
                 is UpdateCheckResult.InvalidResponse -> {
-                    AppLogger.log(this@MainActivity, "ERROR", "Некорректный ответ сервера обновлений: ${updateResult.reason}")
+                    AppLogger.log(this@MainActivity, "ERROR", "\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0439: ${updateResult.reason}")
                     syncUpdateLogsToDashboard()
                     hideUpdateProgress()
-                    Toast.makeText(this@MainActivity, "Некорректный ответ сервера: ${updateResult.reason}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, "\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442 \u0441\u0435\u0440\u0432\u0435\u0440\u0430: ${updateResult.reason}", Toast.LENGTH_LONG).show()
                     updateOperationRunning = false
                     return@launch
                 }
                 is UpdateCheckResult.Success -> {
                     val update = updateResult.info
-                    AppLogger.log(this@MainActivity, "UPDATE", "Версия на сервере: ${update.versionCode} (${update.versionName})")
+                    AppLogger.log(this@MainActivity, "UPDATE", "\u0412\u0435\u0440\u0441\u0438\u044F \u043D\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u0435: ${update.versionCode} (${update.versionName})")
                     if (update.versionCode <= BuildConfig.VERSION_CODE) {
-                        AppLogger.log(this@MainActivity, "UPDATE", "Версия актуальна")
+                        AppLogger.log(this@MainActivity, "UPDATE", "\u0412\u0435\u0440\u0441\u0438\u044F \u0430\u043A\u0442\u0443\u0430\u043B\u044C\u043D\u0430")
                         syncUpdateLogsToDashboard()
                         hideUpdateProgress()
                         AlertDialog.Builder(this@MainActivity)
-                            .setMessage("У вас установлена актуальная версия приложения.")
+                            .setMessage("\u0423 \u0432\u0430\u0441 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0430 \u0430\u043A\u0442\u0443\u0430\u043B\u044C\u043D\u0430\u044F \u0432\u0435\u0440\u0441\u0438\u044F \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F.")
                             .setPositiveButton("OK") { dialog: DialogInterface, _: Int -> dialog.dismiss() }
                             .show()
                         updateOperationRunning = false
@@ -797,8 +797,8 @@ class MainActivity : BaseActivity() {
     private suspend fun syncUpdateLogsToDashboard() {
         withContext(Dispatchers.IO) {
             runCatching { viewModel.sendUserTelemetry() }
-                .onSuccess { AppLogger.log(this@MainActivity, "UPDATE", "Логи обновления отправлены в админ-панель") }
-                .onFailure { AppLogger.log(this@MainActivity, "ERROR", "Не удалось отправить логи обновления в админ-панель: ${it.message}", it) }
+                .onSuccess { AppLogger.log(this@MainActivity, "UPDATE", "\u041B\u043E\u0433\u0438 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u044B \u0432 \u0430\u0434\u043C\u0438\u043D-\u043F\u0430\u043D\u0435\u043B\u044C") }
+                .onFailure { AppLogger.log(this@MainActivity, "ERROR", "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0442\u043F\u0440\u0430\u0432\u0438\u0442\u044C \u043B\u043E\u0433\u0438 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0432 \u0430\u0434\u043C\u0438\u043D-\u043F\u0430\u043D\u0435\u043B\u044C: ${it.message}", it) }
         }
     }
 
@@ -806,16 +806,16 @@ class MainActivity : BaseActivity() {
         val notes = update.releaseNotes
             .filter { it.isNotBlank() }
             .joinToString(separator = "\n") { "• $it" }
-            .ifBlank { "Список изменений не указан." }
+            .ifBlank { "\u0421\u043F\u0438\u0441\u043E\u043A \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439 \u043D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D." }
         AlertDialog.Builder(this)
-            .setTitle("Доступна версия ${update.versionName}")
+            .setTitle("\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u0430 \u0432\u0435\u0440\u0441\u0438\u044F ${update.versionName}")
             .setMessage(notes)
-            .setPositiveButton("Обновить") { _: DialogInterface, _: Int ->
+            .setPositiveButton("\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C") { _: DialogInterface, _: Int ->
                 startApkUpdateDownload(update)
             }
             .apply {
                 if (!update.mandatory) {
-                    setNegativeButton("Отмена") { dialog: DialogInterface, _: Int ->
+                    setNegativeButton("\u041E\u0442\u043C\u0435\u043D\u0430") { dialog: DialogInterface, _: Int ->
                         updateOperationRunning = false
                         dialog.dismiss()
                     }
@@ -826,30 +826,30 @@ class MainActivity : BaseActivity() {
     }
 
     private fun startApkUpdateDownload(update: UpdateInfo) {
-        showUpdateProgress("Загрузка новой версии", 25)
+        showUpdateProgress("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043D\u043E\u0432\u043E\u0439 \u0432\u0435\u0440\u0441\u0438\u0438", 25)
         lifecycleScope.launch {
-            AppLogger.log(this@MainActivity, "UPDATE", "Начата загрузка APK с сервера kvasmix.ru: ${update.apkUrl}")
-            Toast.makeText(this@MainActivity, "Загрузка обновления...", Toast.LENGTH_SHORT).show()
+            AppLogger.log(this@MainActivity, "UPDATE", "\u041D\u0430\u0447\u0430\u0442\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0430 APK \u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 kvasmix.ru: ${update.apkUrl}")
+            Toast.makeText(this@MainActivity, "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F...", Toast.LENGTH_SHORT).show()
             val result = withContext(Dispatchers.IO) {
                 downloadApkToCache(update.apkDownloadUrls) { downloaded, total ->
                     val percent = if (total > 0L) (25 + downloaded * 60 / total).toInt() else 45
-                    runOnUiThread { showUpdateProgress("Загрузка новой версии", percent) }
+                    runOnUiThread { showUpdateProgress("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u043D\u043E\u0432\u043E\u0439 \u0432\u0435\u0440\u0441\u0438\u0438", percent) }
                 }
             }
             result
                 .onSuccess { downloadedApkFile: File ->
-                    AppLogger.log(this@MainActivity, "UPDATE", "APK успешно загружен в cache: ${downloadedApkFile.absolutePath}, size=${downloadedApkFile.length()}")
-                    Toast.makeText(this@MainActivity, "Подготовка установки...", Toast.LENGTH_SHORT).show()
+                    AppLogger.log(this@MainActivity, "UPDATE", "APK \u0443\u0441\u043F\u0435\u0448\u043D\u043E \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D \u0432 cache: ${downloadedApkFile.absolutePath}, size=${downloadedApkFile.length()}")
+                    Toast.makeText(this@MainActivity, "\u041F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u043A\u0430 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0438...", Toast.LENGTH_SHORT).show()
                     syncUpdateLogsToDashboard()
                     pendingInstallVersionCode = update.versionCode
                     pendingInstallVersionName = update.versionName
-                    showUpdateProgress("Установка новой версии", 90)
+                    showUpdateProgress("\u0423\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u043D\u043E\u0432\u043E\u0439 \u0432\u0435\u0440\u0441\u0438\u0438", 90)
                     installApkFile(downloadedApkFile)
                 }
                 .onFailure { error ->
-                    AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки обновления: ${error.message}", error)
+                    AppLogger.log(this@MainActivity, "ERROR", "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: ${error.message}", error)
                     syncUpdateLogsToDashboard()
-                    Toast.makeText(this@MainActivity, "Ошибка загрузки обновления: ${error.message.orEmpty()}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: ${error.message.orEmpty()}", Toast.LENGTH_LONG).show()
                     updateOperationRunning = false
                     hideUpdateProgress()
                 }
@@ -858,25 +858,25 @@ class MainActivity : BaseActivity() {
 
     private fun downloadApkToCache(apkUrls: List<String>, onProgress: (Long, Long) -> Unit): Result<File> {
         val candidateUrls = apkUrls.distinct()
-        if (candidateUrls.isEmpty()) return Result.failure(IllegalStateException("Нет доступных ссылок APK"))
+        if (candidateUrls.isEmpty()) return Result.failure(IllegalStateException("\u041D\u0435\u0442 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0445 \u0441\u0441\u044B\u043B\u043E\u043A APK"))
         var lastError: Throwable? = null
         repeat(APK_DOWNLOAD_MAX_ATTEMPTS) { attemptIndex ->
             val attempt = attemptIndex + 1
             val apkUrl = candidateUrls[attemptIndex.coerceAtMost(candidateUrls.lastIndex)]
-            AppLogger.log(this, "UPDATE", "Загрузка APK, попытка $attempt/$APK_DOWNLOAD_MAX_ATTEMPTS: $apkUrl")
+            AppLogger.log(this, "UPDATE", "\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 APK, \u043F\u043E\u043F\u044B\u0442\u043A\u0430 $attempt/$APK_DOWNLOAD_MAX_ATTEMPTS: $apkUrl")
             val result = downloadApkToCache(apkUrl, onProgress)
             if (result.isSuccess) return result
 
             val error = result.exceptionOrNull()
             lastError = error
-            AppLogger.log(this, "WARN", "Попытка $attempt завершилась: ${error?.message.orEmpty()}", error)
+            AppLogger.log(this, "WARN", "\u041F\u043E\u043F\u044B\u0442\u043A\u0430 $attempt \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u043B\u0430\u0441\u044C: ${error?.message.orEmpty()}", error)
             if (error !is IOException || attempt >= APK_DOWNLOAD_MAX_ATTEMPTS) {
                 return result
             }
-            AppLogger.log(this, "UPDATE", "Повтор загрузки через ${APK_DOWNLOAD_RETRY_DELAY_MS / 1000} сек.")
+            AppLogger.log(this, "UPDATE", "\u041F\u043E\u0432\u0442\u043E\u0440 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0447\u0435\u0440\u0435\u0437 ${APK_DOWNLOAD_RETRY_DELAY_MS / 1000} \u0441\u0435\u043A.")
             Thread.sleep(APK_DOWNLOAD_RETRY_DELAY_MS)
         }
-        return Result.failure(lastError ?: IllegalStateException("Нет доступных ссылок APK"))
+        return Result.failure(lastError ?: IllegalStateException("\u041D\u0435\u0442 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0445 \u0441\u0441\u044B\u043B\u043E\u043A APK"))
     }
 
     private fun downloadApkToCache(apkUrl: String, onProgress: (Long, Long) -> Unit): Result<File> {
@@ -892,14 +892,14 @@ class MainActivity : BaseActivity() {
                 AppLogger.log(
                     this,
                     "UPDATE",
-                    "Ответ загрузки APK: code=${response.code}, contentType=${response.header("Content-Type").orEmpty()}, contentLength=${response.body?.contentLength() ?: -1}"
+                    "\u041E\u0442\u0432\u0435\u0442 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 APK: code=${response.code}, contentType=${response.header("Content-Type").orEmpty()}, contentLength=${response.body?.contentLength() ?: -1}"
                 )
                 if (!response.isSuccessful) throw ApkHttpException(response.code)
-                val body = response.body ?: throw IOException("Пустое тело APK")
+                val body = response.body ?: throw IOException("\u041F\u0443\u0441\u0442\u043E\u0435 \u0442\u0435\u043B\u043E APK")
                 var copiedBytes = 0L
                 val contentLength = body.contentLength()
                 var nextProgressLogBytes = APK_DOWNLOAD_LOG_STEP_BYTES
-                AppLogger.log(this, "UPDATE", "Ожидаемый размер APK: $contentLength bytes")
+                AppLogger.log(this, "UPDATE", "\u041E\u0436\u0438\u0434\u0430\u0435\u043C\u044B\u0439 \u0440\u0430\u0437\u043C\u0435\u0440 APK: $contentLength bytes")
                 body.byteStream().use { input ->
                     tempFile.outputStream().use { output ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
@@ -910,23 +910,23 @@ class MainActivity : BaseActivity() {
                             copiedBytes += read
                             onProgress(copiedBytes, contentLength)
                             if (copiedBytes >= nextProgressLogBytes) {
-                                AppLogger.log(this, "UPDATE", "Загружено: $copiedBytes / $contentLength bytes")
+                                AppLogger.log(this, "UPDATE", "\u0417\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E: $copiedBytes / $contentLength bytes")
                                 nextProgressLogBytes = ((copiedBytes / APK_DOWNLOAD_LOG_STEP_BYTES) + 1) * APK_DOWNLOAD_LOG_STEP_BYTES
                             }
                         }
                     }
                 }
-                if (copiedBytes <= 0L || tempFile.length() <= 0L) throw IOException("APK не был записан в cache")
+                if (copiedBytes <= 0L || tempFile.length() <= 0L) throw IOException("APK \u043D\u0435 \u0431\u044B\u043B \u0437\u0430\u043F\u0438\u0441\u0430\u043D \u0432 cache")
                 if (contentLength >= 0L && copiedBytes != contentLength) {
-                    throw IOException("APK загружен не полностью: ожидалось $contentLength bytes, получено $copiedBytes bytes")
+                    throw IOException("APK \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D \u043D\u0435 \u043F\u043E\u043B\u043D\u043E\u0441\u0442\u044C\u044E: \u043E\u0436\u0438\u0434\u0430\u043B\u043E\u0441\u044C $contentLength bytes, \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u043E $copiedBytes bytes")
                 }
                 if (!tempFile.hasApkZipSignature()) {
                     val preview = tempFile.readTextPreview(MAX_UPDATE_LOG_BODY_CHARS)
                     tempFile.delete()
-                    error("Сервер вернул не APK: contentType=${response.header("Content-Type").orEmpty()}, bytes=$copiedBytes, bodyPreview=$preview")
+                    error("\u0421\u0435\u0440\u0432\u0435\u0440 \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435 APK: contentType=${response.header("Content-Type").orEmpty()}, bytes=$copiedBytes, bodyPreview=$preview")
                 }
-                if (!tempFile.renameTo(apkFile)) error("Не удалось подготовить APK файл")
-                AppLogger.log(this, "UPDATE", "APK полностью загружен: $copiedBytes bytes, file=${apkFile.absolutePath}")
+                if (!tempFile.renameTo(apkFile)) error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u0438\u0442\u044C APK \u0444\u0430\u0439\u043B")
+                AppLogger.log(this, "UPDATE", "APK \u043F\u043E\u043B\u043D\u043E\u0441\u0442\u044C\u044E \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D: $copiedBytes bytes, file=${apkFile.absolutePath}")
                 apkFile
             }
 
@@ -956,17 +956,17 @@ class MainActivity : BaseActivity() {
     }
 
     private fun installApkFile(downloadedApkFile: File) {
-        AppLogger.log(this, "UPDATE", "Подготовка установки APK: path=${downloadedApkFile.absolutePath}, exists=${downloadedApkFile.exists()}, size=${downloadedApkFile.length()}")
+        AppLogger.log(this, "UPDATE", "\u041F\u043E\u0434\u0433\u043E\u0442\u043E\u0432\u043A\u0430 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0438 APK: path=${downloadedApkFile.absolutePath}, exists=${downloadedApkFile.exists()}, size=${downloadedApkFile.length()}")
         if (!downloadedApkFile.exists() || downloadedApkFile.length() <= 0L) {
-            AppLogger.log(this, "ERROR", "APK файл отсутствует или пустой")
-            Toast.makeText(this, "Ошибка загрузки обновления.", Toast.LENGTH_SHORT).show()
+            AppLogger.log(this, "ERROR", "APK \u0444\u0430\u0439\u043B \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u0438\u043B\u0438 \u043F\u0443\u0441\u0442\u043E\u0439")
+            Toast.makeText(this, "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F.", Toast.LENGTH_SHORT).show()
             updateOperationRunning = false
             hideUpdateProgress()
             return
         }
         val validationError = validateDownloadedApk(downloadedApkFile)
         if (validationError != null) {
-            AppLogger.log(this, "ERROR", "APK не может обновить приложение: $validationError")
+            AppLogger.log(this, "ERROR", "APK \u043D\u0435 \u043C\u043E\u0436\u0435\u0442 \u043E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435: $validationError")
             Toast.makeText(this, validationError, Toast.LENGTH_LONG).show()
             updateOperationRunning = false
             hideUpdateProgress()
@@ -974,8 +974,8 @@ class MainActivity : BaseActivity() {
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
             pendingInstallApk = downloadedApkFile
-            AppLogger.log(this, "WARN", "Нет разрешения на установку APK из неизвестных источников, открываем настройки")
-            Toast.makeText(this, "Разрешите установку приложения. После разрешения установка продолжится автоматически.", Toast.LENGTH_LONG).show()
+            AppLogger.log(this, "WARN", "\u041D\u0435\u0442 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F \u043D\u0430 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0443 APK \u0438\u0437 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0445 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432, \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u0435\u043C \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438")
+            Toast.makeText(this, "\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0443 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F. \u041F\u043E\u0441\u043B\u0435 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0430 \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.", Toast.LENGTH_LONG).show()
             val intent = Intent(
                 Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                 Uri.parse("package:$packageName")
@@ -994,12 +994,12 @@ class MainActivity : BaseActivity() {
             putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
         }
         runCatching { apkInstallerLauncher.launch(installIntent) }
-            .onSuccess { AppLogger.log(this, "UPDATE", "Системный установщик APK открыт") }
+            .onSuccess { AppLogger.log(this, "UPDATE", "\u0421\u0438\u0441\u0442\u0435\u043C\u043D\u044B\u0439 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u0449\u0438\u043A APK \u043E\u0442\u043A\u0440\u044B\u0442") }
             .onFailure {
                 updateOperationRunning = false
                 hideUpdateProgress()
-                AppLogger.log(this, "ERROR", "Не удалось открыть установщик APK: ${it.message}", it)
-                Toast.makeText(this, "Не удалось открыть установщик APK", Toast.LENGTH_LONG).show()
+                AppLogger.log(this, "ERROR", "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u0449\u0438\u043A APK: ${it.message}", it)
+                Toast.makeText(this, "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u0449\u0438\u043A APK", Toast.LENGTH_LONG).show()
             }
     }
 
@@ -1011,30 +1011,30 @@ class MainActivity : BaseActivity() {
             PackageManager.GET_SIGNATURES
         }
         val archive = packageManager.getPackageArchiveInfo(apkFile.absolutePath, flags)
-            ?: return "Скачанный файл не является корректным APK."
+            ?: return "\u0421\u043A\u0430\u0447\u0430\u043D\u043D\u044B\u0439 \u0444\u0430\u0439\u043B \u043D\u0435 \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u044B\u043C APK."
         if (archive.packageName != packageName) {
-            return "APK предназначен для другого приложения (${archive.packageName})."
+            return "APK \u043F\u0440\u0435\u0434\u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D \u0434\u043B\u044F \u0434\u0440\u0443\u0433\u043E\u0433\u043E \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u044F (${archive.packageName})."
         }
         val current = packageManager.getPackageInfo(packageName, flags)
         val archiveSignatures = archive.signatureDigests()
         val currentSignatures = current.signatureDigests()
         if (archiveSignatures.isEmpty() || archiveSignatures != currentSignatures) {
-            return "APK подписан другим ключом. Загрузите сборку, подписанную тем же ключом, что и установленное приложение."
+            return "APK \u043F\u043E\u0434\u043F\u0438\u0441\u0430\u043D \u0434\u0440\u0443\u0433\u0438\u043C \u043A\u043B\u044E\u0447\u043E\u043C. \u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0441\u0431\u043E\u0440\u043A\u0443, \u043F\u043E\u0434\u043F\u0438\u0441\u0430\u043D\u043D\u0443\u044E \u0442\u0435\u043C \u0436\u0435 \u043A\u043B\u044E\u0447\u043E\u043C, \u0447\u0442\u043E \u0438 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u043E\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435."
         }
         val archiveVersion = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) archive.longVersionCode else {
             @Suppress("DEPRECATION") archive.versionCode.toLong()
         }
         val expectedVersion = pendingInstallVersionCode
         if (expectedVersion != null && archiveVersion != expectedVersion.toLong()) {
-            return "Сервер объявил версию $expectedVersion (${pendingInstallVersionName.orEmpty()}), " +
-                "но внутри скачанного APK указан versionCode=$archiveVersion. " +
-                "Пересоберите APK с правильным versionCode и загрузите его заново."
+            return "\u0421\u0435\u0440\u0432\u0435\u0440 \u043E\u0431\u044A\u044F\u0432\u0438\u043B \u0432\u0435\u0440\u0441\u0438\u044E $expectedVersion (${pendingInstallVersionName.orEmpty()}), " +
+                "\u043D\u043E \u0432\u043D\u0443\u0442\u0440\u0438 \u0441\u043A\u0430\u0447\u0430\u043D\u043D\u043E\u0433\u043E APK \u0443\u043A\u0430\u0437\u0430\u043D versionCode=$archiveVersion. " +
+                "\u041F\u0435\u0440\u0435\u0441\u043E\u0431\u0435\u0440\u0438\u0442\u0435 APK \u0441 \u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u044B\u043C versionCode \u0438 \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0435\u0433\u043E \u0437\u0430\u043D\u043E\u0432\u043E."
         }
         if (archiveVersion <= BuildConfig.VERSION_CODE.toLong()) {
-            return "Внутри APK указан versionCode=$archiveVersion, установленная версия=${BuildConfig.VERSION_CODE}. " +
-                "Имя файла и версия в update.json не изменяют версию внутри APK."
+            return "\u0412\u043D\u0443\u0442\u0440\u0438 APK \u0443\u043A\u0430\u0437\u0430\u043D versionCode=$archiveVersion, \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u0430\u044F \u0432\u0435\u0440\u0441\u0438\u044F=${BuildConfig.VERSION_CODE}. " +
+                "\u0418\u043C\u044F \u0444\u0430\u0439\u043B\u0430 \u0438 \u0432\u0435\u0440\u0441\u0438\u044F \u0432 update.json \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u044E\u0442 \u0432\u0435\u0440\u0441\u0438\u044E \u0432\u043D\u0443\u0442\u0440\u0438 APK."
         }
-        AppLogger.log(this, "UPDATE", "APK проверен: package=${archive.packageName}, versionCode=$archiveVersion, подпись совпадает")
+        AppLogger.log(this, "UPDATE", "APK \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D: package=${archive.packageName}, versionCode=$archiveVersion, \u043F\u043E\u0434\u043F\u0438\u0441\u044C \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u0435\u0442")
         return null
     }
 
@@ -1052,7 +1052,7 @@ class MainActivity : BaseActivity() {
     }
 
     private fun fetchLatestUpdateInfo(): UpdateCheckResult {
-        AppLogger.log(this, "UPDATE", "Запрос метаданных обновления: $UPDATE_API_URL")
+        AppLogger.log(this, "UPDATE", "\u0417\u0430\u043F\u0440\u043E\u0441 \u043C\u0435\u0442\u0430\u0434\u0430\u043D\u043D\u044B\u0445 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F: $UPDATE_API_URL")
         val request = Request.Builder()
             .url(UPDATE_API_URL)
             .addHeader("Accept", "application/json")
@@ -1065,7 +1065,7 @@ class MainActivity : BaseActivity() {
                 AppLogger.log(
                     this,
                     "UPDATE",
-                    "Ответ сервера обновлений: code=${response.code}, contentType=${response.header("Content-Type").orEmpty()}, bodyLength=${body.length}, bodyPreview=$preview"
+                    "\u041E\u0442\u0432\u0435\u0442 \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0439: code=${response.code}, contentType=${response.header("Content-Type").orEmpty()}, bodyLength=${body.length}, bodyPreview=$preview"
                 )
                 if (!response.isSuccessful) {
                     return UpdateCheckResult.NetworkError("HTTP ${response.code}")
@@ -1073,16 +1073,16 @@ class MainActivity : BaseActivity() {
                 parseUpdateInfo(body)
             }
         } catch (error: JSONException) {
-            AppLogger.log(this, "ERROR", "JSON сервера обновлений поврежден: ${error.message}", error)
+            AppLogger.log(this, "ERROR", "JSON \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0439 \u043F\u043E\u0432\u0440\u0435\u0436\u0434\u0435\u043D: ${error.message}", error)
             UpdateCheckResult.InvalidResponse("JSON parse error: ${error.message}")
         } catch (error: Exception) {
-            AppLogger.log(this, "ERROR", "Ошибка запроса обновлений: ${error.message}", error)
+            AppLogger.log(this, "ERROR", "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0439: ${error.message}", error)
             UpdateCheckResult.NetworkError(error.message ?: error.javaClass.simpleName)
         }
     }
 
     private fun parseUpdateInfo(body: String): UpdateCheckResult {
-        if (body.isBlank()) return UpdateCheckResult.InvalidResponse("Пустое тело ответа")
+        if (body.isBlank()) return UpdateCheckResult.InvalidResponse("\u041F\u0443\u0441\u0442\u043E\u0435 \u0442\u0435\u043B\u043E \u043E\u0442\u0432\u0435\u0442\u0430")
 
         val json = JSONObject(body)
         val status = json.optString("status").trim()
@@ -1093,11 +1093,11 @@ class MainActivity : BaseActivity() {
         val versionCode = json.optFlexibleInt("versionCode", "version_code")
         val versionName = json.optFlexibleString("versionName", "version_name")
         val rawApkUrl = json.optFlexibleString("apk", "apkUrl", "apk_url", "url")
-        if (versionCode == null) return UpdateCheckResult.InvalidResponse("Не найден versionCode/version_code")
-        if (versionName.isBlank()) return UpdateCheckResult.InvalidResponse("Не найден versionName/version_name")
-        if (rawApkUrl.isBlank()) return UpdateCheckResult.InvalidResponse("Не найдена ссылка apk")
+        if (versionCode == null) return UpdateCheckResult.InvalidResponse("\u041D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D versionCode/version_code")
+        if (versionName.isBlank()) return UpdateCheckResult.InvalidResponse("\u041D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D versionName/version_name")
+        if (rawApkUrl.isBlank()) return UpdateCheckResult.InvalidResponse("\u041D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430 \u0441\u0441\u044B\u043B\u043A\u0430 apk")
         if (!rawApkUrl.startsWith("https://", ignoreCase = true) && !rawApkUrl.startsWith("http://", ignoreCase = true)) {
-            return UpdateCheckResult.InvalidResponse("Некорректная ссылка apk=$rawApkUrl")
+            return UpdateCheckResult.InvalidResponse("\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u0430\u044F \u0441\u0441\u044B\u043B\u043A\u0430 apk=$rawApkUrl")
         }
         val apkUrl = normalizeUpdateApkUrl(rawApkUrl, versionCode)
 
@@ -1106,7 +1106,7 @@ class MainActivity : BaseActivity() {
         AppLogger.log(
             this,
             "UPDATE",
-            "Метаданные обновления распознаны: versionCode=$versionCode, versionName=$versionName, mandatory=$mandatory, notes=${releaseNotes.size}, apk=$apkUrl"
+            "\u041C\u0435\u0442\u0430\u0434\u0430\u043D\u043D\u044B\u0435 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u043D\u044B: versionCode=$versionCode, versionName=$versionName, mandatory=$mandatory, notes=${releaseNotes.size}, apk=$apkUrl"
         )
         return UpdateCheckResult.Success(
             UpdateInfo(
@@ -1132,7 +1132,7 @@ class MainActivity : BaseActivity() {
             apkUrl
         }
         if (normalizedUrl != apkUrl) {
-            AppLogger.log(this, "UPDATE", "Ссылка APK заменена на серверный download endpoint: $normalizedUrl")
+            AppLogger.log(this, "UPDATE", "\u0421\u0441\u044B\u043B\u043A\u0430 APK \u0437\u0430\u043C\u0435\u043D\u0435\u043D\u0430 \u043D\u0430 \u0441\u0435\u0440\u0432\u0435\u0440\u043D\u044B\u0439 download endpoint: $normalizedUrl")
         }
         return normalizedUrl
     }
@@ -1195,13 +1195,13 @@ class MainActivity : BaseActivity() {
                 }
                 R.id.nav_recent -> {
                     binding.btnTopBack.visibility = android.view.View.GONE
-                    AppLogger.log(this, "UI", "Открыт экран: История звонков")
+                    AppLogger.log(this, "UI", "\u041E\u0442\u043A\u0440\u044B\u0442 \u044D\u043A\u0440\u0430\u043D: \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0437\u0432\u043E\u043D\u043A\u043E\u0432")
                     openFragment(CallListFragment.newInstance())
                     true
                 }
                 R.id.nav_contacts -> {
                     binding.btnTopBack.visibility = android.view.View.GONE
-                    AppLogger.log(this, "UI", "Открыт экран: Контакты")
+                    AppLogger.log(this, "UI", "\u041E\u0442\u043A\u0440\u044B\u0442 \u044D\u043A\u0440\u0430\u043D: \u041A\u043E\u043D\u0442\u0430\u043A\u0442\u044B")
                     openFragment(ContactsFragment.newInstance())
                     true
                 }
@@ -1213,8 +1213,8 @@ class MainActivity : BaseActivity() {
     private fun refreshPersonalContactsAfterAuthorization() {
         lifecycleScope.launch {
             runCatching { viewModel.refreshPersonalContacts() }
-                .onSuccess { count -> AppLogger.log(this@MainActivity, "API", "Личные контакты загружены: $count") }
-                .onFailure { error -> AppLogger.log(this@MainActivity, "ERROR", "Ошибка загрузки личных контактов: ${error.message}") }
+                .onSuccess { count -> AppLogger.log(this@MainActivity, "API", "\u041B\u0438\u0447\u043D\u044B\u0435 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u044B \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u044B: $count") }
+                .onFailure { error -> AppLogger.log(this@MainActivity, "ERROR", "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u043B\u0438\u0447\u043D\u044B\u0445 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u043E\u0432: ${error.message}") }
         }
     }
 
@@ -1325,11 +1325,11 @@ class MainActivity : BaseActivity() {
 
     private fun updateWarningState() {
         val messages = buildList {
-            if (!hasAllPermissions()) add("Не выданы все разрешения")
+            if (!hasAllPermissions()) add("\u041D\u0435 \u0432\u044B\u0434\u0430\u043D\u044B \u0432\u0441\u0435 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
-                add("Разрешите установку из неизвестных источников")
+                add("\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0443 \u0438\u0437 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0445 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432")
             }
-            if (!isBatteryOptimizationDisabled()) add("Разрешите CallTrack работать без ограничения батареи")
+            if (!isBatteryOptimizationDisabled()) add("\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 CallTrack \u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0431\u0435\u0437 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F \u0431\u0430\u0442\u0430\u0440\u0435\u0438")
         }
         val warningText = messages.joinToString("\n")
         binding.tvWarning.text = warningText
@@ -1355,14 +1355,14 @@ class MainActivity : BaseActivity() {
     fun requestBatteryOptimizationIfNeeded(force: Boolean = false) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || isBatteryOptimizationDisabled() || (!force && batteryOptimizationPromptShown)) return
         batteryOptimizationPromptShown = true
-        AppLogger.log(this, "STABILITY", "Запрос разрешения на фоновую работу без ограничения батареи")
+        AppLogger.log(this, "STABILITY", "\u0417\u0430\u043F\u0440\u043E\u0441 \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F \u043D\u0430 \u0444\u043E\u043D\u043E\u0432\u0443\u044E \u0440\u0430\u0431\u043E\u0442\u0443 \u0431\u0435\u0437 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F \u0431\u0430\u0442\u0430\u0440\u0435\u0438")
         val directRequest = Intent(
             Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
             Uri.parse("package:$packageName")
         )
         runCatching { batteryOptimizationLauncher.launch(directRequest) }
             .onFailure {
-                AppLogger.log(this, "WARN", "Прямой запрос оптимизации батареи недоступен, открываем список настроек", it)
+                AppLogger.log(this, "WARN", "\u041F\u0440\u044F\u043C\u043E\u0439 \u0437\u0430\u043F\u0440\u043E\u0441 \u043E\u043F\u0442\u0438\u043C\u0438\u0437\u0430\u0446\u0438\u0438 \u0431\u0430\u0442\u0430\u0440\u0435\u0438 \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D, \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u0435\u043C \u0441\u043F\u0438\u0441\u043E\u043A \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043A", it)
                 batteryOptimizationLauncher.launch(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             }
     }
@@ -1375,7 +1375,7 @@ class MainActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
-        AppLogger.log(this, "APP", "MainActivity уничтожена")
+        AppLogger.log(this, "APP", "MainActivity \u0443\u043D\u0438\u0447\u0442\u043E\u0436\u0435\u043D\u0430")
         super.onDestroy()
     }
 
