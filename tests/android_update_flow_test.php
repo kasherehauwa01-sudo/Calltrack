@@ -1,7 +1,9 @@
 <?php
 declare(strict_types=1);
 
-$source = (string)file_get_contents(dirname(__DIR__) . '/app/src/main/java/com/example/calltrack/ui/main/MainActivity.kt');
+require_once __DIR__ . '/kotlin_source.php';
+
+$source = readKotlinSource(dirname(__DIR__) . '/app/src/main/java/com/example/calltrack/ui/main/MainActivity.kt');
 $layout = (string)file_get_contents(dirname(__DIR__) . '/app/src/main/res/layout/dialog_update_progress.xml');
 foreach (['Проверка актуальности', 'Загрузка новой версии', 'Установка новой версии'] as $status) {
     if (!str_contains($source, $status)) throw new RuntimeException("Отсутствует статус прогресса: {$status}");

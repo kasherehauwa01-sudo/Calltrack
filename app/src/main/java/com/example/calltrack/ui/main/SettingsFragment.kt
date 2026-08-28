@@ -48,7 +48,7 @@ class SettingsFragment : Fragment() {
         val current = viewModel.themeMode.value ?: PrefsManager.THEME_SYSTEM
         val checked = modes.indexOf(current).coerceAtLeast(0)
         AlertDialog.Builder(requireContext())
-            .setTitle("Тема")
+            .setTitle("\u0422\u0435\u043C\u0430")
             .setSingleChoiceItems(titles, checked) { dialog, which ->
                 val mode = modes[which]
                 viewLifecycleOwner.lifecycleScope.launch {
@@ -57,14 +57,14 @@ class SettingsFragment : Fragment() {
                 }
                 dialog.dismiss()
             }
-            .setNegativeButton("Отмена", null)
+            .setNegativeButton("\u041E\u0442\u043C\u0435\u043D\u0430", null)
             .show()
     }
 
     private fun themeTitle(mode: String): String = when (mode) {
-        PrefsManager.THEME_LIGHT -> "Светлая"
-        PrefsManager.THEME_DARK -> "Темная"
-        else -> "Как в системе"
+        PrefsManager.THEME_LIGHT -> "\u0421\u0432\u0435\u0442\u043B\u0430\u044F"
+        PrefsManager.THEME_DARK -> "\u0422\u0435\u043C\u043D\u0430\u044F"
+        else -> "\u041A\u0430\u043A \u0432 \u0441\u0438\u0441\u0442\u0435\u043C\u0435"
     }
 
     private fun themeNightMode(mode: String): Int = when (mode) {

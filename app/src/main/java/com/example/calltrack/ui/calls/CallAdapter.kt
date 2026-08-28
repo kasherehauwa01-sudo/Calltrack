@@ -62,7 +62,7 @@ class CallAdapter(
             binding.tvClient1c.text = item.client1cName
             binding.tvPhone.text = item.call.phone
             val callTime = timeFormat.format(Date(item.call.timestamp))
-            binding.tvType.text = "${item.call.type} • ${item.call.duration} сек • $callTime"
+            binding.tvType.text = "${item.call.type} • ${item.call.duration} \u0441\u0435\u043A • $callTime"
             binding.tvNote.text = item.call.note
             binding.root.setOnClickListener { onItemClick(item) }
             binding.btnComment.setOnClickListener { onCommentClick(item) }

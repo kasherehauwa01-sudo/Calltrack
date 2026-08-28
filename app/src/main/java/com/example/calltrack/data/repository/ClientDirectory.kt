@@ -80,7 +80,7 @@ class ClientDirectory(context: Context) {
                 parseClientCards(matches)
             }
         }.onFailure {
-            Log.e("ClientDirectory", "Ошибка загрузки карточек Clients", it)
+            Log.e("ClientDirectory", "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u043A\u0430\u0440\u0442\u043E\u0447\u0435\u043A Clients", it)
         }.getOrDefault(emptyList())
         if (cards.isNotEmpty()) synchronized(lock) { clientCards[normalized] = System.currentTimeMillis() to cards }
         return cards
@@ -104,7 +104,7 @@ class ClientDirectory(context: Context) {
         is JSONObject -> value.keys().asSequence().mapNotNull { key ->
             formatFieldValue(value.opt(key)).takeIf(String::isNotBlank)?.let { "$key: $it" }
         }.joinToString("\n")
-        is Boolean -> if (value) "Да" else "Нет"
+        is Boolean -> if (value) "\u0414\u0430" else "\u041D\u0435\u0442"
         else -> value.toString().trim()
     }
 
@@ -140,11 +140,11 @@ class ClientDirectory(context: Context) {
                         if (phone.isNotBlank()) result.putIfAbsent(phone, name)
                     }
                 }
-                Log.d("ClientDirectory", "Из проекта clients загружено номеров: ${result.size}")
+                Log.d("ClientDirectory", "\u0418\u0437 \u043F\u0440\u043E\u0435\u043A\u0442\u0430 clients \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D\u043E \u043D\u043E\u043C\u0435\u0440\u043E\u0432: ${result.size}")
                 result
             }
         }.onFailure {
-            Log.e("ClientDirectory", "Ошибка загрузки справочника проекта clients", it)
+            Log.e("ClientDirectory", "\u041E\u0448\u0438\u0431\u043A\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0441\u043F\u0440\u0430\u0432\u043E\u0447\u043D\u0438\u043A\u0430 \u043F\u0440\u043E\u0435\u043A\u0442\u0430 clients", it)
         }.getOrDefault(emptyMap())
     }
 

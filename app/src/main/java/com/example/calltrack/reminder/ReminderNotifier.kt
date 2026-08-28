@@ -30,7 +30,7 @@ object ReminderNotifier {
         val vibrationPattern = longArrayOf(0, 250, 180, 250)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Напоминания", NotificationManager.IMPORTANCE_HIGH).apply {
+                NotificationChannel(CHANNEL_ID, "\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F", NotificationManager.IMPORTANCE_HIGH).apply {
                     enableVibration(true)
                     setVibrationPattern(vibrationPattern)
                     setSound(
@@ -68,14 +68,14 @@ object ReminderNotifier {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_clover)
-            .setContentTitle("Позвонить клиенту")
+            .setContentTitle("\u041F\u043E\u0437\u0432\u043E\u043D\u0438\u0442\u044C \u043A\u043B\u0438\u0435\u043D\u0442\u0443")
             .setContentText(if (message.isBlank()) name.ifBlank { phone } else message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setSound(soundUri)
             .setVibrate(vibrationPattern)
-            .addAction(0, "Открыть карточку клиента", openCardPending)
-            .addAction(0, "Позвонить", callPending)
+            .addAction(0, "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0443 \u043A\u043B\u0438\u0435\u043D\u0442\u0430", openCardPending)
+            .addAction(0, "\u041F\u043E\u0437\u0432\u043E\u043D\u0438\u0442\u044C", callPending)
             .setContentIntent(openCardPending)
             .build()
 
@@ -93,7 +93,7 @@ object ReminderNotifier {
         CoroutineScope(Dispatchers.IO).launch {
             app.notificationRepository.insertNotification(
                 NotificationEntity(
-                    title = "Позвонить клиенту",
+                    title = "\u041F\u043E\u0437\u0432\u043E\u043D\u0438\u0442\u044C \u043A\u043B\u0438\u0435\u043D\u0442\u0443",
                     message = text,
                     type = NotificationType.REMINDER,
                     targetScreen = NotificationTargets.REMINDER,
