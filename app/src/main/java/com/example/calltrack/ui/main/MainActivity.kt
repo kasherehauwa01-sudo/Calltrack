@@ -34,6 +34,7 @@ import com.example.calltrack.service.CallTrackingService
 import com.example.calltrack.ui.calls.CallListFragment
 import com.example.calltrack.ui.analytics.AnalyticsActivity
 import com.example.calltrack.ui.base.BaseActivity
+import com.example.calltrack.ui.base.installMojibakeRepair
 import com.example.calltrack.ui.contacts.ContactsFragment
 import com.example.calltrack.ui.contactcard.ContactCardFragment
 import com.example.calltrack.ui.contactcard.ContactHistoryFragment
@@ -807,7 +808,7 @@ class MainActivity : BaseActivity() {
             .filter { it.isNotBlank() }
             .joinToString(separator = "\n") { "• $it" }
             .ifBlank { "Список изменений не указан." }
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("Доступна версия ${update.versionName}")
             .setMessage(notes)
             .setPositiveButton("Обновить") { _: DialogInterface, _: Int ->
@@ -822,7 +823,9 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setOnCancelListener { updateOperationRunning = false }
-            .show()
+            .create()
+        dialog.installMojibakeRepair()
+        dialog.show()
     }
 
     private fun startApkUpdateDownload(update: UpdateInfo) {
