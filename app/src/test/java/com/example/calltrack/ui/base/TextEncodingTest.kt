@@ -29,4 +29,21 @@ class TextEncodingTest {
 
         assertEquals(expected, TextEncoding.repair(broken).toString())
     }
+
+    @Test
+    fun repairsMojibakeBulletUsedInAnalyticsTimeline() {
+        val expected = "28.08.2026 • Исходящий • 0:23"
+        val broken = "28.08.2026 вЂў Исходящий вЂў 0:23"
+
+        assertEquals(expected, TextEncoding.repair(broken).toString())
+    }
+
+    @Test
+    fun repairsRepeatedEncodingDamage() {
+        val expected = "События звонка"
+        val brokenOnce = String(expected.toByteArray(Charsets.UTF_8), windows1251)
+        val brokenTwice = String(brokenOnce.toByteArray(Charsets.UTF_8), windows1251)
+
+        assertEquals(expected, TextEncoding.repair(brokenTwice).toString())
+    }
 }

@@ -24,6 +24,8 @@ import com.example.calltrack.R
 import com.example.calltrack.data.local.CallDatabase
 import com.example.calltrack.data.local.CallEntity
 import com.example.calltrack.ui.base.BaseActivity
+import com.example.calltrack.ui.base.TextEncoding
+import com.example.calltrack.ui.base.installMojibakeRepair
 import com.example.calltrack.ui.main.AboutActivity
 import com.example.calltrack.ui.main.MainActivity
 import kotlinx.coroutines.Dispatchers
@@ -201,8 +203,17 @@ class AnalyticsActivity : BaseActivity() {
         lifecycleScope.launch {
             val db = CallDatabase.getInstance(this@AnalyticsActivity)
             val result = withContext(Dispatchers.IO) {
-                val calls = db.callDao().getAllOnce()
-                val contacts = db.contactDao().findAll().associate { it.phone to (it.client1c.ifBlank { it.name }) }
+                val calls = db.callDao().getAllOnce().map { call ->
+                    call.copy(
+                        type = repairText(call.type),
+                        note = repairText(call.note),
+                        tag = repairText(call.tag),
+                        reminder = repairText(call.reminder)
+                    )
+                }
+                val contacts = db.contactDao().findAll().associate {
+                    it.phone to repairText(it.client1c.ifBlank { it.name })
+                }
                 calls to contacts
             }
             allCalls = result.first
@@ -422,7 +433,13 @@ class AnalyticsActivity : BaseActivity() {
         val message = if (events.isEmpty()) "\u0421\u043E\u0431\u044B\u0442\u0438\u0439 \u0441 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u044F\u043C\u0438 \u0438\u043B\u0438 \u043D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u044F\u043C\u0438 \u043D\u0435\u0442" else events.joinToString("\n\n") {
             "${dateFormat.format(Date(it.timestamp))} \u2022 ${it.type} \u2022 ${it.phone}\n\u041A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439: ${it.note.ifBlank { "\u2014" }}\n\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435: ${it.reminder.ifBlank { "\u2014" }}"
         }
-        AlertDialog.Builder(this).setTitle(client).setMessage(message).setPositiveButton("\u0417\u0430\u043A\u0440\u044B\u0442\u044C", null).show()
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(repairText(client))
+            .setMessage(repairText(message))
+            .setPositiveButton("\u0417\u0430\u043A\u0440\u044B\u0442\u044C", null)
+            .create()
+        dialog.installMojibakeRepair()
+        dialog.show()
     }
 
     private fun showCallEditor(call: CallEntity) {
@@ -431,7 +448,7 @@ class AnalyticsActivity : BaseActivity() {
         val reminder = EditText(this).apply { hint = "\u041D\u0430\u043F\u043E\u043C\u0438\u043D\u0430\u043D\u0438\u0435"; setText(call.reminder) }
         box.addView(comment)
         box.addView(reminder)
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("${dateFormat.format(Date(call.timestamp))} \u2022 ${call.phone}")
             .setView(box)
             .setNegativeButton("\u041E\u0442\u043C\u0435\u043D\u0430", null)
@@ -442,8 +459,12 @@ class AnalyticsActivity : BaseActivity() {
                     loadData()
                 }
             }
-            .show()
+            .create()
+        dialog.installMojibakeRepair()
+        dialog.show()
     }
+
+    private fun repairText(value: CharSequence): String = TextEncoding.repair(value).toString()
 
     private fun inPeriod(timestamp: Long): Boolean {
         if (activePeriod == AnalyticsPeriod.ALL) return true
