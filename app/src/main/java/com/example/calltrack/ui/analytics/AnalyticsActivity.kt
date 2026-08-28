@@ -1,5 +1,7 @@
 package com.example.calltrack.ui.analytics
 
+import androidx.activity.addCallback
+
 import android.graphics.Color
 import android.graphics.Canvas
 import android.graphics.Paint
