@@ -14,6 +14,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 
 abstract class BaseActivity : AppCompatActivity() {
+    private var mojibakeViewRepair: MojibakeViewRepair? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         applyThemeMode()
         super.onCreate(savedInstanceState)
@@ -21,6 +23,17 @@ abstract class BaseActivity : AppCompatActivity() {
         window.statusBarColor = Color.TRANSPARENT
         val isNightMode = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars = !isNightMode
+    }
+
+    override fun onStart() {
+        super.onStart()
+        mojibakeViewRepair = MojibakeViewRepair(window.decorView).also { it.start() }
+    }
+
+    override fun onStop() {
+        mojibakeViewRepair?.stop()
+        mojibakeViewRepair = null
+        super.onStop()
     }
 
     private fun applyThemeMode() {

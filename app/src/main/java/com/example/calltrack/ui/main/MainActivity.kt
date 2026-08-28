@@ -34,6 +34,7 @@ import com.example.calltrack.service.CallTrackingService
 import com.example.calltrack.ui.calls.CallListFragment
 import com.example.calltrack.ui.analytics.AnalyticsActivity
 import com.example.calltrack.ui.base.BaseActivity
+import com.example.calltrack.ui.base.installMojibakeRepair
 import com.example.calltrack.ui.contacts.ContactsFragment
 import com.example.calltrack.ui.contactcard.ContactCardFragment
 import com.example.calltrack.ui.contactcard.ContactHistoryFragment
@@ -806,9 +807,9 @@ class MainActivity : BaseActivity() {
         val notes = update.releaseNotes
             .filter { it.isNotBlank() }
             .joinToString(separator = "\n") { "• $it" }
-            .ifBlank { "\u0421\u043F\u0438\u0441\u043E\u043A \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439 \u043D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D." }
-        AlertDialog.Builder(this)
-            .setTitle("\u0414\u043E\u0441\u0442\u0443\u043F\u043D\u0430 \u0432\u0435\u0440\u0441\u0438\u044F ${update.versionName}")
+            .ifBlank { "Список изменений не указан." }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Доступна версия ${update.versionName}")
             .setMessage(notes)
             .setPositiveButton("\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C") { _: DialogInterface, _: Int ->
                 startApkUpdateDownload(update)
@@ -822,7 +823,9 @@ class MainActivity : BaseActivity() {
                 }
             }
             .setOnCancelListener { updateOperationRunning = false }
-            .show()
+            .create()
+        dialog.installMojibakeRepair()
+        dialog.show()
     }
 
     private fun startApkUpdateDownload(update: UpdateInfo) {

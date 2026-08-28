@@ -22,6 +22,7 @@ import com.example.calltrack.databinding.DialogPostCallBinding
 import com.example.calltrack.databinding.DialogAddReminderBinding
 import com.example.calltrack.reminder.ReminderScheduler
 import com.example.calltrack.ui.main.MainViewModel
+import com.example.calltrack.ui.base.installMojibakeRepair
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -29,6 +30,11 @@ import java.util.Calendar
 import java.util.Locale
 
 class PostCallBottomSheet : BottomSheetDialogFragment() {
+
+    override fun onStart() {
+        dialog?.installMojibakeRepair()
+        super.onStart()
+    }
 
     override fun getTheme(): Int = com.example.calltrack.R.style.AppDialogTheme
 
