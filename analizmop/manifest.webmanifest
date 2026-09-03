@@ -1,0 +1,14 @@
+{
+  "name": "ВР Ассистент",
+  "short_name": "ВР Ассистент",
+  "description": "Мобильная аналитика звонков и сканер товаров",
+  "lang": "ru",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#16a34a",
+  "icons": [
+    { "src": "pwa-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
