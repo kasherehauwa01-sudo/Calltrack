@@ -302,7 +302,7 @@
             <div class="registry-wrap" id="adminRegistryTable"><div class="registry-empty">Данные загружаются...</div></div>
           </section>
           <section class="admin-panel" id="adminEmailRegistryPanel" hidden>
-            <p>Таблица входящих и исходящих email из подключенных IMAP-ящиков.</p>
+            <p>Таблица исходящих email из подключенных IMAP-ящиков.</p>
             <div class="registry-toolbar">
               <div class="registry-filter">
                 <label for="emailSearch">Поиск</label>
@@ -905,7 +905,7 @@ async function loadEmailModule(runSync=false){
     updateProgressText();
     elapsedTimer=setInterval(updateProgressText,1000);
   }
-  const params={search:adminEls.emailSearch?.value||'',direction:adminEls.emailDirectionFilter?.value||''};
+  const params={search:adminEls.emailSearch?.value||'',direction:'outgoing'};
   try{
     let syncResult=null;
     let syncError=null;
@@ -914,6 +914,7 @@ async function loadEmailModule(runSync=false){
       catch(error){syncError=error;}
     }
     emailMessages=window.calltrackApi?.getEmailMessages?await window.calltrackApi.getEmailMessages(params):await fetch(`${ADMIN_EMAIL_API_URL}?${new URLSearchParams(params)}`).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p.data||[];});
+    await loadEmailRegistryClientNames(emailMessages);
     renderEmailMessages();
     await loadEmailSettings();
     emailLoaded=true;
@@ -936,10 +937,31 @@ function emailIncomingStatusTitle(value){return value==='read'?'Прочитан
 function emailOutgoingStatusTitle(value){return value==='not_delivered'?'Не доставлено':(value==='opened'?'Открыто':(value==='delivered'?'Доставлено':'—'))}
 function emailDatePart(value){return formatDateDisplay(String(value||'').slice(0,10))}
 function emailTimePart(value){const match=String(value||'').match(/(?:T|\s)(\d{1,2}:\d{2})/);return match?match[1]:''}
+function emailRecipientAddresses(value){return [...String(value||'').toLowerCase().matchAll(/[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}/gi)].map((match)=>match[0])}
+async function loadEmailRegistryClientNames(messages){
+  const emails=[...new Set(messages.flatMap((item)=>emailRecipientAddresses(item.client_email)))];
+  const namesByEmail=new Map();
+  if(emails.length&&window.calltrackApi?.lookupClientNames){
+    try{
+      for(let offset=0;offset<emails.length;offset+=500){
+        const result=await window.calltrackApi.lookupClientNames([],emails.slice(offset,offset+500));
+        Object.entries(result.emailClients||{}).forEach(([email,clients])=>{
+          const names=(Array.isArray(clients)?clients:[]).map((client)=>String(client?.name||'').trim()).filter(Boolean);
+          if(names.length) namesByEmail.set(String(email).toLowerCase(),[...new Set(names)].join(' / '));
+        });
+      }
+    }catch(error){console.error('Не удалось найти клиентов реестра email в локальном кэше Clients:',error);}
+  }
+  messages.forEach((item)=>{
+    const recipientEmails=emailRecipientAddresses(item.client_email);
+    const clientNames=recipientEmails.map((email)=>namesByEmail.get(email)).filter(Boolean);
+    item.client_display_name=[...new Set(clientNames)].join(' / ')||String(item.client_email||'').trim();
+  });
+}
 function renderEmailMessages(){
   if(!emailMessages.length){adminEls.emailTable.innerHTML='<div class="registry-empty">Письма ещё не импортированы</div>';return;}
-  const rows=emailMessages.map((item)=>`<tr data-email-id="${escapeHtml(item.id||'')}"><td>${escapeHtml(emailDatePart(item.sent_at))}</td><td>${escapeHtml(emailTimePart(item.sent_at))}</td><td>${escapeHtml(item.manager_email||'')}</td><td>${escapeHtml(item.client_email||'')}</td><td>${escapeHtml(item.subject||'')}</td><td>${escapeHtml(emailIncomingStatusTitle(item.incoming_status))}</td><td>${escapeHtml(emailOutgoingStatusTitle(item.outgoing_status))}</td></tr>`).join('');
-  adminEls.emailTable.innerHTML=`<table class="registry-table"><thead><tr><th>Дата</th><th>Время</th><th>Email менеджера</th><th>Email клиента</th><th>Тема письма</th><th>Статус входящего</th><th>Статус исходящего</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const rows=emailMessages.map((item)=>`<tr data-email-id="${escapeHtml(item.id||'')}"><td>${escapeHtml(emailDatePart(item.sent_at))}</td><td>${escapeHtml(emailTimePart(item.sent_at))}</td><td>${escapeHtml(item.manager_name||'')}</td><td>${escapeHtml(item.client_display_name||item.client_email||'')}</td><td>${escapeHtml(item.manager_email||'')}</td><td>${escapeHtml(item.client_email||'')}</td><td>${escapeHtml(item.subject||'')}</td><td>${escapeHtml(emailOutgoingStatusTitle(item.outgoing_status))}</td></tr>`).join('');
+  adminEls.emailTable.innerHTML=`<table class="registry-table"><thead><tr><th>Дата</th><th>Время</th><th>Менеджер</th><th>Клиент</th><th>Email менеджера</th><th>Email клиента</th><th>Тема письма</th><th>Статус исходящего</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 async function openEmailCard(id){

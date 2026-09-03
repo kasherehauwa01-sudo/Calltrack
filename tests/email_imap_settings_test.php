@@ -80,5 +80,8 @@ if (!str_contains($js, 'action=test')) throw new RuntimeException('Клиент 
 foreach (['emailSyncNewBtn', 'Подгрузить новые письма', 'emailSyncProgress', 'Подгружаем новые письма', 'syncErrors.slice(0,2)', 'catch(error){syncError=error;}', 'Не удалось завершить текущую порцию синхронизации', 'Показано последних писем:'] as $required) {
     if (!str_contains($html, $required)) throw new RuntimeException("В реестре нет управления или прогресса синхронизации: {$required}");
 }
+foreach (["direction:'outgoing'", 'loadEmailRegistryClientNames(emailMessages)', 'window.calltrackApi.lookupClientNames([],emails.slice(offset,offset+500))', 'item.client_display_name', '<th>Менеджер</th><th>Клиент</th>', 'item.manager_name'] as $required) {
+    if (!str_contains($html, $required)) throw new RuntimeException("Реестр исходящих email не показывает менеджера или клиента из Clients: {$required}");
+}
 
 echo "email_imap_settings_test: OK\n";
