@@ -7,6 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Дашборд отдела продаж</title>
+  <meta name="theme-color" content="#16a34a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23f8fafc%22/%3E%3Cg%20fill%3D%22%2316a34a%22%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2024%2022%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2040%2022%29%22/%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2024%2038%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2040%2038%29%22/%3E%3C/g%3E%3Cpath%20d%3D%22M32%2032%20C38%2040%2043%2049%2048%2058%22%20fill%3D%22none%22%20stroke%3D%22%2315803d%22%20stroke-width%3D%225%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="api.js?v=20260827-client-email-timeline"></script>
@@ -133,7 +137,10 @@
     .chart-card h2{font-size:1rem;font-weight:600;color:#111827}.chart-wrap{position:relative;flex:1;min-height:240px}
     .line-chart{grid-column:span 12}.pie-chart{grid-column:span 5}.bar-chart{grid-column:span 7}
     .empty-state{display:none;background:var(--card);border-radius:var(--radius);border:1px dashed #cbd5e1;padding:24px;text-align:center;color:var(--muted);font-size:1.1rem}
+    .scanner-fab{display:none;position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:90;width:62px;height:62px;border:0;border-radius:50%;background:#16a34a;color:#fff;box-shadow:0 12px 30px rgba(22,163,74,.35);cursor:pointer;padding:16px}.scanner-fab svg{width:100%;height:100%}
+    .scanner-modal{position:fixed;inset:0;z-index:110;background:#020617;display:none}.scanner-modal.open{display:grid;grid-template-rows:1fr auto}.scanner-video{width:100%;height:100%;object-fit:cover;min-height:0}.scanner-frame{position:absolute;inset:50% auto auto 50%;width:min(82vw,420px);aspect-ratio:1.65;transform:translate(-50%,-50%);border:3px solid #4ade80;border-radius:18px;box-shadow:0 0 0 9999px rgba(2,6,23,.42);pointer-events:none}.scanner-hint{position:absolute;left:20px;right:20px;top:calc(24px + env(safe-area-inset-top));color:#fff;text-align:center;font-weight:600;text-shadow:0 2px 8px #000}.scanner-actions{position:relative;z-index:1;display:flex;justify-content:center;gap:12px;padding:16px 16px calc(16px + env(safe-area-inset-bottom));background:#020617}.scanner-action{border:1px solid #475569;border-radius:999px;background:#1e293b;color:#fff;padding:12px 18px;font-weight:600}.scanner-status{position:absolute;left:16px;right:16px;bottom:92px;color:#fff;text-align:center}.product-card-content{display:grid;gap:9px;max-height:60vh;overflow:auto}.product-card-row{display:grid;grid-template-columns:minmax(100px,35%) 1fr;gap:12px;padding-bottom:7px;border-bottom:1px solid #eef2f7}.product-card-label{color:var(--muted)}
     @media (max-width:900px){.container{grid-template-columns:1fr}.dashboard-tabs{grid-column:1;grid-row:auto;position:static;flex-direction:row;overflow-x:auto;border-radius:18px}.tab-btn{width:auto;white-space:nowrap;text-align:center}.view,.view.active,h1{grid-column:1}.pie-chart,.bar-chart,.line-chart{grid-column:span 12}.period-shell{flex-wrap:wrap;white-space:normal}.date-range{width:100%;margin-left:0;flex-wrap:wrap}.client-row{grid-template-columns:1fr}.comment-info{grid-template-columns:1fr}}
+    @media (max-width:900px){body{padding-bottom:104px}.scanner-fab{display:block}}
   </style>
 </head>
 <body>
@@ -552,6 +559,14 @@
       </div>
     </div>
   </main>
+
+  <button class="scanner-fab" id="barcodeScannerBtn" type="button" aria-label="Сканировать штрихкод" title="Сканировать штрихкод"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 9v6M10 9v6M13 9v6M17 9v6"/></svg></button>
+  <section class="scanner-modal" id="barcodeScannerModal" aria-hidden="true" aria-label="Сканер штрихкода">
+    <video class="scanner-video" id="barcodeScannerVideo" playsinline muted></video><div class="scanner-frame"></div>
+    <div class="scanner-hint">Наведите камеру на штрихкод EAN-13</div><div class="scanner-status" id="barcodeScannerStatus"></div>
+    <div class="scanner-actions"><button class="scanner-action" id="barcodeTorchBtn" type="button">Фонарик</button><button class="scanner-action" id="barcodeScannerCloseBtn" type="button">Закрыть</button></div>
+  </section>
+  <div class="comment-modal" id="productCardModal" aria-hidden="true"><div class="comment-dialog" role="dialog" aria-modal="true" aria-labelledby="productCardTitle"><h2 id="productCardTitle">Карточка товара</h2><div class="product-card-content" id="productCardContent"></div><div class="modal-actions"><button class="modal-btn ok" id="productCardCloseBtn" type="button">Закрыть</button></div></div></div>
 
 <script>
 const ADMIN_PASSWORD='8852285';
@@ -2022,6 +2037,46 @@ async function refreshRegistryData(){
     adminEls.registryRefreshBtn.textContent=previousText;
   }
 }
+const barcodeScanner={stream:null,track:null,detector:null,frameRequest:0,torch:false,busy:false};
+function playBarcodeSignal(found){
+  const AudioContextClass=window.AudioContext||window.webkitAudioContext;if(!AudioContextClass)return;
+  const context=new AudioContextClass();const frequencies=found?[880,1175]:[260,180];
+  frequencies.forEach((frequency,index)=>{const oscillator=context.createOscillator(),gain=context.createGain(),start=context.currentTime+index*.13;oscillator.frequency.value=frequency;gain.gain.setValueAtTime(.12,start);gain.gain.exponentialRampToValueAtTime(.001,start+.11);oscillator.connect(gain).connect(context.destination);oscillator.start(start);oscillator.stop(start+.12);});
+  setTimeout(()=>context.close(),500);
+}
+function closeBarcodeScanner(){
+  cancelAnimationFrame(barcodeScanner.frameRequest);barcodeScanner.stream?.getTracks().forEach((track)=>track.stop());
+  Object.assign(barcodeScanner,{stream:null,track:null,detector:null,frameRequest:0,torch:false,busy:false});
+  document.getElementById('barcodeScannerVideo').srcObject=null;document.getElementById('barcodeScannerModal').classList.remove('open');document.getElementById('barcodeScannerModal').setAttribute('aria-hidden','true');
+}
+async function scanBarcodeFrame(){
+  if(!barcodeScanner.detector||barcodeScanner.busy)return;
+  try{const codes=await barcodeScanner.detector.detect(document.getElementById('barcodeScannerVideo'));const ean13=codes.find((code)=>code.format==='ean_13'&&/^\d{13}$/.test(code.rawValue));if(ean13){barcodeScanner.busy=true;await openScannedProduct(ean13.rawValue);return;}}catch(error){console.error('Ошибка распознавания EAN-13:',error);}
+  barcodeScanner.frameRequest=requestAnimationFrame(scanBarcodeFrame);
+}
+async function openBarcodeScanner(){
+  const status=document.getElementById('barcodeScannerStatus');
+  if(!('BarcodeDetector'in window)||!navigator.mediaDevices?.getUserMedia){alert('Сканирование штрихкодов не поддерживается этим браузером. Откройте установленное PWA в актуальном Chrome.');return;}
+  try{
+    const formats=await BarcodeDetector.getSupportedFormats();if(!formats.includes('ean_13'))throw new Error('Формат EAN-13 не поддерживается');
+    barcodeScanner.detector=new BarcodeDetector({formats:['ean_13']});barcodeScanner.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});barcodeScanner.track=barcodeScanner.stream.getVideoTracks()[0];
+    const video=document.getElementById('barcodeScannerVideo');video.srcObject=barcodeScanner.stream;await video.play();document.getElementById('barcodeScannerModal').classList.add('open');document.getElementById('barcodeScannerModal').setAttribute('aria-hidden','false');status.textContent='';barcodeScanner.frameRequest=requestAnimationFrame(scanBarcodeFrame);
+  }catch(error){closeBarcodeScanner();alert(`Не удалось открыть сканер: ${error.message}`);}
+}
+async function toggleBarcodeTorch(){
+  const capabilities=barcodeScanner.track?.getCapabilities?.();if(!capabilities?.torch){document.getElementById('barcodeScannerStatus').textContent='Фонарик не поддерживается устройством';return;}
+  barcodeScanner.torch=!barcodeScanner.torch;await barcodeScanner.track.applyConstraints({advanced:[{torch:barcodeScanner.torch}]});document.getElementById('barcodeTorchBtn').classList.toggle('active',barcodeScanner.torch);
+}
+async function openScannedProduct(ean13){
+  const status=document.getElementById('barcodeScannerStatus');status.textContent='Ищем товар…';
+  try{const response=await fetch(`../api/product_by_ean.php?ean13=${encodeURIComponent(ean13)}`,{cache:'no-store'}),payload=await response.json();if(!response.ok||payload.status==='error')throw new Error(payload.message||`HTTP ${response.status}`);if(!payload.data){playBarcodeSignal(false);status.textContent='Товар не найден';setTimeout(()=>{barcodeScanner.busy=false;status.textContent='';barcodeScanner.frameRequest=requestAnimationFrame(scanBarcodeFrame);},1200);return;}playBarcodeSignal(true);closeBarcodeScanner();renderProductCard(payload.data);}
+  catch(error){playBarcodeSignal(false);status.textContent=`Товар не найден: ${error.message}`;setTimeout(()=>{barcodeScanner.busy=false;barcodeScanner.frameRequest=requestAnimationFrame(scanBarcodeFrame);},1500);}
+}
+function renderProductCard(product){
+  document.getElementById('productCardTitle').textContent=String(product.name||'Карточка товара');const fields={"EAN-13":product.ean13,...(product.fields||{})};const content=document.getElementById('productCardContent');content.replaceChildren(...Object.entries(fields).map(([label,value])=>{const row=document.createElement('div');row.className='product-card-row';const key=document.createElement('span'),text=document.createElement('span');key.className='product-card-label';key.textContent=label;text.textContent=typeof value==='object'?JSON.stringify(value):String(value??'');row.append(key,text);return row;}));document.getElementById('productCardModal').classList.add('open');document.getElementById('productCardModal').setAttribute('aria-hidden','false');
+}
+document.getElementById('barcodeScannerBtn').addEventListener('click',openBarcodeScanner);document.getElementById('barcodeScannerCloseBtn').addEventListener('click',closeBarcodeScanner);document.getElementById('barcodeTorchBtn').addEventListener('click',toggleBarcodeTorch);document.getElementById('productCardCloseBtn').addEventListener('click',()=>{document.getElementById('productCardModal').classList.remove('open');document.getElementById('productCardModal').setAttribute('aria-hidden','true');});
+if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch((error)=>console.error('Не удалось зарегистрировать PWA:',error)));
 async function initDashboard(){try{
   const [callsPayload,outgoingEmails]=await Promise.all([fetchCallsPayload(),fetchClientOutgoingEmails()]);
   clientOutgoingEmails=Array.isArray(outgoingEmails)?outgoingEmails:[];
