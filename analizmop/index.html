@@ -111,10 +111,10 @@
     .client-row{background:var(--card);box-shadow:var(--shadow);border:1px solid #e5e7eb;border-radius:var(--radius);padding:16px;display:grid;grid-template-columns:minmax(180px,260px) minmax(0,1fr);gap:16px;align-items:center}
     .client-name{font-weight:700;color:#111827;word-break:break-word}.client-name-btn{border:0;background:transparent;color:#111827;font:inherit;font-weight:700;text-align:left;cursor:pointer;padding:0;border-bottom:1px dashed #94a3b8}.client-name-btn:hover{color:#2563eb;border-color:#2563eb}.client-meta{font-size:.85rem;color:var(--muted);margin-top:4px}
     .call-timeline{display:flex;gap:8px;align-items:stretch;overflow-x:auto;padding:4px 2px 8px;min-height:64px}
-    .call-segment{position:relative;border:0;border-radius:14px;padding:8px 10px;min-width:145px;color:#0f172a;display:grid;gap:5px;cursor:pointer;text-align:left;box-shadow:0 6px 16px rgba(15,23,42,.08);transition:.2s ease}
+    .call-segment{position:relative;border:0;border-radius:14px;padding:8px 10px;width:145px;height:72px;box-sizing:border-box;overflow:hidden;color:#0f172a;display:grid;gap:5px;cursor:pointer;text-align:left;box-shadow:0 6px 16px rgba(15,23,42,.08);transition:.2s ease}
     .call-segment:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(15,23,42,.12)}
     .call-segment.incoming{background:#dcfce7;border:1px solid #86efac}.call-segment.outgoing{background:#dbeafe;border:1px solid #93c5fd}
-    .call-segment.email-outgoing{background:#fef3c7;border:1px solid #f59e0b;min-width:180px}
+    .call-segment.email-outgoing{background:#fef3c7;border:1px solid #f59e0b;gap:1px}.email-subject{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem}
     .call-segment-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.call-type{font-weight:700;font-size:.86rem}.call-datetime{font-size:.78rem;color:#475569}
     .call-segment.has-note::after{content:'';position:absolute;right:8px;top:8px;width:10px;height:10px;background:#ef4444;border:2px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(239,68,68,.35)}
     .comment-modal{position:fixed;inset:0;background:rgba(15,23,42,.42);display:none;align-items:center;justify-content:center;padding:20px;z-index:100}
@@ -302,7 +302,7 @@
             <div class="registry-wrap" id="adminRegistryTable"><div class="registry-empty">Данные загружаются...</div></div>
           </section>
           <section class="admin-panel" id="adminEmailRegistryPanel" hidden>
-            <p>Таблица входящих и исходящих email из подключенных IMAP-ящиков.</p>
+            <p>Таблица исходящих email из подключенных IMAP-ящиков.</p>
             <div class="registry-toolbar">
               <div class="registry-filter">
                 <label for="emailSearch">Поиск</label>
@@ -905,7 +905,7 @@ async function loadEmailModule(runSync=false){
     updateProgressText();
     elapsedTimer=setInterval(updateProgressText,1000);
   }
-  const params={search:adminEls.emailSearch?.value||'',direction:adminEls.emailDirectionFilter?.value||''};
+  const params={search:adminEls.emailSearch?.value||'',direction:'outgoing'};
   try{
     let syncResult=null;
     let syncError=null;
@@ -914,6 +914,7 @@ async function loadEmailModule(runSync=false){
       catch(error){syncError=error;}
     }
     emailMessages=window.calltrackApi?.getEmailMessages?await window.calltrackApi.getEmailMessages(params):await fetch(`${ADMIN_EMAIL_API_URL}?${new URLSearchParams(params)}`).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p.data||[];});
+    await loadEmailRegistryClientNames(emailMessages);
     renderEmailMessages();
     await loadEmailSettings();
     emailLoaded=true;
@@ -936,10 +937,31 @@ function emailIncomingStatusTitle(value){return value==='read'?'Прочитан
 function emailOutgoingStatusTitle(value){return value==='not_delivered'?'Не доставлено':(value==='opened'?'Открыто':(value==='delivered'?'Доставлено':'—'))}
 function emailDatePart(value){return formatDateDisplay(String(value||'').slice(0,10))}
 function emailTimePart(value){const match=String(value||'').match(/(?:T|\s)(\d{1,2}:\d{2})/);return match?match[1]:''}
+function emailRecipientAddresses(value){return [...String(value||'').toLowerCase().matchAll(/[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}/gi)].map((match)=>match[0])}
+async function loadEmailRegistryClientNames(messages){
+  const emails=[...new Set(messages.flatMap((item)=>emailRecipientAddresses(item.client_email)))];
+  const namesByEmail=new Map();
+  if(emails.length&&window.calltrackApi?.lookupClientNames){
+    try{
+      for(let offset=0;offset<emails.length;offset+=500){
+        const result=await window.calltrackApi.lookupClientNames([],emails.slice(offset,offset+500));
+        Object.entries(result.emailClients||{}).forEach(([email,clients])=>{
+          const names=(Array.isArray(clients)?clients:[]).map((client)=>String(client?.name||'').trim()).filter(Boolean);
+          if(names.length) namesByEmail.set(String(email).toLowerCase(),[...new Set(names)].join(' / '));
+        });
+      }
+    }catch(error){console.error('Не удалось найти клиентов реестра email в локальном кэше Clients:',error);}
+  }
+  messages.forEach((item)=>{
+    const recipientEmails=emailRecipientAddresses(item.client_email);
+    const clientNames=recipientEmails.map((email)=>namesByEmail.get(email)).filter(Boolean);
+    item.client_display_name=[...new Set(clientNames)].join(' / ')||String(item.client_email||'').trim();
+  });
+}
 function renderEmailMessages(){
   if(!emailMessages.length){adminEls.emailTable.innerHTML='<div class="registry-empty">Письма ещё не импортированы</div>';return;}
-  const rows=emailMessages.map((item)=>`<tr data-email-id="${escapeHtml(item.id||'')}"><td>${escapeHtml(emailDatePart(item.sent_at))}</td><td>${escapeHtml(emailTimePart(item.sent_at))}</td><td>${escapeHtml(item.manager_email||'')}</td><td>${escapeHtml(item.client_email||'')}</td><td>${escapeHtml(item.subject||'')}</td><td>${escapeHtml(emailIncomingStatusTitle(item.incoming_status))}</td><td>${escapeHtml(emailOutgoingStatusTitle(item.outgoing_status))}</td></tr>`).join('');
-  adminEls.emailTable.innerHTML=`<table class="registry-table"><thead><tr><th>Дата</th><th>Время</th><th>Email менеджера</th><th>Email клиента</th><th>Тема письма</th><th>Статус входящего</th><th>Статус исходящего</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const rows=emailMessages.map((item)=>`<tr data-email-id="${escapeHtml(item.id||'')}"><td>${escapeHtml(emailDatePart(item.sent_at))}</td><td>${escapeHtml(emailTimePart(item.sent_at))}</td><td>${escapeHtml(item.manager_name||'')}</td><td>${escapeHtml(item.client_display_name||item.client_email||'')}</td><td>${escapeHtml(item.manager_email||'')}</td><td>${escapeHtml(item.client_email||'')}</td><td>${escapeHtml(item.subject||'')}</td><td>${escapeHtml(emailOutgoingStatusTitle(item.outgoing_status))}</td></tr>`).join('');
+  adminEls.emailTable.innerHTML=`<table class="registry-table"><thead><tr><th>Дата</th><th>Время</th><th>Менеджер</th><th>Клиент</th><th>Email менеджера</th><th>Email клиента</th><th>Тема письма</th><th>Статус исходящего</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 async function openEmailCard(id){
@@ -1672,7 +1694,7 @@ function renderClientRow(group){
     const date=formatDateDisplay(formatDateLocal(email.__dt));
     const time=`${String(email.__dt.getHours()).padStart(2,'0')}:${String(email.__dt.getMinutes()).padStart(2,'0')}`;
     const subject=String(email.subject||'Без темы').trim()||'Без темы';
-    return `<button class="call-segment email-outgoing" data-email-id="${escapeHtml(email.id||'')}" type="button" aria-label="Открыть отправленное письмо"><div class="call-segment-top"><span class="call-type">Email отправлен</span></div><div>${escapeHtml(subject)}</div><div class="call-datetime">${escapeHtml(date)} · ${escapeHtml(time)}</div></button>`;
+    return `<button class="call-segment email-outgoing" data-email-id="${escapeHtml(email.id||'')}" type="button" aria-label="Открыть отправленное письмо"><div class="call-segment-top"><span class="call-type">Email отправлен</span></div><div class="email-subject" title="${escapeHtml(subject)}">${escapeHtml(subject)}</div><div class="call-datetime">${escapeHtml(date)} · ${escapeHtml(time)}</div></button>`;
   });
   const segments=[...group.calls.map((call,index)=>({html:callSegments[index],date:call.__dt})),...(group.emails||[]).map((email,index)=>({html:emailSegments[index],date:email.__dt}))].sort((a,b)=>a.date-b.date).map((item)=>item.html).join('');
   const totalDuration=group.calls.reduce((sum,call)=>sum+parseDurationSeconds(call.duration),0);
