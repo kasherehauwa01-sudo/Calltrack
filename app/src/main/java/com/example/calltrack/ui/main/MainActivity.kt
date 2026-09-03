@@ -6,6 +6,8 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -28,6 +30,8 @@ import com.example.calltrack.BuildConfig
 import com.example.calltrack.R
 import com.example.calltrack.data.local.NotificationEntity
 import com.example.calltrack.data.notification.NotificationTargets
+import com.example.calltrack.data.repository.ProductCard
+import com.example.calltrack.data.repository.ProductDirectory
 import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.service.CallTrackingService
@@ -43,6 +47,8 @@ import com.example.calltrack.ui.notifications.NotificationBadgeManager
 import com.example.calltrack.ui.notifications.NotificationsFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import com.example.calltrack.ui.postcall.PostCallActivity
+import com.example.calltrack.ui.scanner.BarcodeScannerActivity
+import com.google.zxing.client.android.Intents
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,6 +72,7 @@ class MainActivity : BaseActivity() {
     private var updateProgressBar: ProgressBar? = null
     private var updateProgressStatus: TextView? = null
     private var batteryOptimizationPromptShown = false
+    private val productDirectory = ProductDirectory()
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
@@ -83,6 +90,12 @@ class MainActivity : BaseActivity() {
     ) {
         updateWarningState()
         (supportFragmentManager.findFragmentById(R.id.fragmentContainer) as? OnboardingFragment)?.onPermissionsUpdated()
+    }
+    private val barcodeScannerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val ean13 = result.data?.getStringExtra(Intents.Scan.RESULT).orEmpty()
+        if (result.resultCode == RESULT_OK && ean13.matches(Regex("\\d{13}"))) lookupScannedProduct(ean13)
     }
     private val unknownAppsLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -133,6 +146,7 @@ class MainActivity : BaseActivity() {
         setupSettingsButton()
         setupAnalyticsButton()
         setupNotificationButton()
+        setupBarcodeScanner()
         binding.btnTopBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
         supportFragmentManager.addOnBackStackChangedListener { updateTopBackVisibility() }
         handleExternalNavigation(intent)
@@ -142,8 +156,10 @@ class MainActivity : BaseActivity() {
                 requestUnknownAppsPermissionIfNeeded()
                 openFragment(OnboardingFragment.newInstance())
                 binding.bottomNav.visibility = android.view.View.GONE
+                binding.btnBarcodeScanner.visibility = android.view.View.GONE
             } else {
                 binding.bottomNav.visibility = android.view.View.VISIBLE
+                binding.btnBarcodeScanner.visibility = android.view.View.VISIBLE
                 if (savedInstanceState == null) binding.bottomNav.selectedItemId = R.id.nav_dial
                 refreshPersonalContactsAfterAuthorization()
                 lifecycleScope.launch { viewModel.sendUserTelemetry() }
@@ -152,6 +168,46 @@ class MainActivity : BaseActivity() {
             }
             updateWarningState()
         }
+    }
+
+    private fun setupBarcodeScanner() {
+        binding.btnBarcodeScanner.setOnClickListener {
+            barcodeScannerLauncher.launch(Intent(this, BarcodeScannerActivity::class.java))
+        }
+    }
+
+    private fun lookupScannedProduct(ean13: String) {
+        binding.btnBarcodeScanner.isEnabled = false
+        lifecycleScope.launch {
+            val product = withContext(Dispatchers.IO) { runCatching { productDirectory.findByEan13(ean13) }.getOrNull() }
+            binding.btnBarcodeScanner.isEnabled = true
+            if (product == null) {
+                playScanTone(found = false)
+                Toast.makeText(this@MainActivity, "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D", Toast.LENGTH_LONG).show()
+            } else {
+                playScanTone(found = true)
+                showProductCard(product)
+            }
+        }
+    }
+
+    private fun playScanTone(found: Boolean) {
+        ToneGenerator(AudioManager.STREAM_NOTIFICATION, 85).apply {
+            startTone(if (found) ToneGenerator.TONE_PROP_ACK else ToneGenerator.TONE_PROP_NACK, 250)
+            binding.root.postDelayed({ release() }, 350)
+        }
+    }
+
+    private fun showProductCard(product: ProductCard) {
+        val details = buildString {
+            append("EAN-13: ").append(product.ean13)
+            product.fields.forEach { (label, value) -> append("\n\n").append(label).append(": ").append(value) }
+        }
+        AlertDialog.Builder(this)
+            .setTitle(product.name)
+            .setMessage(details)
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     override fun onNewIntent(intent: Intent) {
