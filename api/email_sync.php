@@ -129,7 +129,7 @@ function findImapFolder(array $folders, string $requested, string $direction): s
     }
     if ($direction === 'outgoing') {
         foreach ($folders as $folder) {
-            if (preg_match('/(?:^|[\\/.])(sent(?: messages| mail)?|отправленные)$/iu', $folder)) return $folder;
+            if (preg_match('/(?:^|[\\/.])(sent(?: items| messages| mail| objects)?|отправленные(?: письма)?|исходящие)$/iu', $folder)) return $folder;
         }
     }
     return $requested;
@@ -139,7 +139,7 @@ function sentImapFolderCandidates(array $folders, string $requested): array
 {
     $candidates = [];
     foreach ($folders as $folder) {
-        if (strcasecmp($folder, $requested) === 0 || preg_match('/(?:^|[\\/.])(sent(?: messages| mail)?|отправленные)$/iu', $folder)) {
+        if (strcasecmp($folder, $requested) === 0 || preg_match('/(?:^|[\\/.])(sent(?: items| messages| mail| objects)?|отправленные(?: письма)?|исходящие)$/iu', $folder)) {
             $candidates[$folder] = $folder;
         }
     }
@@ -170,6 +170,23 @@ function newestImapFolder(array $mailbox, string $password, array $folders, stri
         }
     }
     return $bestFolder;
+}
+
+function discoverSentImapFolder(array $mailbox): string
+{
+    $password = decryptSecret((string)$mailbox['password_encrypted']);
+    $prefix = imapServerPrefix($mailbox);
+    $inbox = trim((string)($mailbox['inbox_folder'] ?? 'INBOX')) ?: 'INBOX';
+    $imap = @imap_open($prefix . encodeImapFolderName($inbox), (string)$mailbox['username'], $password, OP_READONLY, 1);
+    if ($imap === false) throw new RuntimeException('Не удалось получить список IMAP-папок: ' . (imap_last_error() ?: 'ошибка IMAP'));
+    try {
+        $folders = listImapFolders($imap, $prefix);
+    } finally {
+        imap_close($imap);
+    }
+    $configured = trim((string)($mailbox['sent_folder'] ?? 'Sent')) ?: 'Sent';
+    $fallback = findImapFolder($folders, $configured, 'outgoing');
+    return newestImapFolder($mailbox, $password, $folders, $fallback);
 }
 
 function testImapMailbox(array $mailbox, string $password): array
@@ -275,12 +292,10 @@ function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $dire
         $existingStatement = $pdo->prepare('SELECT imap_uid FROM email_messages WHERE mailbox_id=:mailbox_id AND imap_folder=:folder');
         $existingStatement->execute([':mailbox_id'=>$mailbox['id'], ':folder'=>$folder]);
         $existingUids = array_fill_keys(array_map('intval', $existingStatement->fetchAll(PDO::FETCH_COLUMN)), true);
-        $attempted = 0;
         foreach ($uids as $uid) {
-            if ($imported >= $limit) break;
+            if ($limit > 0 && $imported >= $limit) break;
             $uid = (int)$uid;
             if (isset($existingUids[$uid])) continue;
-            if (++$attempted > $limit * 2) break;
             try {
                 $number = imap_msgno($imap, (int)$uid);
                 if ($number < 1) throw new RuntimeException('IMAP не вернул номер сообщения');
@@ -316,7 +331,7 @@ function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $dire
     return $imported;
 }
 
-function syncEmailMailboxes(PDO $pdo, ?int $mailboxId = null): array
+function syncEmailMailboxes(PDO $pdo, ?int $mailboxId = null, int $limitPerMailbox = 50): array
 {
     ensureEmailTables($pdo);
     if (!function_exists('imap_open')) throw new RuntimeException('На сервере не установлено PHP-расширение IMAP');
@@ -325,16 +340,22 @@ function syncEmailMailboxes(PDO $pdo, ?int $mailboxId = null): array
     $result = ['imported'=>0, 'mailboxes'=>0, 'errors'=>[]];
     foreach ($stmt->fetchAll() as $mailbox) {
         try {
-            // Папки уже проверяются при сохранении настроек. Повторный обход всех
-            // папок и поиск самой новой Sent при каждом нажатии был слишком долгим.
-            $mailbox['inbox_folder'] = trim((string)($mailbox['inbox_folder'] ?? '')) ?: 'INBOX';
+            // Для обычных серверов используем сохранённую папку, а для Mail.ru и
+            // универсального значения Sent дополнительно сверяем список папок.
             $mailbox['sent_folder'] = trim((string)($mailbox['sent_folder'] ?? '')) ?: 'Sent';
             $messageErrors = [];
-            $count = importImapFolder($pdo, $mailbox, $mailbox['inbox_folder'], 'incoming', $messageErrors);
-            if ($mailbox['sent_folder'] !== $mailbox['inbox_folder']) $count += importImapFolder($pdo, $mailbox, $mailbox['sent_folder'], 'outgoing', $messageErrors);
+            // Для Mail.ru, включая почту на собственном домене, фактическая папка
+            // обычно называется «Отправленные». Определяем её автоматически, даже
+            // если в старой настройке осталось универсальное значение Sent.
+            if (str_contains(strtolower((string)$mailbox['imap_host']), 'mail.ru') || strcasecmp($mailbox['sent_folder'], 'Sent') === 0) {
+                $mailbox['sent_folder'] = discoverSentImapFolder($mailbox);
+            }
+            // Реестр хранит только исходящие письма. Фоновый cron передаёт limit=0
+            // и за одно подключение дочитывает папку Sent до самого старого письма.
+            $count = importImapFolder($pdo, $mailbox, $mailbox['sent_folder'], 'outgoing', $messageErrors, $limitPerMailbox);
             $syncError = $messageErrors ? implode('; ', array_map(static fn(array $error): string => sprintf('%s UID %d: %s', $error['folder'], $error['uid'], $error['message']), array_slice($messageErrors, 0, 5))) : null;
             $syncStatus = $messageErrors ? 'error' : 'success';
-            $pdo->prepare("UPDATE email_mailboxes SET inbox_folder=:inbox_folder,sent_folder=:sent_folder,last_sync_at=NOW(),sync_status=:sync_status,sync_error=:sync_error WHERE id=:id")->execute([':inbox_folder'=>$mailbox['inbox_folder'], ':sent_folder'=>$mailbox['sent_folder'], ':sync_status'=>$syncStatus, ':sync_error'=>$syncError, ':id'=>$mailbox['id']]);
+            $pdo->prepare("UPDATE email_mailboxes SET sent_folder=:sent_folder,last_sync_at=NOW(),sync_status=:sync_status,sync_error=:sync_error WHERE id=:id")->execute([':sent_folder'=>$mailbox['sent_folder'], ':sync_status'=>$syncStatus, ':sync_error'=>$syncError, ':id'=>$mailbox['id']]);
             $result['imported'] += $count; $result['mailboxes']++;
             foreach ($messageErrors as $error) $result['errors'][] = ['id'=>$mailbox['id']] + $error;
         } catch (Throwable $e) {
