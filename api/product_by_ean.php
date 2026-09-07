@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/web_auth.php';
+$pdo = getPdo();
+requireWebUser($pdo);
 
 $ean13 = preg_replace('/\D+/', '', (string)($_GET['ean13'] ?? ''));
 if (strlen($ean13) !== 13) sendJson(['status'=>'error', 'message'=>'Передайте штрихкод EAN-13'], 400);

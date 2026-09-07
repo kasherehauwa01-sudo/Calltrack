@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/email_sync.php';
+require_once __DIR__ . '/web_auth.php';
 
 function sendEmailSettingsPayload(PDO $pdo): void
 {
@@ -10,11 +11,13 @@ function sendEmailSettingsPayload(PDO $pdo): void
     sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
 }
 
-function sendEmailRegistryPayload(PDO $pdo): void
+function sendEmailRegistryPayload(PDO $pdo, array $webUser): void
 {
     ensureEmailTables($pdo);
     $where = [];
     $params = [];
+    $scope=webManagerScope($webUser);
+    if($scope){$where[]='email_messages.manager_name = :session_manager';$params[':session_manager']=$scope['manager'];}
     foreach (['manager' => 'email_messages.manager_name', 'client_status' => 'email_messages.client_status'] as $param => $column) {
         $value = trim((string)($_GET[$param] ?? ''));
         if ($value !== '') {
@@ -54,15 +57,16 @@ function sendEmailRegistryPayload(PDO $pdo): void
     sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
 }
 
-function sendEmailDetailPayload(PDO $pdo): void
+function sendEmailDetailPayload(PDO $pdo, array $webUser): void
 {
     ensureEmailTables($pdo);
     $id = (int)($_GET['id'] ?? 0);
     if ($id <= 0) {
         sendJson(['status' => 'error', 'message' => 'Передайте id письма'], 400);
     }
-    $stmt = $pdo->prepare('SELECT * FROM email_messages WHERE id = :id');
-    $stmt->execute([':id' => $id]);
+    $scope=webManagerScope($webUser);
+    $stmt = $pdo->prepare('SELECT * FROM email_messages WHERE id = :id'.($scope?' AND manager_name=:manager':''));
+    $params=[':id'=>$id];if($scope)$params[':manager']=$scope['manager'];$stmt->execute($params);
     $message = $stmt->fetch();
     if (!$message) {
         sendJson(['status' => 'error', 'message' => 'Письмо не найдено'], 404);
@@ -172,22 +176,27 @@ function testEmailMailboxSettings(PDO $pdo): void
 
 try {
     $pdo = getPdo();
+    $webUser=requireWebUser($pdo);
     $action = (string)($_GET['action'] ?? 'emails');
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'test') {
+        requireWebAdmin($pdo);
         testEmailMailboxSettings($pdo);
     }
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        requireWebAdmin($pdo);
         saveEmailMailbox($pdo);
     }
-    if ($action === 'settings') sendEmailSettingsPayload($pdo);
-    if ($action === 'detail') sendEmailDetailPayload($pdo);
+    if ($action === 'settings') { requireWebAdmin($pdo); sendEmailSettingsPayload($pdo); }
+    if ($action === 'detail') sendEmailDetailPayload($pdo,$webUser);
     // Ручная кнопка загружает короткую порцию и не держит HTTP-соединение до
     // тайм-аута прокси. Полную историю каждый час дочитывает CLI cron.
     if ($action === 'sync') {
+        requireWebAdmin($pdo);
         $mailboxId = isset($_GET['id']) ? (int)$_GET['id'] : nextEmailMailboxId($pdo);
         sendJson(['status'=>'success', 'data'=>$mailboxId ? syncEmailMailboxes($pdo, $mailboxId, 10) : ['imported'=>0, 'mailboxes'=>0, 'errors'=>[]]]);
     }
-    sendEmailRegistryPayload($pdo);
+    if ($_SERVER['REQUEST_METHOD']==='POST') requireWebAdmin($pdo);
+    sendEmailRegistryPayload($pdo,$webUser);
 } catch (Throwable $e) {
     sendJson(['status' => 'error', 'message' => $e->getMessage()], 500);
 }

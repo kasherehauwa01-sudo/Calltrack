@@ -18,6 +18,7 @@
     :root { --bg:#f4f6fb; --card:#fff; --text:#1f2a37; --muted:#6b7280; --shadow:0 10px 30px rgba(15,23,42,.08); --radius:14px; }
     *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
     body{background:var(--bg);color:var(--text);min-height:100vh;padding:24px}
+    [hidden]{display:none!important}.auth-screen{min-height:calc(100vh - 48px);display:grid;place-items:center}.auth-card{width:min(420px,100%);background:#fff;border:1px solid #e5e7eb;border-radius:22px;padding:28px;box-shadow:var(--shadow);display:grid;gap:16px}.auth-card h1{grid-column:auto}.auth-card label{display:grid;gap:6px;color:#4b5563}.auth-card input{border:1px solid #d1d5db;border-radius:12px;padding:12px}.auth-submit,.logout-btn{border:0;border-radius:999px;background:#111827;color:#fff;padding:11px 18px;cursor:pointer}.auth-error{color:#dc2626;min-height:20px}.session-bar{grid-column:2;display:flex;justify-content:flex-end;align-items:center;gap:12px;color:#4b5563}
     .container{max-width:1440px;margin:0 auto;display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px;align-items:start}
     h1{font-size:clamp(1.4rem,2.5vw,2rem);font-weight:700;grid-column:2}
 
@@ -144,7 +145,9 @@
   </style>
 </head>
 <body>
-  <main class="container">
+  <section class="auth-screen" id="authScreen"><form class="auth-card" id="authForm"><h1>Вход в Calltrack</h1><label>Логин<input id="authLogin" autocomplete="username" required /></label><label>PIN-код<input id="authPin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><button class="auth-submit" type="submit">Войти</button><div class="auth-error" id="authError" aria-live="polite"></div></form></section>
+  <main class="container" id="appShell" hidden>
+    <div class="session-bar"><span id="currentWebUser"></span><button class="logout-btn" id="logoutBtn" type="button">Выйти</button></div>
     <h1>Аналитика звонков</h1>
 
     <nav class="dashboard-tabs" aria-label="Разделы дашборда">
@@ -339,6 +342,10 @@
             <div class="registry-wrap" id="adminPersonalContactsTable"><div class="registry-empty">Данные загружаются...</div></div>
           </section>
           <section class="admin-panel" id="adminUsersPanel" hidden>
+            <h3>Web-пользователи</h3>
+            <form class="updates-form" id="webUserForm"><input type="hidden" id="webUserId"><label>ФИО<input id="webUserName" required></label><label>Логин<input id="webUserLogin" required></label><label>Новый PIN<input id="webUserPin" type="password" inputmode="numeric"><small>При редактировании оставьте пустым, чтобы не менять.</small></label><label>Роль<select id="webUserRole"><option value="manager">Менеджер</option><option value="admin">Администратор</option></select></label><label id="webUserManagerLabel">Менеджер Calltrack<select id="webUserManager"></select></label><label class="inline-check"><input id="webUserActive" type="checkbox" checked> Активен</label><div class="updates-actions"><button class="registry-refresh-btn" type="submit">Сохранить пользователя</button><button class="updates-action-btn" id="webUserReset" type="button">Новый</button></div><div id="webUserStatus"></div></form>
+            <div class="registry-wrap" id="webUsersTable"></div>
+            <h3>Пользователи Android-приложения</h3>
             <p>Все пользователи, найденные по звонкам и признакам контактов.</p>
             <div class="registry-toolbar">
               <div class="registry-filter">
@@ -560,7 +567,7 @@
     </div>
   </main>
 
-  <button class="scanner-fab" id="barcodeScannerBtn" type="button" aria-label="Сканировать штрихкод" title="Сканировать штрихкод"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 9v6M10 9v6M13 9v6M17 9v6"/></svg></button>
+  <button class="scanner-fab" id="barcodeScannerBtn" type="button" aria-label="Сканировать штрихкод" title="Сканировать штрихкод" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 9v6M10 9v6M13 9v6M17 9v6"/></svg></button>
   <section class="scanner-modal" id="barcodeScannerModal" aria-hidden="true" aria-label="Сканер штрихкода">
     <video class="scanner-video" id="barcodeScannerVideo" playsinline muted></video><div class="scanner-frame"></div>
     <div class="scanner-hint">Наведите камеру на штрихкод EAN-13</div><div class="scanner-status" id="barcodeScannerStatus"></div>
@@ -765,12 +772,20 @@ function setActiveAdminTab(tab){
   if(adminEls.emailRegistryPanel) adminEls.emailRegistryPanel.hidden=tab!=='emailRegistry';
   if(adminEls.emailPanel) adminEls.emailPanel.hidden=tab!=='email';
   if(adminEls.generalSettingsPanel) adminEls.generalSettingsPanel.hidden=tab!=='generalSettings';
+  if(tab==='users') loadWebUsers();
   if(tab==='personalContacts'&&!personalContactsLoaded) loadPersonalContacts();
   if(tab==='users'&&!usersLoaded) loadUsers();
   if(tab==='updates'&&!updatesLoaded) loadUpdates();
   if((tab==='emailRegistry'||tab==='email')&&!emailLoaded) loadEmailModule(false);
   if(tab==='generalSettings') loadClientsCacheStatus();
 }
+
+let webUsers=[],webManagers=[];
+async function loadWebUsers(){const response=await fetch('../api/web_users.php',{credentials:'same-origin',cache:'no-store'}),payload=await response.json();if(!response.ok)throw new Error(payload.message||`HTTP ${response.status}`);webUsers=payload.data||[];webManagers=payload.managers||[];document.getElementById('webUserManager').innerHTML='<option value="">Выберите менеджера</option>'+webManagers.map((m)=>`<option value="${escapeHtml(m.user_phone)}">${escapeHtml(m.manager||m.user_phone)}</option>`).join('');document.getElementById('webUsersTable').innerHTML=`<table class="registry-table"><thead><tr><th>ФИО</th><th>Логин</th><th>Роль</th><th>Менеджер Calltrack</th><th>Активен</th><th></th></tr></thead><tbody>${webUsers.map((u)=>`<tr><td>${escapeHtml(u.display_name)}</td><td>${escapeHtml(u.login)}</td><td>${u.role==='admin'?'Администратор':'Менеджер'}</td><td>${escapeHtml(webManagers.find((m)=>m.user_phone===u.manager_user_phone)?.manager||'—')}</td><td>${Number(u.is_active)?'Да':'Нет'}</td><td><button type="button" class="updates-action-btn" data-web-user="${u.id}">Редактировать</button></td></tr>`).join('')}</tbody></table>`;}
+function updateWebUserManagerVisibility(){document.getElementById('webUserManagerLabel').hidden=document.getElementById('webUserRole').value==='admin';}
+function resetWebUserForm(){document.getElementById('webUserForm').reset();document.getElementById('webUserId').value='';document.getElementById('webUserActive').checked=true;updateWebUserManagerVisibility();}
+document.getElementById('webUserRole').addEventListener('change',updateWebUserManagerVisibility);document.getElementById('webUserReset').addEventListener('click',resetWebUserForm);document.getElementById('webUsersTable').addEventListener('click',(event)=>{const button=event.target.closest('[data-web-user]');if(!button)return;const user=webUsers.find((row)=>String(row.id)===button.dataset.webUser);if(!user)return;document.getElementById('webUserId').value=user.id;document.getElementById('webUserName').value=user.display_name;document.getElementById('webUserLogin').value=user.login;document.getElementById('webUserPin').value='';document.getElementById('webUserRole').value=user.role;document.getElementById('webUserManager').value=user.manager_user_phone||'';document.getElementById('webUserActive').checked=Number(user.is_active)===1;updateWebUserManagerVisibility();});
+document.getElementById('webUserForm').addEventListener('submit',async(event)=>{event.preventDefault();const body={id:document.getElementById('webUserId').value,display_name:document.getElementById('webUserName').value,login:document.getElementById('webUserLogin').value,pin:document.getElementById('webUserPin').value,role:document.getElementById('webUserRole').value,manager_user_phone:document.getElementById('webUserManager').value,is_active:document.getElementById('webUserActive').checked};const response=await fetch('../api/web_users.php',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(body)}),payload=await response.json();document.getElementById('webUserStatus').textContent=response.ok?'Пользователь сохранён':payload.message;if(response.ok){resetWebUserForm();await loadWebUsers();}});updateWebUserManagerVisibility();
 
 function renderClientsCacheStatus(data={}){
   const cronLabels={working:'Работает',configured:'Настроен, ожидается первый запуск',overdue:'Просрочен',no_data:'Нет данных'};
@@ -2085,8 +2100,11 @@ async function initDashboard(){try{
   bindFilters();
   bindClientCalls();
 }catch(error){console.error('Ошибка загрузки/обработки данных:',error);els.emptyState.textContent='Не удалось загрузить данные с сервера';renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();}}
-try{bindAdminPanel();}catch(error){console.error('Ошибка инициализации админ-панели:',error);}
-initDashboard();
+async function requestWebAuth(action='me',body=null){const response=await fetch(`../api/web_auth_api.php?action=${action}`,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):null,credentials:'same-origin',cache:'no-store'});const payload=await response.json();if(!response.ok||payload.status==='error')throw new Error(payload.message||`HTTP ${response.status}`);return payload.data;}
+async function openAuthenticatedApp(user){document.getElementById('authScreen').hidden=true;document.getElementById('appShell').hidden=false;document.getElementById('barcodeScannerBtn').hidden=false;document.getElementById('currentWebUser').textContent=`${user.display_name} · ${user.role==='admin'?'Администратор':'Менеджер'}`;if(user.role!=='admin'){document.querySelector('[data-tab="admin"]')?.remove();document.getElementById('adminView')?.remove();}try{bindAdminPanel();if(user.role==='admin'){adminEls.password.value=ADMIN_PASSWORD;unlockAdminPanel();}}catch(error){console.error('Ошибка инициализации админ-панели:',error);}await initDashboard();}
+document.getElementById('authForm').addEventListener('submit',async(event)=>{event.preventDefault();const error=document.getElementById('authError');error.textContent='';try{const user=await requestWebAuth('login',{login:document.getElementById('authLogin').value,pin:document.getElementById('authPin').value});await openAuthenticatedApp(user);}catch(reason){error.textContent=reason.message;}});
+document.getElementById('logoutBtn').addEventListener('click',async()=>{await requestWebAuth('logout');location.reload();});
+requestWebAuth().then(openAuthenticatedApp).catch(()=>{document.getElementById('authScreen').hidden=false;});
 </script>
 </body>
 </html>
