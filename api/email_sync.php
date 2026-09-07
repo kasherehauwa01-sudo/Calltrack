@@ -104,12 +104,27 @@ function imapServerPrefix(array $mailbox): string
 
 function decodeImapFolderName(string $folder): string
 {
+    if (function_exists('imap_mutf7_to_utf8')) {
+        $decoded = @imap_mutf7_to_utf8($folder);
+        if (is_string($decoded) && $decoded !== '') return $decoded;
+    }
     return function_exists('imap_utf7_decode') ? (imap_utf7_decode($folder) ?: $folder) : $folder;
 }
 
 function encodeImapFolderName(string $folder): string
 {
+    if (function_exists('imap_utf8_to_mutf7')) {
+        $encoded = @imap_utf8_to_mutf7($folder);
+        if (is_string($encoded) && $encoded !== '') return $encoded;
+    }
     return function_exists('imap_utf7_encode') ? (imap_utf7_encode($folder) ?: $folder) : $folder;
+}
+
+function isOutgoingImapFolder(string $folder): bool
+{
+    $parts = preg_split('~[\\/.]+~u', trim($folder)) ?: [$folder];
+    $name = trim((string)end($parts));
+    return preg_match('/^(?:sent(?: items| messages| mail| objects)?|отправ[^\/]*|исходящ[^\/]*)$/iu', $name) === 1;
 }
 
 function listImapFolders($imap, string $prefix): array
@@ -129,7 +144,7 @@ function findImapFolder(array $folders, string $requested, string $direction): s
     }
     if ($direction === 'outgoing') {
         foreach ($folders as $folder) {
-            if (preg_match('/(?:^|[\\/.])(sent(?: items| messages| mail| objects)?|отправленные(?: письма)?|исходящие)$/iu', $folder)) return $folder;
+            if (isOutgoingImapFolder($folder)) return $folder;
         }
     }
     return $requested;
@@ -139,7 +154,7 @@ function sentImapFolderCandidates(array $folders, string $requested): array
 {
     $candidates = [];
     foreach ($folders as $folder) {
-        if (strcasecmp($folder, $requested) === 0 || preg_match('/(?:^|[\\/.])(sent(?: items| messages| mail| objects)?|отправленные(?: письма)?|исходящие)$/iu', $folder)) {
+        if (strcasecmp($folder, $requested) === 0 || isOutgoingImapFolder($folder)) {
             $candidates[$folder] = $folder;
         }
     }

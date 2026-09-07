@@ -1051,7 +1051,8 @@ async function testEmailConnection(){
   try{
     const result=await window.calltrackApi.testEmailSettings(emailSettingsPayload());
     if(result.sent_folder) document.getElementById('emailSentFolder').value=result.sent_folder;
-    adminEls.emailConnectionStatus.textContent=`Подключение успешно. Найдено папок: ${(result.folders||[]).length}. Папка отправленных: ${result.sent_folder||'не найдена'}`;
+    const folders=(result.folders||[]).join(', ')||'не найдены';
+    adminEls.emailConnectionStatus.textContent=`Подключение успешно. Папка отправленных: ${result.sent_folder||'не найдена'}. Папки сервера: ${folders}`;
   }catch(error){adminEls.emailConnectionStatus.textContent=`Ошибка подключения: ${error.message}`;}
   finally{button.disabled=false;}
 }

@@ -22,6 +22,12 @@ if (sentImapFolderCandidates(['INBOX', 'Sent', 'Отправленные', 'Че
 if (sentImapFolderCandidates(['INBOX', 'Исходящие', 'Sent Items'], 'Sent') !== ['Исходящие', 'Sent Items']) {
     throw new RuntimeException('Не обнаруживаются альтернативные названия папки исходящих писем');
 }
+foreach (['Отправленные', 'Отправленные письма', 'Исходящие', 'Sent', 'Sent Items', 'INBOX.Sent'] as $folder) {
+    if (!isOutgoingImapFolder($folder)) throw new RuntimeException("Не распознана папка исходящих: {$folder}");
+}
+foreach (['INBOX', 'Черновики', 'Спам', 'Корзина'] as $folder) {
+    if (isOutgoingImapFolder($folder)) throw new RuntimeException("Служебная папка ошибочно распознана как исходящая: {$folder}");
+}
 $singleParameter = (object)['attribute'=>'filename', 'value'=>'report.pdf'];
 if (normalizeImapParameters($singleParameter) !== [$singleParameter]) {
     throw new RuntimeException('Одиночный stdClass параметр IMAP не нормализуется');
@@ -63,7 +69,7 @@ if (!str_contains($sync, 'newestImapFolder(') ||
 foreach (['rsort($uids, SORT_NUMERIC)', 'catch (Throwable $e)', '$messageErrors[]', 'if ($limit > 0 && $imported >= $limit) break', 'array_fill_keys'] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("Ошибка одного старого письма может заблокировать загрузку новых: {$required}");
 }
-foreach (['discoverSentImapFolder($mailbox)', "str_contains(strtolower((string)\$mailbox['imap_host']), 'mail.ru')", 'отправленные(?: письма)?|исходящие', 'sent(?: items| messages| mail| objects)?'] as $required) {
+foreach (['discoverSentImapFolder($mailbox)', "str_contains(strtolower((string)\$mailbox['imap_host']), 'mail.ru')", 'isOutgoingImapFolder($folder)', 'imap_mutf7_to_utf8', 'imap_utf8_to_mutf7'] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("Mail.ru не использует автоматическое определение папки исходящих: {$required}");
 }
 foreach (["int \$limit = 50", "'file_size'=>(int)(\$part->bytes ?? 0)", 'Загрузка бинарного тела', 'imap_timeout(IMAP_READTIMEOUT, 10)'] as $required) {
@@ -91,7 +97,7 @@ foreach (['executeEmailMessageInsert(', "str_contains(\$error->getMessage(), 'In
 
 $html = (string)file_get_contents($root . '/analizmop/index.html');
 $js = (string)file_get_contents($root . '/analizmop/api.js');
-foreach (['emailTestConnectionBtn', 'Проверить подключение', 'testEmailConnection'] as $required) {
+foreach (['emailTestConnectionBtn', 'Проверить подключение', 'testEmailConnection', 'Папки сервера: ${folders}'] as $required) {
     if (!str_contains($html, $required)) throw new RuntimeException("В интерфейсе отсутствует проверка IMAP: {$required}");
 }
 if (!str_contains($js, 'action=test')) throw new RuntimeException('Клиент не вызывает IMAP test endpoint');
