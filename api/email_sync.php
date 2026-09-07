@@ -149,6 +149,13 @@ function isOutgoingImapFolder(string $folder): bool
     return preg_match('/^(?:sent(?: items| messages| mail| objects)?|отправ[^\/]*|исходящ[^\/]*)$/iu', $name) === 1;
 }
 
+function isOutgoingImapFolder(string $folder): bool
+{
+    $parts = preg_split('~[\\/.]+~u', trim($folder)) ?: [$folder];
+    $name = trim((string)end($parts));
+    return preg_match('/^(?:sent(?: items| messages| mail| objects)?|отправ[^\/]*|исходящ[^\/]*)$/iu', $name) === 1;
+}
+
 function listImapFolders($imap, string $prefix): array
 {
     $folders = imap_list($imap, $prefix, '*') ?: [];
