@@ -309,7 +309,7 @@
             <div class="registry-wrap" id="adminRegistryTable"><div class="registry-empty">Данные загружаются...</div></div>
           </section>
           <section class="admin-panel" id="adminEmailRegistryPanel" hidden>
-            <p>Таблица исходящих email из подключенных IMAP-ящиков.</p>
+            <p>Таблица исходящих email из подключенных IMAP-ящиков. Реестр автоматически синхронизируется каждый час.</p>
             <div class="registry-toolbar">
               <div class="registry-filter">
                 <label for="emailSearch">Поиск</label>
@@ -936,7 +936,7 @@ async function loadEmailModule(runSync=false){
     if(runSync&&!syncError) refreshClientEmailTimeline();
     const syncErrors=Array.isArray(syncResult?.errors)?syncResult.errors:[];
     const syncText=syncError?` Не удалось завершить текущую порцию синхронизации: ${syncError.message}. Нажмите «Подгрузить новые письма» ещё раз.`:(syncResult?` Подгружено новых: ${syncResult.imported||0}.${syncErrors.length?` Не удалось обработать: ${syncErrors.length}. ${syncErrors.slice(0,2).map((item)=>item.message||'Неизвестная ошибка IMAP').join(' ')}`:''}`:'');
-    const registryCountLabel=emailMessages.length>=1000?`Показано последних писем: ${emailMessages.length}`:`Писем в реестре: ${emailMessages.length}`;
+    const registryCountLabel=`Писем в реестре: ${emailMessages.length}`;
     adminEls.emailStatus.textContent=`${registryCountLabel}.${syncText}`;
   }catch(error){
     adminEls.emailStatus.textContent=`Ошибка загрузки email: ${error.message}`;

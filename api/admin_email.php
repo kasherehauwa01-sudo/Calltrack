@@ -49,7 +49,7 @@ function sendEmailRegistryPayload(PDO $pdo): void
         $params[':search'] = '%' . $search . '%';
     }
     $sqlWhere = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
-    $stmt = $pdo->prepare("SELECT email_messages.id, email_messages.sent_at, email_messages.manager_name, email_mailboxes.email AS manager_email, CASE WHEN {$outgoingCondition} THEN 'outgoing' ELSE 'incoming' END AS direction, email_messages.client_name, CASE WHEN {$outgoingCondition} THEN COALESCE(NULLIF(email_messages.to_emails, ''), email_messages.client_email) ELSE email_messages.client_email END AS client_email, email_messages.subject, email_messages.client_status, email_messages.incoming_status, email_messages.outgoing_status, email_messages.message_size, email_messages.has_attachments, email_messages.attachment_count, email_messages.imap_uid FROM email_messages LEFT JOIN email_mailboxes ON email_mailboxes.id = email_messages.mailbox_id" . $sqlWhere . ' ORDER BY email_messages.sent_at DESC, email_messages.id DESC LIMIT 1000');
+    $stmt = $pdo->prepare("SELECT email_messages.id, email_messages.sent_at, email_messages.manager_name, email_mailboxes.email AS manager_email, CASE WHEN {$outgoingCondition} THEN 'outgoing' ELSE 'incoming' END AS direction, email_messages.client_name, CASE WHEN {$outgoingCondition} THEN COALESCE(NULLIF(email_messages.to_emails, ''), email_messages.client_email) ELSE email_messages.client_email END AS client_email, email_messages.subject, email_messages.client_status, email_messages.incoming_status, email_messages.outgoing_status, email_messages.message_size, email_messages.has_attachments, email_messages.attachment_count, email_messages.imap_uid FROM email_messages LEFT JOIN email_mailboxes ON email_mailboxes.id = email_messages.mailbox_id" . $sqlWhere . ' ORDER BY email_messages.sent_at DESC, email_messages.id DESC');
     $stmt->execute($params);
     sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
 }
@@ -71,6 +71,12 @@ function sendEmailDetailPayload(PDO $pdo): void
     $attachments->execute([':id' => $id]);
     $message['attachments'] = $attachments->fetchAll();
     sendJson(['status' => 'success', 'data' => $message]);
+}
+
+function nextEmailMailboxId(PDO $pdo): ?int
+{
+    $id = $pdo->query('SELECT id FROM email_mailboxes WHERE enabled=1 ORDER BY last_sync_at IS NULL DESC, last_sync_at ASC, id ASC LIMIT 1')->fetchColumn();
+    return $id === false ? null : (int)$id;
 }
 
 function saveEmailMailbox(PDO $pdo): void
@@ -175,7 +181,12 @@ try {
     }
     if ($action === 'settings') sendEmailSettingsPayload($pdo);
     if ($action === 'detail') sendEmailDetailPayload($pdo);
-    if ($action === 'sync') sendJson(['status'=>'success', 'data'=>syncEmailMailboxes($pdo, isset($_GET['id']) ? (int)$_GET['id'] : null)]);
+    // Ручная кнопка загружает короткую порцию и не держит HTTP-соединение до
+    // тайм-аута прокси. Полную историю каждый час дочитывает CLI cron.
+    if ($action === 'sync') {
+        $mailboxId = isset($_GET['id']) ? (int)$_GET['id'] : nextEmailMailboxId($pdo);
+        sendJson(['status'=>'success', 'data'=>$mailboxId ? syncEmailMailboxes($pdo, $mailboxId, 10) : ['imported'=>0, 'mailboxes'=>0, 'errors'=>[]]]);
+    }
     sendEmailRegistryPayload($pdo);
 } catch (Throwable $e) {
     sendJson(['status' => 'error', 'message' => $e->getMessage()], 500);
