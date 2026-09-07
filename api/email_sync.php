@@ -275,12 +275,10 @@ function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $dire
         $existingStatement = $pdo->prepare('SELECT imap_uid FROM email_messages WHERE mailbox_id=:mailbox_id AND imap_folder=:folder');
         $existingStatement->execute([':mailbox_id'=>$mailbox['id'], ':folder'=>$folder]);
         $existingUids = array_fill_keys(array_map('intval', $existingStatement->fetchAll(PDO::FETCH_COLUMN)), true);
-        $attempted = 0;
         foreach ($uids as $uid) {
-            if ($imported >= $limit) break;
+            if ($limit > 0 && $imported >= $limit) break;
             $uid = (int)$uid;
             if (isset($existingUids[$uid])) continue;
-            if (++$attempted > $limit * 2) break;
             try {
                 $number = imap_msgno($imap, (int)$uid);
                 if ($number < 1) throw new RuntimeException('IMAP не вернул номер сообщения');
@@ -316,7 +314,7 @@ function importImapFolder(PDO $pdo, array $mailbox, string $folder, string $dire
     return $imported;
 }
 
-function syncEmailMailboxes(PDO $pdo, ?int $mailboxId = null): array
+function syncEmailMailboxes(PDO $pdo, ?int $mailboxId = null, int $limitPerMailbox = 50): array
 {
     ensureEmailTables($pdo);
     if (!function_exists('imap_open')) throw new RuntimeException('На сервере не установлено PHP-расширение IMAP');
@@ -327,14 +325,14 @@ function syncEmailMailboxes(PDO $pdo, ?int $mailboxId = null): array
         try {
             // Папки уже проверяются при сохранении настроек. Повторный обход всех
             // папок и поиск самой новой Sent при каждом нажатии был слишком долгим.
-            $mailbox['inbox_folder'] = trim((string)($mailbox['inbox_folder'] ?? '')) ?: 'INBOX';
             $mailbox['sent_folder'] = trim((string)($mailbox['sent_folder'] ?? '')) ?: 'Sent';
             $messageErrors = [];
-            $count = importImapFolder($pdo, $mailbox, $mailbox['inbox_folder'], 'incoming', $messageErrors);
-            if ($mailbox['sent_folder'] !== $mailbox['inbox_folder']) $count += importImapFolder($pdo, $mailbox, $mailbox['sent_folder'], 'outgoing', $messageErrors);
+            // Реестр хранит только исходящие письма. Фоновый cron передаёт limit=0
+            // и за одно подключение дочитывает папку Sent до самого старого письма.
+            $count = importImapFolder($pdo, $mailbox, $mailbox['sent_folder'], 'outgoing', $messageErrors, $limitPerMailbox);
             $syncError = $messageErrors ? implode('; ', array_map(static fn(array $error): string => sprintf('%s UID %d: %s', $error['folder'], $error['uid'], $error['message']), array_slice($messageErrors, 0, 5))) : null;
             $syncStatus = $messageErrors ? 'error' : 'success';
-            $pdo->prepare("UPDATE email_mailboxes SET inbox_folder=:inbox_folder,sent_folder=:sent_folder,last_sync_at=NOW(),sync_status=:sync_status,sync_error=:sync_error WHERE id=:id")->execute([':inbox_folder'=>$mailbox['inbox_folder'], ':sent_folder'=>$mailbox['sent_folder'], ':sync_status'=>$syncStatus, ':sync_error'=>$syncError, ':id'=>$mailbox['id']]);
+            $pdo->prepare("UPDATE email_mailboxes SET sent_folder=:sent_folder,last_sync_at=NOW(),sync_status=:sync_status,sync_error=:sync_error WHERE id=:id")->execute([':sent_folder'=>$mailbox['sent_folder'], ':sync_status'=>$syncStatus, ':sync_error'=>$syncError, ':id'=>$mailbox['id']]);
             $result['imported'] += $count; $result['mailboxes']++;
             foreach ($messageErrors as $error) $result['errors'][] = ['id'=>$mailbox['id']] + $error;
         } catch (Throwable $e) {
