@@ -28,6 +28,10 @@ foreach (['Отправленные', 'Отправленные письма', '
 foreach (['INBOX', 'Черновики', 'Спам', 'Корзина'] as $folder) {
     if (isOutgoingImapFolder($folder)) throw new RuntimeException("Служебная папка ошибочно распознана как исходящая: {$folder}");
 }
+$mailRuSentUtf7 = '&BB4EQgQ,BEAEMAQyBDsENQQ9BD0ESwQ1-';
+if (decodeImapFolderName($mailRuSentUtf7) !== 'Отправленные' || decodeImapFolderName(encodeImapFolderName('Отправленные')) !== 'Отправленные') {
+    throw new RuntimeException('Modified UTF-7 папки Mail.ru преобразуется неверно');
+}
 $singleParameter = (object)['attribute'=>'filename', 'value'=>'report.pdf'];
 if (normalizeImapParameters($singleParameter) !== [$singleParameter]) {
     throw new RuntimeException('Одиночный stdClass параметр IMAP не нормализуется');
@@ -69,7 +73,7 @@ if (!str_contains($sync, 'newestImapFolder(') ||
 foreach (['rsort($uids, SORT_NUMERIC)', 'catch (Throwable $e)', '$messageErrors[]', 'if ($limit > 0 && $imported >= $limit) break', 'array_fill_keys'] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("Ошибка одного старого письма может заблокировать загрузку новых: {$required}");
 }
-foreach (['discoverSentImapFolder($mailbox)', "str_contains(strtolower((string)\$mailbox['imap_host']), 'mail.ru')", 'isOutgoingImapFolder($folder)', 'imap_mutf7_to_utf8', 'imap_utf8_to_mutf7'] as $required) {
+foreach (['discoverSentImapFolder($mailbox)', "str_contains(strtolower((string)\$mailbox['imap_host']), 'mail.ru')", 'isOutgoingImapFolder($folder)', 'imap_mutf7_to_utf8', 'imap_utf8_to_mutf7', "[...\$folders, 'Sent', 'Отправленные']"] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("Mail.ru не использует автоматическое определение папки исходящих: {$required}");
 }
 foreach (["int \$limit = 50", "'file_size'=>(int)(\$part->bytes ?? 0)", 'Загрузка бинарного тела', 'imap_timeout(IMAP_READTIMEOUT, 10)'] as $required) {

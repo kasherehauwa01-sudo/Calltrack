@@ -108,7 +108,19 @@ function decodeImapFolderName(string $folder): string
         $decoded = @imap_mutf7_to_utf8($folder);
         if (is_string($decoded) && $decoded !== '') return $decoded;
     }
-    return function_exists('imap_utf7_decode') ? (imap_utf7_decode($folder) ?: $folder) : $folder;
+    if (function_exists('imap_utf7_decode')) {
+        $decoded = @imap_utf7_decode($folder);
+        if (is_string($decoded) && $decoded !== '') return $decoded;
+    }
+    // Некоторые сборки PHP не содержат IMAP UTF-7 функций. Mail.ru при этом
+    // возвращает русские папки как modified UTF-7 (например &BB4E...-).
+    return preg_replace_callback('/&([^-]*)-/', static function (array $match): string {
+        if ($match[1] === '') return '&';
+        $base64 = str_replace(',', '/', $match[1]);
+        $base64 .= str_repeat('=', (4 - strlen($base64) % 4) % 4);
+        $utf16 = base64_decode($base64, true);
+        return $utf16 === false ? $match[0] : (@iconv('UTF-16BE', 'UTF-8//IGNORE', $utf16) ?: $match[0]);
+    }, $folder) ?? $folder;
 }
 
 function encodeImapFolderName(string $folder): string
@@ -117,7 +129,24 @@ function encodeImapFolderName(string $folder): string
         $encoded = @imap_utf8_to_mutf7($folder);
         if (is_string($encoded) && $encoded !== '') return $encoded;
     }
-    return function_exists('imap_utf7_encode') ? (imap_utf7_encode($folder) ?: $folder) : $folder;
+    if (function_exists('imap_utf7_encode')) {
+        $encoded = @imap_utf7_encode($folder);
+        if (is_string($encoded) && $encoded !== '') return $encoded;
+    }
+    $parts = preg_split('/([^\x20-\x7e]+)/u', $folder, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [$folder];
+    return implode('', array_map(static function (string $part): string {
+        if ($part === '&') return '&-';
+        if (preg_match('/^[\x20-\x7e]*$/', $part)) return str_replace('&', '&-', $part);
+        $utf16 = @iconv('UTF-8', 'UTF-16BE//IGNORE', $part);
+        return $utf16 === false ? $part : '&' . rtrim(str_replace('/', ',', base64_encode($utf16)), '=') . '-';
+    }, $parts));
+}
+
+function isOutgoingImapFolder(string $folder): bool
+{
+    $parts = preg_split('~[\\/.]+~u', trim($folder)) ?: [$folder];
+    $name = trim((string)end($parts));
+    return preg_match('/^(?:sent(?: items| messages| mail| objects)?|отправ[^\/]*|исходящ[^\/]*)$/iu', $name) === 1;
 }
 
 function isOutgoingImapFolder(string $folder): bool
@@ -200,6 +229,11 @@ function discoverSentImapFolder(array $mailbox): string
         imap_close($imap);
     }
     $configured = trim((string)($mailbox['sent_folder'] ?? 'Sent')) ?: 'Sent';
+    if (str_contains(strtolower((string)$mailbox['imap_host']), 'mail.ru')) {
+        // Пробуем оба имени напрямую. Это покрывает серверы Mail.ru, которые
+        // скрывают системную папку из imap_list или возвращают её только в UTF-7.
+        $folders = array_values(array_unique([...$folders, 'Sent', 'Отправленные']));
+    }
     $fallback = findImapFolder($folders, $configured, 'outgoing');
     return newestImapFolder($mailbox, $password, $folders, $fallback);
 }
