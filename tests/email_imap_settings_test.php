@@ -19,6 +19,9 @@ if (findImapFolder(['INBOX', 'Черновики', 'Отправленные'], 
 if (sentImapFolderCandidates(['INBOX', 'Sent', 'Отправленные', 'Черновики'], 'Sent') !== ['Sent', 'Отправленные']) {
     throw new RuntimeException('Не обнаруживаются все возможные папки отправленных писем');
 }
+if (sentImapFolderCandidates(['INBOX', 'Исходящие', 'Sent Items'], 'Sent') !== ['Исходящие', 'Sent Items']) {
+    throw new RuntimeException('Не обнаруживаются альтернативные названия папки исходящих писем');
+}
 $singleParameter = (object)['attribute'=>'filename', 'value'=>'report.pdf'];
 if (normalizeImapParameters($singleParameter) !== [$singleParameter]) {
     throw new RuntimeException('Одиночный stdClass параметр IMAP не нормализуется');
@@ -60,10 +63,13 @@ if (!str_contains($sync, 'newestImapFolder(') ||
 foreach (['rsort($uids, SORT_NUMERIC)', 'catch (Throwable $e)', '$messageErrors[]', 'if ($limit > 0 && $imported >= $limit) break', 'array_fill_keys'] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("Ошибка одного старого письма может заблокировать загрузку новых: {$required}");
 }
+foreach (['discoverSentImapFolder($mailbox)', "str_contains(strtolower((string)\$mailbox['imap_host']), 'mail.ru')", 'отправленные(?: письма)?|исходящие', 'sent(?: items| messages| mail| objects)?'] as $required) {
+    if (!str_contains($sync, $required)) throw new RuntimeException("Mail.ru не использует автоматическое определение папки исходящих: {$required}");
+}
 foreach (["int \$limit = 50", "'file_size'=>(int)(\$part->bytes ?? 0)", 'Загрузка бинарного тела', 'imap_timeout(IMAP_READTIMEOUT, 10)'] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("IMAP-синхронизация может превысить тайм-аут шлюза: {$required}");
 }
-foreach (['collectImapParts($imap, $number, $structure, \'\', $content, $attachments, false)', 'Папки уже проверяются при сохранении настроек', 'медленная загрузка MIME-тел'] as $required) {
+foreach (['collectImapParts($imap, $number, $structure, \'\', $content, $attachments, false)', 'универсального значения Sent дополнительно сверяем список папок', 'медленная загрузка MIME-тел'] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("HTTP-синхронизация всё ещё выполняет долгие IMAP-операции: {$required}");
 }
 foreach (['normalizeImapContentText($body, $charset)', "if (\$attribute === 'charset')"] as $required) {
