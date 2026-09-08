@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/android_auth.php';
 
 try {
     $data = readJsonBody();
@@ -14,6 +15,7 @@ try {
     $reminder = empty($data['reminder'] ?? null) ? null : normalizeDateTime($data['reminder']);
 
     $pdo = getPdo();
+    $androidUser=optionalAndroidUser($pdo);if($androidUser){$identity=androidManagerIdentity($androidUser);$data['user_phone']=$identity['user_phone'];$data['manager']=$identity['manager'];}
     if (isUserBlocked($pdo, valueOrNull($data, 'user_phone'), valueOrNull($data, 'manager'))) {
         sendJson(['status' => 'success', 'skipped' => true, 'message' => 'Пользователь заблокирован']);
     }

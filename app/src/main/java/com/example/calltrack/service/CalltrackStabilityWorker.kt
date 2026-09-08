@@ -11,12 +11,14 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.calltrack.App
+import com.example.calltrack.auth.AuthStore
 import com.example.calltrack.logging.AppLogger
 import java.util.concurrent.TimeUnit
 
 class CalltrackStabilityWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val app = applicationContext as App
+        if(!AuthStore(app).isAuthenticated)return Result.success()
         val heartbeatAge = StabilityDiagnostics.serviceHeartbeatAgeMs(app)
         StabilityDiagnostics.mark(app, "worker_started", "heartbeat_age_ms=$heartbeatAge; attempt=$runAttemptCount")
         AppLogger.log(app, "STABILITY", "\u041F\u0435\u0440\u0438\u043E\u0434\u0438\u0447\u0435\u0441\u043A\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0444\u043E\u043D\u043E\u0432\u043E\u0439 \u0440\u0430\u0431\u043E\u0442\u044B")
