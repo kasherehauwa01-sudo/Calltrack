@@ -1,8 +1,10 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/web_auth.php';
 
 try {
+    $pdo = getPdo(); requireWebAdmin($pdo);
     $data = readJsonBody();
     $ids = $data['ids'] ?? [];
     $callIds = $data['call_ids'] ?? [];
@@ -10,7 +12,6 @@ try {
         sendJson(['status' => 'error', 'message' => 'ids и call_ids должны быть массивами'], 400);
     }
 
-    $pdo = getPdo();
     $deleted = 0;
     if ($ids !== []) {
         $ids = array_values(array_filter(array_map('intval', $ids), static fn(int $id): bool => $id > 0));

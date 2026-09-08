@@ -1,8 +1,10 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/web_auth.php';
 
 try {
+    $pdo=getPdo();$webUser=requireWebUser($pdo);$scope=webManagerScope($webUser);
     $data = readJsonBody();
     $callId = trim((string)($data['call_id'] ?? ''));
     if ($callId === '') {
@@ -23,6 +25,7 @@ try {
         'client' => ['column' => 'client'],
         'user_phone' => ['column' => 'user_phone'],
     ];
+    if($scope)$map=array_intersect_key($map,array_flip(['comment','tag','reminder','reminder_text']));
 
     $set = [];
     $params = [':call_id' => $callId];
@@ -49,10 +52,10 @@ try {
         sendJson(['status' => 'error', 'message' => 'Нет полей для обновления'], 400);
     }
 
-    $sql = 'UPDATE calls SET ' . implode(', ', $set) . ' WHERE call_id = :call_id';
-    $pdo = getPdo();
-    $existsStmt = $pdo->prepare('SELECT id_db FROM calls WHERE call_id = :call_id LIMIT 1');
-    $existsStmt->execute([':call_id' => $callId]);
+    $scopeSql=$scope?' AND user_phone=:session_user_phone':'';$sql = 'UPDATE calls SET ' . implode(', ', $set) . ' WHERE call_id = :call_id'.$scopeSql;
+    if($scope)$params[':session_user_phone']=$scope['user_phone'];
+    $existsStmt = $pdo->prepare('SELECT id_db FROM calls WHERE call_id = :call_id'.$scopeSql.' LIMIT 1');
+    $existsParams=[':call_id'=>$callId];if($scope)$existsParams[':session_user_phone']=$scope['user_phone'];$existsStmt->execute($existsParams);
     if (!$existsStmt->fetch()) {
         sendJson(['status' => 'error', 'message' => 'Запись с таким call_id не найдена'], 404);
     }
