@@ -73,6 +73,7 @@ class CallTrackingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        if(!com.example.calltrack.auth.AuthStore(this).isAuthenticated){stopSelf();return}
         StabilityDiagnostics.mark(this, "service_started", "pid=${android.os.Process.myPid()}")
         StabilityDiagnostics.increment(this, "service_restart_count")
         createChannel()

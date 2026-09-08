@@ -1,15 +1,17 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/android_auth.php';
 
 try {
     $pdo = getPdo();
 
     $data = readJsonBody();
+    $androidUser=optionalAndroidUser($pdo);if($androidUser){$identity=androidManagerIdentity($androidUser);$data['user_phone']=$identity['user_phone'];$data['manager']=$identity['manager'];}
     $idDb = valueOrNull($data, 'id_db');
     if ($idDb !== null) {
-        $existsStmt = $pdo->prepare('SELECT id FROM personal_contacts WHERE id = :id LIMIT 1');
-        $existsStmt->execute([':id' => (int)$idDb]);
+        $existsStmt = $pdo->prepare('SELECT id FROM personal_contacts WHERE id = :id'.($androidUser?' AND user_phone=:user_phone':'').' LIMIT 1');
+        $existsParams=[':id'=>(int)$idDb];if($androidUser)$existsParams[':user_phone']=$data['user_phone'];$existsStmt->execute($existsParams);
         if (!$existsStmt->fetch()) {
             sendJson(['status' => 'error', 'message' => 'Запись personal_contacts не найдена'], 404);
         }

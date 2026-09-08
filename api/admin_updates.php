@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/web_auth.php';
 
 function updatesDir(): string
 {
@@ -144,6 +145,7 @@ if (defined('CALLTRACK_ADMIN_UPDATES_FUNCTIONS_ONLY')) return;
 
 try {
     $pdo = getPdo();
+    requireWebAdmin($pdo);
     ensureAppUpdatesTable($pdo);
     $dir = updatesDir();
     if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
