@@ -40,6 +40,9 @@ $api = (string)file_get_contents($root . '/analizmop/api.js');
 foreach (['api.js?v=20260827-client-email-timeline', 'refreshClientEmailTimeline', 'if(isClientCalls) refreshClientEmailTimeline()', 'if(runSync&&!syncError) refreshClientEmailTimeline()', 'clientEmailsLoading', 'loadClientNamesForCalls', 'loadClientNamesForCalls([])', 'getCachedClientName', 'clientNamesByEmail', 'result.emailClients', 'normalizeClientLookupEmail', 'group.displayName', "formatPhoneForDisplay(call?.phone)||existing||'Без номера телефона'", 'fetchClientOutgoingEmails', 'ADMIN_EMAIL_API_URL}?direction=outgoing', "cache:'no-store'", 'Email отправлен', 'Отправлено email:', 'data-email-id', 'background:#fef3c7', 'border:1px solid #f59e0b'] as $required) {
     if (!str_contains($html, $required)) throw new RuntimeException("Вкладка звонков не использует Clients: {$required}");
 }
+foreach (['width:145px', 'height:72px', 'class="email-subject"', 'text-overflow:ellipsis'] as $required) {
+    if (!str_contains($html, $required)) throw new RuntimeException("Плашки звонков и email должны иметь одинаковый размер: {$required}");
+}
 if (!str_contains($api, 'lookupClientNames') || !str_contains($api, 'JSON.stringify({ phones, emails })')) {
     throw new RuntimeException('Frontend не вызывает пакетный поиск Clients');
 }

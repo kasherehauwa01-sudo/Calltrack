@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/web_auth.php';
 
 try {
     $pdo = getPdo();
@@ -13,6 +14,8 @@ try {
         $stmt->execute([':user_phone' => $userPhone]);
         sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
     }
+
+    requireWebAdmin($pdo);
 
     $stmt = $pdo->query(
         'SELECT id AS id_db, user_phone, manager, contact_phone, personal_flag, updated_at FROM personal_contacts ORDER BY updated_at DESC, id DESC'

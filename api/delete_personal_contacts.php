@@ -1,8 +1,10 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/web_auth.php';
 
 try {
+    $pdo=getPdo(); requireWebAdmin($pdo);
     $data = readJsonBody();
     $ids = $data['ids'] ?? [];
     if (!is_array($ids)) {
@@ -15,7 +17,7 @@ try {
     }
 
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
-    $stmt = getPdo()->prepare("DELETE FROM personal_contacts WHERE id IN ({$placeholders})");
+    $stmt = $pdo->prepare("DELETE FROM personal_contacts WHERE id IN ({$placeholders})");
     $stmt->execute($ids);
 
     sendJson(['status' => 'success', 'deleted' => $stmt->rowCount()]);
