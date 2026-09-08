@@ -14,4 +14,7 @@
     <string name="switch_user">Сменить пользователя</string>
     <string name="user">Пользователь</string>
     <string name="logs">Логи</string>
+    <string name="scan_barcode">Сканировать штрихкод</string>
+    <string name="scanner_hint">Наведите камеру на штрихкод EAN-13</string>
+    <string name="toggle_flashlight">Включить или выключить фонарик</string>
 </resources>
