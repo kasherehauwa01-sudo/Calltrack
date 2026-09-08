@@ -26,10 +26,12 @@ window.calltrackApi.endpoints = Object.assign({
   testClients: '/vr/calltrack/api/test_clients.php',
   clientsCache: '/vr/calltrack/api/admin_clients_cache.php',
   userCommand: '/vr/calltrack/api/user_command.php',
-  installLatestUpdate: '/vr/calltrack/api/admin_install_update.php'
+  installLatestUpdate: '/vr/calltrack/api/admin_install_update.php',
+  webAuth: '/vr/calltrack/api/web_auth_api.php',
+  webUsers: '/vr/calltrack/api/web_users.php'
 }, window.calltrackApi.endpoints || {});
 window.calltrackApi.requestJson = async function requestJson(url, options = {}) {
-  const response = await fetch(url, options);
+  const response = await fetch(url, { credentials: 'same-origin', ...options });
   const text = await response.text();
 
   let payload = {};
@@ -53,6 +55,31 @@ window.calltrackApi.requestJson = async function requestJson(url, options = {}) 
   }
 
   return payload;
+};
+
+window.calltrackApi.webAuth = async function webAuth(action = 'me', data = null) {
+  const endpoint = window.calltrackApi.endpoints.webAuth;
+  const separator = endpoint.includes('?') ? '&' : '?';
+  const payload = await window.calltrackApi.requestJson(`${endpoint}${separator}action=${encodeURIComponent(action)}`, {
+    method: data ? 'POST' : 'GET',
+    headers: data ? { 'Content-Type': 'application/json; charset=utf-8' } : {},
+    body: data ? JSON.stringify(data) : undefined,
+    credentials: 'same-origin',
+    cache: 'no-store'
+  });
+  return payload.data || null;
+};
+
+window.calltrackApi.getWebUsers = async function getWebUsers() {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.webUsers, { credentials: 'same-origin', cache: 'no-store' });
+};
+
+window.calltrackApi.saveWebUser = async function saveWebUser(data) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.webUsers, { method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify(data), credentials: 'same-origin' });
+};
+
+window.calltrackApi.deleteWebUser = async function deleteWebUser(id) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.webUsers, { method: 'DELETE', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify({ id }), credentials: 'same-origin' });
 };
 
 window.calltrackApi.loadCalls = window.calltrackApi.loadCalls || (async function loadDashboardCalls() {
@@ -136,14 +163,15 @@ window.calltrackApi.deleteCalls = window.calltrackApi.deleteCalls || (async func
 });
 
 window.calltrackApi.getUpdates = window.calltrackApi.getUpdates || (async function getDashboardUpdates() {
-  const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.updates);
+  const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.updates, { credentials: 'same-origin', cache: 'no-store' });
   return Array.isArray(payload.data) ? payload.data : [];
 });
 
 window.calltrackApi.saveUpdate = window.calltrackApi.saveUpdate || (async function saveDashboardUpdate(formData) {
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.updates, {
     method: 'POST',
-    body: formData
+    body: formData,
+    credentials: 'same-origin'
   });
 });
 
@@ -151,7 +179,8 @@ window.calltrackApi.deleteUpdate = window.calltrackApi.deleteUpdate || (async fu
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.updates, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
-    body: JSON.stringify({ action: 'delete', id })
+    body: JSON.stringify({ action: 'delete', id }),
+    credentials: 'same-origin'
   });
 });
 

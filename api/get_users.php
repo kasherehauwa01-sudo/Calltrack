@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/web_auth.php';
 
 function normalizeUserKey(?string $phone, ?string $manager): string
 {
@@ -13,6 +14,7 @@ function normalizeUserKey(?string $phone, ?string $manager): string
 
 try {
     $pdo = getPdo();
+    requireWebAdmin($pdo);
     try {
         ensureUserTelemetryTables($pdo);
     } catch (Throwable $e) {

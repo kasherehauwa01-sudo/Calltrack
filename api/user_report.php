@@ -1,11 +1,13 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/android_auth.php';
 
 try {
     $pdo = getPdo();
     ensureUserTelemetryTables($pdo);
     $data = readJsonBody();
+    $androidUser=optionalAndroidUser($pdo);if($androidUser){$identity=androidManagerIdentity($androidUser);$data['user_phone']=$identity['user_phone'];$data['manager']=$identity['manager'];}
     $userPhone = trim((string)($data['user_phone'] ?? ''));
     if ($userPhone === '') {
         sendJson(['status' => 'error', 'message' => 'Поле user_phone обязательно'], 400);
