@@ -78,6 +78,10 @@ window.calltrackApi.saveWebUser = async function saveWebUser(data) {
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.webUsers, { method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify(data), credentials: 'same-origin' });
 };
 
+window.calltrackApi.deleteWebUser = async function deleteWebUser(id) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.webUsers, { method: 'DELETE', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify({ id }), credentials: 'same-origin' });
+};
+
 window.calltrackApi.loadCalls = window.calltrackApi.loadCalls || (async function loadDashboardCalls() {
   const separator = window.calltrackApi.endpoints.calls.includes('?') ? '&' : '?';
   return window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.calls}${separator}period=all&limit=0`);

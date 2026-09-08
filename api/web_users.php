@@ -8,6 +8,14 @@ try {
         $managers=$pdo->query("SELECT user_phone,MAX(manager) manager FROM (SELECT user_phone,manager FROM app_user_reports UNION ALL SELECT user_phone,manager FROM app_user_states) m WHERE user_phone<>'' GROUP BY user_phone ORDER BY manager")->fetchAll();
         sendJson(['status'=>'success','data'=>$users,'managers'=>$managers]);
     }
+    if ($_SERVER['REQUEST_METHOD']==='DELETE') {
+        $data=readJsonBody();$id=(int)($data['id']??0);$current=requireWebAdmin($pdo);
+        if($id<=0)sendJson(['status'=>'error','message'=>'Не указан пользователь'],400);
+        if($id===(int)$current['id'])sendJson(['status'=>'error','message'=>'Нельзя удалить текущего пользователя'],400);
+        $stmt=$pdo->prepare('DELETE FROM web_users WHERE id=:id');$stmt->execute([':id'=>$id]);
+        if($stmt->rowCount()===0)sendJson(['status'=>'error','message'=>'Пользователь не найден'],404);
+        sendJson(['status'=>'success']);
+    }
     $data=readJsonBody();$id=(int)($data['id']??0);$role=(string)($data['role']??'');$manager=trim((string)($data['manager_user_phone']??''));
     if (!in_array($role,['admin','manager'],true)) sendJson(['status'=>'error','message'=>'Допустимы только роли admin и manager'],400);
     if ($role==='manager'&&$manager==='') sendJson(['status'=>'error','message'=>'Для менеджера обязательна связь с менеджером Calltrack'],400);
