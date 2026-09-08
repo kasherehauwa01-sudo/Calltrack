@@ -12,8 +12,8 @@ try {
     if (!in_array($role,['admin','manager'],true)) sendJson(['status'=>'error','message'=>'Допустимы только роли admin и manager'],400);
     if ($role==='manager'&&$manager==='') sendJson(['status'=>'error','message'=>'Для менеджера обязательна связь с менеджером Calltrack'],400);
     if($role==='manager'){$check=$pdo->prepare("SELECT 1 FROM (SELECT user_phone FROM app_user_reports UNION SELECT user_phone FROM app_user_states) managers WHERE user_phone=:phone LIMIT 1");$check->execute([':phone'=>$manager]);if(!$check->fetchColumn())sendJson(['status'=>'error','message'=>'Выбранный менеджер Calltrack не найден'],400);}
-    $fields=[':name'=>trim((string)($data['display_name']??'')),':login'=>strtolower(trim((string)($data['login']??''))),':role'=>$role,':manager'=>$role==='manager'?$manager:null,':active'=>!empty($data['is_active'])?1:0];
-    if ($fields[':name']===''||$fields[':login']==='') sendJson(['status'=>'error','message'=>'Заполните ФИО и логин'],400);
+    $fields=[':name'=>trim((string)($data['display_name']??'')),':login'=>normalizeWebLoginEmail((string)($data['login']??'')),':role'=>$role,':manager'=>$role==='manager'?$manager:null,':active'=>!empty($data['is_active'])?1:0];
+    if ($fields[':name']===''||$fields[':login']==='') sendJson(['status'=>'error','message'=>'Заполните ФИО и корректный email'],400);
     $pin=(string)($data['pin']??'');
     if($pin!==''&&!preg_match('/^\d{4,12}$/',$pin))sendJson(['status'=>'error','message'=>'PIN должен содержать от 4 до 12 цифр'],400);
     if ($id>0) {

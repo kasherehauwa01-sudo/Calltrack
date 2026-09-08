@@ -6,7 +6,7 @@
 
 ```bash
 cd /var/www/html/vr/calltrack
-php scripts/create_first_web_admin.php admin "ФИО администратора"
+php scripts/create_first_web_admin.php admin@example.com "ФИО администратора"
 ```
 
 PIN вводится интерактивно без отображения и не попадает в аргументы процесса или Git. Скрипт откажется создавать второго первоначального администратора.
@@ -15,8 +15,8 @@ PIN вводится интерактивно без отображения и �
 
 Таблицы создаются автоматически при первом обращении к `web_auth_api.php` или при запуске CLI-скрипта:
 
-* `web_users`: ID, ФИО, уникальный логин, хеш PIN, роль `admin|manager`, стабильный `manager_user_phone`, активность, даты создания/изменения и последнего входа;
-* `web_login_attempts`: логин, SHA-256 IP и время попытки для ограничения перебора PIN.
+* `web_users`: ID, ФИО, уникальный email, хеш PIN, роль `admin|manager`, стабильный `manager_user_phone`, активность, даты создания/изменения и последнего входа;
+* `web_login_attempts`: email, SHA-256 IP и время попытки для ограничения перебора PIN.
 
 Создаются уникальный индекс `uk_web_users_login` и индексы `idx_web_users_manager`, `idx_web_users_active`, `idx_web_login_attempt`. Существующие таблицы и ID не изменяются.
 

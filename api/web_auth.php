@@ -6,7 +6,7 @@ function ensureWebAuthTables(PDO $pdo): void
     $pdo->exec("CREATE TABLE IF NOT EXISTS web_users (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         display_name VARCHAR(255) NOT NULL,
-        login VARCHAR(100) NOT NULL,
+        login VARCHAR(254) NOT NULL,
         pin_hash VARCHAR(255) NOT NULL,
         role ENUM('admin','manager') NOT NULL,
         manager_user_phone VARCHAR(30) NULL,
@@ -20,11 +20,20 @@ function ensureWebAuthTables(PDO $pdo): void
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $pdo->exec("CREATE TABLE IF NOT EXISTS web_login_attempts (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        login VARCHAR(100) NOT NULL,
+        login VARCHAR(254) NOT NULL,
         ip_hash CHAR(64) NOT NULL,
         attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_web_login_attempt (login, ip_hash, attempted_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    foreach (['ALTER TABLE web_users MODIFY login VARCHAR(254) NOT NULL', 'ALTER TABLE web_login_attempts MODIFY login VARCHAR(254) NOT NULL'] as $sql) {
+        try { $pdo->exec($sql); } catch (Throwable $e) { /* Размер уже актуален или ALTER запрещён. */ }
+    }
+}
+
+function normalizeWebLoginEmail(string $value): string
+{
+    $email = strtolower(trim($value));
+    return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
 }
 
 function startWebSession(): void
