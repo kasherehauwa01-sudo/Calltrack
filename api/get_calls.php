@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/client_directory.php';
+require_once __DIR__ . '/web_auth.php';
 
 function applyRegistryPeriod(array $source): array
 {
@@ -82,14 +83,19 @@ function enrichCallsWithClients(array $rows): array
 }
 
 try {
+    $pdo = getPdo();
+    $webUser = requireWebUser($pdo);
     $filters = applyRegistryPeriod($_GET);
+    $scope = webManagerScope($webUser);
+    if ($scope) $filters['user_phone'] = $scope['user_phone'];
+    $params = [];
+    $where = buildFilters($filters, $params);
     $rawLimit = $_GET['limit'] ?? null;
     $period = strtolower(trim((string)($_GET['period'] ?? '')));
     $loadAll = $period === 'all' || $rawLimit === null || (int)$rawLimit === 0;
     $limit = $loadAll ? null : min(max((int)$rawLimit, 1), 1000);
     $offset = max((int)($_GET['offset'] ?? 0), 0);
 
-    $pdo = getPdo();
     $countStmt = $pdo->prepare("SELECT COUNT(*) FROM calls{$where}");
     foreach ($params as $key => $value) $countStmt->bindValue($key, $value);
     $countStmt->execute();
@@ -103,7 +109,8 @@ try {
     $stmt = $pdo->prepare($sql);
     foreach ($params as $key => $value) $stmt->bindValue($key, $value);
     if (!$loadAll) {
-        $rows = array_slice($rows, $offset, $limit);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
     }
     $stmt->execute();
     $rows = enrichCallsWithClients($stmt->fetchAll());
