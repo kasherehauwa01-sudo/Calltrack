@@ -31,7 +31,7 @@ window.calltrackApi.endpoints = Object.assign({
   webUsers: '/vr/calltrack/api/web_users.php'
 }, window.calltrackApi.endpoints || {});
 window.calltrackApi.requestJson = async function requestJson(url, options = {}) {
-  const response = await fetch(url, options);
+  const response = await fetch(url, { credentials: 'same-origin', ...options });
   const text = await response.text();
 
   let payload = {};
@@ -163,14 +163,15 @@ window.calltrackApi.deleteCalls = window.calltrackApi.deleteCalls || (async func
 });
 
 window.calltrackApi.getUpdates = window.calltrackApi.getUpdates || (async function getDashboardUpdates() {
-  const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.updates);
+  const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.updates, { credentials: 'same-origin', cache: 'no-store' });
   return Array.isArray(payload.data) ? payload.data : [];
 });
 
 window.calltrackApi.saveUpdate = window.calltrackApi.saveUpdate || (async function saveDashboardUpdate(formData) {
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.updates, {
     method: 'POST',
-    body: formData
+    body: formData,
+    credentials: 'same-origin'
   });
 });
 
@@ -178,7 +179,8 @@ window.calltrackApi.deleteUpdate = window.calltrackApi.deleteUpdate || (async fu
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.updates, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
-    body: JSON.stringify({ action: 'delete', id })
+    body: JSON.stringify({ action: 'delete', id }),
+    credentials: 'same-origin'
   });
 });
 

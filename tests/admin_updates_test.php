@@ -26,5 +26,12 @@ $adminSource = (string)file_get_contents(dirname(__DIR__) . '/api/admin_updates.
 if (!str_contains($adminSource, 'Изменение записи не изменяет подписанный APK-файл')) {
     throw new RuntimeException('Сервер разрешает публиковать версию без соответствующего APK');
 }
+$frontend = (string)file_get_contents(dirname(__DIR__) . '/analizmop/api.js');
+$html = (string)file_get_contents(dirname(__DIR__) . '/analizmop/index.html');
+if (!str_contains($frontend, "fetch(url, { credentials: 'same-origin', ...options })") ||
+    !str_contains($frontend, "cache: 'no-store'") ||
+    substr_count($frontend.$html, "credentials:'same-origin'") + substr_count($frontend.$html, "credentials: 'same-origin'") < 6) {
+    throw new RuntimeException('Запросы реестра и загрузки APK не передают cookie web-сессии');
+}
 
 echo "admin_updates_test: OK\n";
