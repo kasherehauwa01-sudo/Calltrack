@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/clients_cache_refresh.php';
+require_once __DIR__ . '/web_auth.php';
 
 function assertClientsCacheAdmin(): void
 {
@@ -12,6 +13,7 @@ function assertClientsCacheAdmin(): void
 }
 
 try {
+    requireWebAdmin(getPdo());
     assertClientsCacheAdmin();
     $method = (string)($_SERVER['REQUEST_METHOD'] ?? 'GET');
     if ($method === 'GET') {
