@@ -577,13 +577,6 @@
     </div>
   </main>
 
-  <button class="scanner-fab" id="barcodeScannerBtn" type="button" aria-label="Сканировать штрихкод" title="Сканировать штрихкод" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 9v6M10 9v6M13 9v6M17 9v6"/></svg></button>
-  <section class="scanner-modal" id="barcodeScannerModal" aria-hidden="true" aria-label="Сканер штрихкода">
-    <video class="scanner-video" id="barcodeScannerVideo" playsinline muted></video><div class="scanner-frame"></div>
-    <div class="scanner-hint">Наведите камеру на штрихкод EAN-13</div><div class="scanner-status" id="barcodeScannerStatus"></div>
-    <div class="scanner-actions"><button class="scanner-action" id="barcodeTorchBtn" type="button">Фонарик</button><button class="scanner-action" id="barcodeScannerCloseBtn" type="button">Закрыть</button></div>
-  </section>
-  <div class="comment-modal" id="productCardModal" aria-hidden="true"><div class="comment-dialog" role="dialog" aria-modal="true" aria-labelledby="productCardTitle"><h2 id="productCardTitle">Карточка товара</h2><div class="product-card-content" id="productCardContent"></div><div class="modal-actions"><button class="modal-btn ok" id="productCardCloseBtn" type="button">Закрыть</button></div></div></div>
 
 <script>
 const ADMIN_PASSWORD='8852285';
@@ -2056,45 +2049,6 @@ async function refreshRegistryData(){
     adminEls.registryRefreshBtn.textContent=previousText;
   }
 }
-const barcodeScanner={stream:null,track:null,detector:null,frameRequest:0,torch:false,busy:false};
-function playBarcodeSignal(found){
-  const AudioContextClass=window.AudioContext||window.webkitAudioContext;if(!AudioContextClass)return;
-  const context=new AudioContextClass();const frequencies=found?[880,1175]:[260,180];
-  frequencies.forEach((frequency,index)=>{const oscillator=context.createOscillator(),gain=context.createGain(),start=context.currentTime+index*.13;oscillator.frequency.value=frequency;gain.gain.setValueAtTime(.12,start);gain.gain.exponentialRampToValueAtTime(.001,start+.11);oscillator.connect(gain).connect(context.destination);oscillator.start(start);oscillator.stop(start+.12);});
-  setTimeout(()=>context.close(),500);
-}
-function closeBarcodeScanner(){
-  cancelAnimationFrame(barcodeScanner.frameRequest);barcodeScanner.stream?.getTracks().forEach((track)=>track.stop());
-  Object.assign(barcodeScanner,{stream:null,track:null,detector:null,frameRequest:0,torch:false,busy:false});
-  document.getElementById('barcodeScannerVideo').srcObject=null;document.getElementById('barcodeScannerModal').classList.remove('open');document.getElementById('barcodeScannerModal').setAttribute('aria-hidden','true');
-}
-async function scanBarcodeFrame(){
-  if(!barcodeScanner.detector||barcodeScanner.busy)return;
-  try{const codes=await barcodeScanner.detector.detect(document.getElementById('barcodeScannerVideo'));const ean13=codes.find((code)=>code.format==='ean_13'&&/^\d{13}$/.test(code.rawValue));if(ean13){barcodeScanner.busy=true;await openScannedProduct(ean13.rawValue);return;}}catch(error){console.error('Ошибка распознавания EAN-13:',error);}
-  barcodeScanner.frameRequest=requestAnimationFrame(scanBarcodeFrame);
-}
-async function openBarcodeScanner(){
-  const status=document.getElementById('barcodeScannerStatus');
-  if(!('BarcodeDetector'in window)||!navigator.mediaDevices?.getUserMedia){alert('Сканирование штрихкодов не поддерживается этим браузером. Откройте установленное PWA в актуальном Chrome.');return;}
-  try{
-    const formats=await BarcodeDetector.getSupportedFormats();if(!formats.includes('ean_13'))throw new Error('Формат EAN-13 не поддерживается');
-    barcodeScanner.detector=new BarcodeDetector({formats:['ean_13']});barcodeScanner.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});barcodeScanner.track=barcodeScanner.stream.getVideoTracks()[0];
-    const video=document.getElementById('barcodeScannerVideo');video.srcObject=barcodeScanner.stream;await video.play();document.getElementById('barcodeScannerModal').classList.add('open');document.getElementById('barcodeScannerModal').setAttribute('aria-hidden','false');status.textContent='';barcodeScanner.frameRequest=requestAnimationFrame(scanBarcodeFrame);
-  }catch(error){closeBarcodeScanner();alert(`Не удалось открыть сканер: ${error.message}`);}
-}
-async function toggleBarcodeTorch(){
-  const capabilities=barcodeScanner.track?.getCapabilities?.();if(!capabilities?.torch){document.getElementById('barcodeScannerStatus').textContent='Фонарик не поддерживается устройством';return;}
-  barcodeScanner.torch=!barcodeScanner.torch;await barcodeScanner.track.applyConstraints({advanced:[{torch:barcodeScanner.torch}]});document.getElementById('barcodeTorchBtn').classList.toggle('active',barcodeScanner.torch);
-}
-async function openScannedProduct(ean13){
-  const status=document.getElementById('barcodeScannerStatus');status.textContent='Ищем товар…';
-  try{const response=await fetch(`../api/product_by_ean.php?ean13=${encodeURIComponent(ean13)}`,{cache:'no-store'}),payload=await response.json();if(!response.ok||payload.status==='error')throw new Error(payload.message||`HTTP ${response.status}`);if(!payload.data){playBarcodeSignal(false);status.textContent='Товар не найден';setTimeout(()=>{barcodeScanner.busy=false;status.textContent='';barcodeScanner.frameRequest=requestAnimationFrame(scanBarcodeFrame);},1200);return;}playBarcodeSignal(true);closeBarcodeScanner();renderProductCard(payload.data);}
-  catch(error){playBarcodeSignal(false);status.textContent=`Товар не найден: ${error.message}`;setTimeout(()=>{barcodeScanner.busy=false;barcodeScanner.frameRequest=requestAnimationFrame(scanBarcodeFrame);},1500);}
-}
-function renderProductCard(product){
-  document.getElementById('productCardTitle').textContent=String(product.name||'Карточка товара');const fields={"EAN-13":product.ean13,...(product.fields||{})};const content=document.getElementById('productCardContent');content.replaceChildren(...Object.entries(fields).map(([label,value])=>{const row=document.createElement('div');row.className='product-card-row';const key=document.createElement('span'),text=document.createElement('span');key.className='product-card-label';key.textContent=label;text.textContent=typeof value==='object'?JSON.stringify(value):String(value??'');row.append(key,text);return row;}));document.getElementById('productCardModal').classList.add('open');document.getElementById('productCardModal').setAttribute('aria-hidden','false');
-}
-document.getElementById('barcodeScannerBtn').addEventListener('click',openBarcodeScanner);document.getElementById('barcodeScannerCloseBtn').addEventListener('click',closeBarcodeScanner);document.getElementById('barcodeTorchBtn').addEventListener('click',toggleBarcodeTorch);document.getElementById('productCardCloseBtn').addEventListener('click',()=>{document.getElementById('productCardModal').classList.remove('open');document.getElementById('productCardModal').setAttribute('aria-hidden','true');});
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch((error)=>console.error('Не удалось зарегистрировать PWA:',error)));
 async function initDashboard(){try{
   const [callsPayload,outgoingEmails]=await Promise.all([fetchCallsPayload(),fetchClientOutgoingEmails()]);
@@ -2104,7 +2058,7 @@ async function initDashboard(){try{
   bindClientCalls();
 }catch(error){console.error('Ошибка загрузки/обработки данных:',error);els.emptyState.textContent='Не удалось загрузить данные с сервера';renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();}}
 async function requestWebAuth(action='me',body=null){return window.calltrackApi.webAuth(action,body);}
-async function openAuthenticatedApp(user){document.getElementById('authScreen').hidden=true;document.getElementById('appShell').hidden=false;document.getElementById('barcodeScannerBtn').hidden=false;document.getElementById('currentWebUser').textContent=`${user.display_name} · ${user.role==='admin'?'Администратор':'Менеджер'}`;if(user.role!=='admin'){document.querySelector('[data-tab="admin"]')?.remove();document.getElementById('adminView')?.remove();}try{bindAdminPanel();if(user.role==='admin'){adminEls.password.value=ADMIN_PASSWORD;unlockAdminPanel();}}catch(error){console.error('Ошибка инициализации админ-панели:',error);}await initDashboard();}
+async function openAuthenticatedApp(user){document.getElementById('authScreen').hidden=true;document.getElementById('appShell').hidden=false;document.getElementById('currentWebUser').textContent=`${user.display_name} · ${user.role==='admin'?'Администратор':'Менеджер'}`;if(user.role!=='admin'){document.querySelector('[data-tab="admin"]')?.remove();document.getElementById('adminView')?.remove();}try{bindAdminPanel();if(user.role==='admin'){adminEls.password.value=ADMIN_PASSWORD;unlockAdminPanel();}}catch(error){console.error('Ошибка инициализации админ-панели:',error);}await initDashboard();}
 document.getElementById('authForm').addEventListener('submit',async(event)=>{event.preventDefault();const error=document.getElementById('authError');error.textContent='';try{const user=await requestWebAuth('login',{login:document.getElementById('authLogin').value,pin:document.getElementById('authPin').value});await openAuthenticatedApp(user);}catch(reason){error.textContent=reason.message;}});
 document.getElementById('logoutBtn').addEventListener('click',async()=>{await requestWebAuth('logout');location.reload();});
 requestWebAuth().then(openAuthenticatedApp).catch(()=>{document.getElementById('authScreen').hidden=false;});
