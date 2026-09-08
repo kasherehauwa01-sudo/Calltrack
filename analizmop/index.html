@@ -7,6 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Дашборд отдела продаж</title>
+  <meta name="theme-color" content="#16a34a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23f8fafc%22/%3E%3Cg%20fill%3D%22%2316a34a%22%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2024%2022%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2040%2022%29%22/%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2024%2038%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2040%2038%29%22/%3E%3C/g%3E%3Cpath%20d%3D%22M32%2032%20C38%2040%2043%2049%2048%2058%22%20fill%3D%22none%22%20stroke%3D%22%2315803d%22%20stroke-width%3D%225%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="api.js?v=20260908-web-auth-endpoints"></script>
@@ -77,8 +81,9 @@
     .user-list-btn{border:1px solid #e5e7eb;background:#f8fafc;border-radius:12px;padding:10px;text-align:left;cursor:pointer;display:grid;gap:4px;color:#111827}
     .user-list-btn:hover,.user-list-btn.active{background:#eef2ff;border-color:#c7d2fe}.user-list-name{font-weight:700}.user-list-meta{font-size:.82rem;color:var(--muted)}
     .user-card{border:1px solid #e5e7eb;border-radius:14px;background:#fff;padding:16px;display:grid;gap:14px;min-height:220px}
-    .user-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.user-info-block{border:1px solid #eef2f7;border-radius:12px;background:#f8fafc;padding:12px;display:grid;gap:8px}.user-info-block h3{font-size:1rem;color:#111827}.user-field{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed #e5e7eb;padding-bottom:5px}.user-field span:first-child{color:var(--muted)}.user-field span:last-child{text-align:right;font-weight:600}
-    .user-actions{display:flex;gap:8px;flex-wrap:wrap}.user-action-btn{border:0;border-radius:999px;background:#e5e7eb;color:#374151;padding:9px 13px;cursor:pointer}.user-action-btn.danger{background:#fee2e2;color:#991b1b}.user-log-filters{display:flex;gap:8px;flex-wrap:wrap}.user-log-filter{border:1px solid #d1d5db;border-radius:999px;background:#fff;padding:7px 12px;cursor:pointer}.user-log-filter.active{background:#111827;color:#fff}.user-logs{background:#0f172a;color:#e5e7eb;border-radius:12px;padding:12px;min-height:140px;max-height:260px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;white-space:pre-wrap}
+    #apkUserModal{padding:0;overflow-x:hidden}.apk-user-dialog{width:100%;max-width:none;min-width:0;max-height:90vh;overflow-x:hidden;overflow-y:auto;border-radius:0}.apk-user-dialog .user-card{width:100%;min-width:0;border:0;padding:0;min-height:0;overflow-x:hidden}
+    .user-card-grid{width:100%;min-width:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:12px}.user-info-block{min-width:0;border:1px solid #eef2f7;border-radius:12px;background:#f8fafc;padding:12px;display:grid;gap:8px}.user-info-block h3{font-size:1rem;color:#111827}.user-field{min-width:0;display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed #e5e7eb;padding-bottom:5px}.user-field span:first-child{color:var(--muted)}.user-field span:last-child{min-width:0;text-align:right;font-weight:600;overflow-wrap:anywhere}
+    .user-actions{display:flex;gap:8px;flex-wrap:wrap}.user-action-btn{border:0;border-radius:999px;background:#e5e7eb;color:#374151;padding:9px 13px;cursor:pointer}.user-action-btn.danger{background:#fee2e2;color:#991b1b}.user-log-filters{display:flex;gap:8px;flex-wrap:wrap}.user-log-filter{border:1px solid #d1d5db;border-radius:999px;background:#fff;padding:7px 12px;cursor:pointer}.user-log-filter.active{background:#111827;color:#fff}.user-logs{max-width:100%;background:#0f172a;color:#e5e7eb;border-radius:12px;padding:12px;min-height:140px;max-height:260px;overflow-x:hidden;overflow-y:auto;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;white-space:pre-wrap}
 
     .filter-card{background:var(--card);box-shadow:var(--shadow);border-radius:var(--radius);padding:14px;border:1px solid #e5e7eb;display:grid;gap:10px}
     .filter-title{color:var(--muted);font-size:.9rem}
@@ -134,7 +139,10 @@
     .chart-card h2{font-size:1rem;font-weight:600;color:#111827}.chart-wrap{position:relative;flex:1;min-height:240px}
     .line-chart{grid-column:span 12}.pie-chart{grid-column:span 5}.bar-chart{grid-column:span 7}
     .empty-state{display:none;background:var(--card);border-radius:var(--radius);border:1px dashed #cbd5e1;padding:24px;text-align:center;color:var(--muted);font-size:1.1rem}
+    .scanner-fab{display:none;position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:90;width:62px;height:62px;border:0;border-radius:50%;background:#16a34a;color:#fff;box-shadow:0 12px 30px rgba(22,163,74,.35);cursor:pointer;padding:16px}.scanner-fab svg{width:100%;height:100%}
+    .scanner-modal{position:fixed;inset:0;z-index:110;background:#020617;display:none}.scanner-modal.open{display:grid;grid-template-rows:1fr auto}.scanner-video{width:100%;height:100%;object-fit:cover;min-height:0}.scanner-frame{position:absolute;inset:50% auto auto 50%;width:min(82vw,420px);aspect-ratio:1.65;transform:translate(-50%,-50%);border:3px solid #4ade80;border-radius:18px;box-shadow:0 0 0 9999px rgba(2,6,23,.42);pointer-events:none}.scanner-hint{position:absolute;left:20px;right:20px;top:calc(24px + env(safe-area-inset-top));color:#fff;text-align:center;font-weight:600;text-shadow:0 2px 8px #000}.scanner-actions{position:relative;z-index:1;display:flex;justify-content:center;gap:12px;padding:16px 16px calc(16px + env(safe-area-inset-bottom));background:#020617}.scanner-action{border:1px solid #475569;border-radius:999px;background:#1e293b;color:#fff;padding:12px 18px;font-weight:600}.scanner-status{position:absolute;left:16px;right:16px;bottom:92px;color:#fff;text-align:center}.product-card-content{display:grid;gap:9px;max-height:60vh;overflow:auto}.product-card-row{display:grid;grid-template-columns:minmax(100px,35%) 1fr;gap:12px;padding-bottom:7px;border-bottom:1px solid #eef2f7}.product-card-label{color:var(--muted)}
     @media (max-width:900px){.container{grid-template-columns:1fr}.dashboard-tabs{grid-column:1;grid-row:auto;position:static;flex-direction:row;overflow-x:auto;border-radius:18px}.tab-btn{width:auto;white-space:nowrap;text-align:center}.view,.view.active,h1{grid-column:1}.pie-chart,.bar-chart,.line-chart{grid-column:span 12}.period-shell{flex-wrap:wrap;white-space:normal}.date-range{width:100%;margin-left:0;flex-wrap:wrap}.client-row{grid-template-columns:1fr}.comment-info{grid-template-columns:1fr}}
+    @media (max-width:900px){body{padding-bottom:104px}.scanner-fab{display:block}}
   </style>
 </head>
 <body>
@@ -352,12 +360,14 @@
                 <label for="usersSearch">Поиск</label>
                 <input id="usersSearch" type="search" placeholder="Имя или номер" />
               </div>
-              <button class="registry-refresh-btn" id="usersRefreshBtn" type="button">Обновить</button>
-              <div class="registry-empty" id="usersStatus" aria-live="polite"></div>
             </div>
-            <div class="users-layout">
-              <div class="users-list" id="usersList"><div class="registry-empty">Данные загружаются...</div></div>
-              <div class="user-card" id="userCard"><div class="registry-empty">Выберите пользователя</div></div>
+            <div class="comment-modal" id="apkUserModal" aria-hidden="true" hidden>
+              <div class="comment-dialog apk-user-dialog" role="dialog" aria-modal="true" aria-labelledby="apkUserModalTitle">
+                <h2 id="apkUserModalTitle">Информация Android-приложения</h2>
+                <div class="registry-empty" id="usersStatus" aria-live="polite"></div>
+                <div class="user-card" id="userCard"><div class="registry-empty">Данные загружаются...</div></div>
+                <div class="modal-actions"><button class="modal-btn ok" id="apkUserCloseBtn" type="button">Закрыть</button></div>
+              </div>
             </div>
           </section>
           <section class="admin-panel" id="adminEmailPanel" hidden>
@@ -583,7 +593,7 @@ console.log('calltrackApi', window.calltrackApi);
 console.log('SQL_CALLS_API_URL', SQL_CALLS_API_URL);
 const chartInstances=[]; let allCalls=[]; let clientOutgoingEmails=[]; let clientEmailsLoading=false; let activePeriod='all'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let adminPasswordValue=''; let activeGroupBy='day'; let adminRegistrySort={key:'call_date',direction:'desc'}; let adminRegistryPeriod='week'; let registryTotalRows=null; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; let users=[]; let usersLoaded=false; let updates=[]; let updatesLoaded=false; let emailMessages=[]; let emailSettings=[]; let emailLoaded=false; let clientsApiTestMatches=[]; let activeUserId=''; let clientNamesRequestId=0; const clientNamesByPhone=new Map(); const clientNamesByEmail=new Map(); const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные']); const selectedRegistryRows=new Set();
 const els={dashboardView:document.getElementById('dashboardView'),clientCallsView:document.getElementById('clientCallsView'),adminView:document.getElementById('adminView'),managerTags:document.getElementById('managerTags'),groupByFilter:document.getElementById('groupByFilter'),periodShell:document.getElementById('periodShell'),dateFrom:document.getElementById('dateFrom'),dateTo:document.getElementById('dateTo'),applyCustomRangeBtn:document.getElementById('applyCustomRangeBtn'),trendTitle:document.getElementById('trendTitle'),kpiTotal:document.getElementById('kpiTotal'),kpiIncoming:document.getElementById('kpiIncoming'),kpiOutgoing:document.getElementById('kpiOutgoing'),kpiMissed:document.getElementById('kpiMissed'),kpiUnanswered:document.getElementById('kpiUnanswered'),kpiDropped:document.getElementById('kpiDropped'),emptyState:document.getElementById('emptyState'),chartsGrid:document.getElementById('chartsGrid'),callTypeTags:document.getElementById('callTypeTags'),clientManagerTags:document.getElementById('clientManagerTags'),clientPeriodShell:document.getElementById('clientPeriodShell'),clientDateFrom:document.getElementById('clientDateFrom'),clientDateTo:document.getElementById('clientDateTo'),clientApplyRangeBtn:document.getElementById('clientApplyRangeBtn'),clientCallsList:document.getElementById('clientCallsList'),commentModal:document.getElementById('commentModal'),commentInfo:document.getElementById('commentInfo'),commentText:document.getElementById('commentText'),reminderText:document.getElementById('reminderText'),reminderAt:document.getElementById('reminderAt'),commentSaveStatus:document.getElementById('commentSaveStatus'),commentCancelBtn:document.getElementById('commentCancelBtn'),commentSaveBtn:document.getElementById('commentSaveBtn'),clientHistoryModal:document.getElementById('clientHistoryModal'),clientHistoryInfo:document.getElementById('clientHistoryInfo'),clientHistoryList:document.getElementById('clientHistoryList'),clientHistoryCloseBtn:document.getElementById('clientHistoryCloseBtn')};
-const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),updateCommand:document.getElementById('adminUpdateCommand'),updateCommandCopyBtn:document.getElementById('adminUpdateCommandCopyBtn'),updateCommandStatus:document.getElementById('adminUpdateCommandStatus'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsRefreshBtn:document.getElementById('personalContactsRefreshBtn'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),usersPanel:document.getElementById('adminUsersPanel'),usersSearch:document.getElementById('usersSearch'),usersRefreshBtn:document.getElementById('usersRefreshBtn'),usersStatus:document.getElementById('usersStatus'),usersList:document.getElementById('usersList'),userCard:document.getElementById('userCard'),emailRegistryPanel:document.getElementById('adminEmailRegistryPanel'),emailPanel:document.getElementById('adminEmailPanel'),emailTable:document.getElementById('emailTable'),emailSettingsTable:document.getElementById('emailSettingsTable'),emailStatus:document.getElementById('emailStatus'),emailSearch:document.getElementById('emailSearch'),emailDirectionFilter:document.getElementById('emailDirectionFilter'),emailRefreshBtn:document.getElementById('emailRefreshBtn'),emailSyncNewBtn:document.getElementById('emailSyncNewBtn'),emailSyncProgress:document.getElementById('emailSyncProgress'),emailSyncProgressText:document.getElementById('emailSyncProgressText'),emailSettingsForm:document.getElementById('emailSettingsForm'),emailAddMailboxBtn:document.getElementById('emailAddMailboxBtn'),emailSettingsModal:document.getElementById('emailSettingsModal'),emailSettingsCancelBtn:document.getElementById('emailSettingsCancelBtn'),emailTestConnectionBtn:document.getElementById('emailTestConnectionBtn'),emailConnectionStatus:document.getElementById('emailConnectionStatus'),updatesPanel:document.getElementById('adminUpdatesPanel'),updatesTable:document.getElementById('updatesTable'),updateForm:document.getElementById('updateForm'),updateId:document.getElementById('updateId'),updateVersionName:document.getElementById('updateVersionName'),updateVersionCode:document.getElementById('updateVersionCode'),updateReleaseNotes:document.getElementById('updateReleaseNotes'),updateApk:document.getElementById('updateApk'),updateFormResetBtn:document.getElementById('updateFormResetBtn'),updatesStatus:document.getElementById('updatesStatus'),generalSettingsPanel:document.getElementById('adminGeneralSettingsPanel'),clientsApiTestForm:document.getElementById('clientsApiTestForm'),clientsApiTestPhone:document.getElementById('clientsApiTestPhone'),clientsApiTestBtn:document.getElementById('clientsApiTestBtn'),clientsApiTestStatus:document.getElementById('clientsApiTestStatus'),clientsApiTestModal:document.getElementById('clientsApiTestModal'),clientsApiTestResult:document.getElementById('clientsApiTestResult'),clientsApiTestBackBtn:document.getElementById('clientsApiTestBackBtn'),clientsApiTestCloseBtn:document.getElementById('clientsApiTestCloseBtn'),registryRefreshBtn:document.getElementById('registryRefreshBtn'),registryTable:document.getElementById('adminRegistryTable'),registryRowsCount:document.getElementById('registryRowsCount'),registryPeriodShell:document.getElementById('registryPeriodShell'),registryCustomPeriodFields:document.getElementById('registryCustomPeriodFields'),registryDateFrom:document.getElementById('registryDateFrom'),registryDateTo:document.getElementById('registryDateTo'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
+const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),updateCommand:document.getElementById('adminUpdateCommand'),updateCommandCopyBtn:document.getElementById('adminUpdateCommandCopyBtn'),updateCommandStatus:document.getElementById('adminUpdateCommandStatus'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsRefreshBtn:document.getElementById('personalContactsRefreshBtn'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),usersPanel:document.getElementById('adminUsersPanel'),usersStatus:document.getElementById('usersStatus'),userCard:document.getElementById('userCard'),apkUserModal:document.getElementById('apkUserModal'),apkUserCloseBtn:document.getElementById('apkUserCloseBtn'),emailRegistryPanel:document.getElementById('adminEmailRegistryPanel'),emailPanel:document.getElementById('adminEmailPanel'),emailTable:document.getElementById('emailTable'),emailSettingsTable:document.getElementById('emailSettingsTable'),emailStatus:document.getElementById('emailStatus'),emailSearch:document.getElementById('emailSearch'),emailDirectionFilter:document.getElementById('emailDirectionFilter'),emailRefreshBtn:document.getElementById('emailRefreshBtn'),emailSyncNewBtn:document.getElementById('emailSyncNewBtn'),emailSyncProgress:document.getElementById('emailSyncProgress'),emailSyncProgressText:document.getElementById('emailSyncProgressText'),emailSettingsForm:document.getElementById('emailSettingsForm'),emailAddMailboxBtn:document.getElementById('emailAddMailboxBtn'),emailSettingsModal:document.getElementById('emailSettingsModal'),emailSettingsCancelBtn:document.getElementById('emailSettingsCancelBtn'),emailTestConnectionBtn:document.getElementById('emailTestConnectionBtn'),emailConnectionStatus:document.getElementById('emailConnectionStatus'),updatesPanel:document.getElementById('adminUpdatesPanel'),updatesTable:document.getElementById('updatesTable'),updateForm:document.getElementById('updateForm'),updateId:document.getElementById('updateId'),updateVersionName:document.getElementById('updateVersionName'),updateVersionCode:document.getElementById('updateVersionCode'),updateReleaseNotes:document.getElementById('updateReleaseNotes'),updateApk:document.getElementById('updateApk'),updateFormResetBtn:document.getElementById('updateFormResetBtn'),updatesStatus:document.getElementById('updatesStatus'),generalSettingsPanel:document.getElementById('adminGeneralSettingsPanel'),clientsApiTestForm:document.getElementById('clientsApiTestForm'),clientsApiTestPhone:document.getElementById('clientsApiTestPhone'),clientsApiTestBtn:document.getElementById('clientsApiTestBtn'),clientsApiTestStatus:document.getElementById('clientsApiTestStatus'),clientsApiTestModal:document.getElementById('clientsApiTestModal'),clientsApiTestResult:document.getElementById('clientsApiTestResult'),clientsApiTestBackBtn:document.getElementById('clientsApiTestBackBtn'),clientsApiTestCloseBtn:document.getElementById('clientsApiTestCloseBtn'),registryRefreshBtn:document.getElementById('registryRefreshBtn'),registryTable:document.getElementById('adminRegistryTable'),registryRowsCount:document.getElementById('registryRowsCount'),registryPeriodShell:document.getElementById('registryPeriodShell'),registryCustomPeriodFields:document.getElementById('registryCustomPeriodFields'),registryDateFrom:document.getElementById('registryDateFrom'),registryDateTo:document.getElementById('registryDateTo'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
 const createLocalDate=(year, monthIndex, day, hours=0, minutes=0, seconds=0)=>new Date(year, monthIndex, day, hours, minutes, seconds, 0);
 const startOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
 const endOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
@@ -726,10 +736,8 @@ function bindAdminPanel(){
   });
   adminEls.personalContactsDeleteSelectedBtn.addEventListener('click',deleteSelectedPersonalContactsRows);
   adminEls.personalContactsRefreshBtn.addEventListener('click',loadPersonalContacts);
-  adminEls.usersRefreshBtn.addEventListener('click',loadUsers);
-  adminEls.usersSearch.addEventListener('input',renderUsersList);
-  adminEls.usersList.addEventListener('click',(e)=>{const btn=e.target.closest('.user-list-btn'); if(btn) selectUser(btn.dataset.userId);});
   adminEls.userCard.addEventListener('click',(e)=>{const action=e.target.closest('.user-action-btn'); const logFilter=e.target.closest('.user-log-filter'); if(action) sendUserAction(action.dataset.command, action); if(logFilter) renderUserLogs(logFilter.dataset.filter);});
+  adminEls.apkUserCloseBtn.addEventListener('click',()=>setApkUserModalVisible(false));
   if(adminEls.updateForm) adminEls.updateForm.addEventListener('submit',saveAppUpdate);
   if(adminEls.updateFormResetBtn) adminEls.updateFormResetBtn.addEventListener('click',resetUpdateForm);
   document.getElementById('installLatestUpdateForAllBtn')?.addEventListener('click',installLatestUpdateForAll);
@@ -767,7 +775,6 @@ function setActiveAdminTab(tab){
   if(adminEls.generalSettingsPanel) adminEls.generalSettingsPanel.hidden=tab!=='generalSettings';
   if(tab==='users') loadWebUsers();
   if(tab==='personalContacts'&&!personalContactsLoaded) loadPersonalContacts();
-  if(tab==='users'&&!usersLoaded) loadUsers();
   if(tab==='updates'&&!updatesLoaded) loadUpdates();
   if((tab==='emailRegistry'||tab==='email')&&!emailLoaded) loadEmailModule(false);
   if(tab==='generalSettings') loadClientsCacheStatus();
@@ -1480,36 +1487,30 @@ function getUserStatus(user){
   return `Неактивен более ${Math.floor(diffMin/1440)} дней`;
 }
 async function loadUsers(){
-  adminEls.usersRefreshBtn.disabled=true;
-  const previousText=adminEls.usersRefreshBtn.textContent;
-  adminEls.usersRefreshBtn.textContent='Обновление...';
   adminEls.usersStatus.textContent='Загрузка...';
   try{
     users=await fetchUsers();
     usersLoaded=true;
-    if(!activeUserId&&users.length) activeUserId=users[0].id;
-    renderUsersList();
-    renderUserCard();
-    adminEls.usersStatus.textContent=`Загружено: ${users.length}`;
+    adminEls.usersStatus.textContent='';
   }catch(error){
     console.error(error);
-    adminEls.usersStatus.textContent='';
-    adminEls.usersList.innerHTML=`<div class="registry-empty">Ошибка загрузки: ${escapeHtml(error.message)}</div>`;
-    adminEls.userCard.innerHTML='<div class="registry-empty">Нет данных пользователя</div>';
-  }finally{
-    adminEls.usersRefreshBtn.disabled=false;
-    adminEls.usersRefreshBtn.textContent=previousText;
+    adminEls.usersStatus.textContent=`Ошибка загрузки: ${error.message}`;
+    adminEls.userCard.innerHTML='<div class="registry-empty">Нет данных Android-приложения</div>';
   }
 }
-function getFilteredUsers(){
-  const search=adminEls.usersSearch.value.trim().toLowerCase();
-  return users.filter((user)=>!search||String(user.manager||'').toLowerCase().includes(search)||String(user.user_phone||'').toLowerCase().includes(search));
-}
-function selectUser(userId){activeUserId=userId;renderUsersList();renderUserCard();}
-function renderUsersList(){
-  const rows=getFilteredUsers();
-  if(!rows.length){adminEls.usersList.innerHTML='<div class="registry-empty">Пользователи не найдены</div>';return;}
-  adminEls.usersList.innerHTML=rows.map((user)=>`<button class="user-list-btn ${user.id===activeUserId?'active':''}" data-user-id="${escapeHtml(user.id)}" type="button"><span class="user-list-name">${escapeHtml(emptyValue(user.manager))}</span><span class="user-list-meta">${escapeHtml(emptyValue(user.user_phone))}</span><span class="user-list-meta">${escapeHtml(getUserStatus(user))}</span></button>`).join('');
+function setApkUserModalVisible(visible){adminEls.apkUserModal.hidden=!visible;adminEls.apkUserModal.classList.toggle('open',visible);adminEls.apkUserModal.setAttribute('aria-hidden',visible?'false':'true');}
+async function openApkUserModal(webUserId){
+  const webUser=webUsers.find((row)=>String(row.id)===String(webUserId));
+  setApkUserModalVisible(true);
+  adminEls.usersStatus.textContent='Загрузка...';
+  adminEls.userCard.innerHTML='<div class="registry-empty">Данные загружаются...</div>';
+  if(!usersLoaded) await loadUsers();
+  if(!webUser?.manager_user_phone){adminEls.usersStatus.textContent='К пользователю не привязан менеджер Calltrack';adminEls.userCard.innerHTML='<div class="registry-empty">Информация Android-приложения недоступна</div>';return;}
+  const androidUser=users.find((item)=>String(item.user_phone||'')===String(webUser.manager_user_phone));
+  if(!androidUser){adminEls.usersStatus.textContent='Данные Android-приложения для пользователя не найдены';adminEls.userCard.innerHTML='<div class="registry-empty">Пользователь ещё не передавал сведения из Android-приложения</div>';return;}
+  activeUserId=androidUser.id;
+  adminEls.usersStatus.textContent='';
+  renderUserCard();
 }
 function infoBlock(title, rows){return `<section class="user-info-block"><h3>${escapeHtml(title)}</h3>${rows.map(([label,value])=>{const display=/дата|активность|синхронизация|запуск|звонок/i.test(label)?formatDateTimeDisplay(value)||value:value;return `<div class="user-field"><span>${escapeHtml(label)}</span><span>${escapeHtml(emptyValue(display))}</span></div>`;}).join('')}</section>`;}
 
@@ -1535,7 +1536,6 @@ function removeActiveUserFromList(){
   if(!user) return;
   users=users.filter((item)=>item.id!==user.id);
   activeUserId=users[0]?.id||'';
-  renderUsersList();
   renderUserCard();
 }
 async function sendUserAction(command, button){
@@ -1550,8 +1550,8 @@ async function sendUserAction(command, button){
     if(window.calltrackApi?.sendUserCommand) await window.calltrackApi.sendUserCommand(user.user_phone||'',command,meta);
     else await fetch(USER_COMMAND_API_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({user_phone:user.user_phone||'',command,...meta})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
     if(command==='delete_user'){removeActiveUserFromList();adminEls.usersStatus.textContent='Пользователь удалён безвозвратно из списка';return;}
-    if(command==='block_user'){user.is_blocked=1;renderUsersList();renderUserCard();adminEls.usersStatus.textContent='Пользователь заблокирован. Новые данные от него не будут записываться в SQL';return;}
-    if(command==='unblock_user'){user.is_blocked=0;renderUsersList();renderUserCard();adminEls.usersStatus.textContent='Пользователь разблокирован. Новые данные снова будут записываться в SQL';return;}
+    if(command==='block_user'){user.is_blocked=1;renderUserCard();adminEls.usersStatus.textContent='Пользователь заблокирован. Новые данные от него не будут записываться в SQL';return;}
+    if(command==='unblock_user'){user.is_blocked=0;renderUserCard();adminEls.usersStatus.textContent='Пользователь разблокирован. Новые данные снова будут записываться в SQL';return;}
     adminEls.usersStatus.textContent='Команда принудительной синхронизации отправлена';
   }catch(error){console.error(error);adminEls.usersStatus.textContent=`Ошибка отправки команды: ${error.message}`;}
   finally{if(button){button.disabled=false;button.textContent=originalText;}}
