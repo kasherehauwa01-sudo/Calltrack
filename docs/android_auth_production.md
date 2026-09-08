@@ -5,7 +5,7 @@ Web и Android используют общие записи `web_users`. При 
 ## Переход без остановки старых приложений
 
 1. Развернуть PHP API. Endpoint `android_auth_api.php` поддерживает login/me/logout, а существующие Android endpoint временно принимают как Bearer token новой версии, так и legacy-запросы старых APK без заголовка Authorization.
-2. Собрать и опубликовать APK 1.0.16. Новое приложение требует входа и отправляет Bearer token.
+2. Собрать и опубликовать APK 1.0.17. Новое приложение требует входа и отправляет Bearer token.
 3. После подтверждения обновления всех устройств legacy-доступ можно отключить отдельным изменением. Эта версия его автоматически не отключает.
 
 Bearer token применяется к `add_call.php`, `personal_contact.php`, `get_personal_contacts.php`, `get_history.php`, `user_report.php` и `user_command_done.php`. Если token передан, `manager_user_phone` всегда берётся из актуальной записи `web_users`; переданное приложением значение игнорируется. `update.php` остаётся публичным техническим endpoint обновления APK.

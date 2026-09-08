@@ -19,7 +19,7 @@ try {
 }
 
 $gradle = (string)file_get_contents(dirname(__DIR__) . '/app/build.gradle');
-if (!str_contains($gradle, 'versionCode generatedVersionCode') || !str_contains($gradle, 'versionName "1.0.16"')) {
+if (!str_contains($gradle, 'versionCode generatedVersionCode') || !str_contains($gradle, 'versionName "1.0.17"')) {
     throw new RuntimeException('APK по умолчанию всё ещё собирается со старой версией 13');
 }
 $adminSource = (string)file_get_contents(dirname(__DIR__) . '/api/admin_updates.php');

@@ -10,5 +10,10 @@ foreach(['add_call.php','personal_contact.php','user_report.php'] as $file){$sou
 $userLayout=file_get_contents($root.'/app/src/main/res/layout/fragment_user.xml');$userFragment=file_get_contents($root.'/app/src/main/java/com/example/calltrack/ui/main/UserFragment.kt');
 if(!str_contains($userLayout,'android:text="Логин"')||!str_contains($userLayout,'tvCurrentUserLogin')||str_contains($userLayout,'Номер телефона')||str_contains($userLayout,'btnSwitchUser')||!str_contains($userFragment,'AuthStore(requireContext()).login'))throw new RuntimeException('Экран пользователя не показывает login авторизованной учётной записи');
 $androidManifest=file_get_contents($root.'/app/src/main/AndroidManifest.xml');$gradle=file_get_contents($root.'/app/build.gradle');
-if(stripos($androidManifest.$gradle,'barcode')!==false||stripos($androidManifest.$gradle,'scanner')!==false)throw new RuntimeException('В APK осталась функция сканирования');
+$androidFiles=[];$iterator=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root.'/app/src/main',FilesystemIterator::SKIP_DOTS));
+foreach($iterator as $file){if($file->isFile()){$androidFiles[]=$file->getPathname();}}
+$androidSource=$androidManifest.$gradle.implode('',array_map(static fn(string $file):string=>(string)file_get_contents($file),$androidFiles));
+foreach(['btnBarcodeScanner','BarcodeScannerActivity','ic_barcode_scanner','zxing-android-embedded','FloatingActionButton'] as $removed){
+    if(str_contains($androidSource,$removed))throw new RuntimeException("В APK осталась кнопка или функция сканера: {$removed}");
+}
 echo "android_shared_auth_test: OK\n";
