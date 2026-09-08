@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/web_auth.php';
 
 function assertInstallUpdateAdmin(): void
 {
@@ -18,6 +19,7 @@ try {
     }
 
     $pdo = getPdo();
+    requireWebAdmin($pdo);
     ensureUserTelemetryTables($pdo);
     ensureAppUpdatesTable($pdo);
     $latest = $pdo->query('SELECT version_name, version_code FROM app_updates ORDER BY version_code DESC, uploaded_at DESC, id DESC LIMIT 1')->fetch();

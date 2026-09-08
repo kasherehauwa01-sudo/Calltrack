@@ -44,6 +44,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import com.example.calltrack.auth.AuthInterceptor
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
@@ -73,7 +74,7 @@ class CallRepository(
     private val sqlDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private val sqlTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
     private val syncMutex = Mutex()
-    private val personalContactsHttpClient = OkHttpClient()
+    private val personalContactsHttpClient = OkHttpClient.Builder().addInterceptor(AuthInterceptor(appContext)).build()
 
 
     suspend fun sendUserTelemetry() {
