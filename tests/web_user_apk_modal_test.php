@@ -16,5 +16,8 @@ foreach (['<h3>Пользователи Android-приложения</h3>', 'id=
 if (!str_contains($html, "String(item.user_phone||'')===String(webUser.manager_user_phone)")) {
     throw new RuntimeException('APK-информация не связана с менеджером web-пользователя');
 }
+if (!str_contains($html, '.apk-user-dialog{width:100vw;max-width:none;')) {
+    throw new RuntimeException('Окно APK не занимает всю ширину экрана');
+}
 
 echo "web_user_apk_modal_test: OK\n";
