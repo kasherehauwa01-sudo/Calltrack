@@ -26,6 +26,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.App
+import com.example.calltrack.auth.AndroidAuthClient
+import com.example.calltrack.auth.AuthStore
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.R
 import com.example.calltrack.data.local.NotificationEntity
@@ -37,6 +39,7 @@ import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.service.CallTrackingService
 import com.example.calltrack.ui.calls.CallListFragment
 import com.example.calltrack.ui.analytics.AnalyticsActivity
+import com.example.calltrack.ui.auth.LoginActivity
 import com.example.calltrack.ui.base.BaseActivity
 import com.example.calltrack.ui.base.installMojibakeRepair
 import com.example.calltrack.ui.contacts.ContactsFragment
@@ -137,6 +140,7 @@ class MainActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         applySavedTheme()
         super.onCreate(savedInstanceState)
+        if (!AuthStore(this).isAuthenticated) { startActivity(Intent(this, LoginActivity::class.java)); finish(); return }
         AppLogger.log(this, "APP", "MainActivity \u0441\u043E\u0437\u0434\u0430\u043D\u0430")
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -340,6 +344,7 @@ class MainActivity : BaseActivity() {
                 menu.add(0, MENU_ABOUT_ID, 0, getString(R.string.about_app))
                 menu.add(0, MENU_SETTINGS_ID, 1, getString(R.string.settings))
                 menu.add(0, MENU_USER_ID, 2, getString(R.string.user))
+                menu.add(0, MENU_LOGOUT_ID, 3, "\u0412\u044B\u0439\u0442\u0438 \u0438\u0437 \u0430\u043A\u043A\u0430\u0443\u043D\u0442\u0430")
                 setOnMenuItemClickListener { menuItem ->
                     when (menuItem.itemId) {
                         MENU_ABOUT_ID -> startActivity(Intent(this@MainActivity, AboutActivity::class.java))
@@ -351,6 +356,7 @@ class MainActivity : BaseActivity() {
                             AppLogger.log(this@MainActivity, "UI", "\u041E\u0442\u043A\u0440\u044B\u0442 \u044D\u043A\u0440\u0430\u043D: \u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C")
                             openSecondaryFragment(UserFragment.newInstance())
                         }
+                        MENU_LOGOUT_ID -> { lifecycleScope.launch { AndroidAuthClient(this@MainActivity).logout(); stopService(Intent(this@MainActivity,CallTrackingService::class.java)); startActivity(Intent(this@MainActivity,LoginActivity::class.java)); finish() } }
                         else -> false
                     }
                     true
@@ -1020,6 +1026,7 @@ class MainActivity : BaseActivity() {
         private const val MENU_ABOUT_ID = 1001
         private const val MENU_SETTINGS_ID = 1002
         private const val MENU_USER_ID = 1003
+        private const val MENU_LOGOUT_ID = 1004
         private const val UPDATE_API_URL = "https://kvasmix.ru/vr/calltrack/api/update.php"
         private const val APK_FILE_NAME = "calltrack-update.apk"
         private const val APK_MIME_TYPE = "application/vnd.android.package-archive"

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/api/config.php';
 require_once dirname(__DIR__) . '/api/web_auth.php';
+require_once dirname(__DIR__) . '/api/android_auth.php';
 
 function findWebUserForPinReset(PDO $pdo, string $login): ?array
 {
@@ -21,6 +22,7 @@ function resetWebUserPin(PDO $pdo, int $userId, string $pin): void
     if ($hash === false) throw new RuntimeException('Не удалось создать hash PIN');
     $stmt = $pdo->prepare('UPDATE web_users SET pin_hash = :pin_hash WHERE id = :id');
     $stmt->execute([':pin_hash' => $hash, ':id' => $userId]);
+    if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'sqlite') revokeAndroidTokens($pdo, $userId);
 }
 
 function readHiddenPin(): string

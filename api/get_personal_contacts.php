@@ -1,12 +1,13 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/web_auth.php';
+require_once __DIR__ . '/android_auth.php';
 
 try {
     $pdo = getPdo();
 
-    $userPhone = valueOrNull($_GET, 'user_phone');
+    $androidUser=optionalAndroidUser($pdo);
+    $userPhone = $androidUser?androidManagerIdentity($androidUser)['user_phone']:valueOrNull($_GET, 'user_phone');
     if ($userPhone !== null) {
         $stmt = $pdo->prepare(
             'SELECT contact_phone, personal_flag FROM personal_contacts WHERE user_phone = :user_phone ORDER BY updated_at DESC'
