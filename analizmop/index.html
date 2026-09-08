@@ -2049,7 +2049,23 @@ async function refreshRegistryData(){
     adminEls.registryRefreshBtn.textContent=previousText;
   }
 }
-if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch((error)=>console.error('Не удалось зарегистрировать PWA:',error)));
+// Одноразовая миграция для браузеров, которые открывали прежнюю PWA-версию Calltrack.
+// После завершения переходного периода этот блок можно удалить: новый Service Worker здесь не регистрируется.
+async function removeLegacyCalltrackPwa(){
+  const cleanupKey='calltrack-pwa-cleanup-v1';
+  if(localStorage.getItem(cleanupKey)==='done')return;
+  const calltrackScope=new URL('./',document.baseURI).href;
+  if('serviceWorker'in navigator){
+    const registrations=await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.filter((registration)=>registration.scope===calltrackScope).map((registration)=>registration.unregister()));
+  }
+  if('caches'in window){
+    const keys=await caches.keys();
+    await Promise.all(keys.filter((key)=>key.startsWith('calltrack-pwa-')).map((key)=>caches.delete(key)));
+  }
+  localStorage.setItem(cleanupKey,'done');
+}
+removeLegacyCalltrackPwa().catch((error)=>console.warn('Не удалось завершить очистку прежней PWA Calltrack:',error));
 async function initDashboard(){try{
   const [callsPayload,outgoingEmails]=await Promise.all([fetchCallsPayload(),fetchClientOutgoingEmails()]);
   clientOutgoingEmails=Array.isArray(outgoingEmails)?outgoingEmails:[];
