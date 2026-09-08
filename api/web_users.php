@@ -23,5 +23,6 @@ try {
         if($pin==='')sendJson(['status'=>'error','message'=>'Укажите PIN-код'],400);$fields[':pin']=password_hash($pin,PASSWORD_DEFAULT);
         $pdo->prepare('INSERT INTO web_users(display_name,login,pin_hash,role,manager_user_phone,is_active) VALUES(:name,:login,:pin,:role,:manager,:active)')->execute($fields);
     }
+    if($pin!=='')$pdo->prepare('DELETE FROM web_login_attempts WHERE login=:login')->execute([':login'=>$fields[':login']]);
     sendJson(['status'=>'success']);
 } catch(Throwable $e){sendJson(['status'=>'error','message'=>$e->getMessage()],500);}
