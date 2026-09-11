@@ -4,9 +4,8 @@ require_once __DIR__.'/config.php'; require_once __DIR__.'/android_auth.php';
 try {
     $pdo=getPdo(); ensureWebAuthTables($pdo); ensureUserTelemetryTables($pdo); requireWebAdmin($pdo);
     if ($_SERVER['REQUEST_METHOD']==='GET') {
-        $users=$pdo->query('SELECT id,display_name,login,role,manager_user_phone,is_active,last_login_at,created_at,updated_at FROM web_users ORDER BY display_name')->fetchAll();
-        $managers=$pdo->query("SELECT user_phone,MAX(manager) manager FROM (SELECT user_phone,manager FROM app_user_reports UNION ALL SELECT user_phone,manager FROM app_user_states) m WHERE user_phone<>'' GROUP BY user_phone ORDER BY manager")->fetchAll();
-        sendJson(['status'=>'success','data'=>$users,'managers'=>$managers]);
+        $users=$pdo->query('SELECT id,display_name,login,role,is_active,last_login_at,created_at,updated_at FROM web_users ORDER BY display_name')->fetchAll();
+        sendJson(['status'=>'success','data'=>$users]);
     }
     if ($_SERVER['REQUEST_METHOD']==='DELETE') {
         $data=readJsonBody();$id=(int)($data['id']??0);$current=requireWebAdmin($pdo);
@@ -18,23 +17,21 @@ try {
         if($stmt->rowCount()===0)sendJson(['status'=>'error','message'=>'Пользователь не найден'],404);
         sendJson(['status'=>'success']);
     }
-    $data=readJsonBody();$id=(int)($data['id']??0);$role=(string)($data['role']??'');$manager=trim((string)($data['manager_user_phone']??''));
+    $data=readJsonBody();$id=(int)($data['id']??0);$role=(string)($data['role']??'');
     if (!in_array($role,['admin','manager'],true)) sendJson(['status'=>'error','message'=>'Допустимы только роли admin и manager'],400);
-    if ($role==='manager'&&$manager==='') sendJson(['status'=>'error','message'=>'Для менеджера обязательна связь с менеджером Calltrack'],400);
-    if($role==='manager'){$check=$pdo->prepare("SELECT 1 FROM (SELECT user_phone FROM app_user_reports UNION SELECT user_phone FROM app_user_states) managers WHERE user_phone=:phone LIMIT 1");$check->execute([':phone'=>$manager]);if(!$check->fetchColumn())sendJson(['status'=>'error','message'=>'Выбранный менеджер Calltrack не найден'],400);}
-    $fields=[':name'=>trim((string)($data['display_name']??'')),':login'=>normalizeWebLoginEmail((string)($data['login']??'')),':role'=>$role,':manager'=>$role==='manager'?$manager:null,':active'=>!empty($data['is_active'])?1:0];
+    $fields=[':name'=>trim((string)($data['display_name']??'')),':login'=>normalizeWebLoginEmail((string)($data['login']??'')),':role'=>$role,':active'=>!empty($data['is_active'])?1:0];
     if ($fields[':name']===''||$fields[':login']==='') sendJson(['status'=>'error','message'=>'Заполните ФИО и корректный email'],400);
     $pin=(string)($data['pin']??'');
     if($pin!==''&&!preg_match('/^\d{4,12}$/',$pin))sendJson(['status'=>'error','message'=>'PIN должен содержать от 4 до 12 цифр'],400);
     if ($id>0) {
-        $target=$pdo->prepare('SELECT role,is_active,manager_user_phone FROM web_users WHERE id=:id');$target->execute([':id'=>$id]);$target=$target->fetch(PDO::FETCH_ASSOC);if(!$target)sendJson(['status'=>'error','message'=>'Пользователь не найден'],404);
+        $target=$pdo->prepare('SELECT role,is_active FROM web_users WHERE id=:id');$target->execute([':id'=>$id]);$target=$target->fetch(PDO::FETCH_ASSOC);if(!$target)sendJson(['status'=>'error','message'=>'Пользователь не найден'],404);
         if($target['role']==='admin'&&(int)$target['is_active']===1&&($role!=='admin'||$fields[':active']!==1)&&(int)$pdo->query("SELECT COUNT(*) FROM web_users WHERE role='admin' AND is_active=1")->fetchColumn()<=1)sendJson(['status'=>'error','message'=>'Нельзя изменить роль или отключить последнего активного администратора'],400);
-        $sql='UPDATE web_users SET display_name=:name,login=:login,role=:role,manager_user_phone=:manager,is_active=:active';
+        $sql='UPDATE web_users SET display_name=:name,login=:login,role=:role,is_active=:active';
         if($pin!==''){$sql.=',pin_hash=:pin';$fields[':pin']=password_hash($pin,PASSWORD_DEFAULT);}$fields[':id']=$id;$pdo->prepare($sql.' WHERE id=:id')->execute($fields);
-        if($pin!==''||$role!==$target['role']||$fields[':active']!==(int)$target['is_active']||$fields[':manager']!==$target['manager_user_phone'])revokeAndroidTokens($pdo,$id);
+        if($pin!==''||$role!==$target['role']||$fields[':active']!==(int)$target['is_active'])revokeAndroidTokens($pdo,$id);
     } else {
         if($pin==='')sendJson(['status'=>'error','message'=>'Укажите PIN-код'],400);$fields[':pin']=password_hash($pin,PASSWORD_DEFAULT);
-        $pdo->prepare('INSERT INTO web_users(display_name,login,pin_hash,role,manager_user_phone,is_active) VALUES(:name,:login,:pin,:role,:manager,:active)')->execute($fields);
+        $pdo->prepare('INSERT INTO web_users(display_name,login,pin_hash,role,is_active) VALUES(:name,:login,:pin,:role,:active)')->execute($fields);
     }
     if($pin!=='')$pdo->prepare('DELETE FROM web_login_attempts WHERE login=:login')->execute([':login'=>$fields[':login']]);
     sendJson(['status'=>'success']);

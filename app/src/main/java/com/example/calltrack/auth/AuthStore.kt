@@ -17,9 +17,9 @@ class AuthStore(context: Context) {
     val login: String get() = prefs.getString("login", "").orEmpty()
     val isAuthenticated: Boolean get() = token.isNotBlank()
 
-    fun save(token: String, id: Long, login: String, name: String, role: String, managerPhone: String) {
+    fun save(token: String, id: Long, login: String, name: String, role: String) {
         prefs.edit().putString("token", token).putLong("user_id", id).putString("login", login).putString("display_name", name)
-            .putString("role", role).putString("manager_user_phone", managerPhone).apply()
+            .putString("role", role).apply()
     }
 
     fun clear() = prefs.edit().clear().apply()

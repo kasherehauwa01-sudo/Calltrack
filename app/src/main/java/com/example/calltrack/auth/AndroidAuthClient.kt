@@ -24,8 +24,8 @@ class AndroidAuthClient(context: Context) {
         client.newCall(request).execute().use { response ->
             val body=JSONObject(response.body?.string().orEmpty());if(!response.isSuccessful)error(body.optString("message","\u041E\u0448\u0438\u0431\u043A\u0430 \u0432\u0445\u043E\u0434\u0430"))
             val data=body.getJSONObject("data");val user=data.getJSONObject("user")
-            val managerPhone=user.optString("manager_user_phone");store.save(data.getString("token"),user.getLong("id"),user.getString("login"),user.getString("display_name"),user.getString("role"),managerPhone)
-            PrefsManager(appContext).setManagerName(user.getString("display_name"));PrefsManager(appContext).setManagerPhone(managerPhone)
+            store.save(data.getString("token"),user.getLong("id"),user.getString("login"),user.getString("display_name"),user.getString("role"))
+            PrefsManager(appContext).setManagerName(user.getString("display_name"));PrefsManager(appContext).setManagerPhone(user.getString("user_phone"))
         }
     } }
 
@@ -34,8 +34,8 @@ class AndroidAuthClient(context: Context) {
         runCatching { client.newCall(authorized("$endpoint?action=me")).execute().use { response ->
             if(!response.isSuccessful)return@use false
             val user=JSONObject(response.body?.string().orEmpty()).getJSONObject("data").getJSONObject("user")
-            val managerPhone=user.optString("manager_user_phone");store.save(store.token,user.getLong("id"),user.getString("login"),user.getString("display_name"),user.getString("role"),managerPhone)
-            PrefsManager(appContext).setManagerName(user.getString("display_name"));PrefsManager(appContext).setManagerPhone(managerPhone);true
+            store.save(store.token,user.getLong("id"),user.getString("login"),user.getString("display_name"),user.getString("role"))
+            PrefsManager(appContext).setManagerName(user.getString("display_name"));PrefsManager(appContext).setManagerPhone(user.getString("user_phone"));true
         } }.getOrDefault(false)
     }
 
