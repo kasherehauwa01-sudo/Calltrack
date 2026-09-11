@@ -10,6 +10,9 @@ foreach(['Нельзя удалить последнего активного а
 foreach(['add_call.php','personal_contact.php','user_report.php'] as $file){$source=file_get_contents($root.'/api/'.$file);if(!str_contains($source,'optionalAndroidUser($pdo)')||!str_contains($source,"\$data['user_phone']=\$identity['user_phone']"))throw new RuntimeException("Нет token scope: $file");}
 $userLayout=file_get_contents($root.'/app/src/main/res/layout/fragment_user.xml');$userFragment=file_get_contents($root.'/app/src/main/java/com/example/calltrack/ui/main/UserFragment.kt');
 if(!str_contains($userLayout,'android:text="Логин"')||!str_contains($userLayout,'tvCurrentUserLogin')||str_contains($userLayout,'Номер телефона')||str_contains($userLayout,'btnSwitchUser')||!str_contains($userFragment,'AuthStore(requireContext()).login'))throw new RuntimeException('Экран пользователя не показывает login авторизованной учётной записи');
+$onboarding=file_get_contents($root.'/app/src/main/java/com/example/calltrack/ui/onboarding/OnboardingFragment.kt');$onboardingLayout=file_get_contents($root.'/app/src/main/res/layout/fragment_onboarding.xml');
+foreach(['etManager','etManagerPhone','submitManagerName','Stage.AUTH'] as $removed)if(str_contains($onboarding.$onboardingLayout,$removed))throw new RuntimeException("После входа осталось ручное заполнение профиля: $removed");
+foreach(['Stage.COMPLETE','host.completeOnboarding()'] as $required)if(!str_contains($onboarding,$required))throw new RuntimeException("Первоначальная настройка не завершается автоматически: $required");
 $androidManifest=file_get_contents($root.'/app/src/main/AndroidManifest.xml');$gradle=file_get_contents($root.'/app/build.gradle');
 $androidFiles=[];$iterator=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root.'/app/src/main',FilesystemIterator::SKIP_DOTS));
 foreach($iterator as $file){if($file->isFile()){$androidFiles[]=$file->getPathname();}}

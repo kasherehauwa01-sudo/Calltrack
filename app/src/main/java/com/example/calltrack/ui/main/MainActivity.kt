@@ -793,10 +793,8 @@ class MainActivity : BaseActivity() {
         permissionsLauncher.launch(requiredPermissions())
     }
 
-    fun completeOnboarding(managerName: String? = null, managerPhone: String? = null) {
+    fun completeOnboarding() {
         lifecycleScope.launch {
-            managerName?.let { viewModel.setManagerName(it) }
-            managerPhone?.let { viewModel.setManagerPhone(it) }
             viewModel.markOnboardingCompleted()
             refreshPersonalContactsAfterAuthorization()
         }
