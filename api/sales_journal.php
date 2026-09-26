@@ -25,22 +25,28 @@ function salesJournalClientKey(array $client): string
     return clientIntegrationKey((string)($client['id']??''),(string)($client['phone']??''),(string)($client['name']??''));
 }
 
+function normalizeSalesJournalClientName(string $name): string
+{
+    return mb_strtolower(trim(preg_replace('/\s+/u',' ',$name)??''));
+}
+
 function canonicalizeSalesJournalClients(array $clients): array
 {
-    $canonical=[];
-    foreach($clients as $client){
-        if(!is_array($client))continue;
-        $name=trim((string)($client['name']??''));$normalized=normalizeClientPhone((string)($client['phone']??''));
-        if($normalized===''&&$name==='')continue;
-        $phone=$normalized!==''?'+7'.$normalized:'';$key=salesJournalClientKey(['id'=>$client['id']??'','phone'=>$phone,'name'=>$name]);
-        $sourceKey=trim((string)($client['key']??''));if($sourceKey==='')$sourceKey=trim((string)($client['id']??''))!==''?'client:'.trim((string)$client['id']):$key;
-        if(!isset($canonical[$key]))$canonical[$key]=['key'=>$key,'id'=>(string)($client['id']??''),'phone'=>$phone,'name'=>$name,'source_keys'=>[]];
-        if($canonical[$key]['name']===''&&$name!=='')$canonical[$key]['name']=$name;
-        if($sourceKey!=='')$canonical[$key]['source_keys'][$sourceKey]=$sourceKey;
-        foreach((array)($client['source_keys']??[]) as $source)if(trim((string)$source)!=='')$canonical[$key]['source_keys'][(string)$source]=(string)$source;
+    $rows=[];
+    foreach($clients as $client){if(!is_array($client))continue;$name=trim(preg_replace('/\s+/u',' ',(string)($client['name']??''))??'');$phone=normalizeClientPhone((string)($client['phone']??''));$phones=[];if($phone!=='')$phones[$phone]=$phone;foreach((array)($client['source_keys']??[]) as $source)if(preg_match('/^phone:\+7(\d{10})$/',(string)$source,$match))$phones[$match[1]]=$match[1];if(!$phones&&$name==='')continue;$rows[]=['client'=>$client,'name'=>$name,'normalized_name'=>normalizeSalesJournalClientName($name),'phones'=>array_values($phones)];}
+    if(!$rows)return [];
+    $parent=range(0,count($rows)-1);
+    $find=static function(int $index)use(&$parent,&$find):int{return $parent[$index]===$index?$index:($parent[$index]=$find($parent[$index]));};
+    $union=static function(int $left,int $right)use(&$parent,&$find):void{$left=$find($left);$right=$find($right);if($left!==$right)$parent[$right]=$left;};
+    $phoneOwner=[];$nameOwner=[];
+    foreach($rows as $index=>$row){foreach($row['phones'] as $phone){if(isset($phoneOwner[$phone]))$union($index,$phoneOwner[$phone]);else $phoneOwner[$phone]=$index;}if($row['normalized_name']!==''){if(isset($nameOwner[$row['normalized_name']]))$union($index,$nameOwner[$row['normalized_name']]);else $nameOwner[$row['normalized_name']]=$index;}}
+    $groups=[];foreach(array_keys($rows) as $index)$groups[$find($index)][]=$rows[$index];$canonical=[];
+    foreach($groups as $group){$phones=[];$names=[];$sourceKeys=[];$id='';foreach($group as $row){$client=$row['client'];if($id===''&&trim((string)($client['id']??''))!=='')$id=trim((string)$client['id']);foreach($row['phones'] as $phone)$phones[$phone]=$phone;if($row['normalized_name']!=='')$names[$row['normalized_name']]=$row['name'];$source=trim((string)($client['key']??''));if($source!=='')$sourceKeys[$source]=$source;foreach((array)($client['source_keys']??[]) as $source)if(trim((string)$source)!=='')$sourceKeys[(string)$source]=(string)$source;}
+        foreach($phones as $phone)$sourceKeys['phone:+7'.$phone]='phone:+7'.$phone;$phoneValues=array_values($phones);$normalizedNames=array_keys($names);sort($normalizedNames,SORT_STRING);
+        if(count($phoneValues)===1)$key='phone:+7'.$phoneValues[0];elseif(count($phoneValues)>1&&count($normalizedNames)===1)$key='name:'.hash('sha256',$normalizedNames[0]);elseif($phoneValues){$sortedPhones=$phoneValues;sort($sortedPhones,SORT_STRING);$key='entity:'.hash('sha256',implode('|',$sortedPhones)."\0".implode('|',$normalizedNames));}elseif(count($group)===1&&$id!=='')$key='client:'.$id;elseif($normalizedNames)$key='name:'.hash('sha256',$normalizedNames[0]);else $key=$id!==''?'client:'.$id:array_key_first($sourceKeys);
+        $sourceKeys[$key]=$key;$canonical[]=['key'=>$key,'id'=>$id,'phone'=>$phoneValues?'+7'.$phoneValues[0]:'','name'=>$names?reset($names):'','source_keys'=>array_values($sourceKeys)];
     }
-    foreach($canonical as &$client)$client['source_keys']=array_values($client['source_keys']);unset($client);
-    return array_values($canonical);
+    return $canonical;
 }
 
 function salesJournalCallDurationSeconds(string $value): int
@@ -105,9 +111,9 @@ function salesJournalSummary(array $item): ?array
 
 function loadSalesJournalBatch(array $clients,string $from,string $to,?callable $transport=null): array
 {
-    $clients=canonicalizeSalesJournalClients($clients);$items=[];$requests=0;
+    $clients=canonicalizeSalesJournalClients($clients);$items=[];$requests=0;$aliases=[];foreach($clients as $client)foreach($client['source_keys'] as $source)$aliases[$source]=$client['key'];
     foreach(array_chunk($clients,500) as $chunk){$requests++;$allowedKeys=array_fill_keys(array_column($chunk,'key'),true);$payload=['clients'=>array_map(static fn($c)=>['key'=>$c['key'],'phone'=>$c['phone'],'name'=>$c['name']],$chunk),'date_from'=>$from,'date_to'=>$to];$response=salesJournalRequest('POST','/api/integrations/calltrack/client-sales',$payload,$transport);foreach(($response['items']??[]) as $item){if(!is_array($item))continue;$summary=salesJournalSummary($item);if($summary&&isset($allowedKeys[$summary['client_key']])&&!isset($items[$summary['sale_id']]))$items[$summary['sale_id']]=$summary;}}
-    return ['items'=>array_values($items),'requests'=>$requests];
+    return ['items'=>array_values($items),'requests'=>$requests,'client_aliases'=>$aliases];
 }
 
 function allowSalesJournalDetails(array $items): void

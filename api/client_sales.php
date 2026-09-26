@@ -8,5 +8,5 @@ try{
     if(!$clients)sendJson(['status'=>'success','available'=>true,'items'=>[],'clients'=>0,'requests'=>0]);
     $result=loadSalesJournalBatch($clients,$from,$to);allowSalesJournalDetails($result['items']);
     error_log('Sales Journal batch: period='.$from.'..'.$to.' clients='.count($clients).' sales='.count($result['items']).' requests='.$result['requests']);
-    sendJson(['status'=>'success','available'=>true,'items'=>$result['items'],'clients'=>count($clients),'requests'=>$result['requests']]);
+    sendJson(['status'=>'success','available'=>true,'items'=>$result['items'],'client_aliases'=>$result['client_aliases'],'clients'=>count($clients),'requests'=>$result['requests']]);
 }catch(InvalidArgumentException $e){sendJson(['status'=>'error','message'=>$e->getMessage()],400);}catch(Throwable $e){error_log('Sales Journal batch unavailable: '.$e->getMessage());sendJson(['status'=>'success','available'=>false,'error'=>'sales_journal_unavailable','items'=>[]]);}
