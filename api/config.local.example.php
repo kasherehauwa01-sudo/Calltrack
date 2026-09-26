@@ -14,5 +14,7 @@ define('CLIENTS_API_TIMEOUT', 120);
 // храните только во внешнем config.local.php или переменной окружения.
 define('SALES_JOURNAL_BASE_URL', ''); // например, https://example.ru/vr/sales
 define('CALLTRACK_INTEGRATION_TOKEN', '');
+define('SALES_JOURNAL_CONNECT_TIMEOUT', 3);
+define('SALES_JOURNAL_TIMEOUT', 30);
 // При нестандартном расположении PHP CLI:
 // putenv('CALLTRACK_PHP_CLI=/usr/bin/php');

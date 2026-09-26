@@ -11,8 +11,8 @@ function normalizeClientPhone(string $value): string
 
 function clientIntegrationKey(string $id,string $phone,string $name): string
 {
-    if(trim($id)!=='')return 'client:'.trim($id);
     $normalized=normalizeClientPhone($phone);if($normalized!=='')return 'phone:+7'.$normalized;
+    if(trim($id)!=='')return 'client:'.trim($id);
     $normalizedName=mb_strtolower(trim(preg_replace('/\s+/u',' ',$name)??''));
     return 'name:'.hash('sha256',$normalizedName);
 }

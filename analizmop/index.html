@@ -1674,7 +1674,7 @@ function getClientPeriodRange(){
   }
   return getPeriodRange(activeClientPeriod);
 }
-function uniqueClientRecord(records){const rows=Array.isArray(records)?records.filter((row)=>row?.integration_key):[];return rows.length===1?rows[0]:null;}
+function uniqueClientRecord(records){const rows=Array.isArray(records)?records.filter((row)=>row?.integration_key):[];const keys=[...new Set(rows.map((row)=>row.integration_key))];return keys.length===1?rows[0]:null;}
 function callClientIntegrationKey(call){const phone=normalizeClientLookupPhone(call?.phone);return uniqueClientRecord(clientRecordsByPhone.get(phone))?.integration_key||(phone?`phone:+7${phone}`:'');}
 function emailClientIntegrationKey(email){return uniqueClientRecord(clientRecordsByEmail.get(normalizeClientLookupEmail(email?.client_email||email?.to_emails)))?.integration_key||'';}
 function populateClientManagers(calls){

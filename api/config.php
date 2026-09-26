@@ -60,6 +60,12 @@ if (!defined('SALES_JOURNAL_BASE_URL')) {
 if (!defined('CALLTRACK_INTEGRATION_TOKEN')) {
     define('CALLTRACK_INTEGRATION_TOKEN', trim((string)(getenv('CALLTRACK_INTEGRATION_TOKEN') ?: '')));
 }
+if (!defined('SALES_JOURNAL_CONNECT_TIMEOUT')) {
+    define('SALES_JOURNAL_CONNECT_TIMEOUT', max(1, (int)(getenv('SALES_JOURNAL_CONNECT_TIMEOUT') ?: 3)));
+}
+if (!defined('SALES_JOURNAL_TIMEOUT')) {
+    define('SALES_JOURNAL_TIMEOUT', max(1, (int)(getenv('SALES_JOURNAL_TIMEOUT') ?: 30)));
+}
 
 function dbConfigValue(string $envName, string $constantName): string
 {
