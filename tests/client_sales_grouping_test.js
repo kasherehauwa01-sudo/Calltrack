@@ -4,8 +4,10 @@ const vm = require('vm');
 const html = fs.readFileSync(`${__dirname}/../analizmop/index.html`, 'utf8');
 const groupingSource = html.match(/function groupSalesByDate\(sales\)\{[\s\S]*?\n\}/)?.[0];
 if (!groupingSource) throw new Error('Функция groupSalesByDate не найдена');
+const sortingSource = html.match(/function sortClientTimelineEvents\(events\)\{[^\n]+\}/)?.[0];
+if (!sortingSource) throw new Error('Функция sortClientTimelineEvents не найдена');
 const context = {};
-vm.runInNewContext(groupingSource, context);
+vm.runInNewContext(`${groupingSource}\n${sortingSource}`, context);
 
 function group(input) {
   context.input = input;
@@ -42,18 +44,31 @@ result = group([
 ]);
 assert(result.length === 1 && result[0].sales.length === 1 && result[0].totalAmount === 10, 'Дубли sale_id попали в группу повторно');
 
+context.events = [
+  { html: 'Продажа', day: '2026-09-25', time: 0, saleLast: 1, type: 0, id: 3 },
+  { html: 'Звонок', day: '2026-09-25', time: 18, saleLast: 0, type: 1, id: 2 },
+  { html: 'Email', day: '2026-09-25', time: 10, saleLast: 0, type: 2, id: 1 },
+];
+vm.runInContext('sorted=sortClientTimelineEvents(events);', context);
+assert(Array.from(context.sorted, (event) => event.html).join(',') === 'Email,Звонок,Продажа', 'Продажа должна быть последней среди событий одной даты');
+
 for (const marker of [
   'data-sale-group=',
   'data-sale-detail-id=',
   'openSaleCard(sale.dataset.saleDetailId,activeSaleGroupKey)',
   '← К списку продаж',
-  'width:calc(100vw - 40px)',
+  'width:100vw',
+  'height:100vh',
+  'sortClientTimelineEvents(events)',
   'isSalesJournalDetailAllowed',
 ]) {
   const source = marker === 'isSalesJournalDetailAllowed'
     ? fs.readFileSync(`${__dirname}/../api/sale_detail.php`, 'utf8')
     : html;
   assert(source.includes(marker), `Не найден обязательный маркер: ${marker}`);
+}
+for (const removedField of ['Исходные данные', 'Социальная продажа', 'Номер строки']) {
+  assert(!html.includes(removedField), `Удалённое поле осталось в карточке: ${removedField}`);
 }
 
 console.log('client_sales_grouping_test: OK');

@@ -54,7 +54,7 @@ salesAssert(count($dedupRequests)===1&&count($dedupRequests[0]['clients'])===500
 
 $root=dirname(__DIR__);$html=(string)file_get_contents($root.'/analizmop/index.html');$api=(string)file_get_contents($root.'/analizmop/api.js');$batch=(string)file_get_contents($root.'/api/client_sales.php');$detail=(string)file_get_contents($root.'/api/sale_detail.php');$integration=(string)file_get_contents($root.'/api/sales_journal.php');
 foreach(['clientSales','saleDetail','getClientSales','getSaleDetail'] as $required)salesAssert(str_contains($api,$required),"Frontend API не содержит {$required}");
-foreach(['callSegments','emailSegments','saleSegments','events.sort','data-sale-id','Продаж:','refreshClientSalesTimeline'] as $required)salesAssert(str_contains($html,$required),"Timeline не содержит {$required}");
+foreach(['callSegments','emailSegments','saleSegments','sortClientTimelineEvents(events)','data-sale-id','Продаж:','refreshClientSalesTimeline'] as $required)salesAssert(str_contains($html,$required),"Timeline не содержит {$required}");
 foreach(['sale_id','client_key','matched_by','sale_date','document_number','total_amount'] as $required)salesAssert(str_contains($integration,$required),"Sale Summary не содержит {$required}");
 foreach(['network error','HTTP ','некорректный JSON','SALES_JOURNAL_CONNECT_TIMEOUT','SALES_JOURNAL_TIMEOUT'] as $required)salesAssert(str_contains($integration,$required),"Нет обработки Sales Journal: {$required}");
 salesAssert(str_contains($batch,'requireWebUser($pdo)')&&str_contains($batch,'salesJournalCommunicationClients($pdo,$user'),'Batch не применяет web scope');
@@ -62,12 +62,12 @@ salesAssert(str_contains($detail,'requireWebUser($pdo)')&&str_contains($detail,'
 salesAssert(str_contains($batch,"'available'=>false")&&str_contains($html,'Данные о продажах временно недоступны'),'Нет graceful degradation');
 salesAssert(str_contains($html,"items.length?")&&str_contains($html,'Распознанные товары отсутствуют'),'Пустой items ломает карточку');
 salesAssert(str_contains($html,'quantity||0)*Number(item.actual_price||0'),'Сумма товара не рассчитывается');
-salesAssert(str_contains($html,'escapeHtml(item.name')&&str_contains($html,'escapeHtml(sale.original_products_text)'),'Внешние данные выводятся без экранирования');
+salesAssert(str_contains($html,'escapeHtml(item.name')&&str_contains($html,'escapeHtml(sale.document_number'),'Внешние данные выводятся без экранирования');
 salesAssert(!str_contains($html,'CALLTRACK_INTEGRATION_TOKEN')&&!str_contains($api,'CALLTRACK_INTEGRATION_TOKEN'),'Bearer token попал во frontend');
 salesAssert(substr_count($integration,"salesJournalRequest('POST'")===1,'Реализован N+1 вместо одного batch-цикла');
 salesAssert(str_contains($integration,'array_chunk($clients,500)'),'Нет ограничения batch в 500 клиентов');
 salesAssert(str_contains($integration,'manager=:manager')&&str_contains($integration,'user_phone=:user_phone'),'Manager scope не применяется к коммуникациям');
-salesAssert(str_contains($html,'type:0')&&str_contains($html,'sale.sale_date'),'Date-only продажа не имеет стабильного порядка');
+salesAssert(str_contains($html,'saleLast:1')&&str_contains($html,'a.saleLast-b.saleLast||a.time-b.time'),'Продажа не размещается последней среди событий той же даты');
 salesAssert(str_contains($html,'keys.length===1?rows[0]:null')&&str_contains($html,'phone:+7${phone}'),'Frontend не связывает canonical phone key с существующей UI-группой');
 salesAssert(str_contains($html,'canonicalSalesClientKey')&&str_contains($html,'clientSalesAliases=payload.client_aliases'),'Frontend не применяет canonical aliases');
 $config=(string)file_get_contents($root.'/api/config.php');salesAssert(str_contains($config,"SALES_JOURNAL_TIMEOUT') ?: 30")&&str_contains($config,'SALES_JOURNAL_CONNECT_TIMEOUT'),'Timeout не настраивается или снова меньше production latency');
