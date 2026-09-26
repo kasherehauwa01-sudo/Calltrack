@@ -6,8 +6,6 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.media.AudioManager
-import android.media.ToneGenerator
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -32,11 +30,11 @@ import com.example.calltrack.BuildConfig
 import com.example.calltrack.R
 import com.example.calltrack.data.local.NotificationEntity
 import com.example.calltrack.data.notification.NotificationTargets
-import com.example.calltrack.data.repository.ProductCard
-import com.example.calltrack.data.repository.ProductDirectory
 import com.example.calltrack.databinding.ActivityMainBinding
 import com.example.calltrack.logging.AppLogger
 import com.example.calltrack.service.CallTrackingService
+import com.example.calltrack.service.CalltrackRecoveryManager
+import com.example.calltrack.service.RecoveryReason
 import com.example.calltrack.ui.calls.CallListFragment
 import com.example.calltrack.ui.analytics.AnalyticsActivity
 import com.example.calltrack.ui.auth.LoginActivity
@@ -50,8 +48,6 @@ import com.example.calltrack.ui.notifications.NotificationBadgeManager
 import com.example.calltrack.ui.notifications.NotificationsFragment
 import com.example.calltrack.ui.onboarding.OnboardingFragment
 import com.example.calltrack.ui.postcall.PostCallActivity
-import com.example.calltrack.ui.scanner.BarcodeScannerActivity
-import com.google.zxing.client.android.Intents
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,7 +71,6 @@ class MainActivity : BaseActivity() {
     private var updateProgressBar: ProgressBar? = null
     private var updateProgressStatus: TextView? = null
     private var batteryOptimizationPromptShown = false
-    private val productDirectory = ProductDirectory()
     private val viewModel: MainViewModel by viewModels {
         MainViewModel.Factory((application as App).repository)
     }
@@ -93,12 +88,6 @@ class MainActivity : BaseActivity() {
     ) {
         updateWarningState()
         (supportFragmentManager.findFragmentById(R.id.fragmentContainer) as? OnboardingFragment)?.onPermissionsUpdated()
-    }
-    private val barcodeScannerLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val ean13 = result.data?.getStringExtra(Intents.Scan.RESULT).orEmpty()
-        if (result.resultCode == RESULT_OK && ean13.matches(Regex("\\d{13}"))) lookupScannedProduct(ean13)
     }
     private val unknownAppsLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -150,7 +139,6 @@ class MainActivity : BaseActivity() {
         setupSettingsButton()
         setupAnalyticsButton()
         setupNotificationButton()
-        setupBarcodeScanner()
         binding.btnTopBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
         supportFragmentManager.addOnBackStackChangedListener { updateTopBackVisibility() }
         handleExternalNavigation(intent)
@@ -160,10 +148,8 @@ class MainActivity : BaseActivity() {
                 requestUnknownAppsPermissionIfNeeded()
                 openFragment(OnboardingFragment.newInstance())
                 binding.bottomNav.visibility = android.view.View.GONE
-                binding.btnBarcodeScanner.visibility = android.view.View.GONE
             } else {
                 binding.bottomNav.visibility = android.view.View.VISIBLE
-                binding.btnBarcodeScanner.visibility = android.view.View.VISIBLE
                 if (savedInstanceState == null) binding.bottomNav.selectedItemId = R.id.nav_dial
                 refreshPersonalContactsAfterAuthorization()
                 lifecycleScope.launch { viewModel.sendUserTelemetry() }
@@ -172,46 +158,6 @@ class MainActivity : BaseActivity() {
             }
             updateWarningState()
         }
-    }
-
-    private fun setupBarcodeScanner() {
-        binding.btnBarcodeScanner.setOnClickListener {
-            barcodeScannerLauncher.launch(Intent(this, BarcodeScannerActivity::class.java))
-        }
-    }
-
-    private fun lookupScannedProduct(ean13: String) {
-        binding.btnBarcodeScanner.isEnabled = false
-        lifecycleScope.launch {
-            val product = withContext(Dispatchers.IO) { runCatching { productDirectory.findByEan13(ean13) }.getOrNull() }
-            binding.btnBarcodeScanner.isEnabled = true
-            if (product == null) {
-                playScanTone(found = false)
-                Toast.makeText(this@MainActivity, "\u0422\u043E\u0432\u0430\u0440 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D", Toast.LENGTH_LONG).show()
-            } else {
-                playScanTone(found = true)
-                showProductCard(product)
-            }
-        }
-    }
-
-    private fun playScanTone(found: Boolean) {
-        ToneGenerator(AudioManager.STREAM_NOTIFICATION, 85).apply {
-            startTone(if (found) ToneGenerator.TONE_PROP_ACK else ToneGenerator.TONE_PROP_NACK, 250)
-            binding.root.postDelayed({ release() }, 350)
-        }
-    }
-
-    private fun showProductCard(product: ProductCard) {
-        val details = buildString {
-            append("EAN-13: ").append(product.ean13)
-            product.fields.forEach { (label, value) -> append("\n\n").append(label).append(": ").append(value) }
-        }
-        AlertDialog.Builder(this)
-            .setTitle(product.name)
-            .setMessage(details)
-            .setPositiveButton("OK", null)
-            .show()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -849,10 +795,8 @@ class MainActivity : BaseActivity() {
         permissionsLauncher.launch(requiredPermissions())
     }
 
-    fun completeOnboarding(managerName: String? = null, managerPhone: String? = null) {
+    fun completeOnboarding() {
         lifecycleScope.launch {
-            managerName?.let { viewModel.setManagerName(it) }
-            managerPhone?.let { viewModel.setManagerPhone(it) }
             viewModel.markOnboardingCompleted()
             refreshPersonalContactsAfterAuthorization()
         }
@@ -957,6 +901,9 @@ class MainActivity : BaseActivity() {
                 add("\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0443 \u0438\u0437 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0445 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432")
             }
             if (!isBatteryOptimizationDisabled()) add("\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 CallTrack \u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0431\u0435\u0437 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F \u0431\u0430\u0442\u0430\u0440\u0435\u0438")
+            if (Build.MANUFACTURER.lowercase() in AGGRESSIVE_BACKGROUND_MANUFACTURERS) {
+                add("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445 \u043F\u0440\u043E\u0438\u0437\u0432\u043E\u0434\u0438\u0442\u0435\u043B\u044F \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F \u00AB\u0410\u0432\u0442\u043E\u0437\u0430\u043F\u0443\u0441\u043A\u00BB \u0438 \u00AB\u0420\u0430\u0431\u043E\u0442\u0430 \u0432 \u0444\u043E\u043D\u0435\u00BB \u0434\u043B\u044F Calltrack")
+            }
         }
         val warningText = messages.joinToString("\n")
         binding.tvWarning.text = warningText
@@ -995,10 +942,7 @@ class MainActivity : BaseActivity() {
     }
 
     private fun startTrackingService() {
-        runCatching {
-            ContextCompat.startForegroundService(this, Intent(this, CallTrackingService::class.java))
-        }
-        lifecycleScope.launch { viewModel.sync() }
+        CalltrackRecoveryManager.recover(this, RecoveryReason.APP_START)
     }
 
     override fun onDestroy() {
@@ -1026,6 +970,7 @@ class MainActivity : BaseActivity() {
         private const val MENU_ABOUT_ID = 1001
         private const val MENU_SETTINGS_ID = 1002
         private const val MENU_USER_ID = 1003
+        private val AGGRESSIVE_BACKGROUND_MANUFACTURERS = setOf("xiaomi", "redmi", "poco", "oppo", "realme", "vivo", "huawei", "honor")
         private const val MENU_LOGOUT_ID = 1004
         private const val UPDATE_API_URL = "https://kvasmix.ru/vr/calltrack/api/update.php"
         private const val APK_FILE_NAME = "calltrack-update.apk"
