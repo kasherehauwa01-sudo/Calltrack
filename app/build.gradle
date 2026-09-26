@@ -40,11 +40,11 @@ android {
         minSdk 26
         targetSdk 35
         versionCode generatedVersionCode
-        versionName "1.0.17"
+        versionName "1.0.18"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "SQL_API_BASE_URL", '"https://kvasmix.ru/vr/calltrack/api/"'
-        buildConfigField "String", "APP_RELEASE_DATE", '"2026-04-22"'
+        buildConfigField "String", "APP_RELEASE_DATE", '"2026-09-22"'
     }
 
     buildTypes {
