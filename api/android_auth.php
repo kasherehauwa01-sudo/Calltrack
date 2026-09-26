@@ -34,7 +34,7 @@ function currentAndroidUser(PDO $pdo): ?array
     $raw=bearerToken();
     if($raw==='')return null;
     ensureAndroidAuthTables($pdo);
-    $stmt=$pdo->prepare("SELECT t.id token_id,w.id,w.display_name,w.login,w.role,w.manager_user_phone,w.is_active
+    $stmt=$pdo->prepare("SELECT t.id token_id,w.id,w.display_name,w.login,w.role,w.is_active
         FROM web_user_tokens t JOIN web_users w ON w.id=t.web_user_id
         WHERE t.token_hash=:hash AND t.revoked_at IS NULL AND t.expires_at>NOW() LIMIT 1");
     $stmt->execute([':hash'=>hash('sha256',$raw)]);$user=$stmt->fetch(PDO::FETCH_ASSOC);
@@ -53,9 +53,7 @@ function optionalAndroidUser(PDO $pdo): ?array
 
 function androidManagerIdentity(array $user): array
 {
-    $phone=trim((string)($user['manager_user_phone']??''));
-    if($phone==='')sendJson(['status'=>'error','message'=>'Для работы Android требуется привязка к менеджеру Calltrack'],403);
-    return ['user_phone'=>$phone,'manager'=>(string)$user['display_name']];
+    return ['user_phone'=>webUserPhone((int)$user['id']),'manager'=>(string)$user['display_name']];
 }
 
 function revokeAndroidTokens(PDO $pdo,int $userId): void

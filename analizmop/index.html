@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23f8fafc%22/%3E%3Cg%20fill%3D%22%2316a34a%22%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2024%2022%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2040%2022%29%22/%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2024%2038%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2040%2038%29%22/%3E%3C/g%3E%3Cpath%20d%3D%22M32%2032%20C38%2040%2043%2049%2048%2058%22%20fill%3D%22none%22%20stroke%3D%22%2315803d%22%20stroke-width%3D%225%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="api.js?v=20260908-web-auth-endpoints"></script>
+  <script src="api.js?v=20260926-client-sales"></script>
   <style>
     :root { --bg:#f4f6fb; --card:#fff; --text:#1f2a37; --muted:#6b7280; --shadow:0 10px 30px rgba(15,23,42,.08); --radius:14px; }
     *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
@@ -123,6 +123,7 @@
     .call-segment.email-outgoing{background:#fef3c7;border:1px solid #f59e0b;gap:1px}.email-subject{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem}
     .call-segment-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.call-type{font-weight:700;font-size:.86rem}.call-datetime{font-size:.78rem;color:#475569}
     .call-segment.has-note::after{content:'';position:absolute;right:8px;top:8px;width:10px;height:10px;background:#ef4444;border:2px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(239,68,68,.35)}
+    .call-segment.sale{background:#ede9fe;border:1px solid #a78bfa}.sale-amount{font-weight:700;color:#5b21b6}.sale-dialog{width:min(980px,100%);max-height:92vh;overflow:auto}.sale-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.sale-section{display:grid;gap:10px}.sale-section h3{font-size:1rem}.sale-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.sale-field{background:#f8fafc;border-radius:10px;padding:9px}.sale-field span{display:block;color:var(--muted);font-size:.78rem;margin-bottom:3px}.sale-products{overflow:auto}.sale-products table{width:100%;border-collapse:collapse}.sale-products th,.sale-products td{padding:8px;border-bottom:1px solid #e5e7eb;text-align:left;white-space:nowrap}.sale-products td:nth-child(3){white-space:normal;min-width:220px}.sale-totals{display:flex;gap:16px;flex-wrap:wrap;font-weight:700}
     .comment-modal{position:fixed;inset:0;background:rgba(15,23,42,.42);display:none;align-items:center;justify-content:center;padding:20px;z-index:100}
     .comment-modal.open{display:flex}.comment-dialog{width:min(560px,100%);background:#fff;border-radius:20px;box-shadow:0 24px 70px rgba(15,23,42,.25);padding:22px;display:grid;gap:16px}
     .comment-dialog h2{font-size:1.25rem}.comment-info{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;color:#374151;font-size:.9rem}.comment-info span{display:block;color:var(--muted);font-size:.78rem;margin-bottom:2px}
@@ -139,10 +140,7 @@
     .chart-card h2{font-size:1rem;font-weight:600;color:#111827}.chart-wrap{position:relative;flex:1;min-height:240px}
     .line-chart{grid-column:span 12}.pie-chart{grid-column:span 5}.bar-chart{grid-column:span 7}
     .empty-state{display:none;background:var(--card);border-radius:var(--radius);border:1px dashed #cbd5e1;padding:24px;text-align:center;color:var(--muted);font-size:1.1rem}
-    .scanner-fab{display:none;position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom));z-index:90;width:62px;height:62px;border:0;border-radius:50%;background:#16a34a;color:#fff;box-shadow:0 12px 30px rgba(22,163,74,.35);cursor:pointer;padding:16px}.scanner-fab svg{width:100%;height:100%}
-    .scanner-modal{position:fixed;inset:0;z-index:110;background:#020617;display:none}.scanner-modal.open{display:grid;grid-template-rows:1fr auto}.scanner-video{width:100%;height:100%;object-fit:cover;min-height:0}.scanner-frame{position:absolute;inset:50% auto auto 50%;width:min(82vw,420px);aspect-ratio:1.65;transform:translate(-50%,-50%);border:3px solid #4ade80;border-radius:18px;box-shadow:0 0 0 9999px rgba(2,6,23,.42);pointer-events:none}.scanner-hint{position:absolute;left:20px;right:20px;top:calc(24px + env(safe-area-inset-top));color:#fff;text-align:center;font-weight:600;text-shadow:0 2px 8px #000}.scanner-actions{position:relative;z-index:1;display:flex;justify-content:center;gap:12px;padding:16px 16px calc(16px + env(safe-area-inset-bottom));background:#020617}.scanner-action{border:1px solid #475569;border-radius:999px;background:#1e293b;color:#fff;padding:12px 18px;font-weight:600}.scanner-status{position:absolute;left:16px;right:16px;bottom:92px;color:#fff;text-align:center}.product-card-content{display:grid;gap:9px;max-height:60vh;overflow:auto}.product-card-row{display:grid;grid-template-columns:minmax(100px,35%) 1fr;gap:12px;padding-bottom:7px;border-bottom:1px solid #eef2f7}.product-card-label{color:var(--muted)}
     @media (max-width:900px){.container{grid-template-columns:1fr}.dashboard-tabs{grid-column:1;grid-row:auto;position:static;flex-direction:row;overflow-x:auto;border-radius:18px}.tab-btn{width:auto;white-space:nowrap;text-align:center}.view,.view.active,h1{grid-column:1}.pie-chart,.bar-chart,.line-chart{grid-column:span 12}.period-shell{flex-wrap:wrap;white-space:normal}.date-range{width:100%;margin-left:0;flex-wrap:wrap}.client-row{grid-template-columns:1fr}.comment-info{grid-template-columns:1fr}}
-    @media (max-width:900px){body{padding-bottom:104px}.scanner-fab{display:block}}
   </style>
 </head>
 <body>
@@ -350,7 +348,7 @@
             <div class="comment-modal" id="webUserModal" aria-hidden="true" hidden>
               <div class="comment-dialog" role="dialog" aria-modal="true" aria-labelledby="webUserModalTitle">
                 <h2 id="webUserModalTitle">Редактирование пользователя</h2>
-                <form class="updates-form" id="webUserForm"><input type="hidden" id="webUserId"><label>ФИО<input id="webUserName" required></label><label>Email<input id="webUserLogin" type="email" autocomplete="off" required></label><label>Новый PIN<input id="webUserPin" type="password" inputmode="numeric"><small>При редактировании оставьте пустым, чтобы не менять.</small></label><label>Роль<select id="webUserRole"><option value="manager">Менеджер</option><option value="admin">Администратор</option></select></label><label id="webUserManagerLabel">Менеджер Calltrack<select id="webUserManager"></select></label><label class="inline-check"><input id="webUserActive" type="checkbox" checked> Активен</label><div class="registry-empty" id="webUserFormStatus" aria-live="polite"></div><div class="updates-actions"><button class="registry-refresh-btn" type="submit">Сохранить</button><button class="updates-action-btn" id="webUserCancel" type="button">Отмена</button></div></form>
+                <form class="updates-form" id="webUserForm"><input type="hidden" id="webUserId"><label>ФИО<input id="webUserName" required></label><label>Email<input id="webUserLogin" type="email" autocomplete="off" required></label><label>Новый PIN<input id="webUserPin" type="password" inputmode="numeric"><small>Этот логин и PIN используются для входа в веб-сервис и Android-приложение. При редактировании оставьте PIN пустым, чтобы не менять его.</small></label><label>Роль<select id="webUserRole"><option value="manager">Менеджер</option><option value="admin">Администратор</option></select></label><label class="inline-check"><input id="webUserActive" type="checkbox" checked> Активен</label><div class="registry-empty" id="webUserFormStatus" aria-live="polite"></div><div class="updates-actions"><button class="registry-refresh-btn" type="submit">Сохранить</button><button class="updates-action-btn" id="webUserCancel" type="button">Отмена</button></div></form>
               </div>
             </div>
             <h3>Пользователи Android-приложения</h3>
@@ -575,6 +573,14 @@
         </div>
       </div>
     </div>
+
+    <div class="comment-modal" id="saleModal" aria-hidden="true">
+      <div class="comment-dialog sale-dialog" role="dialog" aria-modal="true" aria-labelledby="saleModalTitle">
+        <h2 id="saleModalTitle">Карточка продажи</h2>
+        <div id="saleModalContent" class="sale-section"></div>
+        <div class="modal-actions"><button class="modal-btn ok" id="saleModalCloseBtn" type="button">Закрыть</button></div>
+      </div>
+    </div>
   </main>
 
 
@@ -591,8 +597,8 @@ const USERS_API_URL=window.calltrackApi?.endpoints?.users||'/vr/calltrack/api/ge
 const USER_COMMAND_API_URL=window.calltrackApi?.endpoints?.userCommand||'/vr/calltrack/api/user_command.php';
 console.log('calltrackApi', window.calltrackApi);
 console.log('SQL_CALLS_API_URL', SQL_CALLS_API_URL);
-const chartInstances=[]; let allCalls=[]; let clientOutgoingEmails=[]; let clientEmailsLoading=false; let activePeriod='all'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let adminPasswordValue=''; let activeGroupBy='day'; let adminRegistrySort={key:'call_date',direction:'desc'}; let adminRegistryPeriod='week'; let registryTotalRows=null; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; let users=[]; let usersLoaded=false; let updates=[]; let updatesLoaded=false; let emailMessages=[]; let emailSettings=[]; let emailLoaded=false; let clientsApiTestMatches=[]; let activeUserId=''; let clientNamesRequestId=0; const clientNamesByPhone=new Map(); const clientNamesByEmail=new Map(); const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные']); const selectedRegistryRows=new Set();
-const els={dashboardView:document.getElementById('dashboardView'),clientCallsView:document.getElementById('clientCallsView'),adminView:document.getElementById('adminView'),managerTags:document.getElementById('managerTags'),groupByFilter:document.getElementById('groupByFilter'),periodShell:document.getElementById('periodShell'),dateFrom:document.getElementById('dateFrom'),dateTo:document.getElementById('dateTo'),applyCustomRangeBtn:document.getElementById('applyCustomRangeBtn'),trendTitle:document.getElementById('trendTitle'),kpiTotal:document.getElementById('kpiTotal'),kpiIncoming:document.getElementById('kpiIncoming'),kpiOutgoing:document.getElementById('kpiOutgoing'),kpiMissed:document.getElementById('kpiMissed'),kpiUnanswered:document.getElementById('kpiUnanswered'),kpiDropped:document.getElementById('kpiDropped'),emptyState:document.getElementById('emptyState'),chartsGrid:document.getElementById('chartsGrid'),callTypeTags:document.getElementById('callTypeTags'),clientManagerTags:document.getElementById('clientManagerTags'),clientPeriodShell:document.getElementById('clientPeriodShell'),clientDateFrom:document.getElementById('clientDateFrom'),clientDateTo:document.getElementById('clientDateTo'),clientApplyRangeBtn:document.getElementById('clientApplyRangeBtn'),clientCallsList:document.getElementById('clientCallsList'),commentModal:document.getElementById('commentModal'),commentInfo:document.getElementById('commentInfo'),commentText:document.getElementById('commentText'),reminderText:document.getElementById('reminderText'),reminderAt:document.getElementById('reminderAt'),commentSaveStatus:document.getElementById('commentSaveStatus'),commentCancelBtn:document.getElementById('commentCancelBtn'),commentSaveBtn:document.getElementById('commentSaveBtn'),clientHistoryModal:document.getElementById('clientHistoryModal'),clientHistoryInfo:document.getElementById('clientHistoryInfo'),clientHistoryList:document.getElementById('clientHistoryList'),clientHistoryCloseBtn:document.getElementById('clientHistoryCloseBtn')};
+const chartInstances=[]; let allCalls=[]; let clientOutgoingEmails=[]; let clientSales=[]; let clientEmailsLoading=false; let clientSalesRequestId=0; let activePeriod='all'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let adminPasswordValue=''; let activeGroupBy='day'; let adminRegistrySort={key:'call_date',direction:'desc'}; let adminRegistryPeriod='week'; let registryTotalRows=null; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; let users=[]; let usersLoaded=false; let updates=[]; let updatesLoaded=false; let emailMessages=[]; let emailSettings=[]; let emailLoaded=false; let clientsApiTestMatches=[]; let activeUserId=''; let clientNamesRequestId=0; const clientNamesByPhone=new Map(); const clientNamesByEmail=new Map(); const clientRecordsByPhone=new Map(); const clientRecordsByEmail=new Map(); const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','Пропущенные','Неотвеченные','Сброшенные']); const selectedRegistryRows=new Set();
+const els={dashboardView:document.getElementById('dashboardView'),clientCallsView:document.getElementById('clientCallsView'),adminView:document.getElementById('adminView'),managerTags:document.getElementById('managerTags'),groupByFilter:document.getElementById('groupByFilter'),periodShell:document.getElementById('periodShell'),dateFrom:document.getElementById('dateFrom'),dateTo:document.getElementById('dateTo'),applyCustomRangeBtn:document.getElementById('applyCustomRangeBtn'),trendTitle:document.getElementById('trendTitle'),kpiTotal:document.getElementById('kpiTotal'),kpiIncoming:document.getElementById('kpiIncoming'),kpiOutgoing:document.getElementById('kpiOutgoing'),kpiMissed:document.getElementById('kpiMissed'),kpiUnanswered:document.getElementById('kpiUnanswered'),kpiDropped:document.getElementById('kpiDropped'),emptyState:document.getElementById('emptyState'),chartsGrid:document.getElementById('chartsGrid'),callTypeTags:document.getElementById('callTypeTags'),clientManagerTags:document.getElementById('clientManagerTags'),clientPeriodShell:document.getElementById('clientPeriodShell'),clientDateFrom:document.getElementById('clientDateFrom'),clientDateTo:document.getElementById('clientDateTo'),clientApplyRangeBtn:document.getElementById('clientApplyRangeBtn'),clientCallsList:document.getElementById('clientCallsList'),commentModal:document.getElementById('commentModal'),commentInfo:document.getElementById('commentInfo'),commentText:document.getElementById('commentText'),reminderText:document.getElementById('reminderText'),reminderAt:document.getElementById('reminderAt'),commentSaveStatus:document.getElementById('commentSaveStatus'),commentCancelBtn:document.getElementById('commentCancelBtn'),commentSaveBtn:document.getElementById('commentSaveBtn'),clientHistoryModal:document.getElementById('clientHistoryModal'),clientHistoryInfo:document.getElementById('clientHistoryInfo'),clientHistoryList:document.getElementById('clientHistoryList'),clientHistoryCloseBtn:document.getElementById('clientHistoryCloseBtn'),saleModal:document.getElementById('saleModal'),saleModalContent:document.getElementById('saleModalContent'),saleModalCloseBtn:document.getElementById('saleModalCloseBtn')};
 const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),updateCommand:document.getElementById('adminUpdateCommand'),updateCommandCopyBtn:document.getElementById('adminUpdateCommandCopyBtn'),updateCommandStatus:document.getElementById('adminUpdateCommandStatus'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsRefreshBtn:document.getElementById('personalContactsRefreshBtn'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),usersPanel:document.getElementById('adminUsersPanel'),usersStatus:document.getElementById('usersStatus'),userCard:document.getElementById('userCard'),apkUserModal:document.getElementById('apkUserModal'),apkUserCloseBtn:document.getElementById('apkUserCloseBtn'),emailRegistryPanel:document.getElementById('adminEmailRegistryPanel'),emailPanel:document.getElementById('adminEmailPanel'),emailTable:document.getElementById('emailTable'),emailSettingsTable:document.getElementById('emailSettingsTable'),emailStatus:document.getElementById('emailStatus'),emailSearch:document.getElementById('emailSearch'),emailDirectionFilter:document.getElementById('emailDirectionFilter'),emailRefreshBtn:document.getElementById('emailRefreshBtn'),emailSyncNewBtn:document.getElementById('emailSyncNewBtn'),emailSyncProgress:document.getElementById('emailSyncProgress'),emailSyncProgressText:document.getElementById('emailSyncProgressText'),emailSettingsForm:document.getElementById('emailSettingsForm'),emailAddMailboxBtn:document.getElementById('emailAddMailboxBtn'),emailSettingsModal:document.getElementById('emailSettingsModal'),emailSettingsCancelBtn:document.getElementById('emailSettingsCancelBtn'),emailTestConnectionBtn:document.getElementById('emailTestConnectionBtn'),emailConnectionStatus:document.getElementById('emailConnectionStatus'),updatesPanel:document.getElementById('adminUpdatesPanel'),updatesTable:document.getElementById('updatesTable'),updateForm:document.getElementById('updateForm'),updateId:document.getElementById('updateId'),updateVersionName:document.getElementById('updateVersionName'),updateVersionCode:document.getElementById('updateVersionCode'),updateReleaseNotes:document.getElementById('updateReleaseNotes'),updateApk:document.getElementById('updateApk'),updateFormResetBtn:document.getElementById('updateFormResetBtn'),updatesStatus:document.getElementById('updatesStatus'),generalSettingsPanel:document.getElementById('adminGeneralSettingsPanel'),clientsApiTestForm:document.getElementById('clientsApiTestForm'),clientsApiTestPhone:document.getElementById('clientsApiTestPhone'),clientsApiTestBtn:document.getElementById('clientsApiTestBtn'),clientsApiTestStatus:document.getElementById('clientsApiTestStatus'),clientsApiTestModal:document.getElementById('clientsApiTestModal'),clientsApiTestResult:document.getElementById('clientsApiTestResult'),clientsApiTestBackBtn:document.getElementById('clientsApiTestBackBtn'),clientsApiTestCloseBtn:document.getElementById('clientsApiTestCloseBtn'),registryRefreshBtn:document.getElementById('registryRefreshBtn'),registryTable:document.getElementById('adminRegistryTable'),registryRowsCount:document.getElementById('registryRowsCount'),registryPeriodShell:document.getElementById('registryPeriodShell'),registryCustomPeriodFields:document.getElementById('registryCustomPeriodFields'),registryDateFrom:document.getElementById('registryDateFrom'),registryDateTo:document.getElementById('registryDateTo'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
 const createLocalDate=(year, monthIndex, day, hours=0, minutes=0, seconds=0)=>new Date(year, monthIndex, day, hours, minutes, seconds, 0);
 const startOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
@@ -780,15 +786,14 @@ function setActiveAdminTab(tab){
   if(tab==='generalSettings') loadClientsCacheStatus();
 }
 
-let webUsers=[],webManagers=[];
-async function loadWebUsers(){const payload=await window.calltrackApi.getWebUsers();webUsers=payload.data||[];webManagers=payload.managers||[];document.getElementById('webUserManager').innerHTML='<option value="">Выберите менеджера</option>'+webManagers.map((m)=>`<option value="${escapeHtml(m.user_phone)}">${escapeHtml(m.manager||m.user_phone)}</option>`).join('');document.getElementById('webUsersTable').innerHTML=`<table class="registry-table"><thead><tr><th>ФИО</th><th>Email</th><th>Роль</th><th>Менеджер Calltrack</th><th>Активен</th><th>Действия</th></tr></thead><tbody>${webUsers.map((u)=>`<tr><td>${escapeHtml(u.display_name)}</td><td>${escapeHtml(u.login)}</td><td>${u.role==='admin'?'Администратор':'Менеджер'}</td><td>${escapeHtml(webManagers.find((m)=>m.user_phone===u.manager_user_phone)?.manager||'—')}</td><td>${Number(u.is_active)?'Да':'Нет'}</td><td><button type="button" class="updates-action-btn" data-web-user-edit="${u.id}">Редактировать</button> <button type="button" class="updates-action-btn danger" data-web-user-delete="${u.id}">Удалить</button></td></tr>`).join('')}</tbody></table>`;}
-function updateWebUserManagerVisibility(){document.getElementById('webUserManagerLabel').hidden=document.getElementById('webUserRole').value==='admin';}
-function resetWebUserForm(){document.getElementById('webUserForm').reset();document.getElementById('webUserId').value='';document.getElementById('webUserActive').checked=true;updateWebUserManagerVisibility();}
+let webUsers=[];
+async function loadWebUsers(){const payload=await window.calltrackApi.getWebUsers();webUsers=payload.data||[];document.getElementById('webUsersTable').innerHTML=`<table class="registry-table"><thead><tr><th>ФИО</th><th>Email</th><th>Роль</th><th>Активен</th><th>Действия</th></tr></thead><tbody>${webUsers.map((u)=>`<tr><td>${escapeHtml(u.display_name)}</td><td>${escapeHtml(u.login)}</td><td>${u.role==='admin'?'Администратор':'Менеджер'}</td><td>${Number(u.is_active)?'Да':'Нет'}</td><td><button type="button" class="updates-action-btn" data-web-user-edit="${u.id}">Редактировать</button> <button type="button" class="updates-action-btn danger" data-web-user-delete="${u.id}">Удалить</button></td></tr>`).join('')}</tbody></table>`;}
+function resetWebUserForm(){document.getElementById('webUserForm').reset();document.getElementById('webUserId').value='';document.getElementById('webUserActive').checked=true;}
 function setWebUserModalVisible(visible){const modal=document.getElementById('webUserModal');modal.hidden=!visible;modal.classList.toggle('open',visible);modal.setAttribute('aria-hidden',visible?'false':'true');}
-function openWebUserModal(user=null){resetWebUserForm();document.getElementById('webUserFormStatus').textContent='';document.getElementById('webUserModalTitle').textContent=user?'Редактирование пользователя':'Новый пользователь';if(user){document.getElementById('webUserId').value=user.id;document.getElementById('webUserName').value=user.display_name;document.getElementById('webUserLogin').value=user.login;document.getElementById('webUserRole').value=user.role;document.getElementById('webUserManager').value=user.manager_user_phone||'';document.getElementById('webUserActive').checked=Number(user.is_active)===1;updateWebUserManagerVisibility();}setWebUserModalVisible(true);}
+function openWebUserModal(user=null){resetWebUserForm();document.getElementById('webUserFormStatus').textContent='';document.getElementById('webUserModalTitle').textContent=user?'Редактирование пользователя':'Новый пользователь';if(user){document.getElementById('webUserId').value=user.id;document.getElementById('webUserName').value=user.display_name;document.getElementById('webUserLogin').value=user.login;document.getElementById('webUserRole').value=user.role;document.getElementById('webUserActive').checked=Number(user.is_active)===1;}setWebUserModalVisible(true);}
 async function deleteWebUser(id){const user=webUsers.find((row)=>String(row.id)===String(id));if(!user||!confirm(`Удалить пользователя ${user.login}?`))return;try{await window.calltrackApi.deleteWebUser(id);document.getElementById('webUserStatus').textContent='Пользователь удалён';await loadWebUsers();}catch(error){document.getElementById('webUserStatus').textContent=error.message;}}
-document.getElementById('webUserRole').addEventListener('change',updateWebUserManagerVisibility);document.getElementById('webUserAdd').addEventListener('click',()=>openWebUserModal());document.getElementById('webUserCancel').addEventListener('click',()=>setWebUserModalVisible(false));document.getElementById('webUsersTable').addEventListener('click',(event)=>{const edit=event.target.closest('[data-web-user-edit]');const del=event.target.closest('[data-web-user-delete]');if(edit){const user=webUsers.find((row)=>String(row.id)===edit.dataset.webUserEdit);if(user)openWebUserModal(user);}if(del)deleteWebUser(del.dataset.webUserDelete);});
-document.getElementById('webUserForm').addEventListener('submit',async(event)=>{event.preventDefault();const body={id:document.getElementById('webUserId').value,display_name:document.getElementById('webUserName').value,login:document.getElementById('webUserLogin').value,pin:document.getElementById('webUserPin').value,role:document.getElementById('webUserRole').value,manager_user_phone:document.getElementById('webUserManager').value,is_active:document.getElementById('webUserActive').checked};try{await window.calltrackApi.saveWebUser(body);setWebUserModalVisible(false);document.getElementById('webUserStatus').textContent='Пользователь сохранён';await loadWebUsers();}catch(error){document.getElementById('webUserFormStatus').textContent=error.message;}});updateWebUserManagerVisibility();
+document.getElementById('webUserAdd').addEventListener('click',()=>openWebUserModal());document.getElementById('webUserCancel').addEventListener('click',()=>setWebUserModalVisible(false));document.getElementById('webUsersTable').addEventListener('click',(event)=>{const edit=event.target.closest('[data-web-user-edit]');const del=event.target.closest('[data-web-user-delete]');if(edit){const user=webUsers.find((row)=>String(row.id)===edit.dataset.webUserEdit);if(user)openWebUserModal(user);}if(del)deleteWebUser(del.dataset.webUserDelete);});
+document.getElementById('webUserForm').addEventListener('submit',async(event)=>{event.preventDefault();const body={id:document.getElementById('webUserId').value,display_name:document.getElementById('webUserName').value,login:document.getElementById('webUserLogin').value,pin:document.getElementById('webUserPin').value,role:document.getElementById('webUserRole').value,is_active:document.getElementById('webUserActive').checked};try{await window.calltrackApi.saveWebUser(body);setWebUserModalVisible(false);document.getElementById('webUserStatus').textContent='Пользователь сохранён';await loadWebUsers();}catch(error){document.getElementById('webUserFormStatus').textContent=error.message;}});
 
 function renderClientsCacheStatus(data={}){
   const cronLabels={working:'Работает',configured:'Настроен, ожидается первый запуск',overdue:'Просрочен',no_data:'Нет данных'};
@@ -1505,8 +1510,7 @@ async function openApkUserModal(webUserId){
   adminEls.usersStatus.textContent='Загрузка...';
   adminEls.userCard.innerHTML='<div class="registry-empty">Данные загружаются...</div>';
   if(!usersLoaded) await loadUsers();
-  if(!webUser?.manager_user_phone){adminEls.usersStatus.textContent='К пользователю не привязан менеджер Calltrack';adminEls.userCard.innerHTML='<div class="registry-empty">Информация Android-приложения недоступна</div>';return;}
-  const androidUser=users.find((item)=>String(item.user_phone||'')===String(webUser.manager_user_phone));
+  const androidUser=users.find((item)=>String(item.user_phone||'')===`web-user-${webUser.id}`);
   if(!androidUser){adminEls.usersStatus.textContent='Данные Android-приложения для пользователя не найдены';adminEls.userCard.innerHTML='<div class="registry-empty">Пользователь ещё не передавал сведения из Android-приложения</div>';return;}
   activeUserId=androidUser.id;
   adminEls.usersStatus.textContent='';
@@ -1638,6 +1642,8 @@ async function loadClientNamesForCalls(calls){
   const requestId=++clientNamesRequestId;
   clientNamesByPhone.clear();
   clientNamesByEmail.clear();
+  clientRecordsByPhone.clear();
+  clientRecordsByEmail.clear();
   const phones=[...new Set(calls.map((call)=>normalizeClientLookupPhone(call?.phone)).filter(Boolean))];
   const emails=[...new Set(clientOutgoingEmails.map((email)=>normalizeClientLookupEmail(email?.client_email||email?.to_emails)).filter(Boolean))];
   if(!phones.length&&!emails.length){renderClientCalls();return;}
@@ -1647,10 +1653,12 @@ async function loadClientNamesForCalls(calls){
       const result=await window.calltrackApi.lookupClientNames(phones.slice(offset,offset+500),emails.slice(offset,offset+500));
       if(requestId!==clientNamesRequestId) return;
       Object.entries(result.names||{}).forEach(([phone,names])=>clientNamesByPhone.set(phone,Array.isArray(names)?names:[]));
+      Object.entries(result.clients||{}).forEach(([phone,clients])=>clientRecordsByPhone.set(phone,Array.isArray(clients)?clients:[]));
       Object.values(result.clients||{}).flat().forEach((client)=>{
         (client.emails||[]).forEach((email)=>clientNamesByEmail.set(String(email).trim().toLowerCase(),String(client.name||'').trim()));
       });
       Object.entries(result.emailClients||{}).forEach(([email,clients])=>{
+        clientRecordsByEmail.set(String(email).trim().toLowerCase(),Array.isArray(clients)?clients:[]);
         const names=(Array.isArray(clients)?clients:[]).map((client)=>String(client?.name||'').trim()).filter(Boolean);
         if(names.length) clientNamesByEmail.set(String(email).trim().toLowerCase(),names.join(' / '));
       });
@@ -1666,6 +1674,9 @@ function getClientPeriodRange(){
   }
   return getPeriodRange(activeClientPeriod);
 }
+function uniqueClientRecord(records){const rows=Array.isArray(records)?records.filter((row)=>row?.integration_key):[];return rows.length===1?rows[0]:null;}
+function callClientIntegrationKey(call){const phone=normalizeClientLookupPhone(call?.phone);return uniqueClientRecord(clientRecordsByPhone.get(phone))?.integration_key||(phone?`phone:+7${phone}`:'');}
+function emailClientIntegrationKey(email){return uniqueClientRecord(clientRecordsByEmail.get(normalizeClientLookupEmail(email?.client_email||email?.to_emails)))?.integration_key||'';}
 function populateClientManagers(calls){
   const callManagers=calls.map((c)=>((c?.manager||'Не указан').trim()||'Не указан'));
   const emailManagers=clientOutgoingEmails.map((email)=>String(email?.manager_name||'').trim()).filter(Boolean);
@@ -1686,9 +1697,9 @@ function groupCallsByClient(calls){
     if(parseDurationSeconds(call?.duration)<10) return;
     const dt=getCallDateTime(call);
     if(!inDateRange(dt,range.from,range.to)) return;
-    const clientKey=getClientKey(call);
-    if(!grouped.has(clientKey)) grouped.set(clientKey,{client:clientKey,displayName:getClientDisplayName(call),lastDate:dt,calls:[]});
-    const row=grouped.get(clientKey);
+    const clientKey=getClientKey(call);const integrationKey=callClientIntegrationKey(call);const groupKey=integrationKey||`display:${clientKey}`;
+    if(!grouped.has(groupKey)) grouped.set(groupKey,{client:clientKey,displayName:getClientDisplayName(call),integrationKey,lastDate:dt,calls:[]});
+    const row=grouped.get(groupKey);
     row.calls.push({...call,__index:index,__dt:dt,__type:type});
     if(!row.lastDate||dt>row.lastDate) row.lastDate=dt;
   });
@@ -1699,15 +1710,18 @@ function groupCallsByClient(calls){
     if(!inDateRange(dt,range.from,range.to)) return;
     const recipientEmail=normalizeClientLookupEmail(email?.client_email||email?.to_emails);
     const displayName=clientNamesByEmail.get(recipientEmail)||recipientEmail||'Получатель не указан';
-    const clientKey=displayName;
-    if(!grouped.has(clientKey)) grouped.set(clientKey,{client:clientKey,displayName,lastDate:dt,calls:[],emails:[]});
-    const row=grouped.get(clientKey);
+    const clientKey=displayName;const integrationKey=emailClientIntegrationKey(email);const groupKey=integrationKey||`display:${clientKey}`;
+    if(!grouped.has(groupKey)) grouped.set(groupKey,{client:clientKey,displayName,integrationKey,lastDate:dt,calls:[],emails:[]});
+    const row=grouped.get(groupKey);
+    if(!row.integrationKey) row.integrationKey=emailClientIntegrationKey(email);
     row.emails=(row.emails||[]);
     row.emails.push({...email,__dt:dt});
     if(!row.lastDate||dt>row.lastDate) row.lastDate=dt;
   });
-  return [...grouped.values()].map((row)=>({...row,calls:row.calls.sort((a,b)=>a.__dt-b.__dt),emails:(row.emails||[]).sort((a,b)=>a.__dt-b.__dt)})).sort((a,b)=>b.lastDate-a.lastDate);
+  const salesByClient=new Map();clientSales.forEach((sale)=>{const key=String(sale.client_key||'');if(!salesByClient.has(key))salesByClient.set(key,[]);salesByClient.get(key).push({...sale,__date:String(sale.sale_date||'')});});
+  return [...grouped.values()].map((row)=>({...row,calls:row.calls.sort((a,b)=>a.__dt-b.__dt),emails:(row.emails||[]).sort((a,b)=>a.__dt-b.__dt),sales:[...new Map((salesByClient.get(row.integrationKey)||[]).map((sale)=>[String(sale.sale_id),sale])).values()].sort((a,b)=>a.__date.localeCompare(b.__date)||Number(a.sale_id)-Number(b.sale_id))})).sort((a,b)=>b.lastDate-a.lastDate);
 }
+const formatMoney=(value)=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'}).format(Number(value||0));
 function renderClientRow(group){
   const callSegments=group.calls.map((call)=>{
     const date=formatDateDisplay(formatDateLocal(call.__dt));
@@ -1723,14 +1737,17 @@ function renderClientRow(group){
     const subject=String(email.subject||'Без темы').trim()||'Без темы';
     return `<button class="call-segment email-outgoing" data-email-id="${escapeHtml(email.id||'')}" type="button" aria-label="Открыть отправленное письмо"><div class="call-segment-top"><span class="call-type">Email отправлен</span></div><div class="email-subject" title="${escapeHtml(subject)}">${escapeHtml(subject)}</div><div class="call-datetime">${escapeHtml(date)} · ${escapeHtml(time)}</div></button>`;
   });
-  const segments=[...group.calls.map((call,index)=>({html:callSegments[index],date:call.__dt})),...(group.emails||[]).map((email,index)=>({html:emailSegments[index],date:email.__dt}))].sort((a,b)=>a.date-b.date).map((item)=>item.html).join('');
+  const saleSegments=(group.sales||[]).map((sale)=>`<button class="call-segment sale" data-sale-id="${escapeHtml(sale.sale_id)}" type="button" aria-label="Открыть продажу"><div class="call-segment-top"><span class="call-type">Продажа</span></div><div class="email-subject" title="${escapeHtml(sale.document_number||'')}">№ ${escapeHtml(sale.document_number||'—')}</div><div class="sale-amount">${escapeHtml(formatMoney(sale.total_amount))}</div><div class="call-datetime">${escapeHtml(formatDateDisplay(sale.sale_date)||sale.sale_date||'—')}</div></button>`);
+  const events=[...group.calls.map((call,index)=>({html:callSegments[index],day:formatDateLocal(call.__dt),time:call.__dt.getTime(),type:1,id:index})),...(group.emails||[]).map((email,index)=>({html:emailSegments[index],day:formatDateLocal(email.__dt),time:email.__dt.getTime(),type:2,id:index})),...(group.sales||[]).map((sale,index)=>({html:saleSegments[index],day:sale.sale_date,time:0,type:0,id:Number(sale.sale_id)}))];
+  const segments=events.sort((a,b)=>a.day.localeCompare(b.day)||a.type-b.type||a.time-b.time||a.id-b.id).map((item)=>item.html).join('');
   const totalDuration=group.calls.reduce((sum,call)=>sum+parseDurationSeconds(call.duration),0);
-  return `<article class="client-row"><div><button class="client-name client-name-btn" data-client="${escapeHtml(group.client)}" type="button">${escapeHtml(group.displayName)}</button><div class="client-meta">Количество звонков: ${group.calls.length} · Отправлено email: ${(group.emails||[]).length} · Общая продолжительность: ${escapeHtml(formatCallDurationDot(totalDuration))}</div></div><div class="call-timeline">${segments}</div></article>`;
+  return `<article class="client-row"><div><button class="client-name client-name-btn" data-client="${escapeHtml(group.client)}" type="button">${escapeHtml(group.displayName)}</button><div class="client-meta">Количество звонков: ${group.calls.length} · Отправлено email: ${(group.emails||[]).length} · Продаж: ${(group.sales||[]).length} · Общая продолжительность: ${escapeHtml(formatCallDurationDot(totalDuration))}</div></div><div class="call-timeline">${segments}</div></article>`;
 }
 function renderClientCalls(){
   const groups=groupCallsByClient(allCalls);
   const emailError=String(els.clientCallsList.dataset.emailError||'').trim();
-  const warning=emailError?`<div class="client-empty">${escapeHtml(emailError)}</div>`:'';
+  const salesError=String(els.clientCallsList.dataset.salesError||'').trim();
+  const warning=[emailError,salesError].filter(Boolean).map((message)=>`<div class="client-empty">${escapeHtml(message)}</div>`).join('');
   els.clientCallsList.innerHTML=warning+(groups.length?groups.map(renderClientRow).join(''):'<div class="client-empty">Нет звонков и отправленных email за выбранный период</div>');
 }
 
@@ -1755,6 +1772,18 @@ function openClientHistoryModal(clientKey){
 function closeClientHistoryModal(){
   els.clientHistoryModal.classList.remove('open');
   els.clientHistoryModal.setAttribute('aria-hidden','true');
+}
+function closeSaleModal(){els.saleModal.classList.remove('open');els.saleModal.setAttribute('aria-hidden','true');}
+const formatQuantity=(value)=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:3}).format(Number(value||0));
+const saleField=(label,value)=>value===null||value===undefined||value===''?'':`<div class="sale-field"><span>${escapeHtml(label)}</span>${escapeHtml(String(value))}</div>`;
+async function openSaleCard(id){
+  els.saleModal.classList.add('open');els.saleModal.setAttribute('aria-hidden','false');els.saleModalContent.innerHTML='<div class="client-empty">Загрузка продажи...</div>';
+  try{
+    const sale=await window.calltrackApi.getSaleDetail(id);if(!sale)throw new Error('Продажа не найдена');
+    const items=Array.isArray(sale.items)?sale.items:[];const units=items.reduce((sum,item)=>sum+Number(item.quantity||0),0);
+    const rows=items.map((item)=>{const amount=Number(item.quantity||0)*Number(item.actual_price||0);return `<tr><td>${escapeHtml(item.article||'—')}</td><td>${escapeHtml(item.code||'—')}</td><td>${escapeHtml(item.name||'—')}</td><td>${escapeHtml(formatQuantity(item.quantity))}</td><td>${escapeHtml(formatMoney(item.base_price))}</td><td>${escapeHtml(formatMoney(item.actual_price))}</td><td>${escapeHtml(formatMoney(amount))}</td></tr>`;}).join('');
+    els.saleModalContent.innerHTML=`<section class="sale-section"><h3>Основная информация</h3><div class="sale-fields">${saleField('Дата',formatDateDisplay(sale.sale_date)||sale.sale_date)}${saleField('Номер документа',sale.document_number)}${saleField('Клиент',sale.client)}${saleField('Телефон',sale.phone)}${saleField('Подразделение',sale.department)}${saleField('Менеджер',sale.manager||'Не указан')}${saleField('Автор',sale.author)}${saleField('Тип цены',sale.price_type)}</div></section><section class="sale-section"><h3>Финансы</h3><div class="sale-fields">${saleField('Итоговая сумма',formatMoney(sale.total_amount))}${saleField('По базовым ценам',formatMoney(sale.base_amount))}${saleField('Скидка',sale.discount_percent==null?'':`${formatQuantity(sale.discount_percent)} %`)}${saleField('Скидка по карте',sale.discount_card_percent==null?'':`${formatQuantity(sale.discount_card_percent)} %`)}${saleField('Номер карты',sale.discount_card_number)}${saleField('Сертификаты',sale.certificate_amount==null?'':formatMoney(sale.certificate_amount))}${saleField('Социальная продажа',sale.social?'Да':'Нет')}${saleField('Акция',sale.promotion)}</div></section><section class="sale-section"><h3>Дополнительно</h3><div class="sale-fields">${saleField('Основание',sale.reason)}${saleField('Номер строки',sale.row_number)}</div>${sale.original_products_text?`<details><summary>Исходные данные</summary><pre>${escapeHtml(sale.original_products_text)}</pre></details>`:''}</section><section class="sale-section"><h3>Товары</h3><div class="sale-products">${items.length?`<table><thead><tr><th>Артикул</th><th>Код</th><th>Наименование</th><th>Количество</th><th>Базовая цена</th><th>Цена продажи</th><th>Сумма</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="client-empty">Распознанные товары отсутствуют</div>'}</div><div class="sale-totals"><span>Позиций: ${items.length}</span><span>Единиц: ${escapeHtml(formatQuantity(units))}</span><span>Итого: ${escapeHtml(formatMoney(sale.total_amount))}</span></div></section>`;
+  }catch(error){els.saleModalContent.innerHTML=`<div class="client-empty">${escapeHtml(error.message||'Не удалось загрузить карточку продажи')}</div>`;}
 }
 
 function openCommentModal(index){
@@ -1840,19 +1869,20 @@ function bindClientCalls(){
     const tag=e.target.closest('.manager-tag'); if(!tag) return;
     activeClientManager=tag.dataset.manager;
     [...els.clientManagerTags.querySelectorAll('.manager-tag')].forEach((btn)=>btn.classList.toggle('active',btn===tag));
-    renderClientCalls();
+    renderClientCalls();refreshClientSalesTimeline();
   });
   els.clientPeriodShell.addEventListener('click',(e)=>{
     const btn=e.target.closest('.period-pill'); if(!btn||!btn.dataset.period) return;
     setActiveClientPeriod(btn.dataset.period);
-    renderClientCalls();
+    renderClientCalls();refreshClientSalesTimeline();
   });
-  els.clientApplyRangeBtn.addEventListener('click',()=>{setActiveClientPeriod('custom');renderClientCalls();});
+  els.clientApplyRangeBtn.addEventListener('click',()=>{setActiveClientPeriod('custom');renderClientCalls();refreshClientSalesTimeline();});
   els.clientDateFrom.addEventListener('change',()=>{setActiveClientPeriod('custom');renderClientCalls();});
   els.clientDateTo.addEventListener('change',()=>{setActiveClientPeriod('custom');renderClientCalls();});
-  els.clientCallsList.addEventListener('click',(e)=>{const clientBtn=e.target.closest('.client-name-btn'); if(clientBtn){openClientHistoryModal(clientBtn.dataset.client); return;} const emailSegment=e.target.closest('[data-email-id]'); if(emailSegment){openEmailCard(emailSegment.dataset.emailId);return;} const segment=e.target.closest('.call-segment'); if(segment) openCommentModal(Number(segment.dataset.index));});
+  els.clientCallsList.addEventListener('click',(e)=>{const clientBtn=e.target.closest('.client-name-btn'); if(clientBtn){openClientHistoryModal(clientBtn.dataset.client); return;} const saleSegment=e.target.closest('[data-sale-id]');if(saleSegment){openSaleCard(saleSegment.dataset.saleId);return;} const emailSegment=e.target.closest('[data-email-id]'); if(emailSegment){openEmailCard(emailSegment.dataset.emailId);return;} const segment=e.target.closest('.call-segment'); if(segment) openCommentModal(Number(segment.dataset.index));});
   els.clientHistoryCloseBtn.addEventListener('click',closeClientHistoryModal);
   els.clientHistoryModal.addEventListener('click',(e)=>{if(e.target===els.clientHistoryModal) closeClientHistoryModal();});
+  els.saleModalCloseBtn.addEventListener('click',closeSaleModal);els.saleModal.addEventListener('click',(e)=>{if(e.target===els.saleModal)closeSaleModal();});
   els.commentCancelBtn.addEventListener('click',closeCommentModal);
   els.commentSaveBtn.addEventListener('click',saveComment);
   els.commentModal.addEventListener('click',(e)=>{if(e.target===els.commentModal) closeCommentModal();});
@@ -2008,7 +2038,23 @@ async function refreshClientEmailTimeline(){
     clientOutgoingEmails=await fetchClientOutgoingEmails();
     populateClientManagers(allCalls);
     await loadClientNamesForCalls(allCalls);
+    await refreshClientSalesTimeline();
   }finally{clientEmailsLoading=false;}
+}
+function getClientSalesPeriod(){
+  const range=getClientPeriodRange();if(range)return{from:formatDateLocal(range.from),to:formatDateLocal(range.to)};
+  const dates=[];allCalls.forEach((call)=>{const dt=getCallDateTime(call);if(dt)dates.push(dt);});clientOutgoingEmails.forEach((email)=>{const dt=normalizeDateTime(email?.sent_at,email?.sent_at);if(dt)dates.push(dt);});
+  if(!dates.length)return null;dates.sort((a,b)=>a-b);return{from:formatDateLocal(dates[0]),to:formatDateLocal(new Date())};
+}
+async function refreshClientSalesTimeline(){
+  const requestId=++clientSalesRequestId;const period=getClientSalesPeriod();
+  if(!activeClientManager||!period){clientSales=[];renderClientCalls();return;}
+  try{
+    const payload=await window.calltrackApi.getClientSales(activeClientManager,period.from,period.to);if(requestId!==clientSalesRequestId)return;
+    clientSales=Array.isArray(payload.items)?payload.items:[];
+    if(payload.available===false)els.clientCallsList.dataset.salesError='Данные о продажах временно недоступны';else delete els.clientCallsList.dataset.salesError;
+  }catch(error){if(requestId!==clientSalesRequestId)return;clientSales=[];els.clientCallsList.dataset.salesError='Данные о продажах временно недоступны';console.error('Не удалось загрузить продажи:',error);}
+  renderClientCalls();
 }
 function applyCallsPayload(callsPayload){
   allCalls=parseCallsPayload(callsPayload);
