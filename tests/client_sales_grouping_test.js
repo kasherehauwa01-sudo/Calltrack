@@ -59,6 +59,9 @@ for (const marker of [
   '← К списку продаж',
   'width:100vw',
   'height:100vh',
+  'width:min(640px,100%)',
+  "classList.remove('sale-detail-open')",
+  "classList.add('open','sale-detail-open')",
   'sortClientTimelineEvents(events)',
   'isSalesJournalDetailAllowed',
 ]) {
