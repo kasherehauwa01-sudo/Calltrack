@@ -6,7 +6,7 @@ BUILD_FILE="$ROOT/app/build.gradle"
 
 grep -Fq 'def generatedVersionCode = (System.currentTimeMillis() / 60000L).toInteger()' "$BUILD_FILE"
 grep -Fq 'versionCode generatedVersionCode' "$BUILD_FILE"
-grep -Fq 'versionName "1.0.15"' "$BUILD_FILE"
+grep -Fq 'versionName "1.0.18"' "$BUILD_FILE"
 
 if grep -Eq 'version\.properties|publishReleaseApk|calltrackVersionCode|CALLTRACK_VERSION_CODE' "$BUILD_FILE"; then
   echo 'В build.gradle осталась часть прежнего файлового счётчика' >&2

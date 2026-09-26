@@ -21,7 +21,7 @@ foreach (['function removeLegacyHelpTab()', "document.addEventListener('DOMConte
     }
 }
 
-if (!str_contains($html, 'api.js?v=20260908-web-auth-endpoints')) {
+if (!str_contains($html, 'api.js?v=20260926-client-sales')) {
     throw new RuntimeException('Не обновлена версия подключаемого JavaScript');
 }
 
