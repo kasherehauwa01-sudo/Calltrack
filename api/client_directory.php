@@ -9,6 +9,14 @@ function normalizeClientPhone(string $value): string
     return strlen($digits) >= 10 ? substr($digits, -10) : '';
 }
 
+function clientIntegrationKey(string $id,string $phone,string $name): string
+{
+    $normalized=normalizeClientPhone($phone);if($normalized!=='')return 'phone:+7'.$normalized;
+    if(trim($id)!=='')return 'client:'.trim($id);
+    $normalizedName=mb_strtolower(trim(preg_replace('/\s+/u',' ',$name)??''));
+    return 'name:'.hash('sha256',$normalizedName);
+}
+
 function clientValue(array $row, array $keys): string
 {
     foreach ($keys as $key) {
@@ -305,7 +313,7 @@ function readClientMatchesCache(string $normalizedPhone): ?array
         $matches = [];
         foreach ($statement as $row) {
             $client = json_decode((string)$row['payload_json'], true);
-            if (is_array($client)) $matches[] = ['phone'=>'+7'.$normalizedPhone, 'name'=>(string)($client['name'] ?? ''), 'fields'=>is_array($client['fields'] ?? null) ? $client['fields'] : []];
+            if (is_array($client)) $matches[] = ['phone'=>'+7'.$normalizedPhone, 'name'=>(string)($client['name'] ?? ''), 'fields'=>is_array($client['fields'] ?? null) ? $client['fields'] : [], 'client_id'=>(string)($client['id']??'')];
         }
         return $matches;
     }
@@ -369,7 +377,9 @@ function lookupClientDetailsByPhones(array $phones): array
         foreach ($matches as $match) {
             $name = trim((string)($match['name'] ?? ''));
             if ($name === '') continue;
-            $clients[] = ['name'=>$name, 'emails'=>clientEmailsFromFields(is_array($match['fields'] ?? null) ? $match['fields'] : [])];
+            $fields=is_array($match['fields'] ?? null)?$match['fields']:[];
+            $id=(string)($match['client_id']??$fields['id']??$fields['client_id']??'');$phone=(string)($match['phone']??'');
+            $clients[] = ['id'=>$id,'integration_key'=>clientIntegrationKey($id,$phone,$name),'name'=>$name, 'phone'=>$phone, 'emails'=>clientEmailsFromFields($fields)];
         }
         $result[$normalized] = $clients;
     }
@@ -420,7 +430,9 @@ function lookupClientDetailsByEmails(array $emails): array
         $clientEmails = clientEmailsFromFields(is_array($client['fields'] ?? null) ? $client['fields'] : []);
         foreach ($clientEmails as $email) {
             if (!isset($requested[$email])) continue;
-            $result[$email][$name] = ['name'=>$name, 'emails'=>$clientEmails];
+            $id=(string)($client['id']??($client['fields']['id']??$client['fields']['client_id']??''));
+            $phone=(string)(($client['phones']??[])[0]??'');
+            $result[$email][$name] = ['id'=>$id,'integration_key'=>clientIntegrationKey($id,$phone,$name),'name'=>$name,'phone'=>$phone,'emails'=>$clientEmails];
         }
     }
     foreach ($result as $email=>$matches) $result[$email] = array_values($matches);
