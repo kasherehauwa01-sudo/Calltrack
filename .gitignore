@@ -10,3 +10,21 @@ api/config.local.php
 /.gradle/
 /build/
 /app/build/
+
+.idea/
+
+# Local Android / build files
+app/release/
+*.bak_*
+build-error.txt
+installed-old.apk
+local.properties
+old_MainActivity.kt
+
+# Local Gradle wrapper files not tracked in this repository
+gradle/
+gradlew
+gradlew.bat
+
+# Accidental local files
+h origin main*
