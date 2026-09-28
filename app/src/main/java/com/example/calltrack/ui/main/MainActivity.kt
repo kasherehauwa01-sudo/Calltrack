@@ -145,7 +145,6 @@ class MainActivity : BaseActivity() {
 
         viewModel.onboardingCompleted.observe(this) { completed ->
             if (!completed) {
-                requestUnknownAppsPermissionIfNeeded()
                 openFragment(OnboardingFragment.newInstance())
                 binding.bottomNav.visibility = android.view.View.GONE
             } else {
@@ -912,16 +911,6 @@ class MainActivity : BaseActivity() {
         val warningText = messages.joinToString("\n")
         binding.tvWarning.text = warningText
         binding.tvWarning.visibility = if (warningText.isBlank()) android.view.View.GONE else android.view.View.VISIBLE
-    }
-
-    private fun requestUnknownAppsPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        if (packageManager.canRequestPackageInstalls()) return
-        val intent = Intent(
-            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-            Uri.parse("package:$packageName")
-        )
-        unknownAppsLauncher.launch(intent)
     }
 
     fun isBatteryOptimizationDisabled(): Boolean {

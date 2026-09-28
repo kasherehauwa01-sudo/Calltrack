@@ -5,7 +5,6 @@ import android.os.Build
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.data.repository.PrefsManager
 import com.example.calltrack.service.CalltrackRecoveryManager
-import com.example.calltrack.service.RecoveryReason
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -29,7 +28,6 @@ class AndroidAuthClient(context: Context) {
             val data=body.getJSONObject("data");val user=data.getJSONObject("user")
             store.save(data.getString("token"),user.getLong("id"),user.getString("login"),user.getString("display_name"),user.getString("role"))
             PrefsManager(appContext).setManagerName(user.getString("display_name"));PrefsManager(appContext).setManagerPhone(user.getString("user_phone"))
-            CalltrackRecoveryManager.recover(appContext, RecoveryReason.APP_START)
         }
     } }
 
