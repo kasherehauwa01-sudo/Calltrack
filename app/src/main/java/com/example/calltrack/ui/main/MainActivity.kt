@@ -590,7 +590,7 @@ class MainActivity : BaseActivity() {
         val current = packageManager.getPackageInfo(packageName, flags)
         val archiveSignatures = archive.signatureDigests()
         val currentSignatures = current.signatureDigests()
-        if (archiveSignatures.isEmpty() || archiveSignatures != currentSignatures) {
+        if (archiveSignatures.isEmpty() || currentSignatures.isEmpty() || archiveSignatures.intersect(currentSignatures).isEmpty()) {
             return "APK \u043F\u043E\u0434\u043F\u0438\u0441\u0430\u043D \u0434\u0440\u0443\u0433\u0438\u043C \u043A\u043B\u044E\u0447\u043E\u043C. \u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0441\u0431\u043E\u0440\u043A\u0443, \u043F\u043E\u0434\u043F\u0438\u0441\u0430\u043D\u043D\u0443\u044E \u0442\u0435\u043C \u0436\u0435 \u043A\u043B\u044E\u0447\u043E\u043C, \u0447\u0442\u043E \u0438 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u043D\u043E\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435."
         }
         val archiveVersion = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) archive.longVersionCode else {
@@ -612,13 +612,20 @@ class MainActivity : BaseActivity() {
 
     private fun android.content.pm.PackageInfo.signatureDigests(): Set<String> {
         val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            signingInfo?.apkContentsSigners.orEmpty()
+            val info = signingInfo
+            when {
+                info == null -> emptyArray()
+                info.hasMultipleSigners() -> info.apkContentsSigners
+                else -> info.signingCertificateHistory
+            }
         } else {
             @Suppress("DEPRECATION")
             this.signatures.orEmpty()
         }
+
         return signatures.mapTo(linkedSetOf()) { signature ->
-            MessageDigest.getInstance("SHA-256").digest(signature.toByteArray())
+            MessageDigest.getInstance("SHA-256")
+                .digest(signature.toByteArray())
                 .joinToString("") { byte -> "%02x".format(byte) }
         }
     }
