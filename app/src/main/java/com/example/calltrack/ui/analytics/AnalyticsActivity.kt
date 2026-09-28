@@ -23,6 +23,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.setPadding
 import androidx.lifecycle.lifecycleScope
 import com.example.calltrack.R
+import com.example.calltrack.BuildConfig
+import com.example.calltrack.auth.AuthStore
 import com.example.calltrack.data.local.CallDatabase
 import com.example.calltrack.data.local.CallEntity
 import com.example.calltrack.ui.base.BaseActivity
@@ -33,6 +35,9 @@ import com.example.calltrack.ui.main.MainActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -46,7 +51,10 @@ class AnalyticsActivity : BaseActivity() {
     private lateinit var typeRow: LinearLayout
     private lateinit var content: LinearLayout
     private var allCalls: List<CallEntity> = emptyList()
+    private var managerJournalCalls: List<CallEntity> = emptyList()
     private var clientNames: Map<String, String> = emptyMap()
+    private var managerJournalError: String? = null
+    private val httpClient = OkHttpClient()
     private var activeTab: AnalyticsTab = AnalyticsTab.DASHBOARD
     private var activePeriod: AnalyticsPeriod = AnalyticsPeriod.WEEK
     private var activeDetail: AnalyticsDetail = AnalyticsDetail.DAY
@@ -216,17 +224,76 @@ class AnalyticsActivity : BaseActivity() {
                 val contacts = db.contactDao().findAll().associate {
                     it.phone to repairText(it.client1c.ifBlank { it.name })
                 }
-                calls to contacts
+                val journal = runCatching { loadManagerJournal() }
+                Triple(calls, contacts, journal)
             }
             allCalls = result.first
-            clientNames = result.second
+            val journal = result.third
+            managerJournalCalls = journal.getOrDefault(emptyList())
+            managerJournalError = journal.exceptionOrNull()?.let { "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0436\u0443\u0440\u043D\u0430\u043B \u0437\u0432\u043E\u043D\u043A\u043E\u0432. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043A \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442\u0443." }
+            clientNames = result.second + managerJournalCalls.associate { it.phone to it.tag.ifBlank { it.phone } }
             renderContent()
+        }
+    }
+
+    private fun loadManagerJournal(): List<CallEntity> {
+        val token = AuthStore(this).token
+        check(token.isNotBlank()) { "Android session is missing" }
+        val url = BuildConfig.SQL_API_BASE_URL.trimEnd('/') + "/get_calls.php?period=all&limit=0"
+        val request = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
+        httpClient.newCall(request).execute().use { response ->
+            val payload = JSONObject(response.body?.string().orEmpty())
+            if (!response.isSuccessful || payload.optString("status") != "success") {
+                error(payload.optString("message", "HTTP ${response.code}"))
+            }
+            val rows = payload.optJSONArray("data") ?: return emptyList()
+            return buildList {
+                for (index in 0 until rows.length()) {
+                    val row = rows.optJSONObject(index) ?: continue
+                    val timestamp = runCatching {
+                        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(
+                            "${row.optString("call_date")} ${row.optString("call_time")}"
+                        )?.time
+                    }.getOrNull() ?: continue
+                    val duration = parseDurationSeconds(row.optString("duration"))
+                    add(
+                        CallEntity(
+                            id = row.optLong("id_db"),
+                            phone = row.optString("phone"),
+                            type = repairText(row.optString("call_type")),
+                            duration = duration,
+                            note = repairText(row.optString("comment")),
+                            // The server-side client name is carried separately from
+                            // local Room contacts and is used only for grouping.
+                            tag = repairText(row.optString("client")),
+                            reminder = repairText(row.optString("reminder_text")),
+                            timestamp = timestamp,
+                            uploaded = true
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private fun parseDurationSeconds(value: String): Long {
+        value.trim().toLongOrNull()?.let { return it }
+        val parts = value.split(':').mapNotNull(String::toLongOrNull)
+        return when (parts.size) {
+            3 -> parts[0] * 3600 + parts[1] * 60 + parts[2]
+            2 -> parts[0] * 60 + parts[1]
+            else -> 0
         }
     }
 
     private fun renderContent() {
         content.removeAllViews()
-        val filtered = allCalls.filter { call -> inPeriod(call.timestamp) && !isPersonalCall(call) }
+        if (activeTab == AnalyticsTab.CONTACTS && managerJournalError != null) {
+            addText(managerJournalError.orEmpty())
+            return
+        }
+        val source = if (activeTab == AnalyticsTab.CONTACTS) managerJournalCalls else allCalls
+        val filtered = source.filter { call -> inPeriod(call.timestamp) && !isPersonalCall(call) }
         if (activeTab == AnalyticsTab.DASHBOARD) renderDashboard(filtered.filter { activeTypes.contains(it.type) }) else renderContacts(filtered)
     }
 
@@ -259,7 +326,7 @@ class AnalyticsActivity : BaseActivity() {
             val duration = rows.sumOf { it.duration }
             addCard(client, "\u0417\u0432\u043E\u043D\u043A\u043E\u0432: ${rows.size} \u2022 \u0414\u043B\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u044C: ${formatDuration(duration)}", onClick = { showClientHistory(client, rows) })
             rows.sortedByDescending { it.timestamp }.take(5).forEach { call ->
-                addCallEvent(call)
+                addCallEvent(call, editable = false)
             }
         }
     }
@@ -409,13 +476,13 @@ class AnalyticsActivity : BaseActivity() {
         })
     }
 
-    private fun addCallEvent(call: CallEntity) {
+    private fun addCallEvent(call: CallEntity, editable: Boolean = true) {
         val hasDetails = call.note.isNotBlank() || call.reminder.isNotBlank()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             background = rounded(getColor(R.color.surface), dp(14))
             setPadding(dp(12), dp(8), dp(12), dp(8))
-            setOnClickListener { showCallEditor(call) }
+            if (editable) setOnClickListener { showCallEditor(call) }
         }
         row.addView(TextView(this).apply {
             text = "${dateFormat.format(Date(call.timestamp))} \u2022 ${call.type} \u2022 ${formatDuration(call.duration)} \u2022 ${call.phone}"
