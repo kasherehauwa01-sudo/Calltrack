@@ -36,4 +36,5 @@
     <string name="permission_battery_description">Надёжная фиксация звонков и синхронизация в фоне</string>
     <string name="permission_install_packages">Установка обновлений</string>
     <string name="permission_install_packages_description">Установка новой версии Calltrack из приложения</string>
+    <string name="auth_storage_unavailable">Не удалось подготовить защищённое хранилище. Перезапустите приложение.</string>
 </resources>

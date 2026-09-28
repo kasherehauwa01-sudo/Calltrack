@@ -19,6 +19,7 @@ class AndroidAuthClient(context: Context) {
     private val store = AuthStore(context.applicationContext)
     private val client = OkHttpClient()
     private val endpoint = BuildConfig.SQL_API_BASE_URL.trimEnd('/') + "/android_auth_api.php"
+    val hasSavedSession: Boolean get() = store.isAuthenticated
 
     suspend fun login(login: String, pin: String): Result<Unit> = withContext(Dispatchers.IO) { runCatching {
         val json=JSONObject().put("login",login).put("pin",pin).put("device_name","${Build.MANUFACTURER} ${Build.MODEL}")
