@@ -1,6 +1,8 @@
 package com.example.calltrack.ui.contacts
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
@@ -9,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.core.widget.addTextChangedListener
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
@@ -96,8 +99,13 @@ class ContactsFragment : Fragment() {
     }
 
     private suspend fun loadContacts(): List<ContactListItem> = withContext(Dispatchers.IO) {
+        val context = context ?: return@withContext emptyList()
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            return@withContext emptyList()
+        }
         val list = mutableListOf<ContactListItem>()
-        requireContext().contentResolver.query(
+        try {
+            context.contentResolver.query(
             ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
             arrayOf(
                 ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
@@ -107,7 +115,7 @@ class ContactsFragment : Fragment() {
             null,
             null,
             ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
-        )?.use { cursor ->
+            )?.use { cursor ->
             val idIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
             val nameIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
             val phoneIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
@@ -118,6 +126,9 @@ class ContactsFragment : Fragment() {
                     phone = cursor.getString(phoneIdx).orEmpty()
                 )
             }
+            }
+        } catch (_: SecurityException) {
+            return@withContext emptyList()
         }
         list
     }

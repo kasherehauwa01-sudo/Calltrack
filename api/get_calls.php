@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/client_directory.php';
 require_once __DIR__ . '/web_auth.php';
+require_once __DIR__ . '/android_auth.php';
 
 function applyRegistryPeriod(array $source): array
 {
@@ -84,10 +85,17 @@ function enrichCallsWithClients(array $rows): array
 
 try {
     $pdo = getPdo();
-    $webUser = requireWebUser($pdo);
+    $androidUser = optionalAndroidUser($pdo);
     $filters = applyRegistryPeriod($_GET);
-    $scope = webManagerScope($webUser);
-    if ($scope) $filters['user_phone'] = $scope['user_phone'];
+    if ($androidUser) {
+        // Bearer identity always wins over query-string filters, so Android
+        // analytics cannot request another manager's journal.
+        $filters['user_phone'] = androidManagerIdentity($androidUser)['user_phone'];
+    } else {
+        $webUser = requireWebUser($pdo);
+        $scope = webManagerScope($webUser);
+        if ($scope) $filters['user_phone'] = $scope['user_phone'];
+    }
     $params = [];
     $where = buildFilters($filters, $params);
     $rawLimit = $_GET['limit'] ?? null;

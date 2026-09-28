@@ -77,6 +77,7 @@ salesAssert(count($dedupRequests)===1&&count($dedupRequests[0]['clients'])===500
 $root=dirname(__DIR__);$html=(string)file_get_contents($root.'/analizmop/index.html');$api=(string)file_get_contents($root.'/analizmop/api.js');$batch=(string)file_get_contents($root.'/api/client_sales.php');$detail=(string)file_get_contents($root.'/api/sale_detail.php');$integration=(string)file_get_contents($root.'/api/sales_journal.php');
 foreach(['clientSales','saleDetail','getClientSales','getSaleDetail'] as $required)salesAssert(str_contains($api,$required),"Frontend API не содержит {$required}");
 foreach(['callSegments','emailSegments','saleSegments','sortClientTimelineEvents(events)','data-sale-id','Продаж:','refreshClientSalesTimeline'] as $required)salesAssert(str_contains($html,$required),"Timeline не содержит {$required}");
+foreach(['authenticatedWebUser=user', "authenticatedWebUser?.role==='manager'", 'const managers=scopedManager?[scopedManager]'] as $required)salesAssert(str_contains($html,$required),"Manager sales timeline не закреплён за авторизованным менеджером: {$required}");
 foreach(['sale_id','client_key','matched_by','sale_date','document_number','total_amount'] as $required)salesAssert(str_contains($integration,$required),"Sale Summary не содержит {$required}");
 foreach(['network error','HTTP ','некорректный JSON','SALES_JOURNAL_CONNECT_TIMEOUT','SALES_JOURNAL_TIMEOUT'] as $required)salesAssert(str_contains($integration,$required),"Нет обработки Sales Journal: {$required}");
 salesAssert(str_contains($batch,'requireWebUser($pdo)')&&str_contains($batch,'salesJournalCommunicationClients($pdo,$user'),'Batch не применяет web scope');
@@ -93,6 +94,7 @@ salesAssert(str_contains($integration,'manager=:manager')&&str_contains($integra
 salesAssert(str_contains($html,'saleLast:1')&&str_contains($html,'a.saleLast-b.saleLast||a.time-b.time'),'Продажа не размещается последней среди событий той же даты');
 salesAssert(str_contains($html,'keys.length===1?rows[0]:null')&&str_contains($html,'phone:+7${phone}'),'Frontend не связывает canonical phone key с существующей UI-группой');
 salesAssert(str_contains($html,'canonicalSalesClientKey')&&str_contains($html,'clientSalesAliases=payload.client_aliases'),'Frontend не применяет canonical aliases');
+salesAssert(str_contains($html,'salesByPhone')&&str_contains($html,'salesByName')&&str_contains($html,'rowPhones.flatMap'),'Плашки продаж не имеют fallback-сопоставления по телефону и имени клиента');
 $config=(string)file_get_contents($root.'/api/config.php');salesAssert(str_contains($config,"SALES_JOURNAL_TIMEOUT') ?: 90")&&str_contains($config,'SALES_JOURNAL_CONNECT_TIMEOUT'),'Timeout не настраивается или снова меньше production latency');
 salesAssert(str_contains($config,'SALES_JOURNAL_CACHE_TTL')&&str_contains($batch,'loadSalesJournalBatchCached'),'Быстрый кэш продаж не подключён к endpoint');
 salesAssert(str_contains($config,'SALES_JOURNAL_DETAIL_CACHE_TTL')&&str_contains($detail,'loadSalesJournalDetailCached'),'Быстрый кэш карточки продажи не подключён');
