@@ -177,6 +177,29 @@ function loadSalesJournalBatchCached(array $clients,string $from,string $to,?cal
     return $result+['cache_hit'=>false,'cache_stale'=>false,'cache_age_seconds'=>0];
 }
 
+function salesJournalDetailCacheFile(int $saleId): string
+{
+    if($saleId<=0)throw new InvalidArgumentException('Некорректный ID продажи');
+    return salesJournalCacheDirectory().'/detail-'.$saleId.'.json';
+}
+
+function loadSalesJournalDetailCached(int $saleId,?callable $transport=null): array
+{
+    $file=salesJournalDetailCacheFile($saleId);$modified=@filemtime($file);
+    if($modified!==false&&$modified>=time()-SALES_JOURNAL_DETAIL_CACHE_TTL){
+        $cached=json_decode((string)@file_get_contents($file),true);
+        if(is_array($cached)&&(int)($cached['id']??0)===$saleId)return $cached;
+    }
+    $detail=salesJournalRequest('GET','/api/integrations/calltrack/sales/'.$saleId,null,$transport);
+    if((int)($detail['id']??0)!==$saleId)throw new RuntimeException('Sales Journal вернул неверную продажу');
+    $temporary=$file.'.'.getmypid().'.tmp';
+    try{
+        $json=json_encode($detail,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        if(@file_put_contents($temporary,$json,LOCK_EX)!==false)@rename($temporary,$file);
+    }finally{@unlink($temporary);}
+    return $detail;
+}
+
 function allowSalesJournalDetails(array $items): void
 {
     startWebSession();$now=time();$allowed=[];foreach(($_SESSION['sales_journal_allowed']??[]) as $id=>$expires)if((int)$expires>$now)$allowed[(string)$id]=(int)$expires;foreach($items as $item)$allowed[(string)$item['sale_id']]=$now+1800;$_SESSION['sales_journal_allowed']=$allowed;

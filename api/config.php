@@ -72,6 +72,9 @@ if (!defined('SALES_JOURNAL_CACHE_TTL')) {
 if (!defined('SALES_JOURNAL_STALE_CACHE_TTL')) {
     define('SALES_JOURNAL_STALE_CACHE_TTL', max(SALES_JOURNAL_CACHE_TTL, (int)(getenv('SALES_JOURNAL_STALE_CACHE_TTL') ?: 86400)));
 }
+if (!defined('SALES_JOURNAL_DETAIL_CACHE_TTL')) {
+    define('SALES_JOURNAL_DETAIL_CACHE_TTL', max(60, (int)(getenv('SALES_JOURNAL_DETAIL_CACHE_TTL') ?: 3600)));
+}
 
 function dbConfigValue(string $envName, string $constantName): string
 {

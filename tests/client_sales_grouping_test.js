@@ -55,6 +55,9 @@ assert(Array.from(context.sorted, (event) => event.html).join(',') === 'Email,З
 for (const marker of [
   'data-sale-group=',
   'data-sale-detail-id=',
+  'const saleDetailRequests = new Map()',
+  'saleDetailRequests.has(key)',
+  'saleDetailRequests.delete(key)',
   'openSaleCard(sale.dataset.saleDetailId,activeSaleGroupKey)',
   '← К списку продаж',
   'width:100vw',
@@ -71,7 +74,9 @@ for (const marker of [
 ]) {
   const source = marker === 'isSalesJournalDetailAllowed'
     ? fs.readFileSync(`${__dirname}/../api/sale_detail.php`, 'utf8')
-    : html;
+    : marker.startsWith('saleDetailRequests') || marker.startsWith('const saleDetailRequests')
+      ? fs.readFileSync(`${__dirname}/../analizmop/api.js`, 'utf8')
+      : html;
   assert(source.includes(marker), `Не найден обязательный маркер: ${marker}`);
 }
 for (const removedField of ['Исходные данные', 'Социальная продажа', 'Номер строки']) {

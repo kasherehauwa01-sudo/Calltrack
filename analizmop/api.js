@@ -114,11 +114,17 @@ window.calltrackApi.getClientSales = async function getClientSales(manager, date
   });
 };
 
-window.calltrackApi.getSaleDetail = async function getSaleDetail(id) {
+const saleDetailRequests = new Map();
+window.calltrackApi.getSaleDetail = function getSaleDetail(id) {
+  const key = String(id);
+  if (saleDetailRequests.has(key)) return saleDetailRequests.get(key);
   const endpoint = window.calltrackApi.endpoints.saleDetail;
   const separator = endpoint.includes('?') ? '&' : '?';
-  const payload = await window.calltrackApi.requestJson(`${endpoint}${separator}id=${encodeURIComponent(id)}`, { cache: 'no-store' });
-  return payload.data || null;
+  const request = window.calltrackApi.requestJson(`${endpoint}${separator}id=${encodeURIComponent(id)}`, { cache: 'no-store' })
+    .then((payload) => payload.data || null)
+    .catch((error) => { saleDetailRequests.delete(key); throw error; });
+  saleDetailRequests.set(key, request);
+  return request;
 };
 
 window.calltrackApi.clientsCacheStatus = async function clientsCacheStatus(password) {

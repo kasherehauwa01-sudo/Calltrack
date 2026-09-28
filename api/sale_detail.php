@@ -5,7 +5,7 @@ try{
     $pdo=getPdo();requireWebUser($pdo);$id=filter_var($_GET['id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
     if(!$id)sendJson(['status'=>'error','message'=>'Некорректный ID продажи'],400);
     if(!isSalesJournalDetailAllowed((int)$id))sendJson(['status'=>'error','message'=>'Продажа недоступна в выбранной области'],403);
-    $detail=salesJournalRequest('GET','/api/integrations/calltrack/sales/'.(int)$id);
-    if((int)($detail['id']??0)!==(int)$id)throw new RuntimeException('Sales Journal вернул неверную продажу');
+    // Проверка session allow-list выполняется до чтения общего технического кэша.
+    $detail=loadSalesJournalDetailCached((int)$id);
     sendJson(['status'=>'success','data'=>$detail]);
 }catch(Throwable $e){error_log('Sales Journal detail unavailable: '.$e->getMessage());sendJson(['status'=>'error','message'=>'Не удалось загрузить карточку продажи'],502);}

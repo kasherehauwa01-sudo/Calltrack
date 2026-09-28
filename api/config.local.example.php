@@ -20,5 +20,7 @@ define('SALES_JOURNAL_TIMEOUT', 90);
 // безопасно показать последний успешный результат не старше суток.
 define('SALES_JOURNAL_CACHE_TTL', 600);
 define('SALES_JOURNAL_STALE_CACHE_TTL', 86400);
+// Полная карточка продажи кэшируется отдельно, товары не загружаются заранее.
+define('SALES_JOURNAL_DETAIL_CACHE_TTL', 3600);
 // При нестандартном расположении PHP CLI:
 // putenv('CALLTRACK_PHP_CLI=/usr/bin/php');

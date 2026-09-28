@@ -36,6 +36,9 @@ $emptyRequests=0;$emptyClients=[['key'=>'phone:+79990000098','phone'=>'+79990000
 $emptyTransport=static function()use(&$emptyRequests){$emptyRequests++;return ['items'=>[]];};
 loadSalesJournalBatchCached($emptyClients,'2026-09-25','2026-09-25',$emptyTransport);loadSalesJournalBatchCached($emptyClients,'2026-09-25','2026-09-25',$emptyTransport);
 salesAssert($emptyRequests===2,'Пустой ответ Sales Journal закэширован и блокирует появление новых продаж');
+$detailRequests=0;$detailTransport=static function($method,$url,$body)use(&$detailRequests){$detailRequests++;return ['id'=>141955,'document_number'=>'Р-00631068','items'=>[['id'=>1,'name'=>'Товар']]];};
+$firstDetail=loadSalesJournalDetailCached(141955,$detailTransport);$cachedDetail=loadSalesJournalDetailCached(141955,$detailTransport);
+salesAssert($detailRequests===1&&$firstDetail===$cachedDetail&&count($cachedDetail['items'])===1,'Detail продажи не обслуживается быстрым кэшем');
 @unlink($cacheFile);@rmdir(dirname($cacheFile));@rmdir($cacheStorage.'/cache');@rmdir($cacheStorage);$previousStorage===false?putenv('CALLTRACK_STORAGE_DIR'):putenv('CALLTRACK_STORAGE_DIR='.$previousStorage);
 $different=canonicalizeSalesJournalClients([['phone'=>'+79000000001','name'=>'Клиент А'],['phone'=>'+79000000002','name'=>'Клиент Б']]);salesAssert(count($different)===2,'Разные клиенты ошибочно объединены');
 $similar=canonicalizeSalesJournalClients([['phone'=>'+79000000003','name'=>'Ромашка ООО'],['phone'=>'+79000000004','name'=>'Ромашка Плюс ООО']]);salesAssert(count($similar)===2,'Похожие имена ошибочно объединены');
@@ -78,6 +81,7 @@ foreach(['sale_id','client_key','matched_by','sale_date','document_number','tota
 foreach(['network error','HTTP ','некорректный JSON','SALES_JOURNAL_CONNECT_TIMEOUT','SALES_JOURNAL_TIMEOUT'] as $required)salesAssert(str_contains($integration,$required),"Нет обработки Sales Journal: {$required}");
 salesAssert(str_contains($batch,'requireWebUser($pdo)')&&str_contains($batch,'salesJournalCommunicationClients($pdo,$user'),'Batch не применяет web scope');
 salesAssert(str_contains($detail,'requireWebUser($pdo)')&&str_contains($detail,'isSalesJournalDetailAllowed'),'Detail позволяет IDOR');
+salesAssert(strpos($detail,'isSalesJournalDetailAllowed')<strpos($detail,'loadSalesJournalDetailCached'),'Detail cache читается до IDOR-проверки');
 salesAssert(str_contains($batch,"'available'=>false")&&str_contains($html,'Данные о продажах временно недоступны'),'Нет graceful degradation');
 salesAssert(str_contains($html,"items.length?")&&str_contains($html,'Распознанные товары отсутствуют'),'Пустой items ломает карточку');
 salesAssert(str_contains($html,'quantity||0)*Number(item.actual_price||0'),'Сумма товара не рассчитывается');
@@ -91,5 +95,6 @@ salesAssert(str_contains($html,'keys.length===1?rows[0]:null')&&str_contains($ht
 salesAssert(str_contains($html,'canonicalSalesClientKey')&&str_contains($html,'clientSalesAliases=payload.client_aliases'),'Frontend не применяет canonical aliases');
 $config=(string)file_get_contents($root.'/api/config.php');salesAssert(str_contains($config,"SALES_JOURNAL_TIMEOUT') ?: 90")&&str_contains($config,'SALES_JOURNAL_CONNECT_TIMEOUT'),'Timeout не настраивается или снова меньше production latency');
 salesAssert(str_contains($config,'SALES_JOURNAL_CACHE_TTL')&&str_contains($batch,'loadSalesJournalBatchCached'),'Быстрый кэш продаж не подключён к endpoint');
+salesAssert(str_contains($config,'SALES_JOURNAL_DETAIL_CACHE_TTL')&&str_contains($detail,'loadSalesJournalDetailCached'),'Быстрый кэш карточки продажи не подключён');
 
 echo "client_sales_timeline_test: OK\n";
