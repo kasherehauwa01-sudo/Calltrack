@@ -137,10 +137,17 @@ class DialPadFragment : Fragment() {
     }
 
     private fun loadContacts() {
+        val context = context ?: return
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            allContacts = emptyList()
+            onNumberChanged()
+            return
+        }
         viewLifecycleOwner.lifecycleScope.launch {
             allContacts = withContext(Dispatchers.IO) {
                 val list = mutableListOf<T9ContactItem>()
-                requireContext().contentResolver.query(
+                try {
+                    context.contentResolver.query(
                     ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                     arrayOf(
                         ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
@@ -150,7 +157,7 @@ class DialPadFragment : Fragment() {
                     null,
                     null,
                     ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
-                )?.use { cursor ->
+                    )?.use { cursor ->
                     val idIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
                     val nameIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
                     val phoneIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
@@ -169,6 +176,9 @@ class DialPadFragment : Fragment() {
                             wordDigits = wordDigits
                         )
                     }
+                    }
+                } catch (_: SecurityException) {
+                    return@withContext emptyList()
                 }
                 list
             }

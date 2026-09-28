@@ -318,7 +318,7 @@ class CallTrackingService : Service() {
             .setContentIntent(fullScreenIntent)
             .build()
 
-        manager.notify(notificationId, notification)
+        if (canPostNotifications()) runCatching { manager.notify(notificationId, notification) }
         saveNotificationCenterItem(
             title = "\u0417\u0432\u043E\u043D\u043E\u043A \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D",
             message = "\u0417\u0430\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u0437\u0432\u043E\u043D\u043A\u0430: $contactName",
@@ -384,7 +384,7 @@ class CallTrackingService : Service() {
             .addAction(0, "\u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C \u0432 1\u0441", addTo1cPending)
             .build()
 
-        manager.notify(MISSING_CLIENT_NOTIFICATION_ID, notification)
+        if (canPostNotifications()) runCatching { manager.notify(MISSING_CLIENT_NOTIFICATION_ID, notification) }
         saveNotificationCenterItem(
             title = "\u041A\u043B\u0438\u0435\u043D\u0442 $displayClient \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D",
             message = message,
@@ -420,6 +420,10 @@ class CallTrackingService : Service() {
         }
     }
 
+    private fun canPostNotifications(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
     private fun buildPostCallNotificationId(callId: Long): Int {
         val stablePart = (callId and 0x7FFFFFFF).toInt()
         return POST_CALL_NOTIFICATION_ID_BASE + (stablePart % 100000)
@@ -427,13 +431,18 @@ class CallTrackingService : Service() {
 
     private fun resolveContactName(phone: String): String {
         if (phone.isBlank() || phone == "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E") return phone
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) return phone
         val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phone))
         val projection = arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME)
-        contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val name = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.DISPLAY_NAME))
-                if (!name.isNullOrBlank()) return name
+        try {
+            contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val name = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.DISPLAY_NAME))
+                    if (!name.isNullOrBlank()) return name
+                }
             }
+        } catch (error: SecurityException) {
+            AppLogger.log(this, "WARN", "Contacts permission was revoked while resolving a name", error)
         }
         return phone
     }
