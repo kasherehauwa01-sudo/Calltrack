@@ -825,6 +825,10 @@ class MainActivity : BaseActivity() {
         openSecondaryFragment(NotificationsFragment.newInstance())
     }
 
+    fun openPermissionsScreen() {
+        openSecondaryFragment(PermissionsFragment.newInstance())
+    }
+
     private fun openSecondaryFragment(fragment: androidx.fragment.app.Fragment) {
         binding.btnTopBack.visibility = android.view.View.VISIBLE
         supportFragmentManager.beginTransaction()
@@ -835,7 +839,7 @@ class MainActivity : BaseActivity() {
 
     private fun updateTopBackVisibility() {
         binding.btnTopBack.visibility = when (supportFragmentManager.findFragmentById(R.id.fragmentContainer)) {
-            is SettingsFragment, is UserFragment, is NotificationsFragment -> android.view.View.VISIBLE
+            is SettingsFragment, is PermissionsFragment, is UserFragment, is NotificationsFragment -> android.view.View.VISIBLE
             else -> android.view.View.GONE
         }
     }
