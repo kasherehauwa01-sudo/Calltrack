@@ -8,11 +8,12 @@ $backup = (string)file_get_contents($root . '/app/src/main/res/xml/backup_rules.
 $extraction = (string)file_get_contents($root . '/app/src/main/res/xml/data_extraction_rules.xml');
 $unit = (string)file_get_contents($root . '/app/src/test/java/com/example/calltrack/auth/AuthStoreRecoveryTest.kt');
 $login = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/ui/auth/LoginActivity.kt');
+$interceptor = (string)file_get_contents($root . '/app/src/main/java/com/example/calltrack/auth/AuthInterceptor.kt');
 
 foreach (['PREFERENCES_NAME = "android_auth"', 'MasterKey.DEFAULT_MASTER_KEY_ALIAS', 'context.deleteSharedPreferences(PREFERENCES_NAME)', 'KeyStore.getInstance("AndroidKeyStore")'] as $required) {
     if (!str_contains($store, $required)) throw new RuntimeException("Recovery не очищает минимальное auth-хранилище: {$required}");
 }
-foreach (['isRecoverableEncryptedStorageError', 'GeneralSecurityException', 'android.security.KeyStoreException', 'AndroidKeysetManager', 'EncryptedSharedPreferences'] as $required) {
+foreach (['isRecoverableEncryptedStorageError', 'GeneralSecurityException', 'android.security.KeyStoreException', 'SecurityException', 'ProviderException', 'AndroidKeysetManager', 'EncryptedSharedPreferences'] as $required) {
     if (!str_contains($store, $required)) throw new RuntimeException("Не распознаётся crypto/keyset ошибка: {$required}");
 }
 foreach (['openWithSingleRecoveryAttempt', 'onRecoverableError', 'onRetryError', 'EncryptedAuthStorageException'] as $required) {
@@ -35,7 +36,7 @@ foreach ([$backup, $extraction] as $rules) {
         throw new RuntimeException('Backup rules исключают данные, не относящиеся к AuthStore');
     }
 }
-foreach (['nestedCryptoErrorIsRecoverable', 'unrelatedRuntimeErrorIsNotRecoverable', 'successfulOpenDoesNotCleanup', 'cryptoFailureCleansOnlyOnceAndReturnsFreshStorage', 'retryFailureDoesNotStartRecoveryLoop', 'unrelatedFailureDoesNotDestroyStorage'] as $test) {
+foreach (['nestedCryptoErrorIsRecoverable', 'encryptedPreferencesSecurityExceptionIsRecoverable', 'unrelatedSecurityAndIllegalArgumentErrorsAreNotRecoverable', 'unrelatedRuntimeErrorIsNotRecoverable', 'successfulOpenDoesNotCleanup', 'cryptoFailureCleansOnlyOnceAndReturnsFreshStorage', 'retryFailureDoesNotStartRecoveryLoop', 'unrelatedFailureDoesNotDestroyStorage'] as $test) {
     if (!str_contains($unit, $test)) throw new RuntimeException("Нет unit-теста recovery: {$test}");
 }
 if (!str_contains($store, 'putString("token", token)') || !str_contains($store, 'fun clear() = prefs.edit().clear().apply()')) {
@@ -43,6 +44,10 @@ if (!str_contains($store, 'putString("token", token)') || !str_contains($store, 
 }
 if (!str_contains($login, 'catch(error:EncryptedAuthStorageException)') || !str_contains($login, 'auth_storage_unavailable')) {
     throw new RuntimeException('Повторная ошибка recovery не обрабатывается контролируемо на экране входа');
+}
+
+if (!str_contains($interceptor, 'by lazy(LazyThreadSafetyMode.SYNCHRONIZED)')) {
+    throw new RuntimeException('AuthInterceptor открывает Android Keystore во время создания Application');
 }
 
 echo "android_encrypted_auth_recovery_test: OK\n";

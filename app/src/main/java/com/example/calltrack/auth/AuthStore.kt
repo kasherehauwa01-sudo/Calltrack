@@ -8,6 +8,7 @@ import androidx.security.crypto.MasterKey
 import java.io.IOException
 import java.security.GeneralSecurityException
 import java.security.KeyStore
+import java.security.ProviderException
 
 class AuthStore(context: Context) {
     private val prefs = openEncryptedPreferences(context.applicationContext)
@@ -73,21 +74,27 @@ class AuthStore(context: Context) {
             val visited = HashSet<Throwable>()
             var current: Throwable? = error
             while (current != null && visited.add(current)) {
-                if (current is GeneralSecurityException || current is android.security.KeyStoreException) return true
                 val className = current.javaClass.name
-                if (className.startsWith("com.google.crypto.tink.") &&
-                    (className.contains("Keyset", ignoreCase = true) || className.contains("Security", ignoreCase = true) || current is IOException)
-                ) return true
-                if (current is IOException && current.stackTrace.any { frame ->
-                        frame.className.startsWith("com.google.crypto.tink.") ||
-                            frame.className.contains("AndroidKeysetManager") ||
-                            frame.className.contains("EncryptedSharedPreferences")
-                    }
+                val comesFromEncryptedStorage = current.stackTrace.any(::isEncryptedStorageFrame)
+                if (current is GeneralSecurityException || current is android.security.KeyStoreException) return true
+                if (className.startsWith("com.google.crypto.tink.")) return true
+                // AndroidX/Tink иногда оборачивают сбой keyset не в GeneralSecurityException,
+                // а в SecurityException, ProviderException, IOException или IllegalArgumentException.
+                // Ограничение по стеку не позволяет считать произвольную ошибку приложения crypto-сбоем.
+                if (comesFromEncryptedStorage &&
+                    (current is SecurityException || current is ProviderException || current is IOException || current is IllegalArgumentException)
                 ) return true
                 current = current.cause
             }
             return false
         }
+
+        private fun isEncryptedStorageFrame(frame: StackTraceElement): Boolean =
+            frame.className.startsWith("androidx.security.crypto.") ||
+                frame.className.startsWith("com.google.crypto.tink.") ||
+                frame.className.startsWith("android.security.keystore.") ||
+                frame.className.contains("AndroidKeysetManager") ||
+                frame.className.contains("EncryptedSharedPreferences")
 
         internal fun <T> openWithSingleRecoveryAttempt(
             open: () -> T,

@@ -23,6 +23,27 @@ class AuthStoreRecoveryTest {
     }
 
     @Test
+    fun encryptedPreferencesSecurityExceptionIsRecoverable() {
+        val error = SecurityException("Could not decrypt keyset").apply {
+            stackTrace = arrayOf(
+                StackTraceElement(
+                    "androidx.security.crypto.EncryptedSharedPreferences",
+                    "create",
+                    "EncryptedSharedPreferences.java",
+                    155
+                )
+            )
+        }
+        assertTrue(AuthStore.isRecoverableEncryptedStorageError(RuntimeException("wrapper", error)))
+    }
+
+    @Test
+    fun unrelatedSecurityAndIllegalArgumentErrorsAreNotRecoverable() {
+        assertFalse(AuthStore.isRecoverableEncryptedStorageError(SecurityException("permission denied")))
+        assertFalse(AuthStore.isRecoverableEncryptedStorageError(IllegalArgumentException("bad input")))
+    }
+
+    @Test
     fun successfulOpenDoesNotCleanup() {
         var opens = 0
         var cleanups = 0
