@@ -5,6 +5,7 @@ $root = dirname(__DIR__);
 require_once __DIR__ . '/kotlin_source.php';
 $app = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/App.kt');
 $worker = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/service/CalltrackStabilityWorker.kt');
+$recovery = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/service/CalltrackRecoveryManager.kt');
 $service = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/service/CallTrackingService.kt');
 $logger = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/logging/AppLogger.kt');
 $manifest = (string)file_get_contents($root . '/app/src/main/AndroidManifest.xml');
@@ -16,16 +17,19 @@ $diagnostics = readKotlinSource($root . '/app/src/main/java/com/example/calltrac
 $repository = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/data/repository/CallRepository.kt');
 $callDao = readKotlinSource($root . '/app/src/main/java/com/example/calltrack/data/local/CallDao.kt');
 
-foreach (['PeriodicWorkRequestBuilder<CalltrackStabilityWorker>(15, TimeUnit.MINUTES)', 'ExistingPeriodicWorkPolicy.KEEP', 'repository.syncPending()', 'repository.sendUserTelemetry()'] as $expected) {
-    if (!str_contains($worker, $expected)) throw new RuntimeException("Нет механизма восстановления: {$expected}");
+foreach (['PeriodicWorkRequestBuilder<CalltrackStabilityWorker>(15, TimeUnit.MINUTES)', 'ExistingPeriodicWorkPolicy.KEEP', 'serviceHeartbeatAgeMs', 'RecoveryReason.WATCHDOG'] as $expected) {
+    if (!str_contains($worker, $expected)) throw new RuntimeException("Нет watchdog-механизма: {$expected}");
 }
-if (!str_contains($app, 'CalltrackStabilityWorker.schedule(this)')) {
-    throw new RuntimeException('Периодическая проверка не запускается при старте приложения');
+foreach (['object CalltrackRecoveryManager', 'enqueueUniqueWork(RECOVERY_WORK, ExistingWorkPolicy.KEEP', 'enqueueUniqueWork(SYNC_WORK, ExistingWorkPolicy.KEEP', 'NetworkType.CONNECTED', 'repository.syncPending()', 'repository.sendUserTelemetry()', 'AuthStore(context).isAuthenticated'] as $expected) {
+    if (!str_contains($recovery, $expected)) throw new RuntimeException("RecoveryManager настроен неверно: {$expected}");
+}
+if (!str_contains($app, 'CalltrackRecoveryManager.recover(this, RecoveryReason.PROCESS_RESTART)')) {
+    throw new RuntimeException('Восстановление не запускается при создании процесса');
 }
 if (str_contains($app, 'Thread.setDefaultUncaughtExceptionHandler')) {
     throw new RuntimeException('Application повторно заменяет системный crash handler');
 }
-foreach (['RECEIVE_BOOT_COMPLETED', '.service.BootReceiver'] as $expected) {
+foreach (['RECEIVE_BOOT_COMPLETED', '.service.BootReceiver', 'android.intent.action.MY_PACKAGE_REPLACED'] as $expected) {
     if (!str_contains($manifest, $expected)) throw new RuntimeException("Нет восстановления после перезагрузки: {$expected}");
 }
 foreach (['REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', 'ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', 'isIgnoringBatteryOptimizations'] as $expected) {
@@ -37,11 +41,17 @@ if (!str_contains($onboarding, 'Stage.BATTERY') || !str_contains($onboarding, '�
 if (!str_contains($service, 'runCatching { tracker.start() }') || !str_contains($logger, 'PRUNE_INTERVAL_MS')) {
     throw new RuntimeException('Не добавлена защита сервиса или экономное обслуживание журнала');
 }
-foreach (['service_heartbeat_at', 'tracker_event_at', 'call_capture_finished_at', 'sync_failed_detail', 'pending_calls', 'device_idle', 'battery_optimization_ignored'] as $expected) {
+foreach (['service_heartbeat_at', 'tracker_event_at', 'call_capture_finished_at', 'sync_failed_detail', 'pending_calls', 'device_idle', 'battery_optimization_ignored', 'device_boot_at', 'last_recovery_attempt_at', 'last_recovery_success_at', 'last_recovery_reason', 'recovery_attempt_count', 'recovery_loop_detected', 'watchdog_last_check_at', 'last_recovery_error'] as $expected) {
     if (!str_contains($diagnostics, $expected)) throw new RuntimeException("Чёрный ящик не сохраняет диагностический параметр: {$expected}");
 }
-foreach (['STABILITY_GAP', 'serviceHeartbeatAgeMs', 'worker_started', 'worker_finished'] as $expected) {
+foreach (['STABILITY_GAP', 'serviceHeartbeatAgeMs', 'watchdogChecked'] as $expected) {
     if (!str_contains($worker, $expected)) throw new RuntimeException("Worker не диагностирует остановку сервиса: {$expected}");
+}
+foreach (['START_STICKY', 'CalltrackRecoveryManager.recover(this, RecoveryReason.SERVICE_DESTROYED)', 'onTaskRemoved'] as $expected) {
+    if (!str_contains($service, $expected)) throw new RuntimeException("Foreground service не поддерживает восстановление: {$expected}");
+}
+foreach (['MAX_RECOVERY_ATTEMPTS = 3', 'RECOVERY_WINDOW_MS = 30 * 60 * 1000L', 'recovery_loop_detected', 'last_recovery_error'] as $expected) {
+    if (!str_contains($diagnostics, $expected)) throw new RuntimeException("Нет защиты от restart loop: {$expected}");
 }
 foreach (['SERVICE_HEARTBEAT_INTERVAL_MS', 'serviceHeartbeat', 'tracker_event', 'call_capture_started', 'call_capture_finished', 'service_timeout', 'task_removed'] as $expected) {
     if (!str_contains($service, $expected)) throw new RuntimeException("Сервис не пишет этап диагностики: {$expected}");

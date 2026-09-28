@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Ключ Android Keystore не переносится между устройствами, поэтому
+         связанный с ним encrypted auth-файл также нельзя восстанавливать. -->
+    <exclude domain="sharedpref" path="android_auth.xml" />
+</full-backup-content>

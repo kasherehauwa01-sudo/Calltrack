@@ -40,6 +40,10 @@ class SettingsFragment : Fragment() {
         binding.btnThemeMode.setOnClickListener {
             showThemeDialog()
         }
+
+        binding.btnPermissions.setOnClickListener {
+            (requireActivity() as? MainActivity)?.openPermissionsScreen()
+        }
     }
 
     private fun showThemeDialog() {
