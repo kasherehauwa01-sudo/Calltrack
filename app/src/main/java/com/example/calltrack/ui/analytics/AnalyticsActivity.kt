@@ -258,6 +258,32 @@ class AnalyticsActivity : BaseActivity() {
         }
     }
 
+    private fun loadContactTimeline() {
+        content.removeAllViews()
+        addText("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u043A\u043B\u0438\u0435\u043D\u0442\u0430\u043C...")
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { requestContactTimeline() }
+                    .recoverCatching { requestCallsFallback() }
+            }
+            result.onSuccess { timeline ->
+                managerJournalCalls = timeline.calls
+                managerEmails = timeline.emails
+                managerSales = timeline.sales
+                managerSalesAvailable = timeline.salesAvailable
+                clientNames = clientNames + timeline.calls.associate { it.phone to it.tag.ifBlank { it.phone } }
+                managerJournalError = null
+            }.onFailure {
+                managerJournalCalls = emptyList()
+                managerEmails = emptyList()
+                managerSales = emptyList()
+                managerSalesAvailable = false
+                managerJournalError = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0437\u0432\u043E\u043D\u043A\u0438 \u043A\u043B\u0438\u0435\u043D\u0442\u0430\u043C. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043A \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442\u0443."
+            }
+            renderContent()
+        }
+    }
+
     private fun requestContactTimeline(): ContactTimeline {
         val token = AuthStore(this).token
         check(token.isNotBlank()) { "Android session is missing" }
@@ -271,34 +297,7 @@ class AnalyticsActivity : BaseActivity() {
                 error(payload.optString("message", "HTTP ${response.code}"))
             }
             val data = payload.getJSONObject("data")
-            val rows = data.optJSONArray("calls")
-            val calls = buildList {
-                if (rows == null) return@buildList
-                for (index in 0 until rows.length()) {
-                    val row = rows.optJSONObject(index) ?: continue
-                    val timestamp = runCatching {
-                        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(
-                            "${row.optString("call_date")} ${row.optString("call_time")}"
-                        )?.time
-                    }.getOrNull() ?: continue
-                    val duration = parseDurationSeconds(row.optString("duration"))
-                    add(
-                        CallEntity(
-                            id = row.optLong("id_db"),
-                            phone = row.optString("phone"),
-                            type = repairText(row.optString("call_type")),
-                            duration = duration,
-                            note = repairText(row.optString("comment")),
-                            // The server-side client name is carried separately from
-                            // local Room contacts and is used only for grouping.
-                            tag = repairText(row.optString("client")),
-                            reminder = repairText(row.optString("reminder_text")),
-                            timestamp = timestamp,
-                            uploaded = true
-                        )
-                    )
-                }
-            }
+            val calls = parseTimelineCalls(data.optJSONArray("calls"))
             val emailsJson = data.optJSONArray("emails")
             val emails = buildList {
                 if (emailsJson == null) return@buildList
@@ -310,10 +309,50 @@ class AnalyticsActivity : BaseActivity() {
             val sales = buildList {
                 if (salesJson == null) return@buildList
                 for (index in 0 until salesJson.length()) salesJson.optJSONObject(index)?.let { row ->
-                    add(TimelineSale(row.optString("client"), row.optString("total_amount"), parseServerTimestamp(row.optString("sale_date") + " 00:00:00")))
+                    add(TimelineSale(row.optString("client"), row.optString("phone"), row.optString("total_amount"), parseServerTimestamp(row.optString("sale_date").take(10) + " 00:00:00")))
                 }
             }
             return ContactTimeline(calls, emails, sales, data.optBoolean("sales_available", true))
+        }
+    }
+
+    private fun requestCallsFallback(): ContactTimeline {
+        val token = AuthStore(this).token
+        val (from, to) = activePeriod.dateRange()
+        val url = BuildConfig.SQL_API_BASE_URL.trimEnd('/') +
+            "/get_calls.php?date_from=$from&date_to=$to&limit=0"
+        val request = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
+        httpClient.newCall(request).execute().use { response ->
+            val payload = JSONObject(response.body?.string().orEmpty())
+            if (!response.isSuccessful || payload.optString("status") != "success") {
+                error(payload.optString("message", "HTTP ${response.code}"))
+            }
+            return ContactTimeline(parseTimelineCalls(payload.optJSONArray("data")), emptyList(), emptyList(), false)
+        }
+    }
+
+    private fun parseTimelineCalls(rows: org.json.JSONArray?): List<CallEntity> = buildList {
+        if (rows == null) return@buildList
+        for (index in 0 until rows.length()) {
+            val row = rows.optJSONObject(index) ?: continue
+            val timestamp = runCatching {
+                SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(
+                    "${row.optString("call_date")} ${row.optString("call_time")}"
+                )?.time
+            }.getOrNull() ?: continue
+            add(
+                CallEntity(
+                    id = row.optLong("id_db"),
+                    phone = row.optString("phone"),
+                    type = repairText(row.optString("call_type")),
+                    duration = parseDurationSeconds(row.optString("duration")),
+                    note = repairText(row.optString("comment")),
+                    tag = repairText(row.optString("client")),
+                    reminder = repairText(row.optString("reminder_text")),
+                    timestamp = timestamp,
+                    uploaded = true
+                )
+            )
         }
     }
 
@@ -364,23 +403,30 @@ class AnalyticsActivity : BaseActivity() {
         val clientCalls = calls.filter {
             it.duration >= 10 && (it.type == "\u0412\u0445\u043E\u0434\u044F\u0449\u0438\u0439" || it.type == "\u0418\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0439")
         }
-        val clients = (clientCalls.map { clientNames[it.phone] ?: it.phone } + managerEmails.map { it.client } + managerSales.map { it.client })
+        val clientKeys = (clientCalls.map { timelineClientKey(clientNames[it.phone].orEmpty(), it.phone) } +
+            managerEmails.map { timelineClientKey(it.client, "") } +
+            managerSales.map { timelineClientKey(it.client, it.phone) })
             .filter { it.isNotBlank() }.distinct()
-            .sortedByDescending { client ->
+            .sortedByDescending { key ->
                 maxOf(
-                    clientCalls.filter { (clientNames[it.phone] ?: it.phone) == client }.maxOfOrNull { it.timestamp } ?: 0L,
-                    managerEmails.filter { it.client == client }.maxOfOrNull { it.timestamp } ?: 0L,
-                    managerSales.filter { it.client == client }.maxOfOrNull { it.timestamp } ?: 0L
+                    clientCalls.filter { timelineClientKey(clientNames[it.phone].orEmpty(), it.phone) == key }.maxOfOrNull { it.timestamp } ?: 0L,
+                    managerEmails.filter { timelineClientKey(it.client, "") == key }.maxOfOrNull { it.timestamp } ?: 0L,
+                    managerSales.filter { timelineClientKey(it.client, it.phone) == key }.maxOfOrNull { it.timestamp } ?: 0L
                 )
             }
-        if (clients.isEmpty()) {
+        if (clientKeys.isEmpty()) {
             addText("\u041D\u0435\u0442 \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u0437\u0430 \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u044B\u0439 \u043F\u0435\u0440\u0438\u043E\u0434")
             return
         }
-        clients.forEach { client ->
-            val rows = clientCalls.filter { (clientNames[it.phone] ?: it.phone) == client }
-            val emails = managerEmails.filter { it.client == client }
-            val sales = managerSales.filter { it.client == client }
+        clientKeys.forEach { key ->
+            val rows = clientCalls.filter { timelineClientKey(clientNames[it.phone].orEmpty(), it.phone) == key }
+            val emails = managerEmails.filter { timelineClientKey(it.client, "") == key }
+            val sales = managerSales.filter { timelineClientKey(it.client, it.phone) == key }
+            val client = rows.firstNotNullOfOrNull { clientNames[it.phone]?.takeIf(String::isNotBlank) }
+                ?: emails.firstOrNull()?.client?.takeIf(String::isNotBlank)
+                ?: sales.firstOrNull()?.client?.takeIf(String::isNotBlank)
+                ?: sales.firstOrNull()?.phone?.takeIf(String::isNotBlank)
+                ?: rows.firstOrNull()?.phone.orEmpty()
             val duration = rows.sumOf { it.duration }
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -419,6 +465,13 @@ class AnalyticsActivity : BaseActivity() {
     }
 
     private fun callEventLabel(call: CallEntity): String = "${call.type} \u2022 ${formatDuration(call.duration)}"
+
+    private fun timelineClientKey(name: String, phone: String): String {
+        val normalizedName = name.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
+        if (normalizedName.isNotBlank()) return "name:$normalizedName"
+        val digits = phone.filter(Char::isDigit).takeLast(10)
+        return if (digits.isNotBlank()) "phone:$digits" else ""
+    }
 
     private fun withAlpha(color: Int, alpha: Int): Int = Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color))
 
@@ -731,5 +784,5 @@ private enum class AnalyticsPeriod(val title: String, val hasDetail: Boolean = f
 private enum class AnalyticsDetail(val title: String) { DAY("\u0414\u043D\u0438"), WEEK("\u041D\u0435\u0434\u0435\u043B\u0438"), MONTH("\u041C\u0435\u0441\u044F\u0446\u044B") }
 private data class ContactTimeline(val calls: List<CallEntity>, val emails: List<TimelineEmail>, val sales: List<TimelineSale>, val salesAvailable: Boolean)
 private data class TimelineEmail(val client: String, val subject: String, val timestamp: Long)
-private data class TimelineSale(val client: String, val amount: String, val timestamp: Long)
+private data class TimelineSale(val client: String, val phone: String, val amount: String, val timestamp: Long)
 private data class TimelineUiEvent(val timestamp: Long, val label: String, val color: Int)

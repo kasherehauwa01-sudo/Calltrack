@@ -94,6 +94,7 @@ salesAssert(str_contains($integration,'manager=:manager')&&str_contains($integra
 salesAssert(str_contains($html,'saleLast:1')&&str_contains($html,'a.saleLast-b.saleLast||a.time-b.time'),'Продажа не размещается последней среди событий той же даты');
 salesAssert(str_contains($html,'keys.length===1?rows[0]:null')&&str_contains($html,'phone:+7${phone}'),'Frontend не связывает canonical phone key с существующей UI-группой');
 salesAssert(str_contains($html,'canonicalSalesClientKey')&&str_contains($html,'clientSalesAliases=payload.client_aliases'),'Frontend не применяет canonical aliases');
+salesAssert(str_contains($html,'salesByPhone')&&str_contains($html,'salesByName')&&str_contains($html,'rowPhones.flatMap'),'Плашки продаж не имеют fallback-сопоставления по телефону и имени клиента');
 $config=(string)file_get_contents($root.'/api/config.php');salesAssert(str_contains($config,"SALES_JOURNAL_TIMEOUT') ?: 90")&&str_contains($config,'SALES_JOURNAL_CONNECT_TIMEOUT'),'Timeout не настраивается или снова меньше production latency');
 salesAssert(str_contains($config,'SALES_JOURNAL_CACHE_TTL')&&str_contains($batch,'loadSalesJournalBatchCached'),'Быстрый кэш продаж не подключён к endpoint');
 salesAssert(str_contains($config,'SALES_JOURNAL_DETAIL_CACHE_TTL')&&str_contains($detail,'loadSalesJournalDetailCached'),'Быстрый кэш карточки продажи не подключён');
