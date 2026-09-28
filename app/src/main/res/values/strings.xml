@@ -37,4 +37,14 @@
     <string name="permission_install_packages">Установка обновлений</string>
     <string name="permission_install_packages_description">Установка новой версии Calltrack из приложения</string>
     <string name="auth_storage_unavailable">Не удалось подготовить защищённое хранилище. Перезапустите приложение.</string>
+    <string name="permissions_onboarding_title">Настроим Calltrack</string>
+    <string name="permissions_onboarding_description">Для корректной работы приложению потребуется доступ к функциям телефона.</string>
+    <string name="onboarding_phone">Телефон и звонки\nСовершение и обработка звонков</string>
+    <string name="onboarding_call_log">Журнал вызовов\nРабота с историей звонков</string>
+    <string name="onboarding_contacts">Контакты\nИмена и поиск контактов</string>
+    <string name="onboarding_notifications">Уведомления\nУведомления Calltrack</string>
+    <string name="grant_permissions">Предоставить разрешения</string>
+    <string name="continue_action">Продолжить</string>
+    <string name="open_settings">Открыть настройки</string>
+    <string name="permissions_onboarding_denied">Некоторые возможности будут ограничены. Это не помешает продолжить работу. Разрешения можно выдать позже в настройках.</string>
 </resources>

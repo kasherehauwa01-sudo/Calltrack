@@ -1,15 +1,18 @@
 package com.example.calltrack.reminder
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.calltrack.App
 import com.example.calltrack.R
 import com.example.calltrack.data.local.NotificationEntity
@@ -79,7 +82,9 @@ object ReminderNotifier {
             .setContentIntent(openCardPending)
             .build()
 
-        manager.notify(("reminder" + phone).hashCode(), notification)
+        val canNotify = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (canNotify) runCatching { manager.notify(("reminder" + phone).hashCode(), notification) }
         saveToNotificationCenter(context, phone, name, message)
     }
 
