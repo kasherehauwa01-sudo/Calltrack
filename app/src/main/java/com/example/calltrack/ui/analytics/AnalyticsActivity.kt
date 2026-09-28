@@ -239,7 +239,10 @@ class AnalyticsActivity : BaseActivity() {
         content.removeAllViews()
         addText("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u043A\u043B\u0438\u0435\u043D\u0442\u0430\u043C...")
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { requestContactTimeline() } }
+            val result = withContext(Dispatchers.IO) {
+                runCatching { requestContactTimeline() }
+                    .recoverCatching { requestCallsFallback() }
+            }
             result.onSuccess { timeline ->
                 managerJournalCalls = timeline.calls
                 managerEmails = timeline.emails
@@ -271,34 +274,7 @@ class AnalyticsActivity : BaseActivity() {
                 error(payload.optString("message", "HTTP ${response.code}"))
             }
             val data = payload.getJSONObject("data")
-            val rows = data.optJSONArray("calls")
-            val calls = buildList {
-                if (rows == null) return@buildList
-                for (index in 0 until rows.length()) {
-                    val row = rows.optJSONObject(index) ?: continue
-                    val timestamp = runCatching {
-                        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(
-                            "${row.optString("call_date")} ${row.optString("call_time")}"
-                        )?.time
-                    }.getOrNull() ?: continue
-                    val duration = parseDurationSeconds(row.optString("duration"))
-                    add(
-                        CallEntity(
-                            id = row.optLong("id_db"),
-                            phone = row.optString("phone"),
-                            type = repairText(row.optString("call_type")),
-                            duration = duration,
-                            note = repairText(row.optString("comment")),
-                            // The server-side client name is carried separately from
-                            // local Room contacts and is used only for grouping.
-                            tag = repairText(row.optString("client")),
-                            reminder = repairText(row.optString("reminder_text")),
-                            timestamp = timestamp,
-                            uploaded = true
-                        )
-                    )
-                }
-            }
+            val calls = parseTimelineCalls(data.optJSONArray("calls"))
             val emailsJson = data.optJSONArray("emails")
             val emails = buildList {
                 if (emailsJson == null) return@buildList
@@ -314,6 +290,46 @@ class AnalyticsActivity : BaseActivity() {
                 }
             }
             return ContactTimeline(calls, emails, sales, data.optBoolean("sales_available", true))
+        }
+    }
+
+    private fun requestCallsFallback(): ContactTimeline {
+        val token = AuthStore(this).token
+        val (from, to) = activePeriod.dateRange()
+        val url = BuildConfig.SQL_API_BASE_URL.trimEnd('/') +
+            "/get_calls.php?date_from=$from&date_to=$to&limit=0"
+        val request = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
+        httpClient.newCall(request).execute().use { response ->
+            val payload = JSONObject(response.body?.string().orEmpty())
+            if (!response.isSuccessful || payload.optString("status") != "success") {
+                error(payload.optString("message", "HTTP ${response.code}"))
+            }
+            return ContactTimeline(parseTimelineCalls(payload.optJSONArray("data")), emptyList(), emptyList(), false)
+        }
+    }
+
+    private fun parseTimelineCalls(rows: org.json.JSONArray?): List<CallEntity> = buildList {
+        if (rows == null) return@buildList
+        for (index in 0 until rows.length()) {
+            val row = rows.optJSONObject(index) ?: continue
+            val timestamp = runCatching {
+                SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse(
+                    "${row.optString("call_date")} ${row.optString("call_time")}"
+                )?.time
+            }.getOrNull() ?: continue
+            add(
+                CallEntity(
+                    id = row.optLong("id_db"),
+                    phone = row.optString("phone"),
+                    type = repairText(row.optString("call_type")),
+                    duration = parseDurationSeconds(row.optString("duration")),
+                    note = repairText(row.optString("comment")),
+                    tag = repairText(row.optString("client")),
+                    reminder = repairText(row.optString("reminder_text")),
+                    timestamp = timestamp,
+                    uploaded = true
+                )
+            )
         }
     }
 
