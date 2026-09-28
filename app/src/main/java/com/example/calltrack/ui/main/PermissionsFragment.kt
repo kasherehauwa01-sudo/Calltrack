@@ -27,12 +27,13 @@ class PermissionsFragment : Fragment() {
     private var _binding: FragmentPermissionsBinding? = null
     private val binding get() = _binding!!
     private var pendingRuntimePermission: String? = null
+    private val permanentlyDeniedPermissions = mutableSetOf<String>()
 
     private val runtimePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val permission = pendingRuntimePermission
         pendingRuntimePermission = null
         if (!granted && permission != null && !shouldShowRequestPermissionRationale(permission)) {
-            openApplicationSettings()
+            permanentlyDeniedPermissions += permission
         }
         refreshPermissions()
     }
@@ -93,8 +94,12 @@ class PermissionsFragment : Fragment() {
 
     private fun MutableList<PermissionItem>.addRuntimePermission(@StringRes title: Int, @StringRes description: Int, permission: String) {
         add(PermissionItem(title, description, { ContextCompat.checkSelfPermission(requireContext(), permission) == PackageManager.PERMISSION_GRANTED }) {
-            pendingRuntimePermission = permission
-            runtimePermissionLauncher.launch(permission)
+            if (permission in permanentlyDeniedPermissions) {
+                openApplicationSettings()
+            } else {
+                pendingRuntimePermission = permission
+                runtimePermissionLauncher.launch(permission)
+            }
         })
     }
 
