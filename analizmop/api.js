@@ -28,7 +28,9 @@ window.calltrackApi.endpoints = Object.assign({
   userCommand: '/vr/calltrack/api/user_command.php',
   installLatestUpdate: '/vr/calltrack/api/admin_install_update.php',
   webAuth: '/vr/calltrack/api/web_auth_api.php',
-  webUsers: '/vr/calltrack/api/web_users.php'
+  webUsers: '/vr/calltrack/api/web_users.php',
+  clientSales: '/vr/calltrack/api/client_sales.php',
+  saleDetail: '/vr/calltrack/api/sale_detail.php'
 }, window.calltrackApi.endpoints || {});
 window.calltrackApi.requestJson = async function requestJson(url, options = {}) {
   const response = await fetch(url, { credentials: 'same-origin', ...options });
@@ -102,6 +104,28 @@ window.calltrackApi.lookupClientNames = window.calltrackApi.lookupClientNames ||
   });
   return { names: payload.data || {}, clients: payload.clients || {}, emailClients: payload.email_clients || {} };
 });
+
+window.calltrackApi.getClientSales = async function getClientSales(manager, dateFrom, dateTo) {
+  return window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientSales, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ manager, date_from: dateFrom, date_to: dateTo }),
+    cache: 'no-store'
+  });
+};
+
+const saleDetailRequests = new Map();
+window.calltrackApi.getSaleDetail = function getSaleDetail(id) {
+  const key = String(id);
+  if (saleDetailRequests.has(key)) return saleDetailRequests.get(key);
+  const endpoint = window.calltrackApi.endpoints.saleDetail;
+  const separator = endpoint.includes('?') ? '&' : '?';
+  const request = window.calltrackApi.requestJson(`${endpoint}${separator}id=${encodeURIComponent(id)}`, { cache: 'no-store' })
+    .then((payload) => payload.data || null)
+    .catch((error) => { saleDetailRequests.delete(key); throw error; });
+  saleDetailRequests.set(key, request);
+  return request;
+};
 
 window.calltrackApi.clientsCacheStatus = async function clientsCacheStatus(password) {
   const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientsCache, {

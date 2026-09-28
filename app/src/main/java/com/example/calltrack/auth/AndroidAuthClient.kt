@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.Build
 import com.example.calltrack.BuildConfig
 import com.example.calltrack.data.repository.PrefsManager
+import com.example.calltrack.service.CalltrackRecoveryManager
+import com.example.calltrack.service.RecoveryReason
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -17,6 +19,7 @@ class AndroidAuthClient(context: Context) {
     private val store = AuthStore(context.applicationContext)
     private val client = OkHttpClient()
     private val endpoint = BuildConfig.SQL_API_BASE_URL.trimEnd('/') + "/android_auth_api.php"
+    val hasSavedSession: Boolean get() = store.isAuthenticated
 
     suspend fun login(login: String, pin: String): Result<Unit> = withContext(Dispatchers.IO) { runCatching {
         val json=JSONObject().put("login",login).put("pin",pin).put("device_name","${Build.MANUFACTURER} ${Build.MODEL}")
@@ -24,8 +27,9 @@ class AndroidAuthClient(context: Context) {
         client.newCall(request).execute().use { response ->
             val body=JSONObject(response.body?.string().orEmpty());if(!response.isSuccessful)error(body.optString("message","\u041E\u0448\u0438\u0431\u043A\u0430 \u0432\u0445\u043E\u0434\u0430"))
             val data=body.getJSONObject("data");val user=data.getJSONObject("user")
-            val managerPhone=user.optString("manager_user_phone");store.save(data.getString("token"),user.getLong("id"),user.getString("login"),user.getString("display_name"),user.getString("role"),managerPhone)
-            PrefsManager(appContext).setManagerName(user.getString("display_name"));PrefsManager(appContext).setManagerPhone(managerPhone)
+            store.save(data.getString("token"),user.getLong("id"),user.getString("login"),user.getString("display_name"),user.getString("role"))
+            PrefsManager(appContext).setManagerName(user.getString("display_name"));PrefsManager(appContext).setManagerPhone(user.getString("user_phone"))
+            CalltrackRecoveryManager.recover(appContext, RecoveryReason.APP_START)
         }
     } }
 
@@ -34,13 +38,13 @@ class AndroidAuthClient(context: Context) {
         runCatching { client.newCall(authorized("$endpoint?action=me")).execute().use { response ->
             if(!response.isSuccessful)return@use false
             val user=JSONObject(response.body?.string().orEmpty()).getJSONObject("data").getJSONObject("user")
-            val managerPhone=user.optString("manager_user_phone");store.save(store.token,user.getLong("id"),user.getString("login"),user.getString("display_name"),user.getString("role"),managerPhone)
-            PrefsManager(appContext).setManagerName(user.getString("display_name"));PrefsManager(appContext).setManagerPhone(managerPhone);true
+            store.save(store.token,user.getLong("id"),user.getString("login"),user.getString("display_name"),user.getString("role"))
+            PrefsManager(appContext).setManagerName(user.getString("display_name"));PrefsManager(appContext).setManagerPhone(user.getString("user_phone"));true
         } }.getOrDefault(false)
     }
 
     suspend fun logout() = withContext(Dispatchers.IO) {
-        runCatching { client.newCall(authorized("$endpoint?action=logout", post=true)).execute().close() };store.clear();PrefsManager(appContext).setManagerName("");PrefsManager(appContext).setManagerPhone("")
+        runCatching { client.newCall(authorized("$endpoint?action=logout", post=true)).execute().close() };store.clear();CalltrackRecoveryManager.cancelAuthorizedWork(appContext);PrefsManager(appContext).setManagerName("");PrefsManager(appContext).setManagerPhone("")
     }
 
     private fun authorized(url:String,post:Boolean=false):Request {

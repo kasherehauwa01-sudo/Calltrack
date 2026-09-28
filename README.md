@@ -909,6 +909,29 @@ tail -n 100 storage/logs/clients_cache_refresh.log
 
 Временная ошибка Clients оставляет кэш и cursor без изменений. Ошибка контракта, порядка событий или invalid cursor отмечается сообщением «Требуется полное обновление кэша»; автоматический fallback на full намеренно отсутствует. `update_calltrack.sh` обновление кэша не запускает.
 
+### Ежечасная синхронизация исходящих Email
+
+Исходящие письма забирает CLI-задача `api/sync_email.php`. Она запускается каждый
+час в 07 минут, использует межпроцессный lock и синхронизирует только активные
+почтовые ящики. Открытый в браузере «Реестр Email» перечитывает данные из БД
+каждые пять минут, поэтому результат cron появляется без ручного обновления страницы.
+
+После обновления файлов установите оба фоновых задания Calltrack одной
+идемпотентной командой и проверьте Email-блок crontab:
+
+```bash
+cd /var/www/html/vr/calltrack
+sudo bash scripts/install_background_jobs.sh /var/www/html/vr/calltrack
+sudo crontab -u www-data -l | sed -n '/CALLTRACK_EMAIL_SYNC/,/CALLTRACK_EMAIL_SYNC END/p'
+```
+
+Ручная проверка тем же пользователем и просмотр журнала:
+
+```bash
+sudo -u www-data /usr/bin/php /var/www/html/vr/calltrack/api/sync_email.php
+tail -n 100 /var/www/html/vr/calltrack/storage/logs/email-sync.log
+```
+
 ### Изменённые файлы после объединения
 
 - `analizmop/index.html`

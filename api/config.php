@@ -54,6 +54,27 @@ if (!defined('CALLTRACK_ADMIN_PASSWORD')) {
     // Для production задайте значение в /etc/calltrack/config.local.php.
     define('CALLTRACK_ADMIN_PASSWORD', (string)(getenv('CALLTRACK_ADMIN_PASSWORD') ?: '8852285'));
 }
+if (!defined('SALES_JOURNAL_BASE_URL')) {
+    define('SALES_JOURNAL_BASE_URL', rtrim((string)(getenv('SALES_JOURNAL_BASE_URL') ?: ''), '/'));
+}
+if (!defined('CALLTRACK_INTEGRATION_TOKEN')) {
+    define('CALLTRACK_INTEGRATION_TOKEN', trim((string)(getenv('CALLTRACK_INTEGRATION_TOKEN') ?: '')));
+}
+if (!defined('SALES_JOURNAL_CONNECT_TIMEOUT')) {
+    define('SALES_JOURNAL_CONNECT_TIMEOUT', max(1, (int)(getenv('SALES_JOURNAL_CONNECT_TIMEOUT') ?: 3)));
+}
+if (!defined('SALES_JOURNAL_TIMEOUT')) {
+    define('SALES_JOURNAL_TIMEOUT', max(1, (int)(getenv('SALES_JOURNAL_TIMEOUT') ?: 90)));
+}
+if (!defined('SALES_JOURNAL_CACHE_TTL')) {
+    define('SALES_JOURNAL_CACHE_TTL', max(30, (int)(getenv('SALES_JOURNAL_CACHE_TTL') ?: 600)));
+}
+if (!defined('SALES_JOURNAL_STALE_CACHE_TTL')) {
+    define('SALES_JOURNAL_STALE_CACHE_TTL', max(SALES_JOURNAL_CACHE_TTL, (int)(getenv('SALES_JOURNAL_STALE_CACHE_TTL') ?: 86400)));
+}
+if (!defined('SALES_JOURNAL_DETAIL_CACHE_TTL')) {
+    define('SALES_JOURNAL_DETAIL_CACHE_TTL', max(60, (int)(getenv('SALES_JOURNAL_DETAIL_CACHE_TTL') ?: 3600)));
+}
 
 function dbConfigValue(string $envName, string $constantName): string
 {
