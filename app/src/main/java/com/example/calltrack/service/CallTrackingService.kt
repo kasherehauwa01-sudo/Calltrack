@@ -51,6 +51,7 @@ class CallTrackingService : Service() {
 
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        StabilityDiagnostics.serviceConfirmed(this)
         when (intent?.action) {
             ACTION_MARK_PERSONAL_FROM_NOTIFICATION -> {
                 val phone = intent?.getStringExtra(EXTRA_NOTIFICATION_PHONE).orEmpty()
@@ -536,11 +537,13 @@ class CallTrackingService : Service() {
             runCatching { tracker.stop() }
                 .onFailure { error -> AppLogger.log(this, "WARN", "\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0438 \u043D\u0430\u0431\u043B\u044E\u0434\u0435\u043D\u0438\u044F \u0437\u0430 \u0437\u0432\u043E\u043D\u043A\u0430\u043C\u0438: ${error.message}", error) }
         }
+        CalltrackRecoveryManager.recover(this, RecoveryReason.SERVICE_DESTROYED)
         super.onDestroy()
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         StabilityDiagnostics.mark(this, "task_removed")
+        CalltrackRecoveryManager.recover(this, RecoveryReason.SERVICE_DESTROYED)
         super.onTaskRemoved(rootIntent)
     }
 

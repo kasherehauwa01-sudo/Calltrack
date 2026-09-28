@@ -6,7 +6,8 @@ import com.example.calltrack.data.remote.ApiFactory
 import com.example.calltrack.data.notification.NotificationRepository
 import com.example.calltrack.data.repository.CallRepository
 import com.example.calltrack.logging.AppLogger
-import com.example.calltrack.service.CalltrackStabilityWorker
+import com.example.calltrack.service.CalltrackRecoveryManager
+import com.example.calltrack.service.RecoveryReason
 import com.example.calltrack.service.StabilityDiagnostics
 import com.google.android.material.color.DynamicColors
 import kotlinx.coroutines.CoroutineScope
@@ -42,6 +43,6 @@ class App : Application() {
             webhookApi = ApiFactory.createWebhookApi(),
             context = this
         )
-        CalltrackStabilityWorker.schedule(this)
+        CalltrackRecoveryManager.recover(this, RecoveryReason.PROCESS_RESTART)
     }
 }
