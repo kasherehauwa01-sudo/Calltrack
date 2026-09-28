@@ -59,6 +59,7 @@ foreach (["email_messages.direction = 'outgoing'", 'LOWER(email_messages.from_em
 $sync = (string)file_get_contents($root . '/api/email_sync.php');
 $syncCli = (string)file_get_contents($root . '/api/sync_email.php');
 $cronInstaller = (string)file_get_contents($root . '/scripts/install_email_sync_cron.sh');
+$backgroundInstaller = (string)file_get_contents($root . '/scripts/install_background_jobs.sh');
 foreach (['OP_READONLY', 'FT_PEEK', 'fetchImapBodyWithoutMarkingRead', 'imap_fetch_overview($imap, (string)$uid, FT_UID)'] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("IMAP-синхронизация может пометить письмо прочитанным: {$required}");
 }
@@ -91,6 +92,9 @@ foreach (['syncEmailMailboxes(getPdo(), null, 0)', 'flock($lock, LOCK_EX | LOCK_
 foreach (['7 * * * *', 'scripts/sync_email_cron.sh', 'CALLTRACK_EMAIL_SYNC'] as $required) {
     if (!str_contains($cronInstaller, $required)) throw new RuntimeException("Не настроена ежечасная синхронизация исходящих писем: {$required}");
 }
+foreach (['install_clients_cache_cron.sh', 'install_email_sync_cron.sh'] as $required) {
+    if (!str_contains($backgroundInstaller, $required)) throw new RuntimeException("Общий установщик фоновых задач не запускает: {$required}");
+}
 if (str_contains($api, 'LIMIT 1000')) throw new RuntimeException('Реестр по-прежнему обрезает историю исходящих писем');
 if (!str_contains($api, 'nextEmailMailboxId($pdo)') || !str_contains($api, 'syncEmailMailboxes($pdo, $mailboxId, 10)')) {
     throw new RuntimeException('Ручная синхронизация может снова превысить HTTP-тайм-аут');
@@ -107,6 +111,9 @@ foreach (['emailTestConnectionBtn', 'Проверить подключение',
 if (!str_contains($js, 'action=test')) throw new RuntimeException('Клиент не вызывает IMAP test endpoint');
 foreach (['emailSyncNewBtn', 'Подгрузить новые письма', 'emailSyncProgress', 'Подгружаем новые письма', 'syncErrors.slice(0,2)', 'catch(error){syncError=error;}', 'Не удалось завершить текущую порцию синхронизации', 'Писем в реестре:'] as $required) {
     if (!str_contains($html, $required)) throw new RuntimeException("В реестре нет управления или прогресса синхронизации: {$required}");
+}
+foreach (['startEmailRegistryAutoRefresh', '5*60*1000', "document.visibilityState==='visible'", 'loadEmailModule(false)'] as $required) {
+    if (!str_contains($html, $required)) throw new RuntimeException("Открытый реестр Email автоматически не обновляется: {$required}");
 }
 foreach (["direction:'outgoing'", 'loadEmailRegistryClientNames(emailMessages)', 'window.calltrackApi.lookupClientNames([],emails.slice(offset,offset+500))', 'item.client_display_name', '<th>Менеджер</th><th>Клиент</th>', 'item.manager_name'] as $required) {
     if (!str_contains($html, $required)) throw new RuntimeException("Реестр исходящих email не показывает менеджера или клиента из Clients: {$required}");

@@ -973,6 +973,7 @@ async function loadEmailModule(runSync=false){
 }
 function emailIncomingStatusTitle(value){return value==='read'?'Прочитано':(value==='answered'?'Отвечено':'Непрочитано')}
 function emailOutgoingStatusTitle(value){return value==='not_delivered'?'Не доставлено':(value==='opened'?'Открыто':(value==='delivered'?'Доставлено':'—'))}
+function startEmailRegistryAutoRefresh(){setInterval(()=>{if(document.visibilityState==='visible'&&adminEls.emailRegistryPanel&&!adminEls.emailRegistryPanel.hidden)loadEmailModule(false);},5*60*1000);}
 function emailDatePart(value){return formatDateDisplay(String(value||'').slice(0,10))}
 function emailTimePart(value){const match=String(value||'').match(/(?:T|\s)(\d{1,2}:\d{2})/);return match?match[1]:''}
 function emailRecipientAddresses(value){return [...String(value||'').toLowerCase().matchAll(/[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}/gi)].map((match)=>match[0])}
@@ -2141,7 +2142,7 @@ async function initDashboard(){try{
   bindClientCalls();
 }catch(error){console.error('Ошибка загрузки/обработки данных:',error);els.emptyState.textContent='Не удалось загрузить данные с сервера';renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();}}
 async function requestWebAuth(action='me',body=null){return window.calltrackApi.webAuth(action,body);}
-async function openAuthenticatedApp(user){document.getElementById('authScreen').hidden=true;document.getElementById('appShell').hidden=false;document.getElementById('currentWebUser').textContent=`${user.display_name} · ${user.role==='admin'?'Администратор':'Менеджер'}`;if(user.role!=='admin'){document.querySelector('[data-tab="admin"]')?.remove();document.getElementById('adminView')?.remove();}try{bindAdminPanel();if(user.role==='admin'){adminEls.password.value=ADMIN_PASSWORD;unlockAdminPanel();}}catch(error){console.error('Ошибка инициализации админ-панели:',error);}await initDashboard();}
+async function openAuthenticatedApp(user){document.getElementById('authScreen').hidden=true;document.getElementById('appShell').hidden=false;document.getElementById('currentWebUser').textContent=`${user.display_name} · ${user.role==='admin'?'Администратор':'Менеджер'}`;if(user.role!=='admin'){document.querySelector('[data-tab="admin"]')?.remove();document.getElementById('adminView')?.remove();}try{bindAdminPanel();startEmailRegistryAutoRefresh();if(user.role==='admin'){adminEls.password.value=ADMIN_PASSWORD;unlockAdminPanel();}}catch(error){console.error('Ошибка инициализации админ-панели:',error);}await initDashboard();}
 document.getElementById('authForm').addEventListener('submit',async(event)=>{event.preventDefault();const error=document.getElementById('authError');error.textContent='';try{const user=await requestWebAuth('login',{login:document.getElementById('authLogin').value,pin:document.getElementById('authPin').value});await openAuthenticatedApp(user);}catch(reason){error.textContent=reason.message;}});
 document.getElementById('logoutBtn').addEventListener('click',async()=>{await requestWebAuth('logout');location.reload();});
 requestWebAuth().then(openAuthenticatedApp).catch(()=>{document.getElementById('authScreen').hidden=false;});

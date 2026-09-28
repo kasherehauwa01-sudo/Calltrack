@@ -116,6 +116,49 @@ function loadSalesJournalBatch(array $clients,string $from,string $to,?callable 
     return ['items'=>array_values($items),'requests'=>$requests,'client_aliases'=>$aliases];
 }
 
+function salesJournalCacheDirectory(): string
+{
+    $storage=trim((string)(getenv('CALLTRACK_STORAGE_DIR')?:''));
+    $directory=($storage!==''?rtrim($storage,'/'):dirname(__DIR__).'/storage').'/cache/sales-journal';
+    if(!is_dir($directory)&&!@mkdir($directory,0775,true)&&!is_dir($directory))throw new RuntimeException('Не удалось создать кэш Sales Journal');
+    return $directory;
+}
+
+function salesJournalCacheKey(array $clients,string $from,string $to): string
+{
+    $identity=[];
+    foreach(canonicalizeSalesJournalClients($clients) as $client){$sources=$client['source_keys'];sort($sources,SORT_STRING);$identity[]=['key'=>$client['key'],'phone'=>$client['phone'],'name'=>$client['name'],'source_keys'=>$sources];}
+    usort($identity,static fn(array $left,array $right):int=>strcmp($left['key'],$right['key']));
+    return hash('sha256',json_encode(['from'=>$from,'to'=>$to,'clients'=>$identity],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));
+}
+
+function readSalesJournalCache(string $key,int $maxAge): ?array
+{
+    $file=salesJournalCacheDirectory().'/'.$key.'.json';$modified=@filemtime($file);
+    if($modified===false||$modified<time()-$maxAge)return null;
+    $cached=json_decode((string)@file_get_contents($file),true);
+    if(!is_array($cached)||!isset($cached['items'],$cached['client_aliases'])||!is_array($cached['items'])||!is_array($cached['client_aliases']))return null;
+    return ['items'=>$cached['items'],'client_aliases'=>$cached['client_aliases'],'requests'=>0,'cache_hit'=>true,'cache_stale'=>$modified<time()-SALES_JOURNAL_CACHE_TTL,'cache_age_seconds'=>max(0,time()-$modified)];
+}
+
+function writeSalesJournalCache(string $key,array $result): void
+{
+    $directory=salesJournalCacheDirectory();$file=$directory.'/'.$key.'.json';$temporary=$file.'.'.getmypid().'.tmp';
+    $json=json_encode(['items'=>$result['items'],'client_aliases'=>$result['client_aliases']],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+    if(@file_put_contents($temporary,$json,LOCK_EX)===false||!@rename($temporary,$file)){@unlink($temporary);throw new RuntimeException('Не удалось сохранить кэш Sales Journal');}
+    foreach(glob($directory.'/*.json')?:[] as $cachedFile){$modified=@filemtime($cachedFile);if($modified!==false&&$modified<time()-SALES_JOURNAL_STALE_CACHE_TTL)@unlink($cachedFile);}
+}
+
+function loadSalesJournalBatchCached(array $clients,string $from,string $to,?callable $transport=null): array
+{
+    $clients=canonicalizeSalesJournalClients($clients);$key=salesJournalCacheKey($clients,$from,$to);
+    try{$cached=readSalesJournalCache($key,SALES_JOURNAL_CACHE_TTL);if($cached!==null)return $cached;}catch(Throwable $error){error_log('Sales Journal cache read failed: '.$error->getMessage());}
+    try{$result=loadSalesJournalBatch($clients,$from,$to,$transport);}
+    catch(Throwable $error){try{$stale=readSalesJournalCache($key,SALES_JOURNAL_STALE_CACHE_TTL);if($stale!==null){error_log('Sales Journal unavailable, stale cache used: '.$error->getMessage());return $stale;}}catch(Throwable $cacheError){error_log('Sales Journal stale cache read failed: '.$cacheError->getMessage());}throw $error;}
+    try{writeSalesJournalCache($key,$result);}catch(Throwable $error){error_log('Sales Journal cache write failed: '.$error->getMessage());}
+    return $result+['cache_hit'=>false,'cache_stale'=>false,'cache_age_seconds'=>0];
+}
+
 function allowSalesJournalDetails(array $items): void
 {
     startWebSession();$now=time();$allowed=[];foreach(($_SESSION['sales_journal_allowed']??[]) as $id=>$expires)if((int)$expires>$now)$allowed[(string)$id]=(int)$expires;foreach($items as $item)$allowed[(string)$item['sale_id']]=$now+1800;$_SESSION['sales_journal_allowed']=$allowed;

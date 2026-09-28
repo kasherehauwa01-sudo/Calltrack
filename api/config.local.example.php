@@ -16,5 +16,9 @@ define('SALES_JOURNAL_BASE_URL', ''); // например, https://example.ru/vr
 define('CALLTRACK_INTEGRATION_TOKEN', '');
 define('SALES_JOURNAL_CONNECT_TIMEOUT', 3);
 define('SALES_JOURNAL_TIMEOUT', 30);
+// Summary-продажи кэшируются на 10 минут; при ошибке Sales Journal можно
+// безопасно показать последний успешный результат не старше суток.
+define('SALES_JOURNAL_CACHE_TTL', 600);
+define('SALES_JOURNAL_STALE_CACHE_TTL', 86400);
 // При нестандартном расположении PHP CLI:
 // putenv('CALLTRACK_PHP_CLI=/usr/bin/php');

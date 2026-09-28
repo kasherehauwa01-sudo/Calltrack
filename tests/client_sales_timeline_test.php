@@ -21,6 +21,15 @@ salesAssert(count($sameNames)===1&&str_starts_with($sameNames[0]['key'],'name:')
 salesAssert(in_array('phone:+79377171142',$sameNames[0]['source_keys'],true)&&in_array('phone:+79375417002',$sameNames[0]['source_keys'],true),'Потеряны исходные телефонные ключи');
 $aliasResult=loadSalesJournalBatch($sameNames,'2026-09-20','2026-09-26',static fn($method,$url,$body)=>['items'=>[['sale_id'=>900,'client_key'=>$body['clients'][0]['key'],'matched_by'=>'name','sale_date'=>'2026-09-25','document_number'=>'Р-900','client'=>'Рыкунов Александр Сергеевич ИП','phone'=>'+79370000000','manager'=>null,'department'=>'','total_amount'=>'1.00']]]);
 salesAssert(($aliasResult['client_aliases']['phone:+79377171142']??'')===$sameNames[0]['key']&&($aliasResult['client_aliases']['phone:+79375417002']??'')===$sameNames[0]['key'],'Canonical aliases не возвращают продажу к обоим телефонам');
+$previousStorage=getenv('CALLTRACK_STORAGE_DIR');$cacheStorage=sys_get_temp_dir().'/calltrack-sales-cache-'.bin2hex(random_bytes(4));putenv('CALLTRACK_STORAGE_DIR='.$cacheStorage);
+$cacheClients=[['key'=>'phone:+79990000099','phone'=>'+79990000099','name'=>'Кэш Клиент','source_keys'=>['phone:+79990000099']]];$cacheRequests=0;
+$cacheTransport=static function($method,$url,$body)use(&$cacheRequests){$cacheRequests++;return ['items'=>[['sale_id'=>901,'client_key'=>$body['clients'][0]['key'],'matched_by'=>'phone','sale_date'=>'2026-09-25','document_number'=>'Р-901','client'=>'Кэш Клиент','phone'=>'+79990000099','manager'=>null,'department'=>'','total_amount'=>'10.00']]];};
+$cacheMiss=loadSalesJournalBatchCached($cacheClients,'2026-09-25','2026-09-25',$cacheTransport);$cacheHit=loadSalesJournalBatchCached($cacheClients,'2026-09-25','2026-09-25',$cacheTransport);
+salesAssert($cacheRequests===1&&!$cacheMiss['cache_hit']&&$cacheHit['cache_hit']&&$cacheHit['requests']===0,'Повторный запрос продаж не обслуживается быстрым кэшем');
+$cacheFile=salesJournalCacheDirectory().'/'.salesJournalCacheKey($cacheClients,'2026-09-25','2026-09-25').'.json';touch($cacheFile,time()-SALES_JOURNAL_CACHE_TTL-1);clearstatcache(true,$cacheFile);
+$stale=loadSalesJournalBatchCached($cacheClients,'2026-09-25','2026-09-25',static function(){throw new RuntimeException('timeout');});
+salesAssert($stale['cache_hit']&&$stale['cache_stale']&&count($stale['items'])===1,'При ошибке Sales Journal не используется последний успешный кэш');
+@unlink($cacheFile);@rmdir(dirname($cacheFile));@rmdir($cacheStorage.'/cache');@rmdir($cacheStorage);$previousStorage===false?putenv('CALLTRACK_STORAGE_DIR'):putenv('CALLTRACK_STORAGE_DIR='.$previousStorage);
 $different=canonicalizeSalesJournalClients([['phone'=>'+79000000001','name'=>'Клиент А'],['phone'=>'+79000000002','name'=>'Клиент Б']]);salesAssert(count($different)===2,'Разные клиенты ошибочно объединены');
 $similar=canonicalizeSalesJournalClients([['phone'=>'+79000000003','name'=>'Ромашка ООО'],['phone'=>'+79000000004','name'=>'Ромашка Плюс ООО']]);salesAssert(count($similar)===2,'Похожие имена ошибочно объединены');
 $emptyNames=canonicalizeSalesJournalClients([['phone'=>'+79000000005','name'=>''],['phone'=>'+79000000006','name'=>'']]);salesAssert(count($emptyNames)===2,'Пустые имена объединили разные телефоны');
@@ -71,5 +80,6 @@ salesAssert(str_contains($html,'saleLast:1')&&str_contains($html,'a.saleLast-b.s
 salesAssert(str_contains($html,'keys.length===1?rows[0]:null')&&str_contains($html,'phone:+7${phone}'),'Frontend не связывает canonical phone key с существующей UI-группой');
 salesAssert(str_contains($html,'canonicalSalesClientKey')&&str_contains($html,'clientSalesAliases=payload.client_aliases'),'Frontend не применяет canonical aliases');
 $config=(string)file_get_contents($root.'/api/config.php');salesAssert(str_contains($config,"SALES_JOURNAL_TIMEOUT') ?: 30")&&str_contains($config,'SALES_JOURNAL_CONNECT_TIMEOUT'),'Timeout не настраивается или снова меньше production latency');
+salesAssert(str_contains($config,'SALES_JOURNAL_CACHE_TTL')&&str_contains($batch,'loadSalesJournalBatchCached'),'Быстрый кэш продаж не подключён к endpoint');
 
 echo "client_sales_timeline_test: OK\n";

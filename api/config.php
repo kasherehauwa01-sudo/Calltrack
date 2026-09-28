@@ -66,6 +66,12 @@ if (!defined('SALES_JOURNAL_CONNECT_TIMEOUT')) {
 if (!defined('SALES_JOURNAL_TIMEOUT')) {
     define('SALES_JOURNAL_TIMEOUT', max(1, (int)(getenv('SALES_JOURNAL_TIMEOUT') ?: 30)));
 }
+if (!defined('SALES_JOURNAL_CACHE_TTL')) {
+    define('SALES_JOURNAL_CACHE_TTL', max(30, (int)(getenv('SALES_JOURNAL_CACHE_TTL') ?: 600)));
+}
+if (!defined('SALES_JOURNAL_STALE_CACHE_TTL')) {
+    define('SALES_JOURNAL_STALE_CACHE_TTL', max(SALES_JOURNAL_CACHE_TTL, (int)(getenv('SALES_JOURNAL_STALE_CACHE_TTL') ?: 86400)));
+}
 
 function dbConfigValue(string $envName, string $constantName): string
 {
