@@ -1,9 +1,11 @@
 package com.example.calltrack.ui.calls
 
+import android.Manifest
 import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
@@ -13,6 +15,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
@@ -171,7 +174,9 @@ class CallListFragment : Fragment() {
 
     private suspend fun resolveCallItems(calls: List<CallEntity>): List<RecentCallListItem> = withContext(Dispatchers.IO) {
         val nameByPhone = mutableMapOf<String, String>()
-        requireContext().contentResolver.query(
+        val context = context
+        if (context != null && ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) try {
+            context.contentResolver.query(
             ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
             arrayOf(
                 ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
@@ -180,7 +185,7 @@ class CallListFragment : Fragment() {
             null,
             null,
             null
-        )?.use { cursor ->
+            )?.use { cursor ->
             val nameIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
             val phoneIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
             while (cursor.moveToNext()) {
@@ -193,6 +198,9 @@ class CallListFragment : Fragment() {
                     }
                 }
             }
+            }
+        } catch (_: SecurityException) {
+            nameByPhone.clear()
         }
 
         // Имена Clients и личный признак вычисляем один раз для каждого номера.
@@ -284,7 +292,8 @@ class CallListFragment : Fragment() {
         val phone = rawPhone.trim()
         if (phone.isBlank() || phone == "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E") return
 
-        val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$phone"))
+        val canCall = ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
+        val callIntent = Intent(if (canCall) Intent.ACTION_CALL else Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
         val fallbackDialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
         runCatching {
             startActivity(callIntent)

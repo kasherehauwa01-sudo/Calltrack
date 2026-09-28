@@ -1,10 +1,13 @@
 package com.example.calltrack.telephony
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.telephony.PhoneStateListener
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
+import androidx.core.content.ContextCompat
 
 class CallStateTracker(
     private val context: Context,
@@ -15,6 +18,8 @@ class CallStateTracker(
     private var phoneStateListener: PhoneStateListener? = null
 
     fun start() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) return
+        try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val cb = object : TelephonyCallback(), TelephonyCallback.CallStateListener {
                 override fun onCallStateChanged(state: Int) {
@@ -33,6 +38,10 @@ class CallStateTracker(
             phoneStateListener = legacy
             @Suppress("DEPRECATION")
             telephonyManager.listen(legacy, PhoneStateListener.LISTEN_CALL_STATE)
+        }
+        } catch (_: SecurityException) {
+            callback = null
+            phoneStateListener = null
         }
     }
 

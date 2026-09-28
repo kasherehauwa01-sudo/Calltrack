@@ -1,7 +1,9 @@
 package com.example.calltrack.ui.contactcard
 
+import android.Manifest
 import android.app.DatePickerDialog
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.app.TimePickerDialog
 import android.os.Bundle
@@ -18,6 +20,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.ProgressBar
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
@@ -322,8 +325,13 @@ class ContactCardFragment : Fragment() {
     private suspend fun findContactNameInPhoneBook(phone: String): String? = withContext(Dispatchers.IO) {
         val target = normalizePhone(phone).takeLast(10)
         if (target.isBlank()) return@withContext null
+        val context = context ?: return@withContext null
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            return@withContext null
+        }
 
-        requireContext().contentResolver.query(
+        try {
+            context.contentResolver.query(
             ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
             arrayOf(
                 ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
@@ -332,7 +340,7 @@ class ContactCardFragment : Fragment() {
             null,
             null,
             null
-        )?.use { cursor ->
+            )?.use { cursor ->
             val nameIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
             val phoneIdx = cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
             while (cursor.moveToNext()) {
@@ -341,6 +349,9 @@ class ContactCardFragment : Fragment() {
                     return@withContext cursor.getString(nameIdx).orEmpty().ifBlank { null }
                 }
             }
+            }
+        } catch (_: SecurityException) {
+            return@withContext null
         }
         null
     }
