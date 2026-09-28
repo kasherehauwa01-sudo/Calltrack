@@ -9,13 +9,11 @@ function ensureWebAuthTables(PDO $pdo): void
         login VARCHAR(254) NOT NULL,
         pin_hash VARCHAR(255) NOT NULL,
         role ENUM('admin','manager') NOT NULL,
-        manager_user_phone VARCHAR(30) NULL,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
         last_login_at DATETIME NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY uk_web_users_login (login),
-        INDEX idx_web_users_manager (manager_user_phone),
         INDEX idx_web_users_active (is_active)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $pdo->exec("CREATE TABLE IF NOT EXISTS web_login_attempts (
@@ -28,6 +26,10 @@ function ensureWebAuthTables(PDO $pdo): void
     foreach (['ALTER TABLE web_users MODIFY login VARCHAR(254) NOT NULL', 'ALTER TABLE web_login_attempts MODIFY login VARCHAR(254) NOT NULL'] as $sql) {
         try { $pdo->exec($sql); } catch (Throwable $e) { /* Размер уже актуален или ALTER запрещён. */ }
     }
+    // Поле старой ручной привязки больше не используется: Android и web
+    // идентифицируют одного пользователя по стабильному ID учётной записи.
+    try { $pdo->exec('ALTER TABLE web_users DROP INDEX idx_web_users_manager'); } catch (Throwable $e) { /* Индекс уже удалён. */ }
+    try { $pdo->exec('ALTER TABLE web_users DROP COLUMN manager_user_phone'); } catch (Throwable $e) { /* Поле уже удалено. */ }
 }
 
 function normalizeWebLoginEmail(string $value): string
@@ -50,12 +52,7 @@ function currentWebUser(PDO $pdo): ?array
     ensureUserTelemetryTables($pdo);
     $id = (int)($_SESSION['web_user_id'] ?? 0);
     if ($id <= 0) return null;
-    $stmt = $pdo->prepare("SELECT w.id,w.display_name,w.login,w.role,w.manager_user_phone,w.is_active,
-        COALESCE(NULLIF(r.manager,''), NULLIF(s.manager,''), '') AS manager_name
-        FROM web_users w
-        LEFT JOIN app_user_reports r ON r.user_phone=w.manager_user_phone
-        LEFT JOIN app_user_states s ON s.user_phone=w.manager_user_phone
-        WHERE w.id=:id LIMIT 1");
+    $stmt = $pdo->prepare('SELECT id,display_name,login,role,is_active FROM web_users WHERE id=:id LIMIT 1');
     $stmt->execute([':id'=>$id]);
     $user = $stmt->fetch();
     if (!$user || !(int)$user['is_active']) { $_SESSION=[]; return null; }
@@ -80,5 +77,10 @@ function requireWebAdmin(PDO $pdo): array
 function webManagerScope(array $user): ?array
 {
     if ($user['role'] === 'admin') return null;
-    return ['user_phone'=>(string)$user['manager_user_phone'], 'manager'=>(string)$user['manager_name']];
+    return ['user_phone'=>webUserPhone((int)$user['id']), 'manager'=>(string)$user['display_name']];
+}
+
+function webUserPhone(int $userId): string
+{
+    return 'web-user-'.$userId;
 }
