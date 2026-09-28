@@ -63,6 +63,10 @@ for (const marker of [
   "classList.remove('sale-detail-open')",
   "classList.add('open','sale-detail-open')",
   'sortClientTimelineEvents(events)',
+  'flex:0 0 172px',
+  'overflow-x:auto',
+  'Продаж - ${saleGroup.sales.length}.',
+  'На сумму ${escapeHtml(formatRubles(saleGroup.totalAmount))}',
   'isSalesJournalDetailAllowed',
 ]) {
   const source = marker === 'isSalesJournalDetailAllowed'

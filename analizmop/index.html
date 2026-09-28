@@ -116,8 +116,8 @@
     .client-empty{background:var(--card);border:1px dashed #cbd5e1;border-radius:var(--radius);padding:22px;text-align:center;color:var(--muted)}
     .client-row{background:var(--card);box-shadow:var(--shadow);border:1px solid #e5e7eb;border-radius:var(--radius);padding:16px;display:grid;grid-template-columns:minmax(180px,260px) minmax(0,1fr);gap:16px;align-items:center}
     .client-name{font-weight:700;color:#111827;word-break:break-word}.client-name-btn{border:0;background:transparent;color:#111827;font:inherit;font-weight:700;text-align:left;cursor:pointer;padding:0;border-bottom:1px dashed #94a3b8}.client-name-btn:hover{color:#2563eb;border-color:#2563eb}.client-meta{font-size:.85rem;color:var(--muted);margin-top:4px}
-    .call-timeline{display:flex;gap:8px;align-items:stretch;overflow-x:auto;padding:4px 2px 8px;min-height:64px}
-    .call-segment{position:relative;border:0;border-radius:14px;padding:8px 10px;width:145px;height:72px;box-sizing:border-box;overflow:hidden;color:#0f172a;display:grid;gap:5px;cursor:pointer;text-align:left;box-shadow:0 6px 16px rgba(15,23,42,.08);transition:.2s ease}
+    .call-timeline{display:flex;gap:8px;align-items:stretch;overflow-x:auto;overscroll-behavior-inline:contain;padding:4px 2px 10px;min-height:96px;scrollbar-gutter:stable}
+    .call-segment{position:relative;border:0;border-radius:14px;padding:8px 10px;width:172px;min-width:172px;max-width:172px;flex:0 0 172px;height:88px;box-sizing:border-box;overflow:hidden;color:#0f172a;display:grid;gap:5px;cursor:pointer;text-align:left;box-shadow:0 6px 16px rgba(15,23,42,.08);transition:.2s ease}
     .call-segment:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(15,23,42,.12)}
     .call-segment.incoming{background:#dcfce7;border:1px solid #86efac}.call-segment.outgoing{background:#dbeafe;border:1px solid #93c5fd}
     .call-segment.email-outgoing{background:#fef3c7;border:1px solid #f59e0b;gap:1px}.email-subject{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem}
@@ -1724,6 +1724,7 @@ function groupCallsByClient(calls){
   return [...grouped.values()].map((row)=>({...row,calls:row.calls.sort((a,b)=>a.__dt-b.__dt),emails:(row.emails||[]).sort((a,b)=>a.__dt-b.__dt),sales:[...new Map((salesByClient.get(row.integrationKey)||[]).map((sale)=>[String(sale.sale_id),sale])).values()].sort((a,b)=>a.__date.localeCompare(b.__date)||Number(a.sale_id)-Number(b.sale_id))})).sort((a,b)=>b.lastDate-a.lastDate);
 }
 const formatMoney=(value)=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'}).format(Number(value||0));
+const formatRubles=(value)=>`${new Intl.NumberFormat('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(value||0))} руб.`;
 function groupSalesByDate(sales){
   const unique=new Map();(Array.isArray(sales)?sales:[]).forEach((sale)=>{const id=String(sale?.sale_id||'');if(id&&!unique.has(id))unique.set(id,sale);});
   const groups=new Map();unique.forEach((sale)=>{const date=String(sale.sale_date||'').slice(0,10);if(!groups.has(date))groups.set(date,[]);groups.get(date).push(sale);});
@@ -1748,9 +1749,11 @@ function renderClientRow(group){
   });
   const saleGroups=groupSalesByDate(group.sales||[]);
   const saleSegments=saleGroups.map((saleGroup)=>{
-    if(saleGroup.sales.length===1){const sale=saleGroup.sales[0];return `<button class="call-segment sale" data-sale-id="${escapeHtml(sale.sale_id)}" type="button" aria-label="Открыть продажу"><div class="call-segment-top"><span class="call-type">Продажа</span></div><div class="email-subject" title="${escapeHtml(sale.document_number||'')}">№ ${escapeHtml(sale.document_number||'—')}</div><div class="sale-amount">${escapeHtml(formatMoney(sale.total_amount))}</div><div class="call-datetime">${escapeHtml(formatDateDisplay(saleGroup.date)||saleGroup.date||'—')}</div></button>`;}
+    const date=formatDateDisplay(saleGroup.date)||saleGroup.date||'—';
+    const summary=`Продаж - ${saleGroup.sales.length}. На сумму ${formatRubles(saleGroup.totalAmount)} ${date}`;
+    if(saleGroup.sales.length===1){const sale=saleGroup.sales[0];return `<button class="call-segment sale" data-sale-id="${escapeHtml(sale.sale_id)}" type="button" aria-label="Открыть продажу" title="${escapeHtml(summary)}"><div class="call-segment-top"><span class="call-type">Продаж - 1.</span></div><div class="sale-amount">На сумму ${escapeHtml(formatRubles(saleGroup.totalAmount))}</div><div class="call-datetime">${escapeHtml(date)}</div></button>`;}
     const groupKey=`sale-group-${renderedSaleGroups.size}`;renderedSaleGroups.set(groupKey,saleGroup);
-    return `<button class="call-segment sale sale-group" data-sale-group="${escapeHtml(groupKey)}" type="button" aria-label="Открыть список продаж за день"><div class="call-segment-top"><span class="call-type">Продажи</span></div><div class="email-subject">${saleGroup.sales.length} ${pluralizeSales(saleGroup.sales.length)}</div><div class="sale-amount">${escapeHtml(formatMoney(saleGroup.totalAmount))}</div><div class="call-datetime">${escapeHtml(formatDateDisplay(saleGroup.date)||saleGroup.date||'—')}</div></button>`;
+    return `<button class="call-segment sale sale-group" data-sale-group="${escapeHtml(groupKey)}" type="button" aria-label="Открыть список продаж за день" title="${escapeHtml(summary)}"><div class="call-segment-top"><span class="call-type">Продаж - ${saleGroup.sales.length}.</span></div><div class="sale-amount">На сумму ${escapeHtml(formatRubles(saleGroup.totalAmount))}</div><div class="call-datetime">${escapeHtml(date)}</div></button>`;
   });
   const events=[...group.calls.map((call,index)=>({html:callSegments[index],day:formatDateLocal(call.__dt),time:call.__dt.getTime(),saleLast:0,type:1,id:index})),...(group.emails||[]).map((email,index)=>({html:emailSegments[index],day:formatDateLocal(email.__dt),time:email.__dt.getTime(),saleLast:0,type:2,id:index})),...saleGroups.map((saleGroup,index)=>({html:saleSegments[index],day:saleGroup.date,time:0,saleLast:1,type:0,id:Number(saleGroup.sales[0]?.sale_id||0)}))];
   const segments=sortClientTimelineEvents(events).map((item)=>item.html).join('');
