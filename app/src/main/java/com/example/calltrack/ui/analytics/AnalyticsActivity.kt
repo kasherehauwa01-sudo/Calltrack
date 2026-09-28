@@ -227,10 +227,14 @@ class AnalyticsActivity : BaseActivity() {
                 val contacts = db.contactDao().findAll().associate {
                     it.phone to repairText(it.client1c.ifBlank { it.name })
                 }
-                calls to contacts
+                val journal = runCatching { loadManagerJournal() }
+                Triple(calls, contacts, journal)
             }
             allCalls = result.first
-            clientNames = result.second
+            val journal = result.third
+            managerJournalCalls = journal.getOrDefault(emptyList())
+            managerJournalError = journal.exceptionOrNull()?.let { "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0436\u0443\u0440\u043D\u0430\u043B \u0437\u0432\u043E\u043D\u043A\u043E\u0432. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043A \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442\u0443." }
+            clientNames = result.second + managerJournalCalls.associate { it.phone to it.tag.ifBlank { it.phone } }
             renderContent()
         }
     }
