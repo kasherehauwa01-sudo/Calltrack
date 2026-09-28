@@ -80,13 +80,23 @@ function salesJournalCommunicationClients(PDO $pdo,array $user,string $manager,s
     return canonicalizeSalesJournalClients($clients);
 }
 
+function salesJournalRequestUrl(string $base,string $path): string
+{
+    $base=rtrim(trim($base),'/');$path='/'.ltrim($path,'/');
+    $integrationRoot='/api/integrations/calltrack';
+    // В production встречаются обе безопасные формы настройки: корень Sales Journal
+    // и уже полный корень Integration API. Не добавляем integration path второй раз.
+    if(str_ends_with($base,$integrationRoot)&&str_starts_with($path,$integrationRoot.'/'))$path=substr($path,strlen($integrationRoot));
+    return $base.$path;
+}
+
 function salesJournalRequest(string $method,string $path,?array $body=null,?callable $transport=null): array
 {
     if($transport)return $transport($method,$path,$body);
     $base=rtrim((string)SALES_JOURNAL_BASE_URL,'/');$token=(string)CALLTRACK_INTEGRATION_TOKEN;
     if($base===''||$token==='')throw new RuntimeException('Интеграция Sales Journal не настроена');
     if(!function_exists('curl_init'))throw new RuntimeException('Расширение cURL недоступно');
-    $started=microtime(true);$curl=curl_init($base.$path);$headers=['Accept: application/json','Authorization: Bearer '.$token];
+    $started=microtime(true);$curl=curl_init(salesJournalRequestUrl($base,$path));$headers=['Accept: application/json','Authorization: Bearer '.$token];
     $options=[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CUSTOMREQUEST=>$method,CURLOPT_CONNECTTIMEOUT=>(int)SALES_JOURNAL_CONNECT_TIMEOUT,CURLOPT_TIMEOUT=>(int)SALES_JOURNAL_TIMEOUT,CURLOPT_HTTPHEADER=>$headers];
     if($body!==null){$encoded=json_encode($body,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);$options[CURLOPT_POSTFIELDS]=$encoded;$headers[]='Content-Type: application/json';$options[CURLOPT_HTTPHEADER]=$headers;}
     curl_setopt_array($curl,$options);$raw=curl_exec($curl);$status=(int)curl_getinfo($curl,CURLINFO_RESPONSE_CODE);$error=curl_error($curl);curl_close($curl);

@@ -56,6 +56,9 @@ try{salesJournalPeriod(['date_from'=>'2026-10-01','date_to'=>'2026-09-30']);thro
 foreach([[401,'{}',''],[500,'{}',''],[0,'','timeout']] as [$status,$raw,$error]){try{salesJournalDecodeResponse($raw,$status,$error);throw new RuntimeException("Ошибка Sales Journal {$status} принята");}catch(RuntimeException $expected){salesAssert(str_contains($expected->getMessage(),'Sales Journal'),'Ошибка скрыта неверно');}}
 try{salesJournalDecodeResponse('{bad',200);throw new RuntimeException('Invalid JSON принят');}catch(RuntimeException $expected){salesAssert(str_contains($expected->getMessage(),'JSON'),'Invalid JSON не распознан');}
 salesAssert(salesJournalDecodeResponse('{"items":[]}',200)===['items'=>[]],'Пустой список продаж не поддерживается');
+salesAssert(salesJournalRequestUrl('https://example.test/vr/sales','/api/integrations/calltrack/client-sales')==='https://example.test/vr/sales/api/integrations/calltrack/client-sales','URL от корня Sales Journal сформирован неверно');
+salesAssert(salesJournalRequestUrl('https://example.test/vr/sales/api/integrations/calltrack/','/api/integrations/calltrack/client-sales')==='https://example.test/vr/sales/api/integrations/calltrack/client-sales','Integration API path продублирован в URL');
+salesAssert(salesJournalRequestUrl('https://example.test/vr/sales/api/integrations/calltrack','/api/integrations/calltrack/sales/141955')==='https://example.test/vr/sales/api/integrations/calltrack/sales/141955','Detail URL продублировал Integration API path');
 try{salesJournalDecodeResponse('{"detail":"duplicate phone"}',422);throw new RuntimeException('HTTP 422 принят');}catch(RuntimeException $expected){salesAssert(str_contains($expected->getMessage(),'422'),'HTTP 422 не обрабатывается как недоступность продаж');}
 
 $clients=[];for($i=1;$i<=501;$i++)$clients[]=['key'=>'client:'.$i,'phone'=>'+7999'.str_pad((string)$i,7,'0',STR_PAD_LEFT),'name'=>'Клиент '.$i];
@@ -86,7 +89,7 @@ salesAssert(str_contains($integration,'manager=:manager')&&str_contains($integra
 salesAssert(str_contains($html,'saleLast:1')&&str_contains($html,'a.saleLast-b.saleLast||a.time-b.time'),'Продажа не размещается последней среди событий той же даты');
 salesAssert(str_contains($html,'keys.length===1?rows[0]:null')&&str_contains($html,'phone:+7${phone}'),'Frontend не связывает canonical phone key с существующей UI-группой');
 salesAssert(str_contains($html,'canonicalSalesClientKey')&&str_contains($html,'clientSalesAliases=payload.client_aliases'),'Frontend не применяет canonical aliases');
-$config=(string)file_get_contents($root.'/api/config.php');salesAssert(str_contains($config,"SALES_JOURNAL_TIMEOUT') ?: 30")&&str_contains($config,'SALES_JOURNAL_CONNECT_TIMEOUT'),'Timeout не настраивается или снова меньше production latency');
+$config=(string)file_get_contents($root.'/api/config.php');salesAssert(str_contains($config,"SALES_JOURNAL_TIMEOUT') ?: 90")&&str_contains($config,'SALES_JOURNAL_CONNECT_TIMEOUT'),'Timeout не настраивается или снова меньше production latency');
 salesAssert(str_contains($config,'SALES_JOURNAL_CACHE_TTL')&&str_contains($batch,'loadSalesJournalBatchCached'),'Быстрый кэш продаж не подключён к endpoint');
 
 echo "client_sales_timeline_test: OK\n";

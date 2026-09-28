@@ -64,7 +64,7 @@ if (!defined('SALES_JOURNAL_CONNECT_TIMEOUT')) {
     define('SALES_JOURNAL_CONNECT_TIMEOUT', max(1, (int)(getenv('SALES_JOURNAL_CONNECT_TIMEOUT') ?: 3)));
 }
 if (!defined('SALES_JOURNAL_TIMEOUT')) {
-    define('SALES_JOURNAL_TIMEOUT', max(1, (int)(getenv('SALES_JOURNAL_TIMEOUT') ?: 30)));
+    define('SALES_JOURNAL_TIMEOUT', max(1, (int)(getenv('SALES_JOURNAL_TIMEOUT') ?: 90)));
 }
 if (!defined('SALES_JOURNAL_CACHE_TTL')) {
     define('SALES_JOURNAL_CACHE_TTL', max(30, (int)(getenv('SALES_JOURNAL_CACHE_TTL') ?: 600)));

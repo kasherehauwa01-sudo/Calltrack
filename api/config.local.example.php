@@ -12,10 +12,10 @@ define('CLIENTS_API_TIMEOUT', 120);
 
 // Server-to-server интеграция с Sales Journal. Настоящий Bearer token
 // храните только во внешнем config.local.php или переменной окружения.
-define('SALES_JOURNAL_BASE_URL', ''); // например, https://example.ru/vr/sales
+define('SALES_JOURNAL_BASE_URL', ''); // https://example.ru/vr/sales или .../api/integrations/calltrack
 define('CALLTRACK_INTEGRATION_TOKEN', '');
 define('SALES_JOURNAL_CONNECT_TIMEOUT', 3);
-define('SALES_JOURNAL_TIMEOUT', 30);
+define('SALES_JOURNAL_TIMEOUT', 90);
 // Summary-продажи кэшируются на 10 минут; при ошибке Sales Journal можно
 // безопасно показать последний успешный результат не старше суток.
 define('SALES_JOURNAL_CACHE_TTL', 600);
