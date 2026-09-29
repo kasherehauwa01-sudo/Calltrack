@@ -21,7 +21,7 @@ foreach (['function removeLegacyHelpTab()', "document.addEventListener('DOMConte
     }
 }
 
-if (!str_contains($html, 'api.js?v=20260926-client-sales')) {
+if (!str_contains($html, 'api.js?v=20260929-supervisor-role')) {
     throw new RuntimeException('Не обновлена версия подключаемого JavaScript');
 }
 
