@@ -18,7 +18,7 @@ try {
         sendJson(['status'=>'success']);
     }
     $data=readJsonBody();$id=(int)($data['id']??0);$role=(string)($data['role']??'');
-    if (!in_array($role,['admin','manager'],true)) sendJson(['status'=>'error','message'=>'Допустимы только роли admin и manager'],400);
+    if (!in_array($role,['admin','supervisor','manager'],true)) sendJson(['status'=>'error','message'=>'Допустимы роли admin, supervisor и manager'],400);
     $fields=[':name'=>trim((string)($data['display_name']??'')),':login'=>normalizeWebLoginEmail((string)($data['login']??'')),':role'=>$role,':active'=>!empty($data['is_active'])?1:0];
     if ($fields[':name']===''||$fields[':login']==='') sendJson(['status'=>'error','message'=>'Заполните ФИО и корректный email'],400);
     $pin=(string)($data['pin']??'');
