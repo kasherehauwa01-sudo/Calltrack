@@ -21,12 +21,17 @@ foreach (['<h3>Пользователи Android-приложения</h3>', 'id=
 if (!str_contains($html, "String(item.user_phone||'')===`web-user-\${webUser.id}`")) {
     throw new RuntimeException('APK-информация не связана с учётной записью web-пользователя');
 }
-if (!str_contains($html, '.apk-user-dialog{width:100%;max-width:none;min-width:0;')) {
+if (!str_contains($html, '#apkUserModal .apk-user-dialog{width:100vw;max-width:100vw;min-width:0;height:100vh;max-height:100vh;')) {
     throw new RuntimeException('Окно APK не занимает всю ширину экрана');
 }
-foreach (['#apkUserModal{padding:0;overflow-x:hidden}', '.apk-user-dialog .user-card{width:100%;', '.user-logs{max-width:100%;'] as $noHorizontalScroll) {
+foreach (['#apkUserModal{padding:0;overflow:hidden}', '.apk-user-dialog .user-card{width:100%;', '.user-logs{max-width:100%;'] as $noHorizontalScroll) {
     if (!str_contains($html, $noHorizontalScroll)) {
         throw new RuntimeException("Не отключена горизонтальная прокрутка окна APK: {$noHorizontalScroll}");
+    }
+}
+foreach (['class="user-action-help"', 'ставит команду в очередь', 'При следующем соединении Android-приложение', 'ещё не синхронизированные звонки'] as $explanation) {
+    if (!str_contains($html, $explanation)) {
+        throw new RuntimeException("Не объяснено действие принудительной синхронизации: {$explanation}");
     }
 }
 
