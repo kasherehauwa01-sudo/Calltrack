@@ -8,6 +8,11 @@ foreach (['data-web-user-apk=', 'id="apkUserModal"', 'function openApkUserModal(
         throw new RuntimeException("Не реализовано окно APK пользователя: {$required}");
     }
 }
+foreach (["u.role==='manager'?", "if(app)openApkUserModal(app.dataset.webUserApk)", "if(!webUser||webUser.role!=='manager') return", 'Приложение: ${webUser.display_name}'] as $required) {
+    if (!str_contains($html, $required)) {
+        throw new RuntimeException("Кнопка приложения не ограничена web-менеджерами: {$required}");
+    }
+}
 foreach (['<h3>Пользователи Android-приложения</h3>', 'id="usersSearch"', 'id="usersList"'] as $removed) {
     if (str_contains($html, $removed)) {
         throw new RuntimeException("Отдельный блок Android-пользователей не удалён: {$removed}");
