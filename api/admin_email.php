@@ -17,7 +17,6 @@ function sendEmailRegistryPayload(PDO $pdo, array $webUser): void
     $where = [];
     $params = [];
     $scope=webManagerScope($webUser);
-    if($scope){$where[]='email_messages.manager_name = :session_manager';$params[':session_manager']=$scope['manager'];}
     foreach (['manager' => 'email_messages.manager_name', 'client_status' => 'email_messages.client_status'] as $param => $column) {
         $value = trim((string)($_GET[$param] ?? ''));
         if ($value !== '') {
@@ -54,7 +53,11 @@ function sendEmailRegistryPayload(PDO $pdo, array $webUser): void
     $sqlWhere = $where ? (' WHERE ' . implode(' AND ', $where)) : '';
     $stmt = $pdo->prepare("SELECT email_messages.id, email_messages.sent_at, email_messages.manager_name, email_mailboxes.email AS manager_email, CASE WHEN {$outgoingCondition} THEN 'outgoing' ELSE 'incoming' END AS direction, email_messages.client_name, CASE WHEN {$outgoingCondition} THEN COALESCE(NULLIF(email_messages.to_emails, ''), email_messages.client_email) ELSE email_messages.client_email END AS client_email, email_messages.subject, email_messages.client_status, email_messages.incoming_status, email_messages.outgoing_status, email_messages.message_size, email_messages.has_attachments, email_messages.attachment_count, email_messages.imap_uid FROM email_messages LEFT JOIN email_mailboxes ON email_mailboxes.id = email_messages.mailbox_id" . $sqlWhere . ' ORDER BY email_messages.sent_at DESC, email_messages.id DESC');
     $stmt->execute($params);
-    sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
+    $rows=$stmt->fetchAll();$canonicalNames=canonicalManagerNames($pdo);
+    foreach($rows as &$row)$row['manager_name']=canonicalManagerName((string)$row['manager_name'],$canonicalNames);
+    unset($row);
+    if($scope)$rows=array_values(array_filter($rows,static fn(array $row):bool=>$row['manager_name']===$scope['manager']));
+    sendJson(['status' => 'success', 'data' => $rows]);
 }
 
 function sendEmailDetailPayload(PDO $pdo, array $webUser): void
@@ -65,9 +68,10 @@ function sendEmailDetailPayload(PDO $pdo, array $webUser): void
         sendJson(['status' => 'error', 'message' => 'Передайте id письма'], 400);
     }
     $scope=webManagerScope($webUser);
-    $stmt = $pdo->prepare('SELECT * FROM email_messages WHERE id = :id'.($scope?' AND manager_name=:manager':''));
-    $params=[':id'=>$id];if($scope)$params[':manager']=$scope['manager'];$stmt->execute($params);
+    $stmt = $pdo->prepare('SELECT * FROM email_messages WHERE id = :id');
+    $stmt->execute([':id'=>$id]);
     $message = $stmt->fetch();
+    if($message){$message['manager_name']=canonicalManagerName((string)$message['manager_name'],canonicalManagerNames($pdo));if($scope&&$message['manager_name']!==$scope['manager'])$message=false;}
     if (!$message) {
         sendJson(['status' => 'error', 'message' => 'Письмо не найдено'], 404);
     }
