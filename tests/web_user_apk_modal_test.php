@@ -29,6 +29,11 @@ foreach (['#apkUserModal{padding:0;overflow:hidden}', '.apk-user-dialog .user-ca
         throw new RuntimeException("Не отключена горизонтальная прокрутка окна APK: {$noHorizontalScroll}");
     }
 }
+foreach (['grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr))', 'align-items:start', '.user-info-block{min-width:0;align-self:start', 'padding:9px 10px', 'font-size:.82rem;line-height:1.3'] as $compactLayout) {
+    if (!str_contains($html, $compactLayout)) {
+        throw new RuntimeException("Блоки окна приложения не уплотнены: {$compactLayout}");
+    }
+}
 foreach (['class="user-action-help"', 'ставит команду в очередь', 'При следующем соединении Android-приложение', 'ещё не синхронизированные звонки'] as $explanation) {
     if (!str_contains($html, $explanation)) {
         throw new RuntimeException("Не объяснено действие принудительной синхронизации: {$explanation}");
