@@ -8,7 +8,7 @@ function ensureWebAuthTables(PDO $pdo): void
         display_name VARCHAR(255) NOT NULL,
         login VARCHAR(254) NOT NULL,
         pin_hash VARCHAR(255) NOT NULL,
-        role ENUM('admin','manager') NOT NULL,
+        role ENUM('admin','supervisor','manager') NOT NULL,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
         last_login_at DATETIME NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -26,6 +26,7 @@ function ensureWebAuthTables(PDO $pdo): void
     foreach (['ALTER TABLE web_users MODIFY login VARCHAR(254) NOT NULL', 'ALTER TABLE web_login_attempts MODIFY login VARCHAR(254) NOT NULL'] as $sql) {
         try { $pdo->exec($sql); } catch (Throwable $e) { /* Размер уже актуален или ALTER запрещён. */ }
     }
+    try { $pdo->exec("ALTER TABLE web_users MODIFY role ENUM('admin','supervisor','manager') NOT NULL"); } catch (Throwable $e) { /* При отсутствии ALTER применяется штатная миграция. */ }
     // Поле старой ручной привязки больше не используется: Android и web
     // идентифицируют одного пользователя по стабильному ID учётной записи.
     try { $pdo->exec('ALTER TABLE web_users DROP INDEX idx_web_users_manager'); } catch (Throwable $e) { /* Индекс уже удалён. */ }
@@ -76,8 +77,31 @@ function requireWebAdmin(PDO $pdo): array
 
 function webManagerScope(array $user): ?array
 {
-    if ($user['role'] === 'admin') return null;
+    if (in_array($user['role'], ['admin', 'supervisor'], true)) return null;
     return ['user_phone'=>webUserPhone((int)$user['id']), 'manager'=>(string)$user['display_name']];
+}
+
+function managerNameKey(string $name): string
+{
+    $parts = preg_split('/\s+/u', mb_strtolower(trim($name))) ?: [];
+    $parts = array_values(array_filter($parts, static fn(string $part): bool => $part !== ''));
+    sort($parts, SORT_STRING);
+    return implode("\0", $parts);
+}
+
+function canonicalManagerNames(PDO $pdo): array
+{
+    $names = $pdo->query("SELECT display_name FROM web_users WHERE is_active=1 AND role='manager'")->fetchAll(PDO::FETCH_COLUMN);
+    $byKey = [];
+    foreach ($names as $name) $byKey[managerNameKey((string)$name)][] = (string)$name;
+    $result = [];
+    foreach ($byKey as $key => $matches) if (count($matches) === 1) $result[$key] = $matches[0];
+    return $result;
+}
+
+function canonicalManagerName(string $name, array $canonicalNames): string
+{
+    return $canonicalNames[managerNameKey($name)] ?? trim($name);
 }
 
 function webUserPhone(int $userId): string

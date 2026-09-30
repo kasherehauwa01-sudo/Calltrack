@@ -4,10 +4,27 @@ function removeLegacyHelpTab() {
   document.querySelectorAll('[data-tab="help"], #helpView').forEach((element) => element.remove());
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', removeLegacyHelpTab, { once: true });
-} else {
+// Страница могла остаться в браузерном кэше от версии, где существовали только
+// manager/admin. Внешний скрипт добавляет новую роль и в такой старый HTML.
+function ensureSupervisorRoleOption() {
+  const select = document.getElementById('webUserRole');
+  if (!select || select.querySelector('option[value="supervisor"]')) return;
+  const option = document.createElement('option');
+  option.value = 'supervisor';
+  option.textContent = 'Руководитель';
+  const adminOption = select.querySelector('option[value="admin"]');
+  select.insertBefore(option, adminOption);
+}
+
+function repairCachedDashboardMarkup() {
   removeLegacyHelpTab();
+  ensureSupervisorRoleOption();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', repairCachedDashboardMarkup, { once: true });
+} else {
+  repairCachedDashboardMarkup();
 }
 
 // Общие API-методы дашборда используются встроенным скриптом админ-панели.
@@ -217,7 +234,7 @@ window.calltrackApi.getEmailMessages = window.calltrackApi.getEmailMessages || (
 
 window.calltrackApi.getEmailSettings = window.calltrackApi.getEmailSettings || (async function getEmailSettings() {
   const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
-  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=settings`);
+  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=settings`, { cache: 'no-store' });
   return Array.isArray(payload.data) ? payload.data : [];
 });
 

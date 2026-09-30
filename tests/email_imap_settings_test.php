@@ -115,6 +115,9 @@ foreach (['emailSyncNewBtn', 'Подгрузить новые письма', 'em
 foreach (['startEmailRegistryAutoRefresh', '5*60*1000', "document.visibilityState==='visible'", 'loadEmailModule(false)'] as $required) {
     if (!str_contains($html, $required)) throw new RuntimeException("Открытый реестр Email автоматически не обновляется: {$required}");
 }
+foreach (["if(tab==='email') loadEmailSettings()", "if(tab==='emailRegistry'&&!emailLoaded) loadEmailModule(false)", 'Ошибка загрузки настроек IMAP:', "action=settings`, { cache: 'no-store' }"] as $required) {
+    if (!str_contains($html.$js, $required)) throw new RuntimeException("Настройки IMAP зависят от загрузки реестра писем: {$required}");
+}
 foreach (["direction:'outgoing'", 'loadEmailRegistryClientNames(emailMessages)', 'window.calltrackApi.lookupClientNames([],emails.slice(offset,offset+500))', 'item.client_display_name', '<th>Менеджер</th><th>Клиент</th>', 'item.manager_name'] as $required) {
     if (!str_contains($html, $required)) throw new RuntimeException("Реестр исходящих email не показывает менеджера или клиента из Clients: {$required}");
 }
