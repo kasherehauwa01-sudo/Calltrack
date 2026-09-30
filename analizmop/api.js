@@ -234,7 +234,7 @@ window.calltrackApi.getEmailMessages = window.calltrackApi.getEmailMessages || (
 
 window.calltrackApi.getEmailSettings = window.calltrackApi.getEmailSettings || (async function getEmailSettings() {
   const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
-  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=settings`);
+  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=settings`, { cache: 'no-store' });
   return Array.isArray(payload.data) ? payload.data : [];
 });
 
