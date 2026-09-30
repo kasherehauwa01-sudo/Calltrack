@@ -27,7 +27,7 @@ foreach (['function removeLegacyHelpTab()', "document.addEventListener('DOMConte
     }
 }
 
-if (!str_contains($html, 'api.js?v=20260929-supervisor-role')) {
+if (!str_contains($html, 'api.js?v=20260930-imap-password')) {
     throw new RuntimeException('Не обновлена версия подключаемого JavaScript');
 }
 

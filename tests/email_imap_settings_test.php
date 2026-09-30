@@ -121,6 +121,9 @@ foreach (["if(tab==='email') loadEmailSettings()", "if(tab==='emailRegistry'&&!e
 foreach (['emailChangePassword', 'Изменить сохранённый пароль', 'passwordInput.disabled=Boolean(item.id)', 'data-1p-ignore', 'data-lpignore="true"'] as $required) {
     if (!str_contains($html, $required)) throw new RuntimeException("Автозаполнение может перезаписать пароль IMAP: {$required}");
 }
+foreach (['function ensureEmailPasswordControl()', 'function setEmailPasswordEditMode(editExisting)', "event.target.closest('[data-email-edit]')", "event.target.closest('#emailAddMailboxBtn')", 'ensureEmailPasswordControl();'] as $required) {
+    if (!str_contains($js, $required)) throw new RuntimeException("Закэшированная форма IMAP не восстанавливается: {$required}");
+}
 foreach (['Mail.ru отклонил авторизацию', 'специальный пароль для внешнего приложения', 'https://help.mail.ru/mail/se'] as $required) {
     if (!str_contains($sync, $required)) throw new RuntimeException("Ошибка Mail.ru не объясняет настройку пароля приложения: {$required}");
 }

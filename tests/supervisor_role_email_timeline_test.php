@@ -19,7 +19,7 @@ assertTrue(str_contains($users,"['admin','supervisor','manager']"),'CRUD дол�
 $frontend=file_get_contents($root.'/analizmop/index.html');
 $frontendApi=file_get_contents($root.'/analizmop/api.js');
 assertTrue(str_contains($frontend,'<option value="supervisor">Руководитель</option>'),'В форме нет роли Руководитель');
-assertTrue(str_contains($frontend,'api.js?v=20260929-supervisor-role'),'Версия frontend-скрипта не обновлена');
+assertTrue(str_contains($frontend,'api.js?v=20260930-imap-password'),'Версия frontend-скрипта не обновлена');
 assertTrue(str_contains($frontendApi,'function ensureSupervisorRoleOption()'),'Нет восстановления роли для закэшированного HTML');
 assertTrue(str_contains($frontendApi,"select.insertBefore(option, adminOption)"),'Руководитель не добавляется перед Администратором');
 assertTrue(str_contains($frontend,"if(user.role!=='admin')"),'Admin panel должен быть виден только admin');
