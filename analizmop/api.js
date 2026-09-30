@@ -4,10 +4,27 @@ function removeLegacyHelpTab() {
   document.querySelectorAll('[data-tab="help"], #helpView').forEach((element) => element.remove());
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', removeLegacyHelpTab, { once: true });
-} else {
+// Страница могла остаться в браузерном кэше от версии, где существовали только
+// manager/admin. Внешний скрипт добавляет новую роль и в такой старый HTML.
+function ensureSupervisorRoleOption() {
+  const select = document.getElementById('webUserRole');
+  if (!select || select.querySelector('option[value="supervisor"]')) return;
+  const option = document.createElement('option');
+  option.value = 'supervisor';
+  option.textContent = 'Руководитель';
+  const adminOption = select.querySelector('option[value="admin"]');
+  select.insertBefore(option, adminOption);
+}
+
+function repairCachedDashboardMarkup() {
   removeLegacyHelpTab();
+  ensureSupervisorRoleOption();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', repairCachedDashboardMarkup, { once: true });
+} else {
+  repairCachedDashboardMarkup();
 }
 
 // Общие API-методы дашборда используются встроенным скриптом админ-панели.

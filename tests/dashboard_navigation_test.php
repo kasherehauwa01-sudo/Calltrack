@@ -3,6 +3,12 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__);
 $html = (string)file_get_contents($root . '/analizmop/index.html');
+if (!str_contains($html, '<button class="tab-btn" data-tab="clientCalls" type="button">История клиентов</button>')) {
+    throw new RuntimeException('Вкладка истории клиентов названа неверно');
+}
+if (str_contains($html, '>Звонки клиентам</button>')) {
+    throw new RuntimeException('В интерфейсе осталось старое название вкладки звонков клиентов');
+}
 foreach (['<button class="tab-btn" data-tab="help"', 'id="helpView"', '>Помощь</button>', 'helpView.classList'] as $removed) {
     if (str_contains($html, $removed)) {
         throw new RuntimeException("Вкладка помощи не удалена полностью: {$removed}");
@@ -21,7 +27,7 @@ foreach (['function removeLegacyHelpTab()', "document.addEventListener('DOMConte
     }
 }
 
-if (!str_contains($html, 'api.js?v=20260926-client-sales')) {
+if (!str_contains($html, 'api.js?v=20260929-supervisor-role')) {
     throw new RuntimeException('Не обновлена версия подключаемого JavaScript');
 }
 
