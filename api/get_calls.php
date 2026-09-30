@@ -83,6 +83,19 @@ function enrichCallsWithClients(array $rows): array
     return $rows;
 }
 
+function dashboardManagerDirectory(PDO $pdo, array $user): array
+{
+    $scope = webManagerScope($user);
+    if ($scope) {
+        return [['display_name'=>(string)$scope['manager'], 'user_phone'=>(string)$scope['user_phone']]];
+    }
+    $stmt = $pdo->query("SELECT id,display_name FROM web_users WHERE role='manager' AND is_active=1 ORDER BY display_name");
+    return array_map(static fn(array $row): array => [
+        'display_name'=>(string)$row['display_name'],
+        'user_phone'=>webUserPhone((int)$row['id']),
+    ], $stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
 try {
     $pdo = getPdo();
     $androidUser = optionalAndroidUser($pdo);
@@ -91,10 +104,12 @@ try {
         // Bearer identity always wins over query-string filters, so Android
         // analytics cannot request another manager's journal.
         $filters['user_phone'] = androidManagerIdentity($androidUser)['user_phone'];
+        $managerDirectory = [['display_name'=>(string)$androidUser['display_name'], 'user_phone'=>webUserPhone((int)$androidUser['id'])]];
     } else {
         $webUser = requireWebUser($pdo);
         $scope = webManagerScope($webUser);
         if ($scope) $filters['user_phone'] = $scope['user_phone'];
+        $managerDirectory = dashboardManagerDirectory($pdo, $webUser);
     }
     $params = [];
     $where = buildFilters($filters, $params);
@@ -123,7 +138,7 @@ try {
     $stmt->execute();
     $rows = enrichCallsWithClients($stmt->fetchAll());
 
-    sendJson(['status' => 'success', 'data' => $rows, 'total' => $total]);
+    sendJson(['status' => 'success', 'data' => $rows, 'total' => $total, 'managers'=>$managerDirectory]);
 } catch (Throwable $e) {
     sendJson(['status' => 'error', 'message' => $e->getMessage()], 500);
 }

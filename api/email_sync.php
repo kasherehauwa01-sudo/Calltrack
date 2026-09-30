@@ -241,6 +241,10 @@ function testImapMailbox(array $mailbox, string $password): array
     $imap = @imap_open($prefix . 'INBOX', (string)$mailbox['username'], $password, OP_READONLY, 1);
     if ($imap === false) {
         $detail = imap_last_error() ?: 'сервер не сообщил причину';
+        $host = mb_strtolower(normalizeImapHost((string)($mailbox['imap_host'] ?? '')));
+        if (str_ends_with($host, 'mail.ru') && (stripos($detail, 'AUTHENTICATIONFAILED') !== false || stripos($detail, 'NEEDOBM') !== false)) {
+            throw new RuntimeException('Mail.ru отклонил авторизацию. Создайте специальный пароль для внешнего приложения в настройках безопасности Mail.ru и укажите его вместо обычного пароля почты. Справка: https://help.mail.ru/mail/se');
+        }
         throw new RuntimeException('IMAP-подключение не установлено: ' . $detail . '. Проверьте логин, пароль приложения, порт и SSL/TLS');
     }
     try {
