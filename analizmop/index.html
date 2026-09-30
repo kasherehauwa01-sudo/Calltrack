@@ -377,7 +377,8 @@
                   <label>IMAP Host<input id="emailImapHost" type="text" placeholder="imap.example.com" /></label>
                   <label>IMAP Port<input id="emailImapPort" type="number" value="993" /></label>
                   <label>Логин<input id="emailUsername" type="text" /></label>
-                  <label>Пароль<input id="emailPassword" type="password" autocomplete="new-password" placeholder="Оставьте пустым, чтобы не менять" /><small>Если почтовый сервис использует двухфакторную защиту, укажите отдельный пароль для почтового приложения.</small></label>
+                  <label>Пароль<input id="emailPassword" type="password" autocomplete="off" data-1p-ignore data-lpignore="true" placeholder="Пароль приложения" /><small>Для Mail.ru и сервисов с двухфакторной защитой нужен отдельный пароль для внешнего приложения, а не обычный пароль почты.</small></label>
+                  <label class="inline-check" id="emailChangePasswordRow" hidden><input id="emailChangePassword" type="checkbox" /> Изменить сохранённый пароль</label>
                   <label>Папка INBOX<input id="emailInboxFolder" type="text" value="INBOX" /></label>
                   <label>Папка Sent<input id="emailSentFolder" type="text" value="Sent" /></label>
                   <label><input id="emailImapSsl" type="checkbox" checked /> SSL/TLS</label>
@@ -752,6 +753,7 @@ function bindAdminPanel(){
   if(adminEls.emailSearch) adminEls.emailSearch.addEventListener('input',()=>{emailLoaded=false;loadEmailModule();});
   if(adminEls.emailDirectionFilter) adminEls.emailDirectionFilter.addEventListener('change',loadEmailModule);
   if(adminEls.emailSettingsForm) adminEls.emailSettingsForm.addEventListener('submit',saveEmailSettings);
+  document.getElementById('emailChangePassword')?.addEventListener('change',(event)=>{const input=document.getElementById('emailPassword');input.disabled=!event.target.checked;if(event.target.checked)input.focus();else input.value='';});
   if(adminEls.emailTestConnectionBtn) adminEls.emailTestConnectionBtn.addEventListener('click',testEmailConnection);
   if(adminEls.emailSettingsTable) adminEls.emailSettingsTable.addEventListener('click',(e)=>{const edit=e.target.closest('[data-email-edit]');const del=e.target.closest('[data-email-delete]');if(edit){const item=emailSettings.find((row)=>String(row.id)===String(edit.dataset.emailEdit));if(item) openEmailSettingsModal(item);} if(del) deleteEmailSettings(del.dataset.emailDelete);});
   if(adminEls.clientsApiTestForm) adminEls.clientsApiTestForm.addEventListener('submit',testClientsApiPhone);
@@ -1033,7 +1035,13 @@ async function openEmailSettingsModal(item={}){
   document.getElementById('emailImapHost').value=item.imap_host||'';
   document.getElementById('emailImapPort').value=item.imap_port||993;
   document.getElementById('emailUsername').value=item.username||'';
-  document.getElementById('emailPassword').value='';
+  const passwordInput=document.getElementById('emailPassword');
+  const changePassword=document.getElementById('emailChangePassword');
+  const changePasswordRow=document.getElementById('emailChangePasswordRow');
+  passwordInput.value='';
+  changePassword.checked=false;
+  changePasswordRow.hidden=!item.id;
+  passwordInput.disabled=Boolean(item.id);
   document.getElementById('emailInboxFolder').value=item.inbox_folder||'INBOX';
   document.getElementById('emailSentFolder').value=item.sent_folder||'Sent';
   document.getElementById('emailImapSsl').checked=Number(item.imap_ssl??1)===1;

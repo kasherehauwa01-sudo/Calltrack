@@ -118,6 +118,12 @@ foreach (['startEmailRegistryAutoRefresh', '5*60*1000', "document.visibilityStat
 foreach (["if(tab==='email') loadEmailSettings()", "if(tab==='emailRegistry'&&!emailLoaded) loadEmailModule(false)", 'Ошибка загрузки настроек IMAP:', "action=settings`, { cache: 'no-store' }"] as $required) {
     if (!str_contains($html.$js, $required)) throw new RuntimeException("Настройки IMAP зависят от загрузки реестра писем: {$required}");
 }
+foreach (['emailChangePassword', 'Изменить сохранённый пароль', 'passwordInput.disabled=Boolean(item.id)', 'data-1p-ignore', 'data-lpignore="true"'] as $required) {
+    if (!str_contains($html, $required)) throw new RuntimeException("Автозаполнение может перезаписать пароль IMAP: {$required}");
+}
+foreach (['Mail.ru отклонил авторизацию', 'специальный пароль для внешнего приложения', 'https://help.mail.ru/mail/se'] as $required) {
+    if (!str_contains($sync, $required)) throw new RuntimeException("Ошибка Mail.ru не объясняет настройку пароля приложения: {$required}");
+}
 foreach (["direction:'outgoing'", 'loadEmailRegistryClientNames(emailMessages)', 'window.calltrackApi.lookupClientNames([],emails.slice(offset,offset+500))', 'item.client_display_name', '<th>Менеджер</th><th>Клиент</th>', 'item.manager_name'] as $required) {
     if (!str_contains($html, $required)) throw new RuntimeException("Реестр исходящих email не показывает менеджера или клиента из Clients: {$required}");
 }
