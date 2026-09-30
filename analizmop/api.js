@@ -4,10 +4,72 @@ function removeLegacyHelpTab() {
   document.querySelectorAll('[data-tab="help"], #helpView').forEach((element) => element.remove());
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', removeLegacyHelpTab, { once: true });
-} else {
+// Страница могла остаться в браузерном кэше от версии, где существовали только
+// manager/admin. Внешний скрипт добавляет новую роль и в такой старый HTML.
+function ensureSupervisorRoleOption() {
+  const select = document.getElementById('webUserRole');
+  if (!select || select.querySelector('option[value="supervisor"]')) return;
+  const option = document.createElement('option');
+  option.value = 'supervisor';
+  option.textContent = 'Руководитель';
+  const adminOption = select.querySelector('option[value="admin"]');
+  select.insertBefore(option, adminOption);
+}
+
+function setEmailPasswordEditMode(editExisting) {
+  const input = document.getElementById('emailPassword');
+  const checkbox = document.getElementById('emailChangePassword');
+  const row = document.getElementById('emailChangePasswordRow');
+  if (!input || !checkbox || !row) return;
+  input.value = '';
+  checkbox.checked = false;
+  row.hidden = !editExisting;
+  input.disabled = editExisting;
+}
+
+// Старый HTML разрешал password manager подставлять основной пароль почты и
+// незаметно заменять им сохранённый пароль приложения при редактировании.
+function ensureEmailPasswordControl() {
+  const input = document.getElementById('emailPassword');
+  if (!input) return;
+  input.autocomplete = 'off';
+  input.setAttribute('data-1p-ignore', '');
+  input.setAttribute('data-lpignore', 'true');
+  let row = document.getElementById('emailChangePasswordRow');
+  if (!row) {
+    row = document.createElement('label');
+    row.className = 'inline-check';
+    row.id = 'emailChangePasswordRow';
+    row.hidden = true;
+    row.innerHTML = '<input id="emailChangePassword" type="checkbox" /> Изменить сохранённый пароль';
+    input.closest('label')?.insertAdjacentElement('afterend', row);
+  }
+  const checkbox = document.getElementById('emailChangePassword');
+  if (checkbox && !checkbox.dataset.bound) {
+    checkbox.dataset.bound = '1';
+    checkbox.addEventListener('change', () => {
+      input.disabled = !checkbox.checked;
+      if (checkbox.checked) input.focus(); else input.value = '';
+    });
+  }
+  setEmailPasswordEditMode(true);
+}
+
+function repairCachedDashboardMarkup() {
   removeLegacyHelpTab();
+  ensureSupervisorRoleOption();
+  ensureEmailPasswordControl();
+}
+
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-email-edit]')) setTimeout(() => setEmailPasswordEditMode(true), 0);
+  if (event.target.closest('#emailAddMailboxBtn')) setTimeout(() => setEmailPasswordEditMode(false), 0);
+});
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', repairCachedDashboardMarkup, { once: true });
+} else {
+  repairCachedDashboardMarkup();
 }
 
 // Общие API-методы дашборда используются встроенным скриптом админ-панели.
@@ -217,7 +279,7 @@ window.calltrackApi.getEmailMessages = window.calltrackApi.getEmailMessages || (
 
 window.calltrackApi.getEmailSettings = window.calltrackApi.getEmailSettings || (async function getEmailSettings() {
   const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
-  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=settings`);
+  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=settings`, { cache: 'no-store' });
   return Array.isArray(payload.data) ? payload.data : [];
 });
 
