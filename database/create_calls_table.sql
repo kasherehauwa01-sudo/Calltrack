@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS calls (
     client VARCHAR(255),
     call_id VARCHAR(100),
     user_phone VARCHAR(30),
+    -- Источник события необязателен. Старые Android-клиенты его не передают,
+    -- поэтому NULL сохраняет совместимость с существующей синхронизацией.
+    source VARCHAR(50) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_call_id (call_id),
