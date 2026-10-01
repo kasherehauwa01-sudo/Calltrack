@@ -88,6 +88,7 @@ class CallAdapter(
     companion object {
         private const val VIEW_TYPE_HEADER = 0
         private const val VIEW_TYPE_CALL = 1
-        private const val MAX_BACKGROUND_ALPHA = 48
+        // 13 / 255 = 5.1%: MAX is marked only by a very light brand-color fill.
+        private const val MAX_BACKGROUND_ALPHA = 13
     }
 }

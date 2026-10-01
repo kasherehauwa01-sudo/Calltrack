@@ -10,6 +10,8 @@ $analytics=(string)file_get_contents($root.'/app/src/main/java/com/example/callt
 foreach (['item.call.source.equals("max"','Color.argb(MAX_BACKGROUND_ALPHA, 145, 50, 213)','(\\u041C\\u0410\\u041A\\u0421)','binding.btnComment','binding.btnReminder'] as $required) {
     if(!str_contains($adapter,$required))throw new RuntimeException("История звонков не содержит MAX-оформление: {$required}");
 }
+if(!str_contains($adapter,'MAX_BACKGROUND_ALPHA = 13'))throw new RuntimeException('Фиолетовый фон MAX-звонка должен иметь прозрачность 5%');
+if(!str_contains($layout,'app:strokeWidth="0dp"'))throw new RuntimeException('С плашки MAX-звонка не убрана обводка');
 if(!str_contains($list,'call.contactName.ifBlank { call.phone }'))throw new RuntimeException('История не использует имя абонента MAX');
 foreach (['tvName','tvType','btnComment','btnReminder'] as $required)if(!str_contains($layout,$required))throw new RuntimeException("В компактной плашке отсутствует {$required}");
 foreach (['tvClient1c','tvPhone','tvNote'] as $removed)if(str_contains($layout,$removed))throw new RuntimeException("В компактной плашке осталось лишнее поле {$removed}");
