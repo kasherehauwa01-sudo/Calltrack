@@ -34,8 +34,18 @@ $stale=loadSalesJournalBatchCached($cacheClients,'2026-09-25','2026-09-25',stati
 salesAssert($stale['cache_hit']&&$stale['cache_stale']&&count($stale['items'])===1,'При ошибке Sales Journal не используется последний успешный кэш');
 $emptyRequests=0;$emptyClients=[['key'=>'phone:+79990000098','phone'=>'+79990000098','name'=>'Без продаж','source_keys'=>['phone:+79990000098']]];
 $emptyTransport=static function()use(&$emptyRequests){$emptyRequests++;return ['items'=>[]];};
-loadSalesJournalBatchCached($emptyClients,'2026-09-25','2026-09-25',$emptyTransport);loadSalesJournalBatchCached($emptyClients,'2026-09-25','2026-09-25',$emptyTransport);
-salesAssert($emptyRequests===2,'Пустой ответ Sales Journal закэширован и блокирует появление новых продаж');
+$emptyMiss=loadSalesJournalBatchCached($emptyClients,'2026-09-25','2026-09-25',$emptyTransport);$emptyHit=loadSalesJournalBatchCached($emptyClients,'2026-09-25','2026-09-25',$emptyTransport);
+salesAssert($emptyRequests===1&&!$emptyMiss['cache_hit']&&$emptyMiss['items']===[],'Первый пустой ответ Sales Journal не записан в кэш');
+salesAssert($emptyHit['cache_hit']&&$emptyHit['requests']===0&&$emptyHit['items']===[],'Повторный пустой ответ не обслуживается из кэша');
+$emptyCacheFile=salesJournalCacheDirectory().'/'.salesJournalCacheKey($emptyClients,'2026-09-25','2026-09-25').'.json';touch($emptyCacheFile,time()-SALES_JOURNAL_CACHE_TTL-1);clearstatcache(true,$emptyCacheFile);
+$emptyStale=loadSalesJournalBatchCached($emptyClients,'2026-09-25','2026-09-25',static function(){throw new RuntimeException('timeout');});
+salesAssert($emptyStale['cache_hit']&&$emptyStale['cache_stale']&&$emptyStale['items']===[],'Stale-кэш не принимает корректный пустой ответ');
+$invalidCacheKey=str_repeat('a',64);$invalidCacheFile=salesJournalCacheDirectory().'/'.$invalidCacheKey.'.json';
+foreach(['{"version":2}','{"version":2,"items":"invalid"}','{"version":1,"items":[]}','{broken'] as $invalidJson){file_put_contents($invalidCacheFile,$invalidJson);clearstatcache(true,$invalidCacheFile);salesAssert(readSalesJournalCache($invalidCacheKey,SALES_JOURNAL_CACHE_TTL,$emptyClients)===null,'Повреждённый кэш Sales Journal принят как валидный');}
+$recoveryRequests=0;file_put_contents($emptyCacheFile,'{broken');clearstatcache(true,$emptyCacheFile);
+$recovered=loadSalesJournalBatchCached($emptyClients,'2026-09-25','2026-09-25',static function()use(&$recoveryRequests){$recoveryRequests++;return ['items'=>[]];});
+salesAssert($recoveryRequests===1&&!$recovered['cache_hit']&&$recovered['items']===[],'Повреждённый JSON кэша сломал загрузку Sales Journal');
+@unlink($invalidCacheFile);@unlink($emptyCacheFile);
 $detailRequests=0;$detailTransport=static function($method,$url,$body)use(&$detailRequests){$detailRequests++;return ['id'=>141955,'document_number'=>'Р-00631068','items'=>[['id'=>1,'name'=>'Товар']]];};
 $firstDetail=loadSalesJournalDetailCached(141955,$detailTransport);$cachedDetail=loadSalesJournalDetailCached(141955,$detailTransport);
 salesAssert($detailRequests===1&&$firstDetail===$cachedDetail&&count($cachedDetail['items'])===1,'Detail продажи не обслуживается быстрым кэшем');
