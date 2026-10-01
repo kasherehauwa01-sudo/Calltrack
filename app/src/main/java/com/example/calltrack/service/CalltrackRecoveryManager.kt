@@ -51,7 +51,7 @@ object CalltrackRecoveryManager {
     }
 
     fun schedulePendingSync(context: Context) {
-        if (!shouldRun(context)) return
+        if (!canSync(context)) return
         val request = OneTimeWorkRequestBuilder<CalltrackSyncWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
@@ -68,9 +68,12 @@ object CalltrackRecoveryManager {
     }
 
     internal fun shouldRun(context: Context): Boolean =
-        runCatching { AuthStore(context).isAuthenticated }.getOrDefault(false) &&
+        canSync(context) &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
+
+    internal fun canSync(context: Context): Boolean =
+        runCatching { AuthStore(context).isAuthenticated }.getOrDefault(false)
 
     internal suspend fun recoverNow(context: Context, reason: RecoveryReason): Boolean {
         if (!shouldRun(context)) return true
@@ -107,11 +110,11 @@ class CalltrackRecoveryWorker(context: Context, params: WorkerParameters) : Coro
 class CalltrackSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val app = applicationContext as App
-        if (!CalltrackRecoveryManager.shouldRun(app)) return Result.success()
+        if (!CalltrackRecoveryManager.canSync(app)) return Result.success()
         return runCatching {
-            app.repository.syncPending()
+            val completed = app.repository.syncPending()
             app.repository.sendUserTelemetry()
-            Result.success()
+            if (completed) Result.success() else Result.retry()
         }.getOrElse {
             StabilityDiagnostics.mark(app, "sync_failed", "recovery worker: ${it.message}")
             Result.retry()

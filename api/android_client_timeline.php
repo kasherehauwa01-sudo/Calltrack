@@ -13,7 +13,7 @@ try {
     [$from,$to]=salesJournalPeriod($_GET);
     $identity=androidManagerIdentity($user);
 
-    $stmt=$pdo->prepare('SELECT id_db,call_date,call_time,phone,call_type,duration,manager,client,comment,tag,reminder,reminder_text FROM calls WHERE user_phone=:user_phone AND call_date>=:from AND call_date<=:to ORDER BY call_date DESC,call_time DESC,id_db DESC');
+    $stmt=$pdo->prepare('SELECT id_db,call_date,call_time,phone,call_type,duration,manager,client,comment,tag,reminder,reminder_text,source,contact_name,direction,status,started_at,answered_at,ended_at,ringing_duration_seconds,is_video,contact_resolution_status FROM calls WHERE user_phone=:user_phone AND call_date>=:from AND call_date<=:to ORDER BY call_date DESC,call_time DESC,id_db DESC');
     $stmt->execute([':user_phone'=>$identity['user_phone'],':from'=>$from,':to'=>$to]);
     $calls=enrichAndroidTimelineCalls($stmt->fetchAll());
 
