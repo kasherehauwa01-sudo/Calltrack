@@ -32,6 +32,11 @@
     <string name="permission_phone_calls_description">Совершение звонка из Calltrack</string>
     <string name="permission_notifications">Уведомления</string>
     <string name="permission_notifications_description">Работа фонового сервиса, напоминаний и служебных уведомлений</string>
+    <string name="permission_notification_access">Доступ к уведомлениям</string>
+    <string name="permission_notification_access_description">Нужен для регистрации звонков и сообщений MAX.</string>
+    <string name="open_notification_access_settings">Предоставить доступ к уведомлениям</string>
+    <string name="notification_access_settings_unavailable">Не удалось открыть системные настройки доступа к уведомлениям</string>
+    <string name="max_notification_listener_label">Диагностика уведомлений MAX</string>
     <string name="permission_battery">Работа без ограничения батареи</string>
     <string name="permission_battery_description">Надёжная фиксация звонков и синхронизация в фоне</string>
     <string name="permission_install_packages">Установка обновлений</string>

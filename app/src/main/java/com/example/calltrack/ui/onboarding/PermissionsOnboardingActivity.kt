@@ -35,6 +35,10 @@ class PermissionsOnboardingActivity : AppCompatActivity() {
         }
     }
 
+    private val notificationAccessLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        refreshNotificationAccess()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = PermissionOnboardingStore(this)
@@ -58,6 +62,22 @@ class PermissionsOnboardingActivity : AppCompatActivity() {
                 data = Uri.fromParts("package", packageName, null)
             })
         }
+        binding.btnNotificationAccess.setOnClickListener {
+            runCatching { notificationAccessLauncher.launch(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+                .onFailure { binding.tvNotificationAccessStatus.setText(R.string.notification_access_settings_unavailable) }
+        }
+        refreshNotificationAccess()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::binding.isInitialized) refreshNotificationAccess()
+    }
+
+    private fun refreshNotificationAccess() {
+        val granted = AppPermissions.hasNotificationListenerAccess(this)
+        binding.tvNotificationAccessStatus.setText(if (granted) R.string.permission_granted else R.string.permission_not_granted)
+        binding.btnNotificationAccess.isEnabled = !granted
     }
 
     private fun finishOnboarding() {
