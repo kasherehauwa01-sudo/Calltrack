@@ -11,13 +11,33 @@ import android.provider.ContactsContract
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
-import androidx.core.content.ContextCompat
-import java.util.Locale
+import com.example.calltrack.App
+import com.example.calltrack.BuildConfig
+import com.example.calltrack.auth.AuthStore
+import com.example.calltrack.data.local.CallEntity
+import com.example.calltrack.service.CalltrackRecoveryManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /** Временная диагностика уведомлений MAX. Данные выводятся только в Logcat. */
 class MaxNotificationListenerService : NotificationListenerService() {
 
-    private val lookedUpNamesByNotification = mutableMapOf<String, MutableSet<String>>()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var session: MaxCallSession? = null
+    private var resolution: ResolvedContact? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        session = MaxCallSessionStore(this).load()
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
+    }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn?.packageName != MAX_PACKAGE) return
@@ -27,9 +47,7 @@ class MaxNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         if (sbn?.packageName != MAX_PACKAGE) return
-        synchronized(lookedUpNamesByNotification) {
-            lookedUpNamesByNotification.remove(sbn.key)
-        }
+        finishSession(sbn)
         runCatching {
             Log.i(TAG, buildString {
                 append("event=REMOVED")
@@ -80,25 +98,61 @@ class MaxNotificationListenerService : NotificationListenerService() {
 
         val personName = person?.name?.toString()?.takeIf { it.isNotBlank() }
         if (extras.safeText(Notification.EXTRA_TEMPLATE) == CALL_STYLE_TEMPLATE && personName != null) {
-            lookupContactOnce(sbn, personName)
+            updateSession(sbn, extras, personName)
         }
     }
 
-    private fun lookupContactOnce(sbn: StatusBarNotification, maxName: String) {
-        val normalizedName = MaxContactNameMatcher.normalize(maxName)
-        val shouldLookup = synchronized(lookedUpNamesByNotification) {
-            lookedUpNamesByNotification.getOrPut(sbn.key) { mutableSetOf() }
-                .add(normalizedName.lowercase(Locale.ROOT))
+    private fun updateSession(sbn: StatusBarNotification, extras: Bundle, name: String) {
+        val callType = (extras.safeScalar(CALL_TYPE_KEY) as? Number)?.toInt() ?: return
+        val previous = session.takeIf { it.notificationKey == sbn.key }
+        val updated = MaxCallStateMachine.posted(
+            previous, sbn.key, name, callType,
+            extras.safeScalar(CALL_IS_VIDEO_KEY) as? Boolean ?: false,
+            System.currentTimeMillis()
+        ) ?: return
+        if (previous == null) {
+            resolution = MaxContactResolver(this).resolve(name)
+            Log.i(TAG, "contactResolution status=${resolution?.status?.wireValue}" + if (BuildConfig.DEBUG) " phoneResolved=${resolution?.phone != null}" else "")
         }
-        if (!shouldLookup) return
+        session = updated
+        MaxCallSessionStore(this).save(updated)
+    }
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
-            Log.i(TAG, "contactLookup permission=denied")
-            return
+    private fun finishSession(sbn: StatusBarNotification) {
+        val current = session?.takeIf { it.notificationKey == sbn.key } ?: return
+        session = null
+        MaxCallSessionStore(this).clear()
+        val result = current.finish(System.currentTimeMillis())
+        val contact = resolution ?: MaxContactResolver(this).resolve(result.maxContactName)
+        resolution = null
+        if (!AuthStore(this).isAuthenticated) return
+        scope.launch {
+            val repository = (application as App).repository
+            val entity = CallEntity(
+                phone = contact.phone?.let(repository::normalizePhone).orEmpty(),
+                type = when {
+                    result.direction == MaxCallDirection.OUTGOING -> "Исходящий"
+                    result.status == MaxCallStatus.MISSED -> "Пропущенный"
+                    else -> "Входящий"
+                },
+                duration = result.durationSeconds,
+                note = "",
+                timestamp = result.startedAt,
+                source = "max",
+                sourceEventId = result.sourceEventId,
+                contactName = result.maxContactName,
+                direction = result.direction.name.lowercase(),
+                status = result.status.name.lowercase(),
+                answeredAt = result.answeredAt,
+                endedAt = result.endedAt,
+                ringingDurationSeconds = result.ringingDurationSeconds,
+                isVideo = result.isVideo,
+                contactResolutionStatus = contact.status.wireValue
+            )
+            val id = repository.saveCall(entity)
+            repository.syncCallById(id)
+            CalltrackRecoveryManager.schedulePendingSync(this@MaxNotificationListenerService)
         }
-
-        runCatching { findExactContacts(maxName) }
-            .onFailure { Log.e(TAG, "contactLookup error=${it::class.java.simpleName}") }
     }
 
     private fun findExactContacts(maxName: String) {

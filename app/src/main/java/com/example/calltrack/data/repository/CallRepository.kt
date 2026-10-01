@@ -673,7 +673,10 @@ class CallRepository(
 
 
     suspend fun saveCall(call: CallEntity): Long {
-        ensureContact(call.phone)
+        if (call.phone.isNotBlank()) ensureContact(call.phone)
+        if (call.sourceEventId.isNotBlank()) {
+            callDao.getBySourceEventId(call.sourceEventId)?.let { return it.id }
+        }
         val duplicate = callDao.findRecentDuplicate(
             phone = call.phone,
             type = call.type,
@@ -1090,9 +1093,9 @@ class CallRepository(
     }
 
     private suspend fun sendCallToWebhook(entity: CallEntity, managerName: String, managerPhone: String): Boolean {
-        Log.d("WEBHOOK", "\u041E\u0442\u043F\u0440\u0430\u0432\u043A\u0430 \u0437\u0432\u043E\u043D\u043A\u0430 \u0432 SQL API: $entity")
-        val personalMarked = isPersonalContact(entity.phone)
-        val clientName = if (personalMarked) PERSONAL_CALL_CLIENT_VALUE else findClientName(entity.phone)
+        Log.d("WEBHOOK", "Отправка звонка в SQL API: localId=${entity.id}, source=${entity.source}")
+        val personalMarked = entity.phone.isNotBlank() && isPersonalContact(entity.phone)
+        val clientName = if (entity.phone.isBlank()) "" else if (personalMarked) PERSONAL_CALL_CLIENT_VALUE else findClientName(entity.phone)
         val reminderText = extractReminderText(entity.reminder)
         val callId = buildWebhookCallId(entity)
 
@@ -1120,7 +1123,7 @@ class CallRepository(
             val payload = JSONObject().apply {
                 put("date", sqlDate)
                 put("time", sqlTime)
-                put("phone", normalizePhone(entity.phone))
+                if (entity.phone.isBlank()) put("phone", JSONObject.NULL) else put("phone", normalizePhone(entity.phone))
                 put("type", entity.type)
                 put("duration", entity.duration)
                 put("manager", managerName)
@@ -1131,11 +1134,22 @@ class CallRepository(
                 put("client", clientName)
                 put("call_id", callId)
                 put("user_phone", normalizePhone(managerPhone))
+                put("source", entity.source)
+                put("source_event_id", entity.sourceEventId.ifBlank { callId })
+                put("contact_name", entity.contactName)
+                put("direction", entity.direction)
+                put("status", entity.status)
+                put("started_at", sqlDateTime(entity.timestamp))
+                put("answered_at", entity.answeredAt?.let(::sqlDateTime) ?: JSONObject.NULL)
+                put("ended_at", entity.endedAt?.let(::sqlDateTime) ?: JSONObject.NULL)
+                put("ringing_duration_seconds", entity.ringingDurationSeconds ?: JSONObject.NULL)
+                put("is_video", entity.isVideo)
+                put("contact_resolution_status", entity.contactResolutionStatus)
             }
             AppLogger.log(
                 appContext,
                 "API",
-                "\u041E\u0442\u043F\u0440\u0430\u0432\u043A\u0430 \u0434\u0430\u043D\u043D\u044B\u0445 \u0432 SQL API: call_id=$callId, phone=${entity.phone}, type=${entity.type}"
+                "Отправка данных в SQL API: call_id=$callId, source=${entity.source}, type=${entity.type}"
             )
             withContext(Dispatchers.IO) {
                 val request = Request.Builder()
@@ -1150,7 +1164,7 @@ class CallRepository(
                         )
                     }
                     AppLogger.log(appContext, "API", "\u041E\u0442\u0432\u0435\u0442 SQL API: code=${response.code}")
-                    Log.d("WEBHOOK", "\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0432 SQL API: phone=${entity.phone}, id=${entity.id}, call_id=$callId")
+                    Log.d("WEBHOOK", "Отправлено в SQL API: id=${entity.id}, call_id=$callId, source=${entity.source}")
                     true
                 }
             }
@@ -1162,7 +1176,10 @@ class CallRepository(
     }
 
 
-    private fun buildWebhookCallId(entity: CallEntity): String = "${entity.id}_${entity.timestamp}"
+    private fun buildWebhookCallId(entity: CallEntity): String = entity.sourceEventId.ifBlank { "${entity.id}_${entity.timestamp}" }
+
+    private fun sqlDateTime(timestamp: Long): String =
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(timestamp))
 
     private fun sqlApiUrl(endpoint: String): String {
         return BuildConfig.SQL_API_BASE_URL.trimEnd('/') + "/" + endpoint.trimStart('/')
