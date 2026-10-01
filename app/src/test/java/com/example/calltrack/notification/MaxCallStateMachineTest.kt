@@ -46,6 +46,41 @@ class MaxCallStateMachineTest {
         assertEquals(first.sourceEventId, second.sourceEventId)
     }
 
+    @Test fun `duplicate incoming and active updates keep one incoming call`() {
+        var session = MaxCallStateMachine.posted(null, "key", "Имя", 1, false, 1_000)
+        session = MaxCallStateMachine.posted(session, "key", "Имя", 1, false, 2_000)
+        session = MaxCallStateMachine.posted(session, "key", "Имя", 2, false, 4_000)
+        session = MaxCallStateMachine.posted(session, "key", "Имя", 2, false, 5_000)
+        val result = MaxCallStateMachine.removed(session, 9_000)!!
+        assertEquals(MaxCallDirection.INCOMING, result.direction)
+        assertEquals(MaxCallStatus.ANSWERED, result.status)
+        assertEquals(4L, result.answeredAt?.div(1_000))
+        assertEquals(5L, result.durationSeconds)
+    }
+
+    @Test fun `second removed after session cleanup produces no result`() {
+        var session = MaxCallStateMachine.posted(null, "key", "Имя", 2, false, 1_000)
+        assertNotNull(MaxCallStateMachine.removed(session, 3_000))
+        session = null
+        assertNull(MaxCallStateMachine.removed(session, 4_000))
+    }
+
+    @Test fun `restored ringing session remains incoming after answer`() {
+        val beforeRestart = MaxCallStateMachine.posted(null, "key", "Имя", 1, false, 1_000)!!
+        val restored = beforeRestart.copy()
+        val answered = MaxCallStateMachine.posted(restored, "key", "Имя", 2, false, 4_000)!!
+        assertEquals(MaxCallDirection.INCOMING, answered.direction)
+        assertEquals(beforeRestart.sourceEventId, answered.sourceEventId)
+    }
+
+    @Test fun `restored active session keeps answer time and event id`() {
+        val beforeRestart = MaxCallStateMachine.posted(null, "key", "Имя", 2, false, 1_000)!!
+        val restored = beforeRestart.copy()
+        val result = MaxCallStateMachine.removed(restored, 6_000)!!
+        assertEquals(5L, result.durationSeconds)
+        assertEquals(beforeRestart.sourceEventId, result.sourceEventId)
+    }
+
     @Test fun `reused notification id can produce different stable events`() {
         val first = MaxCallStateMachine.posted(null, "same-key", "Имя", 2, false, 1_000)!!.finish(2_000)
         val second = MaxCallStateMachine.posted(null, "same-key", "Имя", 2, false, 3_000)!!.finish(4_000)

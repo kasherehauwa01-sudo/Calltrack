@@ -126,7 +126,7 @@ class MaxNotificationListenerService : NotificationListenerService() {
 
     private fun finishSession(sbn: StatusBarNotification) {
         val current = session?.takeIf { it.notificationKey == sbn.key } ?: return
-        val result = current.finish(System.currentTimeMillis())
+        val result = MaxCallStateMachine.removed(current, System.currentTimeMillis()) ?: return
         val contact = resolution ?: MaxContactResolver(this).resolve(result.maxContactName)
         val store = MaxCallSessionStore(this)
         // Сначала надёжно фиксируем завершённое событие. При смерти процесса оно будет
@@ -148,9 +148,9 @@ class MaxNotificationListenerService : NotificationListenerService() {
             val entity = CallEntity(
                 phone = contact.phone?.let(repository::normalizePhone).orEmpty(),
                 type = when {
-                    result.direction == MaxCallDirection.OUTGOING -> "Исходящий"
-                    result.status == MaxCallStatus.MISSED -> "Пропущенный"
-                    else -> "Входящий"
+                    result.direction == MaxCallDirection.OUTGOING -> "\u0418\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0439"
+                    result.status == MaxCallStatus.MISSED -> "\u041F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0439"
+                    else -> "\u0412\u0445\u043E\u0434\u044F\u0449\u0438\u0439"
                 },
                 duration = result.durationSeconds,
                 note = "",
@@ -173,6 +173,12 @@ class MaxNotificationListenerService : NotificationListenerService() {
             Log.i(TAG, "event=${if (uploaded) "callUploaded" else "callUploadFailed"} sourceEventId=${result.sourceEventId}")
             CalltrackRecoveryManager.schedulePendingSync(this@MaxNotificationListenerService)
         }
+    }
+
+    private fun maskPhone(phone: String?): String = when {
+        phone.isNullOrBlank() -> "none"
+        phone.length <= 4 -> "****"
+        else -> "***${phone.takeLast(4)}"
     }
 
     private fun maskPhone(phone: String?): String = when {

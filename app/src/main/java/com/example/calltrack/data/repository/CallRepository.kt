@@ -1098,7 +1098,7 @@ class CallRepository(
     }
 
     private suspend fun sendCallToWebhook(entity: CallEntity, managerName: String, managerPhone: String): Boolean {
-        Log.d("WEBHOOK", "Отправка звонка в SQL API: localId=${entity.id}, source=${entity.source}")
+        Log.d("WEBHOOK", "Sending call to SQL API: localId=${entity.id}, source=${entity.source}")
         val personalMarked = entity.phone.isNotBlank() && isPersonalContact(entity.phone)
         val clientName = if (entity.phone.isBlank()) "" else if (personalMarked) PERSONAL_CALL_CLIENT_VALUE else findClientName(entity.phone)
         val reminderText = extractReminderText(entity.reminder)
@@ -1154,7 +1154,7 @@ class CallRepository(
             AppLogger.log(
                 appContext,
                 "API",
-                "Отправка данных в SQL API: call_id=$callId, source=${entity.source}, type=${entity.type}"
+                "Sending data to SQL API: call_id=$callId, source=${entity.source}, type=${entity.type}"
             )
             withContext(Dispatchers.IO) {
                 val request = Request.Builder()
@@ -1169,7 +1169,7 @@ class CallRepository(
                         )
                     }
                     AppLogger.log(appContext, "API", "\u041E\u0442\u0432\u0435\u0442 SQL API: code=${response.code}")
-                    Log.d("WEBHOOK", "Отправлено в SQL API: id=${entity.id}, call_id=$callId, source=${entity.source}")
+                    Log.d("WEBHOOK", "Sent to SQL API: id=${entity.id}, call_id=$callId, source=${entity.source}")
                     true
                 }
             }
@@ -1182,9 +1182,6 @@ class CallRepository(
 
 
     private fun buildWebhookCallId(entity: CallEntity): String = entity.sourceEventId.ifBlank { "${entity.id}_${entity.timestamp}" }
-
-    private fun sqlDateTime(timestamp: Long): String =
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(timestamp))
 
     private fun sqlApiUrl(endpoint: String): String {
         return BuildConfig.SQL_API_BASE_URL.trimEnd('/') + "/" + endpoint.trimStart('/')

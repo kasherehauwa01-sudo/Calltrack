@@ -81,4 +81,6 @@ object MaxCallStateMachine {
         )
         else -> current
     }
+
+    fun removed(current: MaxCallSession?, at: Long): MaxCallResult? = current?.finish(at)
 }
