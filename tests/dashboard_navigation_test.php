@@ -15,13 +15,17 @@ foreach (['<button class="tab-btn" data-tab="help"', 'id="helpView"', '>Помо
     }
 }
 
+if (!str_contains($html, 'if(isClientCalls) refreshClientEmailTimeline();')) {
+    throw new RuntimeException('При открытии Истории клиентов не запускается загрузка timeline');
+}
+
 $standaloneDashboard = (string)file_get_contents($root . '/dashboard/index.html');
 if (str_contains($standaloneDashboard, 'Помощь')) {
     throw new RuntimeException('Вкладка помощи осталась в standalone-дашборде');
 }
 
 $apiJs = (string)file_get_contents($root . '/analizmop/api.js');
-foreach (['function removeLegacyHelpTab()', "document.addEventListener('DOMContentLoaded', removeLegacyHelpTab"] as $required) {
+foreach (['function removeLegacyHelpTab()', 'function repairCachedDashboardMarkup()', "document.addEventListener('DOMContentLoaded', repairCachedDashboardMarkup"] as $required) {
     if (!str_contains($apiJs, $required)) {
         throw new RuntimeException("Не найдена защита от закэшированной вкладки помощи: {$required}");
     }
