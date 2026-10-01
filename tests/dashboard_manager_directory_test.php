@@ -10,6 +10,9 @@ function managerDirectoryAssert(bool $condition,string $message): void { if(!$co
 foreach (['function dashboardManagerDirectory(PDO $pdo, array $user): array', "role='manager' AND is_active=1", "'user_phone'=>webUserPhone((int)\$row['id'])", "'managers'=>\$managerDirectory"] as $required) {
     managerDirectoryAssert(str_contains($api,$required),"API не возвращает справочник менеджеров: {$required}");
 }
+foreach (["catch (Throwable \$error)", "error_log('Dashboard manager directory unavailable: '", 'return [];'] as $required) {
+    managerDirectoryAssert(str_contains($api,$required),"Сбой необязательного справочника менеджеров блокирует звонки: {$required}");
+}
 managerDirectoryAssert(str_contains($api,"if (\$scope) {\n        return [['display_name'=>(string)\$scope['manager']"),'Manager получил чужой справочник пользователей');
 managerDirectoryAssert(str_contains($api,"\$managerDirectory = [['display_name'=>(string)\$androidUser['display_name']"),'Android API не ограничивает справочник текущей учётной записью');
 foreach (['let availableManagers=[]', 'payload?.managers', '[...availableManagers,...callManagers]', '[...availableManagers,...callManagers,...emailManagers]', 'await loadWebUsers();await refreshRegistryData();'] as $required) {

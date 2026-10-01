@@ -89,11 +89,19 @@ function dashboardManagerDirectory(PDO $pdo, array $user): array
     if ($scope) {
         return [['display_name'=>(string)$scope['manager'], 'user_phone'=>(string)$scope['user_phone']]];
     }
-    $stmt = $pdo->query("SELECT id,display_name FROM web_users WHERE role='manager' AND is_active=1 ORDER BY display_name");
-    return array_map(static fn(array $row): array => [
-        'display_name'=>(string)$row['display_name'],
-        'user_phone'=>webUserPhone((int)$row['id']),
-    ], $stmt->fetchAll(PDO::FETCH_ASSOC));
+    try {
+        $stmt = $pdo->query("SELECT id,display_name FROM web_users WHERE role='manager' AND is_active=1 ORDER BY display_name");
+        return array_map(static fn(array $row): array => [
+            'display_name'=>(string)$row['display_name'],
+            'user_phone'=>webUserPhone((int)$row['id']),
+        ], $stmt->fetchAll(PDO::FETCH_ASSOC));
+    } catch (Throwable $error) {
+        // Справочник нужен только для показа новых менеджеров до первого звонка.
+        // Его недоступность не должна блокировать основную статистику и историю:
+        // frontend дополнит фильтры менеджерами из самих звонков и Email.
+        error_log('Dashboard manager directory unavailable: '.$error->getMessage());
+        return [];
+    }
 }
 
 try {
