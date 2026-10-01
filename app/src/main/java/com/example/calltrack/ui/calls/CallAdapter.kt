@@ -1,5 +1,6 @@
 package com.example.calltrack.ui.calls
 
+import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
@@ -58,12 +59,14 @@ class CallAdapter(
         private val timeFormat = SimpleDateFormat("HH.mm.ss", Locale.getDefault())
 
         fun bind(item: RecentCallListItem.CallRow) {
-            binding.tvName.text = item.contactName
-            binding.tvClient1c.text = item.client1cName
-            binding.tvPhone.text = item.call.phone
+            val isMaxCall = item.call.source.equals("max", ignoreCase = true)
+            binding.tvName.text = if (isMaxCall) "${item.contactName} (\u041C\u0410\u041A\u0421)" else item.contactName
+            binding.root.setCardBackgroundColor(
+                if (isMaxCall) Color.argb(MAX_BACKGROUND_ALPHA, 145, 50, 213)
+                else binding.root.context.getColor(com.example.calltrack.R.color.surface)
+            )
             val callTime = timeFormat.format(Date(item.call.timestamp))
             binding.tvType.text = "${item.call.type} • ${item.call.duration} \u0441\u0435\u043A • $callTime"
-            binding.tvNote.text = item.call.note
             binding.root.setOnClickListener { onItemClick(item) }
             binding.btnComment.setOnClickListener { onCommentClick(item) }
             binding.btnReminder.setOnClickListener { onReminderClick(item) }
@@ -85,5 +88,6 @@ class CallAdapter(
     companion object {
         private const val VIEW_TYPE_HEADER = 0
         private const val VIEW_TYPE_CALL = 1
+        private const val MAX_BACKGROUND_ALPHA = 48
     }
 }
