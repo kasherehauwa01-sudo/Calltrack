@@ -132,7 +132,7 @@ try {
     $countStmt->execute();
     $total = (int)$countStmt->fetchColumn();
 
-    $sql = "SELECT id_db, call_date, call_time, phone, call_type, duration, manager, client, comment, tag, reminder, reminder_text, call_id, user_phone, created_at FROM calls{$where} ORDER BY call_date DESC, call_time DESC, id_db DESC";
+    $sql = "SELECT id_db, call_date, call_time, phone, call_type, duration, manager, client, comment, tag, reminder, reminder_text, call_id, user_phone, created_at, source, source_event_id, contact_name, direction, status, started_at, answered_at, ended_at, ringing_duration_seconds, is_video, contact_resolution_status FROM calls{$where} ORDER BY call_date DESC, call_time DESC, id_db DESC";
     if (!$loadAll) {
         $sql .= ' LIMIT :limit OFFSET :offset';
     }

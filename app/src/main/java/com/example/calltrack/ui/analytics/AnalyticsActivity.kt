@@ -239,29 +239,6 @@ class AnalyticsActivity : BaseActivity() {
         content.removeAllViews()
         addText("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u043A\u043B\u0438\u0435\u043D\u0442\u0430\u043C...")
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { requestContactTimeline() } }
-            result.onSuccess { timeline ->
-                managerJournalCalls = timeline.calls
-                managerEmails = timeline.emails
-                managerSales = timeline.sales
-                managerSalesAvailable = timeline.salesAvailable
-                clientNames = clientNames + timeline.calls.associate { it.phone to it.tag.ifBlank { it.phone } }
-                managerJournalError = null
-            }.onFailure {
-                managerJournalCalls = emptyList()
-                managerEmails = emptyList()
-                managerSales = emptyList()
-                managerSalesAvailable = false
-                managerJournalError = "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044C \u0437\u0432\u043E\u043D\u043A\u0438 \u043A\u043B\u0438\u0435\u043D\u0442\u0430\u043C. \u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u043A \u0438\u043D\u0442\u0435\u0440\u043D\u0435\u0442\u0443."
-            }
-            renderContent()
-        }
-    }
-
-    private fun loadContactTimeline() {
-        content.removeAllViews()
-        addText("\u0417\u0430\u0433\u0440\u0443\u0437\u043A\u0430 \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u043A\u043B\u0438\u0435\u043D\u0442\u0430\u043C...")
-        lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching { requestContactTimeline() }
                     .recoverCatching { requestCallsFallback() }
