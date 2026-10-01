@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 
 object AppPermissions {
     fun runtimePermissions(): Array<String> = buildList {
@@ -23,4 +24,8 @@ object AppPermissions {
 
     fun has(context: Context, permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+
+    fun hasNotificationListenerAccess(context: Context): Boolean = runCatching {
+        NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+    }.getOrDefault(false)
 }

@@ -261,8 +261,11 @@ class CallRepository(
         val normalized = normalizePhone(phone)
         if (normalized.isBlank()) return false
 
+        // Положительный флаг в отдельном кеше достаточен для исключения служебных
+        // уведомлений. Отрицательный флаг не должен перекрывать более свежую
+        // локальную отметку контакта, пока синхронизация с сервером стоит в очереди.
         val cachedFlag = personalContactDao.getFlag(normalized)
-        if (cachedFlag != null) return cachedFlag == 1
+        if (cachedFlag == 1) return true
 
         val direct = contactDao.findByPhone(phone)
         if (direct?.client1c == "\u041B\u0438\u0447\u043D\u044B\u0439") return true
@@ -834,7 +837,10 @@ class CallRepository(
     suspend fun markAsPersonalContact(phone: String): Boolean {
         if (phone.isBlank() || phone == "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E") return false
         ensureContact(phone)
-        if (!syncPersonalContactToRemote(phone, true, enqueueOnFailure = true)) return false
+        // Сначала сохраняем признак локально: следующий звонок не должен показывать
+        // уведомление о результате даже при временно недоступном сервере.
+        setPersonalContactLocal(phone, true)
+        syncPersonalContactToRemote(phone, true, enqueueOnFailure = true)
         val pendingCount = markCallsPendingForNormalizedPhone(phone)
         Log.d("CallRepository", "\u041B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442: \u043F\u043E\u0441\u0442\u0430\u0432\u0438\u043B\u0438 \u0432 \u043E\u0447\u0435\u0440\u0435\u0434\u044C $pendingCount \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u0434\u043B\u044F \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u043A\u043E\u043B\u043E\u043D\u043A\u0438 \u041A\u043B\u0438\u0435\u043D\u0442")
         syncPending()
@@ -851,7 +857,8 @@ class CallRepository(
     suspend fun unmarkPersonalContact(phone: String): Boolean {
         if (phone.isBlank() || phone == "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E") return false
         ensureContact(phone)
-        if (!syncPersonalContactToRemote(phone, false, enqueueOnFailure = true)) return false
+        setPersonalContactLocal(phone, false)
+        syncPersonalContactToRemote(phone, false, enqueueOnFailure = true)
         val pendingCount = markCallsPendingForNormalizedPhone(phone)
         Log.d("CallRepository", "\u041B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442 \u0441\u043D\u044F\u0442: \u043F\u043E\u0441\u0442\u0430\u0432\u0438\u043B\u0438 \u0432 \u043E\u0447\u0435\u0440\u0435\u0434\u044C $pendingCount \u0437\u0432\u043E\u043D\u043A\u043E\u0432 \u0434\u043B\u044F \u043E\u0447\u0438\u0441\u0442\u043A\u0438 \u043A\u043E\u043B\u043E\u043D\u043A\u0438 \u041A\u043B\u0438\u0435\u043D\u0442")
         syncPending()
@@ -866,6 +873,13 @@ class CallRepository(
         contactDao.findAll()
             .filter { contact -> normalizePhone(contact.phone) == normalizedPhone }
             .forEach { contact -> contactDao.updateClient1c(contact.id, value) }
+    }
+
+    private suspend fun setPersonalContactLocal(phone: String, isPersonal: Boolean) {
+        val normalizedPhone = normalizePhone(phone)
+        if (normalizedPhone.isBlank()) return
+        personalContactDao.upsert(PersonalContactEntity(normalizedPhone, if (isPersonal) 1 else 0))
+        updatePersonalContactLocal(phone, isPersonal)
     }
 
     private suspend fun markCallsPendingForNormalizedPhone(phone: String): Int {
@@ -931,8 +945,7 @@ class CallRepository(
         }.getOrDefault(false)
 
         if (ok) {
-            personalContactDao.upsert(PersonalContactEntity(normalizedContactPhone, personalFlag))
-            updatePersonalContactLocal(normalizedContactPhone, isPersonal)
+            setPersonalContactLocal(normalizedContactPhone, isPersonal)
             AppLogger.log(appContext, "API", "\u041B\u0438\u0447\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D: flag=$personalFlag")
         }
         return ok
