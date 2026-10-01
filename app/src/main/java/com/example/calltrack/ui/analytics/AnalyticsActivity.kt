@@ -160,7 +160,7 @@ class AnalyticsActivity : BaseActivity() {
     private fun renderTabs() {
         tabRow.removeAllViews()
         tabRow.addView(tabButton("\u0414\u0430\u0448\u0431\u043E\u0440\u0434", AnalyticsTab.DASHBOARD), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply { setMargins(0, 0, dp(4), 0) })
-        tabRow.addView(tabButton("\u041A\u043E\u043D\u0442\u0430\u043A\u0442\u044B", AnalyticsTab.CONTACTS), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply { setMargins(dp(4), 0, 0, 0) })
+        tabRow.addView(tabButton("\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0432", AnalyticsTab.CONTACTS), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply { setMargins(dp(4), 0, 0, 0) })
     }
 
     private fun tabButton(label: String, tab: AnalyticsTab) = Button(this).apply {
@@ -327,7 +327,9 @@ class AnalyticsActivity : BaseActivity() {
                     tag = repairText(row.optString("client")),
                     reminder = repairText(row.optString("reminder_text")),
                     timestamp = timestamp,
-                    uploaded = true
+                    uploaded = true,
+                    source = row.optString("source").ifBlank { "phone" },
+                    contactName = repairText(row.optString("contact_name"))
                 )
             )
         }
@@ -375,7 +377,7 @@ class AnalyticsActivity : BaseActivity() {
     }
 
     private fun renderContacts(calls: List<CallEntity>) {
-        addSectionTitle("\u0417\u0432\u043E\u043D\u043A\u0438 \u043A\u043B\u0438\u0435\u043D\u0442\u0430")
+        addSectionTitle("\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u043A\u043B\u0438\u0435\u043D\u0442\u043E\u0432")
         if (!managerSalesAvailable) addText("\u0414\u0430\u043D\u043D\u044B\u0435 \u043E \u043F\u0440\u043E\u0434\u0430\u0436\u0430\u0445 \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B")
         val clientCalls = calls.filter {
             it.duration >= 10 && (it.type == "\u0412\u0445\u043E\u0434\u044F\u0449\u0438\u0439" || it.type == "\u0418\u0441\u0445\u043E\u0434\u044F\u0449\u0438\u0439")
@@ -423,7 +425,7 @@ class AnalyticsActivity : BaseActivity() {
                 setTextColor(getColor(R.color.textSecondary))
             })
             val timeline = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            val events = rows.map { TimelineUiEvent(it.timestamp, callEventLabel(it), typeColor(it.type)) } +
+            val events = rows.map { TimelineUiEvent(it.timestamp, callEventLabel(it), if (it.source == "max") Color.rgb(145, 50, 213) else typeColor(it.type)) } +
                 emails.map { TimelineUiEvent(it.timestamp, "Email\n${it.subject.ifBlank { "\u041E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E" }}", Color.rgb(245, 158, 11)) } +
                 sales.map { TimelineUiEvent(it.timestamp, "\u041F\u0440\u043E\u0434\u0430\u0436\u0430\n${it.amount} \u20BD", Color.rgb(139, 92, 246)) }
             events.sortedBy { it.timestamp }.forEach { event ->
@@ -441,7 +443,10 @@ class AnalyticsActivity : BaseActivity() {
         }
     }
 
-    private fun callEventLabel(call: CallEntity): String = "${call.type} \u2022 ${formatDuration(call.duration)}"
+    private fun callEventLabel(call: CallEntity): String {
+        val source = if (call.source == "max") "MAX \u2022 " else ""
+        return "$source${call.type} \u2022 ${formatDuration(call.duration)}"
+    }
 
     private fun timelineClientKey(name: String, phone: String): String {
         val normalizedName = name.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")

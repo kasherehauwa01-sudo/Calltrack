@@ -223,7 +223,7 @@ class CallListFragment : Fragment() {
             val short = normalized.takeLast(10)
             RecentCallListItem.CallRow(
                 call = call,
-                contactName = nameByPhone[normalized] ?: nameByPhone[short] ?: call.phone,
+                contactName = nameByPhone[normalized] ?: nameByPhone[short] ?: call.contactName.ifBlank { call.phone },
                 client1cName = clientByPhone[short] ?: "—"
             )
         }
