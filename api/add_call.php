@@ -15,7 +15,12 @@ try {
     $reminder = empty($data['reminder'] ?? null) ? null : normalizeDateTime($data['reminder']);
 
     $pdo = getPdo();
-    $androidUser=optionalAndroidUser($pdo);if($androidUser){$identity=androidManagerIdentity($androidUser);$data['user_phone']=$identity['user_phone'];$data['manager']=$identity['manager'];}
+    $source = ($data['source'] ?? 'phone') === 'max' ? 'max' : 'phone';
+    $androidUser=optionalAndroidUser($pdo);
+    if($source==='max'&&!$androidUser)sendJson(['status'=>'error','message'=>'Для MAX-звонка требуется авторизация'],401);
+    if($androidUser){$identity=androidManagerIdentity($androidUser);$data['user_phone']=$identity['user_phone'];$data['manager']=$identity['manager'];}
+    $sourceEventId=trim((string)($data['source_event_id']??''));
+    if($source==='max'&&$sourceEventId==='')sendJson(['status'=>'error','message'=>'Для MAX-звонка требуется source_event_id'],400);
     if (isUserBlocked($pdo, valueOrNull($data, 'user_phone'), valueOrNull($data, 'manager'))) {
         sendJson(['status' => 'success', 'skipped' => true, 'message' => 'Пользователь заблокирован']);
     }
@@ -34,8 +39,8 @@ try {
         ':client' => valueOrNull($data, 'client'),
         ':call_id' => $callId,
         ':user_phone' => valueOrNull($data, 'user_phone'),
-        ':source' => ($data['source'] ?? 'phone') === 'max' ? 'max' : 'phone',
-        ':source_event_id' => valueOrNull($data, 'source_event_id'),
+        ':source' => $source,
+        ':source_event_id' => $sourceEventId !== '' ? $sourceEventId : null,
         ':contact_name' => valueOrNull($data, 'contact_name'),
         ':direction' => valueOrNull($data, 'direction'),
         ':status' => valueOrNull($data, 'status'),

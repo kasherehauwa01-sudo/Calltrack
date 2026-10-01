@@ -22,7 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-/** Временная диагностика уведомлений MAX. Данные выводятся только в Logcat. */
+/** Фиксация звонков MAX через общую локальную очередь и backend Calltrack. */
 class MaxNotificationListenerService : NotificationListenerService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -31,7 +31,9 @@ class MaxNotificationListenerService : NotificationListenerService() {
 
     override fun onCreate() {
         super.onCreate()
-        session = MaxCallSessionStore(this).load()
+        val store = MaxCallSessionStore(this)
+        session = store.load()
+        store.loadCompleted()?.let(::queueCompletedCall)
     }
 
     override fun onDestroy() {
@@ -47,8 +49,9 @@ class MaxNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         if (sbn?.packageName != MAX_PACKAGE) return
-        finishSession(sbn)
-        runCatching {
+        runCatching { finishSession(sbn) }
+            .onFailure { Log.e(TAG, "event=callEndFailed error=${safeError(it)}") }
+        if (BuildConfig.DEBUG) runCatching {
             Log.i(TAG, buildString {
                 append("event=REMOVED")
                 append(" packageName=").append(sbn.packageName)
@@ -65,7 +68,7 @@ class MaxNotificationListenerService : NotificationListenerService() {
         val notification = sbn.notification
         val extras = notification.extras ?: Bundle.EMPTY
         val person = extractCallPerson(extras)
-        Log.i(TAG, buildString {
+        if (BuildConfig.DEBUG) Log.i(TAG, buildString {
             append("event=POSTED")
             append(" packageName=").append(sbn.packageName)
             append(" id=").append(sbn.id)
@@ -112,7 +115,10 @@ class MaxNotificationListenerService : NotificationListenerService() {
         ) ?: return
         if (previous == null) {
             resolution = MaxContactResolver(this).resolve(name)
-            Log.i(TAG, "contactResolution status=${resolution?.status?.wireValue}" + if (BuildConfig.DEBUG) " phoneResolved=${resolution?.phone != null}" else "")
+            Log.i(TAG, "event=sessionCreated direction=${updated.direction.name.lowercase()}")
+            Log.i(TAG, "event=contactResolved status=${resolution?.status?.wireValue} phone=${maskPhone(resolution?.phone)}")
+        } else if (previous.state != MaxCallState.ACTIVE && updated.state == MaxCallState.ACTIVE) {
+            Log.i(TAG, "event=callAnswered direction=incoming")
         }
         session = updated
         MaxCallSessionStore(this).save(updated)
@@ -120,13 +126,24 @@ class MaxNotificationListenerService : NotificationListenerService() {
 
     private fun finishSession(sbn: StatusBarNotification) {
         val current = session?.takeIf { it.notificationKey == sbn.key } ?: return
-        session = null
-        MaxCallSessionStore(this).clear()
         val result = current.finish(System.currentTimeMillis())
         val contact = resolution ?: MaxContactResolver(this).resolve(result.maxContactName)
+        val store = MaxCallSessionStore(this)
+        // Сначала надёжно фиксируем завершённое событие. При смерти процесса оно будет
+        // повторно поставлено в общую Room-очередь с тем же идемпотентным event id.
+        store.saveCompleted(result, contact)
+        session = null
+        store.clearActive()
         resolution = null
+        Log.i(TAG, "event=callEnded direction=${result.direction.name.lowercase()} status=${result.status.name.lowercase()} duration=${result.durationSeconds}")
+        queueCompletedCall(PendingMaxCall(result, contact))
+    }
+
+    private fun queueCompletedCall(pending: PendingMaxCall) {
         if (!AuthStore(this).isAuthenticated) return
         scope.launch {
+            val result = pending.result
+            val contact = pending.contact
             val repository = (application as App).repository
             val entity = CallEntity(
                 phone = contact.phone?.let(repository::normalizePhone).orEmpty(),
@@ -150,9 +167,18 @@ class MaxNotificationListenerService : NotificationListenerService() {
                 contactResolutionStatus = contact.status.wireValue
             )
             val id = repository.saveCall(entity)
-            repository.syncCallById(id)
+            MaxCallSessionStore(this@MaxNotificationListenerService).clearCompleted()
+            Log.i(TAG, "event=callQueued sourceEventId=${result.sourceEventId}")
+            val uploaded = repository.syncCallById(id)
+            Log.i(TAG, "event=${if (uploaded) "callUploaded" else "callUploadFailed"} sourceEventId=${result.sourceEventId}")
             CalltrackRecoveryManager.schedulePendingSync(this@MaxNotificationListenerService)
         }
+    }
+
+    private fun maskPhone(phone: String?): String = when {
+        phone.isNullOrBlank() -> "none"
+        phone.length <= 4 -> "****"
+        else -> "***${phone.takeLast(4)}"
     }
 
     private fun findExactContacts(maxName: String) {

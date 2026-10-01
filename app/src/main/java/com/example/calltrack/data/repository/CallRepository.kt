@@ -1041,25 +1041,27 @@ class CallRepository(
         syncCallById(callId)
     }
 
-    suspend fun syncCallById(callId: Long) {
+    suspend fun syncCallById(callId: Long): Boolean {
         StabilityDiagnostics.mark(appContext, "sync_started", "call_id=$callId")
-        syncMutex.withLock {
-            val entity = callDao.getById(callId) ?: return@withLock
+        return syncMutex.withLock {
+            val entity = callDao.getById(callId) ?: return@withLock false
             val managerName = prefs.getManagerName().ifBlank { "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D" }
             val managerPhone = prefs.getManagerPhone().ifBlank { "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D" }
             if (sendCallToWebhook(entity, managerName, managerPhone)) {
                 callDao.markUploaded(entity.id)
                 AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED BY ID: id=${entity.id}")
                 StabilityDiagnostics.mark(appContext, "sync_finished", "call_id=$callId")
+                true
             } else {
                 StabilityDiagnostics.mark(appContext, "sync_failed", "call_id=$callId; \u0441\u0435\u0440\u0432\u0435\u0440 \u043D\u0435 \u043F\u0440\u0438\u043D\u044F\u043B \u0437\u0432\u043E\u043D\u043E\u043A")
+                false
             }
         }
     }
 
-    suspend fun syncPending() {
+    suspend fun syncPending(): Boolean {
         StabilityDiagnostics.mark(appContext, "sync_started", "pending")
-        syncMutex.withLock {
+        return syncMutex.withLock {
             val managerName = prefs.getManagerName().ifBlank { "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D" }
             val managerPhone = prefs.getManagerPhone().ifBlank { "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D" }
             val pending = callDao.getPending()
@@ -1067,6 +1069,7 @@ class CallRepository(
                 // Антидубль: на некоторых устройствах один завершённый звонок может попасть в БД несколько раз
                 // с очень близким timestamp. Группируем такие записи в 5-секундное окно и отправляем один webhook.
                 SyncFingerprint(
+                    sourceEventId = entity.sourceEventId,
                     phone = entity.phone,
                     type = entity.type,
                     duration = entity.duration,
@@ -1084,11 +1087,13 @@ class CallRepository(
                     AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED: ids=${duplicates.joinToString { it.id.toString() }}")
                     Log.d(
                         "CallRepository",
-                        "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
+                        "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, source=${entity.source}"
                     )
                 }
             }
-            StabilityDiagnostics.mark(appContext, "sync_finished", "pending_before=${pending.size}")
+            val completed = callDao.getPendingCount() == 0
+            StabilityDiagnostics.mark(appContext, "sync_finished", "pending_before=${pending.size}; completed=$completed")
+            completed
         }
     }
 
@@ -1344,6 +1349,7 @@ class CallRepository(
     }
 
     private data class SyncFingerprint(
+        val sourceEventId: String,
         val phone: String,
         val type: String,
         val duration: Long,

@@ -9,6 +9,7 @@ foreach(['source_event_id','contact_resolution_status','answered_at','ringing_du
     if(!str_contains($api,$field)||!str_contains($migration,$field))throw new RuntimeException("MAX field missing: $field");
 }
 if(!str_contains($api,'ON DUPLICATE KEY UPDATE')||!str_contains($migration,'UNIQUE KEY uk_source_event'))throw new RuntimeException('MAX idempotency missing');
+foreach(["\$source==='max'&&!\$androidUser","\$source==='max'&&\$sourceEventId===''",'Для MAX-звонка требуется авторизация'] as $required)if(!str_contains($api,$required))throw new RuntimeException("MAX auth contract missing: $required");
 foreach(['sourceEventId','contactResolutionStatus','ringingDurationSeconds'] as $field)if(!str_contains($entity,$field))throw new RuntimeException("Room MAX field missing: $field");
 if(!str_contains($ui,"call.source==='max'?'MAX · ':''"))throw new RuntimeException('MAX timeline marker missing');
 echo "max_call_integration_test: OK\n";
