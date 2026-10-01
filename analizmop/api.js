@@ -148,7 +148,15 @@ window.calltrackApi.deleteWebUser = async function deleteWebUser(id) {
 
 window.calltrackApi.loadCalls = window.calltrackApi.loadCalls || (async function loadDashboardCalls() {
   const separator = window.calltrackApi.endpoints.calls.includes('?') ? '&' : '?';
-  return window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.calls}${separator}period=all&limit=0`);
+  const baseUrl = `${window.calltrackApi.endpoints.calls}${separator}period=all&limit=0`;
+  try {
+    return await window.calltrackApi.requestJson(baseUrl, { cache: 'no-store' });
+  } catch (error) {
+    // Справочник новых менеджеров дополняет фильтры, но не должен лишать
+    // пользователя самих звонков при несовместимой production-схеме.
+    console.warn('Повторная загрузка звонков без справочника менеджеров:', error);
+    return window.calltrackApi.requestJson(`${baseUrl}&include_managers=0`, { cache: 'no-store' });
+  }
 });
 
 window.calltrackApi.testClientPhone = window.calltrackApi.testClientPhone || (async function testClientPhone(phone) {

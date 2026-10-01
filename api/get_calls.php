@@ -117,7 +117,11 @@ try {
         $webUser = requireWebUser($pdo);
         $scope = webManagerScope($webUser);
         if ($scope) $filters['user_phone'] = $scope['user_phone'];
-        $managerDirectory = dashboardManagerDirectory($pdo, $webUser);
+        // Frontend может повторить запрос без необязательного справочника,
+        // если production-схема web_users временно несовместима с ним.
+        $managerDirectory = ($_GET['include_managers'] ?? '1') === '0'
+            ? []
+            : dashboardManagerDirectory($pdo, $webUser);
     }
     $params = [];
     $where = buildFilters($filters, $params);

@@ -31,7 +31,7 @@ foreach (['function removeLegacyHelpTab()', 'function repairCachedDashboardMarku
     }
 }
 
-if (!str_contains($html, 'api.js?v=20260930-imap-password')) {
+if (!str_contains($html, 'api.js?v=20261001-calls-recovery')) {
     throw new RuntimeException('Не обновлена версия подключаемого JavaScript');
 }
 
