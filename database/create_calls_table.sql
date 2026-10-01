@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS calls (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_call_id (call_id),
+    UNIQUE KEY uk_source_event (source, source_event_id),
     INDEX idx_phone (phone),
     INDEX idx_user_phone (user_phone),
     INDEX idx_call_date (call_date),

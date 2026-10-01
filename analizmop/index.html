@@ -568,6 +568,9 @@ function mapCallRecord(obj){
     client: obj.client || obj.Client || obj['Клиент'] || '',
     id: obj.call_id || obj.ID || obj['ID'] || '',
     userPhone: obj.user_phone || obj.userPhone || obj['Номер телефона пользователя'] || '',
+    source: obj.source || 'phone',
+    contactName: obj.contact_name || '',
+    status: obj.status || '',
     createdAt: obj.created_at || '',
     updatedAt: obj.updated_at || ''
   };
@@ -1691,8 +1694,9 @@ function renderClientRow(group){
     const time=`${String(call.__dt.getHours()).padStart(2,'0')}:${String(call.__dt.getMinutes()).padStart(2,'0')}`;
     const hasNote=callHasHistoryDetails(call);
     const cls=call.__type==='Входящий'?'incoming':'outgoing';
-    const tooltip=`Дата: ${date}\nВремя: ${time}\nТип звонка: ${call.__type}\nДлительность: ${formatCallDuration(call.duration)}\nМенеджер: ${call.manager||'Не указан'}`;
-    return `<button class="call-segment ${cls} ${hasNote?'has-note':''}" title="${escapeHtml(tooltip)}" data-index="${call.__index}" type="button" aria-label="Открыть комментарии"><div class="call-segment-top"><span class="call-type">${escapeHtml(call.__type)} · ${escapeHtml(formatCallDurationDot(call.duration))}</span></div><div class="call-datetime">${escapeHtml(date)} · ${escapeHtml(time)}</div></button>`;
+    const source=call.source==='max'?'MAX · ':'';
+    const tooltip=`Источник: ${call.source==='max'?'MAX':'Телефон'}\nДата: ${date}\nВремя: ${time}\nТип звонка: ${call.__type}\nДлительность: ${formatCallDuration(call.duration)}\nМенеджер: ${call.manager||'Не указан'}`;
+    return `<button class="call-segment ${cls} ${hasNote?'has-note':''}" title="${escapeHtml(tooltip)}" data-index="${call.__index}" type="button" aria-label="Открыть комментарии"><div class="call-segment-top"><span class="call-type">${escapeHtml(source+call.__type)} · ${escapeHtml(formatCallDurationDot(call.duration))}</span></div><div class="call-datetime">${escapeHtml(date)} · ${escapeHtml(time)}</div></button>`;
   });
   const emailSegments=(group.emails||[]).map((email)=>{
     const date=formatDateDisplay(formatDateLocal(email.__dt));
