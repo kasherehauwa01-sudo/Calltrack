@@ -19,6 +19,7 @@ import androidx.fragment.app.Fragment
 import com.example.calltrack.R
 import com.example.calltrack.databinding.FragmentPermissionsBinding
 import com.example.calltrack.databinding.ItemPermissionBinding
+import com.example.calltrack.permissions.AppPermissions
 import com.example.calltrack.service.CalltrackRecoveryManager
 import com.example.calltrack.service.RecoveryReason
 
@@ -84,6 +85,9 @@ class PermissionsFragment : Fragment() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             addRuntimePermission(R.string.permission_notifications, R.string.permission_notifications_description, Manifest.permission.POST_NOTIFICATIONS)
         }
+        add(PermissionItem(R.string.permission_notification_access, R.string.permission_notification_access_description, { AppPermissions.hasNotificationListenerAccess(requireContext()) }) {
+            openSettings(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        })
         add(PermissionItem(R.string.permission_battery, R.string.permission_battery_description, ::isBatteryOptimizationDisabled, ::requestBatteryOptimizationExclusion))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             add(PermissionItem(R.string.permission_install_packages, R.string.permission_install_packages_description, { requireContext().packageManager.canRequestPackageInstalls() }) {
