@@ -1,7 +1,5 @@
 package com.example.calltrack.notification
 
-import java.security.MessageDigest
-
 enum class MaxCallState { INCOMING_RINGING, ACTIVE }
 enum class MaxCallDirection { INCOMING, OUTGOING }
 enum class MaxCallStatus { ANSWERED, MISSED }
@@ -13,8 +11,7 @@ data class MaxCallSession(
     val state: MaxCallState,
     val direction: MaxCallDirection,
     val answeredAt: Long? = null,
-    val isVideo: Boolean = false,
-    val sourceEventId: String = MaxCallEventId.create(notificationKey, maxContactName, startedAt)
+    val isVideo: Boolean = false
 ) {
     fun onActive(at: Long): MaxCallSession = copy(
         state = MaxCallState.ACTIVE,
@@ -24,7 +21,7 @@ data class MaxCallSession(
     fun finish(at: Long): MaxCallResult {
         val answered = answeredAt
         return MaxCallResult(
-            sourceEventId = sourceEventId,
+            sourceEventId = "max:${notificationKey.hashCode().toUInt().toString(16)}:$startedAt",
             maxContactName = maxContactName,
             direction = direction,
             status = if (direction == MaxCallDirection.INCOMING && answered == null) MaxCallStatus.MISSED else MaxCallStatus.ANSWERED,
@@ -37,14 +34,6 @@ data class MaxCallSession(
             } else null,
             isVideo = isVideo
         )
-    }
-}
-
-object MaxCallEventId {
-    fun create(notificationKey: String, contactName: String, startedAt: Long): String {
-        val source = "$notificationKey\u0000${MaxContactNameMatcher.normalize(contactName)}\u0000$startedAt"
-        val digest = MessageDigest.getInstance("SHA-256").digest(source.toByteArray(Charsets.UTF_8))
-        return "max:" + digest.joinToString("") { "%02x".format(it) }
     }
 }
 
@@ -66,11 +55,10 @@ object MaxCallStateMachine {
         current: MaxCallSession?,
         notificationKey: String,
         contactName: String,
-        callType: Int?,
+        callType: Int,
         isVideo: Boolean,
-        at: Long,
-        isCallStyle: Boolean = true
-    ): MaxCallSession? = if (!isCallStyle) current else when (callType) {
+        at: Long
+    ): MaxCallSession? = when (callType) {
         1 -> current ?: MaxCallSession(
             notificationKey, contactName, at, MaxCallState.INCOMING_RINGING,
             MaxCallDirection.INCOMING, isVideo = isVideo
@@ -81,6 +69,4 @@ object MaxCallStateMachine {
         )
         else -> current
     }
-
-    fun removed(current: MaxCallSession?, at: Long): MaxCallResult? = current?.finish(at)
 }

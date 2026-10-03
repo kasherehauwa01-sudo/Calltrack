@@ -4,7 +4,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/web_auth.php';
 
 try {
-    $pdo = getPdo(); requireWebAdmin($pdo);
+    $pdo = getPdo(); $admin=requireWebAdmin($pdo);
     $data = readJsonBody();
     $ids = $data['ids'] ?? [];
     $callIds = $data['call_ids'] ?? [];
@@ -33,6 +33,7 @@ try {
         }
     }
 
+    recordWebSecurityEvent($pdo,'calls_deleted','success',(int)$admin['id'],(string)$admin['login'],['deleted'=>$deleted]);
     sendJson(['status' => 'success', 'deleted' => $deleted]);
 } catch (Throwable $e) {
     sendJson(['status' => 'error', 'message' => $e->getMessage()], 500);

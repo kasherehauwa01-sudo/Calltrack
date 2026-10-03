@@ -257,16 +257,7 @@
 
     <section class="view" id="adminView">
       <article class="admin-card">
-        <div class="admin-lock" id="adminLock">
-          <h2>Админ панель</h2>
-          <p>Раздел защищен паролем. Введите пароль администратора, чтобы открыть настройки.</p>
-          <div class="admin-login-row">
-            <input class="admin-password" id="adminPassword" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Пароль" />
-            <button class="admin-login-btn" id="adminLoginBtn" type="button">Войти</button>
-          </div>
-          <div class="admin-error" id="adminError" aria-live="polite"></div>
-        </div>
-        <div class="admin-content" id="adminContent" hidden>
+        <div class="admin-content" id="adminContent">
           <h2>Админ панель</h2>
           <div class="admin-subtabs" role="tablist" aria-label="Разделы админ панели">
             <button class="admin-subtab active" data-admin-tab="generalSettings" type="button">Общие настройки</button>
@@ -521,7 +512,6 @@
 
 
 <script>
-const ADMIN_PASSWORD='8852285';
 window.calltrackApi=window.calltrackApi||{};
 window.calltrackApi.endpoints=window.calltrackApi.endpoints||{};
 const SQL_CALLS_API_URL=window.calltrackApi?.endpoints?.calls||'/vr/calltrack/api/get_calls.php';
@@ -533,9 +523,9 @@ const USERS_API_URL=window.calltrackApi?.endpoints?.users||'/vr/calltrack/api/ge
 const USER_COMMAND_API_URL=window.calltrackApi?.endpoints?.userCommand||'/vr/calltrack/api/user_command.php';
 console.log('calltrackApi', window.calltrackApi);
 console.log('SQL_CALLS_API_URL', SQL_CALLS_API_URL);
-const chartInstances=[]; let allCalls=[]; let availableManagers=[]; let clientOutgoingEmails=[]; let clientSales=[]; let clientSalesAliases={}; let renderedSaleGroups=new Map(); let activeSaleGroupKey=''; let saleModalRequestId=0; let clientEmailsLoading=false; let clientSalesRequestId=0; let activePeriod='all'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let isAdminUnlocked=false; let adminPasswordValue=''; let activeGroupBy='month'; let adminRegistrySort={key:'call_date',direction:'desc'}; let adminRegistryPeriod='week'; let registryTotalRows=null; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; let users=[]; let usersLoaded=false; let updates=[]; let updatesLoaded=false; let emailMessages=[]; let emailSettings=[]; let emailLoaded=false; let clientsApiTestMatches=[]; let activeUserId=''; let authenticatedWebUser=null; let clientNamesRequestId=0; const clientNamesByPhone=new Map(); const clientNamesByEmail=new Map(); const clientRecordsByPhone=new Map(); const clientRecordsByEmail=new Map(); const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий','MAX Входящие','MAX исходящие']); const selectedRegistryRows=new Set();
+const chartInstances=[]; let allCalls=[]; let availableManagers=[]; let clientOutgoingEmails=[]; let clientSales=[]; let clientSalesAliases={}; let renderedSaleGroups=new Map(); let activeSaleGroupKey=''; let saleModalRequestId=0; let clientEmailsLoading=false; let clientSalesRequestId=0; let activePeriod='all'; let activeClientPeriod='month'; let activeClientManager=''; let editingCallIndex=null; let activeGroupBy='month'; let adminRegistrySort={key:'call_date',direction:'desc'}; let adminRegistryPeriod='week'; let registryTotalRows=null; let personalContacts=[]; let personalContactsLoaded=false; let personalContactsSort={key:'updated_at',direction:'desc'}; let users=[]; let usersLoaded=false; let updates=[]; let updatesLoaded=false; let emailMessages=[]; let emailSettings=[]; let emailLoaded=false; let clientsApiTestMatches=[]; let activeUserId=''; let authenticatedWebUser=null; let clientNamesRequestId=0; const clientNamesByPhone=new Map(); const clientNamesByEmail=new Map(); const clientRecordsByPhone=new Map(); const clientRecordsByEmail=new Map(); const selectedPersonalContactsRows=new Set(); const activeManagers=new Set(); const activeCallTypes=new Set(['Входящий','Исходящий']); const selectedRegistryRows=new Set();
 const els={dashboardView:document.getElementById('dashboardView'),clientCallsView:document.getElementById('clientCallsView'),adminView:document.getElementById('adminView'),managerTags:document.getElementById('managerTags'),groupByFilter:document.getElementById('groupByFilter'),periodShell:document.getElementById('periodShell'),dateFrom:document.getElementById('dateFrom'),dateTo:document.getElementById('dateTo'),applyCustomRangeBtn:document.getElementById('applyCustomRangeBtn'),trendTitle:document.getElementById('trendTitle'),kpiTotal:document.getElementById('kpiTotal'),kpiIncoming:document.getElementById('kpiIncoming'),kpiOutgoing:document.getElementById('kpiOutgoing'),kpiMissed:document.getElementById('kpiMissed'),kpiUnanswered:document.getElementById('kpiUnanswered'),kpiDropped:document.getElementById('kpiDropped'),emptyState:document.getElementById('emptyState'),chartsGrid:document.getElementById('chartsGrid'),callTypeTags:document.getElementById('callTypeTags'),clientManagerTags:document.getElementById('clientManagerTags'),clientPeriodShell:document.getElementById('clientPeriodShell'),clientDateFrom:document.getElementById('clientDateFrom'),clientDateTo:document.getElementById('clientDateTo'),clientApplyRangeBtn:document.getElementById('clientApplyRangeBtn'),clientCallsList:document.getElementById('clientCallsList'),commentModal:document.getElementById('commentModal'),commentInfo:document.getElementById('commentInfo'),commentText:document.getElementById('commentText'),reminderText:document.getElementById('reminderText'),reminderAt:document.getElementById('reminderAt'),commentSaveStatus:document.getElementById('commentSaveStatus'),commentCancelBtn:document.getElementById('commentCancelBtn'),commentSaveBtn:document.getElementById('commentSaveBtn'),clientHistoryModal:document.getElementById('clientHistoryModal'),clientHistoryInfo:document.getElementById('clientHistoryInfo'),clientHistoryList:document.getElementById('clientHistoryList'),clientHistoryCloseBtn:document.getElementById('clientHistoryCloseBtn'),saleModal:document.getElementById('saleModal'),saleModalContent:document.getElementById('saleModalContent'),saleModalTitle:document.getElementById('saleModalTitle'),saleModalBackBtn:document.getElementById('saleModalBackBtn'),saleModalCloseBtn:document.getElementById('saleModalCloseBtn')};
-const adminEls={tabs:document.querySelectorAll('.tab-btn'),lock:document.getElementById('adminLock'),content:document.getElementById('adminContent'),password:document.getElementById('adminPassword'),loginBtn:document.getElementById('adminLoginBtn'),updateCommand:document.getElementById('adminUpdateCommand'),updateCommandCopyBtn:document.getElementById('adminUpdateCommandCopyBtn'),updateCommandStatus:document.getElementById('adminUpdateCommandStatus'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsRefreshBtn:document.getElementById('personalContactsRefreshBtn'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),usersPanel:document.getElementById('adminUsersPanel'),usersStatus:document.getElementById('usersStatus'),userCard:document.getElementById('userCard'),apkUserModal:document.getElementById('apkUserModal'),apkUserCloseBtn:document.getElementById('apkUserCloseBtn'),emailRegistryPanel:document.getElementById('adminEmailRegistryPanel'),emailPanel:document.getElementById('adminEmailPanel'),emailTable:document.getElementById('emailTable'),emailSettingsTable:document.getElementById('emailSettingsTable'),emailStatus:document.getElementById('emailStatus'),emailSearch:document.getElementById('emailSearch'),emailDirectionFilter:document.getElementById('emailDirectionFilter'),emailRefreshBtn:document.getElementById('emailRefreshBtn'),emailSyncNewBtn:document.getElementById('emailSyncNewBtn'),emailSyncProgress:document.getElementById('emailSyncProgress'),emailSyncProgressText:document.getElementById('emailSyncProgressText'),emailSettingsForm:document.getElementById('emailSettingsForm'),emailAddMailboxBtn:document.getElementById('emailAddMailboxBtn'),emailSettingsModal:document.getElementById('emailSettingsModal'),emailSettingsCancelBtn:document.getElementById('emailSettingsCancelBtn'),emailTestConnectionBtn:document.getElementById('emailTestConnectionBtn'),emailConnectionStatus:document.getElementById('emailConnectionStatus'),updatesPanel:document.getElementById('adminUpdatesPanel'),updatesTable:document.getElementById('updatesTable'),updateForm:document.getElementById('updateForm'),updateId:document.getElementById('updateId'),updateVersionName:document.getElementById('updateVersionName'),updateVersionCode:document.getElementById('updateVersionCode'),updateReleaseNotes:document.getElementById('updateReleaseNotes'),updateApk:document.getElementById('updateApk'),updateFormResetBtn:document.getElementById('updateFormResetBtn'),updatesStatus:document.getElementById('updatesStatus'),generalSettingsPanel:document.getElementById('adminGeneralSettingsPanel'),clientsApiTestForm:document.getElementById('clientsApiTestForm'),clientsApiTestPhone:document.getElementById('clientsApiTestPhone'),clientsApiTestBtn:document.getElementById('clientsApiTestBtn'),clientsApiTestStatus:document.getElementById('clientsApiTestStatus'),clientsApiTestModal:document.getElementById('clientsApiTestModal'),clientsApiTestResult:document.getElementById('clientsApiTestResult'),clientsApiTestBackBtn:document.getElementById('clientsApiTestBackBtn'),clientsApiTestCloseBtn:document.getElementById('clientsApiTestCloseBtn'),registryRefreshBtn:document.getElementById('registryRefreshBtn'),registryTable:document.getElementById('adminRegistryTable'),registryRowsCount:document.getElementById('registryRowsCount'),registryPeriodShell:document.getElementById('registryPeriodShell'),registryCustomPeriodFields:document.getElementById('registryCustomPeriodFields'),registryDateFrom:document.getElementById('registryDateFrom'),registryDateTo:document.getElementById('registryDateTo'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
+const adminEls={tabs:document.querySelectorAll('.tab-btn'),content:document.getElementById('adminContent'),updateCommand:document.getElementById('adminUpdateCommand'),updateCommandCopyBtn:document.getElementById('adminUpdateCommandCopyBtn'),updateCommandStatus:document.getElementById('adminUpdateCommandStatus'),error:document.getElementById('adminError'),subtabs:document.querySelectorAll('.admin-subtab'),registryPanel:document.getElementById('adminRegistryPanel'),personalContactsPanel:document.getElementById('adminPersonalContactsPanel'),personalContactsTable:document.getElementById('adminPersonalContactsTable'),personalContactsManagerFilter:document.getElementById('personalContactsManagerFilter'),personalContactsRefreshBtn:document.getElementById('personalContactsRefreshBtn'),personalContactsDeleteSelectedBtn:document.getElementById('personalContactsDeleteSelectedBtn'),personalContactsStatus:document.getElementById('personalContactsStatus'),usersPanel:document.getElementById('adminUsersPanel'),usersStatus:document.getElementById('usersStatus'),userCard:document.getElementById('userCard'),apkUserModal:document.getElementById('apkUserModal'),apkUserCloseBtn:document.getElementById('apkUserCloseBtn'),emailRegistryPanel:document.getElementById('adminEmailRegistryPanel'),emailPanel:document.getElementById('adminEmailPanel'),emailTable:document.getElementById('emailTable'),emailSettingsTable:document.getElementById('emailSettingsTable'),emailStatus:document.getElementById('emailStatus'),emailSearch:document.getElementById('emailSearch'),emailDirectionFilter:document.getElementById('emailDirectionFilter'),emailRefreshBtn:document.getElementById('emailRefreshBtn'),emailSyncNewBtn:document.getElementById('emailSyncNewBtn'),emailSyncProgress:document.getElementById('emailSyncProgress'),emailSyncProgressText:document.getElementById('emailSyncProgressText'),emailSettingsForm:document.getElementById('emailSettingsForm'),emailAddMailboxBtn:document.getElementById('emailAddMailboxBtn'),emailSettingsModal:document.getElementById('emailSettingsModal'),emailSettingsCancelBtn:document.getElementById('emailSettingsCancelBtn'),emailTestConnectionBtn:document.getElementById('emailTestConnectionBtn'),emailConnectionStatus:document.getElementById('emailConnectionStatus'),updatesPanel:document.getElementById('adminUpdatesPanel'),updatesTable:document.getElementById('updatesTable'),updateForm:document.getElementById('updateForm'),updateId:document.getElementById('updateId'),updateVersionName:document.getElementById('updateVersionName'),updateVersionCode:document.getElementById('updateVersionCode'),updateReleaseNotes:document.getElementById('updateReleaseNotes'),updateApk:document.getElementById('updateApk'),updateFormResetBtn:document.getElementById('updateFormResetBtn'),updatesStatus:document.getElementById('updatesStatus'),generalSettingsPanel:document.getElementById('adminGeneralSettingsPanel'),clientsApiTestForm:document.getElementById('clientsApiTestForm'),clientsApiTestPhone:document.getElementById('clientsApiTestPhone'),clientsApiTestBtn:document.getElementById('clientsApiTestBtn'),clientsApiTestStatus:document.getElementById('clientsApiTestStatus'),clientsApiTestModal:document.getElementById('clientsApiTestModal'),clientsApiTestResult:document.getElementById('clientsApiTestResult'),clientsApiTestBackBtn:document.getElementById('clientsApiTestBackBtn'),clientsApiTestCloseBtn:document.getElementById('clientsApiTestCloseBtn'),registryRefreshBtn:document.getElementById('registryRefreshBtn'),registryTable:document.getElementById('adminRegistryTable'),registryRowsCount:document.getElementById('registryRowsCount'),registryPeriodShell:document.getElementById('registryPeriodShell'),registryCustomPeriodFields:document.getElementById('registryCustomPeriodFields'),registryDateFrom:document.getElementById('registryDateFrom'),registryDateTo:document.getElementById('registryDateTo'),registryManagerFilter:document.getElementById('registryManagerFilter'),registryTypeFilter:document.getElementById('registryTypeFilter'),registryClientSearch:document.getElementById('registryClientSearch'),registryDeleteSelectedBtn:document.getElementById('registryDeleteSelectedBtn')};
 const createLocalDate=(year, monthIndex, day, hours=0, minutes=0, seconds=0)=>new Date(year, monthIndex, day, hours, minutes, seconds, 0);
 const startOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
 const endOfDay=(date)=>createLocalDate(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
@@ -590,7 +580,6 @@ function setActiveTab(tab){
   els.dashboardView.classList.toggle('active',tab==='dashboard');
   els.clientCallsView.classList.toggle('active',isClientCalls);
   els.adminView.classList.toggle('active',isAdmin);
-  if(isAdmin&&!isAdminUnlocked) setTimeout(()=>adminEls.password.focus(),0);
   if(isClientCalls) refreshClientEmailTimeline();
 }
 
@@ -611,25 +600,8 @@ async function copyAdminUpdateCommand(){
   }
 }
 
-function unlockAdminPanel(){
-  const value=adminEls.password.value.trim();
-  if(value!==ADMIN_PASSWORD){
-    adminEls.error.textContent='Неверный пароль';
-    adminEls.password.value='';
-    adminEls.password.focus();
-    return;
-  }
-  isAdminUnlocked=true;
-  adminPasswordValue=value;
-  adminEls.error.textContent='';
-  adminEls.lock.hidden=true;
-  adminEls.content.hidden=false;
-  setActiveAdminTab('generalSettings');
-}
 function bindAdminPanel(){
   adminEls.tabs.forEach((btn)=>btn.addEventListener('click',()=>setActiveTab(btn.dataset.tab)));
-  adminEls.loginBtn.addEventListener('click',unlockAdminPanel);
-  adminEls.password.addEventListener('keydown',(e)=>{if(e.key==='Enter') unlockAdminPanel();});
   adminEls.updateCommandCopyBtn.addEventListener('click',copyAdminUpdateCommand);
   adminEls.subtabs.forEach((btn)=>btn.addEventListener('click',()=>setActiveAdminTab(btn.dataset.adminTab)));
   [adminEls.registryDateFrom,adminEls.registryDateTo,adminEls.registryManagerFilter,adminEls.registryTypeFilter,adminEls.registryClientSearch].forEach((control)=>{
@@ -756,7 +728,7 @@ function renderClientsCacheStatus(data={}){
 async function loadClientsCacheStatus(){
   const feedback=document.getElementById('clientsCacheRefreshStatus');
   const message=document.getElementById('clientsCacheRefreshMessage');
-  try{renderClientsCacheStatus(await window.calltrackApi.clientsCacheStatus(adminPasswordValue));if(!feedback.classList.contains('running'))message.textContent='Статус кэша загружен';}
+  try{renderClientsCacheStatus(await window.calltrackApi.clientsCacheStatus());if(!feedback.classList.contains('running'))message.textContent='Статус кэша загружен';}
   catch(error){feedback.className='cache-refresh-feedback error';message.textContent=`Не удалось получить статус: ${error.message}`;}
 }
 async function refreshClientsCacheNow(mode='delta'){
@@ -770,12 +742,12 @@ async function refreshClientsCacheNow(mode='delta'){
   feedback.className='cache-refresh-feedback running';spinner.hidden=false;
   message.textContent='Запуск обновления кэша Clients...';
   try{
-    const launched=await window.calltrackApi.refreshClientsCache(adminPasswordValue,mode);
+    const launched=await window.calltrackApi.refreshClientsCache(mode);
     renderClientsCacheStatus(launched.data);button.textContent='Обновление выполняется...';
     message.textContent='Обновление кэша запущено';
     while(Date.now()-startedAt<pollingTimeoutMs){
       await new Promise((resolve)=>setTimeout(resolve,4000));
-      const status=await window.calltrackApi.clientsCacheStatus(adminPasswordValue);
+      const status=await window.calltrackApi.clientsCacheStatus();
       renderClientsCacheStatus(status);
       if(status.status==='success'){
         feedback.className='cache-refresh-feedback success';
@@ -789,7 +761,7 @@ async function refreshClientsCacheNow(mode='delta'){
     message.textContent='Автоматическая проверка остановлена через 10 минут. Серверный процесс продолжает работу; обновите статус позднее.';
   }catch(error){
     feedback.className='cache-refresh-feedback error';message.textContent=`Обновление завершилось с ошибкой: ${error.message}`;
-    try{renderClientsCacheStatus(await window.calltrackApi.clientsCacheStatus(adminPasswordValue));}catch(statusError){console.error(statusError);}
+    try{renderClientsCacheStatus(await window.calltrackApi.clientsCacheStatus());}catch(statusError){console.error(statusError);}
   }finally{
     spinner.hidden=true;button.disabled=false;button.textContent=mode==='full'?'Полное обновление':'Обновить изменения сейчас';
   }
@@ -1052,7 +1024,7 @@ async function installLatestUpdateForAll(){
   button.disabled=true;
   status.textContent='Формирование очереди уведомлений...';
   try{
-    const result=await window.calltrackApi.installLatestUpdateForAll(adminPasswordValue);
+    const result=await window.calltrackApi.installLatestUpdateForAll();
     status.textContent=`Версия ${result.version_name} (${result.version_code}): поставлено в очередь ${Number(result.queued||0)} из ${Number(result.eligible_users||0)} пользователей.${Number(result.without_version_code||0)>0?` Без данных VersionCode: ${Number(result.without_version_code)}.`:''}`;
   }catch(error){
     status.textContent=`Ошибка отправки уведомлений: ${error.message}`;
@@ -1106,7 +1078,7 @@ async function saveAppUpdate(event){
   adminEls.updatesStatus.textContent='Сохранение...';
   try{
     if(window.calltrackApi?.saveUpdate) await window.calltrackApi.saveUpdate(formData);
-    else await fetch(ADMIN_UPDATES_API_URL,{method:'POST',body:formData,credentials:'same-origin'}).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p;});
+    else await fetch(ADMIN_UPDATES_API_URL,{method:'POST',headers:window.calltrackApi.withCsrf(),body:formData,credentials:'same-origin'}).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p;});
     resetUpdateForm();
     adminEls.updatesStatus.textContent='Обновление сохранено, update.json сформирован';
     await loadUpdates();
@@ -1132,7 +1104,7 @@ async function uploadApkInChunks(file){
       if(adminEls.updateVersionName.value.trim()) formData.append('version_name',adminEls.updateVersionName.value.trim());
       formData.append('release_notes',adminEls.updateReleaseNotes.value);
       formData.append('chunk',file.slice(index*chunkSize,Math.min(file.size,(index+1)*chunkSize)),file.name);
-      result=window.calltrackApi?.saveUpdate?await window.calltrackApi.saveUpdate(formData):await fetch(ADMIN_UPDATES_API_URL,{method:'POST',body:formData,credentials:'same-origin'}).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p;});
+      result=window.calltrackApi?.saveUpdate?await window.calltrackApi.saveUpdate(formData):await fetch(ADMIN_UPDATES_API_URL,{method:'POST',headers:window.calltrackApi.withCsrf(),body:formData,credentials:'same-origin'}).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p;});
       adminEls.updatesStatus.textContent=`Загрузка APK: ${index+1} из ${totalChunks}`;
     }
     if(!result?.complete) throw new Error('APK загружен не полностью');
@@ -1148,7 +1120,7 @@ async function deleteAppUpdate(id){
   adminEls.updatesStatus.textContent='Удаление...';
   try{
     if(window.calltrackApi?.deleteUpdate) await window.calltrackApi.deleteUpdate(id);
-    else await fetch(ADMIN_UPDATES_API_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({action:'delete',id}),credentials:'same-origin'}).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p;});
+    else await fetch(ADMIN_UPDATES_API_URL,{method:'POST',headers:window.calltrackApi.withCsrf({'Content-Type':'application/json; charset=utf-8'}),body:JSON.stringify({action:'delete',id}),credentials:'same-origin'}).then(async(r)=>{const p=await r.json();if(!r.ok||p.status==='error') throw new Error(p.message||`HTTP ${r.status}`);return p;});
     resetUpdateForm();
     adminEls.updatesStatus.textContent='Обновление удалено, update.json обновлён';
     await loadUpdates();
@@ -1266,7 +1238,7 @@ async function deleteSelectedRegistryRows(){
   adminEls.registryDeleteSelectedBtn.textContent='Удаление...';
   try{
     if(window.calltrackApi?.deleteCalls) await window.calltrackApi.deleteCalls({ids,call_ids});
-    else await fetch(DELETE_CALLS_API_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({ids,call_ids})}).then(async(response)=>{const payload=await response.json().catch(()=>({}));if(!response.ok||payload.status==='error') throw new Error(payload.message||`HTTP ${response.status}`);return payload;});
+    else await fetch(DELETE_CALLS_API_URL,{method:'POST',headers:window.calltrackApi.withCsrf({'Content-Type':'application/json; charset=utf-8'}),body:JSON.stringify({ids,call_ids})}).then(async(response)=>{const payload=await response.json().catch(()=>({}));if(!response.ok||payload.status==='error') throw new Error(payload.message||`HTTP ${response.status}`);return payload;});
     selectedRegistryRows.clear();
     await refreshRegistryData();
     adminEls.registryRowsCount.textContent=`Удалено строк: ${rowsToDelete.length}`;
@@ -1374,7 +1346,7 @@ async function updatePersonalContactFlagValue(select){
   adminEls.personalContactsStatus.textContent='Сохранение признака...';
   try{
     if(window.calltrackApi?.updatePersonalContactFlag) await window.calltrackApi.updatePersonalContactFlag(id,value);
-    else await fetch('/vr/calltrack/api/personal_contact.php',{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({id_db:id,personal_flag:value})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
+    else await fetch('/vr/calltrack/api/personal_contact.php',{method:'POST',headers:window.calltrackApi.withCsrf({'Content-Type':'application/json; charset=utf-8'}),body:JSON.stringify({id_db:id,personal_flag:value})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
     if(row) row.personal_flag=value;
     adminEls.personalContactsStatus.textContent='Признак сохранён';
   }catch(error){
@@ -1394,7 +1366,7 @@ async function deleteSelectedPersonalContactsRows(){
   adminEls.personalContactsStatus.textContent='Удаление...';
   try{
     if(window.calltrackApi?.deletePersonalContacts) await window.calltrackApi.deletePersonalContacts(ids);
-    else await fetch('/vr/calltrack/api/delete_personal_contacts.php',{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({ids})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
+    else await fetch('/vr/calltrack/api/delete_personal_contacts.php',{method:'POST',headers:window.calltrackApi.withCsrf({'Content-Type':'application/json; charset=utf-8'}),body:JSON.stringify({ids})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
     personalContacts=personalContacts.filter((row)=>!selectedPersonalContactsRows.has(getPersonalContactRowKey(row)));
     selectedPersonalContactsRows.clear();
     updatePersonalContactsFilterOptions();
@@ -1508,7 +1480,7 @@ async function sendUserAction(command, button){
   try{
     const meta={user_id:user.id||'',manager:user.manager||''};
     if(window.calltrackApi?.sendUserCommand) await window.calltrackApi.sendUserCommand(user.user_phone||'',command,meta);
-    else await fetch(USER_COMMAND_API_URL,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify({user_phone:user.user_phone||'',command,...meta})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
+    else await fetch(USER_COMMAND_API_URL,{method:'POST',headers:window.calltrackApi.withCsrf({'Content-Type':'application/json; charset=utf-8'}),body:JSON.stringify({user_phone:user.user_phone||'',command,...meta})}).then((response)=>{if(!response.ok) throw new Error(`HTTP ${response.status}`); return response.json();});
     if(command==='delete_user'){removeActiveUserFromList();adminEls.usersStatus.textContent='Пользователь удалён безвозвратно из списка';return;}
     if(command==='block_user'){user.is_blocked=1;renderUserCard();adminEls.usersStatus.textContent='Пользователь заблокирован. Новые данные от него не будут записываться в SQL';return;}
     if(command==='unblock_user'){user.is_blocked=0;renderUserCard();adminEls.usersStatus.textContent='Пользователь разблокирован. Новые данные снова будут записываться в SQL';return;}
@@ -1696,7 +1668,7 @@ function renderClientRow(group){
     const cls=call.__type==='Входящий'?'incoming':'outgoing';
     const source=call.source==='max'?'MAX · ':'';
     const tooltip=`Источник: ${call.source==='max'?'MAX':'Телефон'}\nДата: ${date}\nВремя: ${time}\nТип звонка: ${call.__type}\nДлительность: ${formatCallDuration(call.duration)}\nМенеджер: ${call.manager||'Не указан'}`;
-    return `<button class="call-segment ${cls} ${call.source==='max'?'max-call':''} ${hasNote?'has-note':''}" title="${escapeHtml(tooltip)}" data-index="${call.__index}" type="button" aria-label="Открыть комментарии"><div class="call-segment-top"><span class="call-type">${escapeHtml(source+call.__type)} · ${escapeHtml(formatCallDurationDot(call.duration))}</span></div><div class="call-datetime">${escapeHtml(date)} · ${escapeHtml(time)}</div></button>`;
+    return `<button class="call-segment ${cls} ${hasNote?'has-note':''}" title="${escapeHtml(tooltip)}" data-index="${call.__index}" type="button" aria-label="Открыть комментарии"><div class="call-segment-top"><span class="call-type">${escapeHtml(source+call.__type)} · ${escapeHtml(formatCallDurationDot(call.duration))}</span></div><div class="call-datetime">${escapeHtml(date)} · ${escapeHtml(time)}</div></button>`;
   });
   const emailSegments=(group.emails||[]).map((email)=>{
     const date=formatDateDisplay(formatDateLocal(email.__dt));
@@ -1831,7 +1803,7 @@ function persistCallComment(call){
     call_id:call.id||'',
     user_phone:call.userPhone||''
   };
-  return fetch(SQL_CALLS_API_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  return fetch(SQL_CALLS_API_URL,{method:'POST',headers:window.calltrackApi.withCsrf({'Content-Type':'application/json'}),body:JSON.stringify(payload)})
     .then((response)=>response.text())
     .then((text)=>{
       let data=null;
@@ -2027,7 +1999,7 @@ function setActivePeriodPill(p){activePeriod=p;[...els.periodShell.querySelector
   updateGroupByAvailability(p);
   setGroupByForPeriod(p);
 }
-function applyFilters(){const g=activeGroupBy,p=activePeriod,range=getPeriodRange(p);let from=null,to=null;if(p==='custom'){from=els.dateFrom.value?startOfDay(parseLocalDate(els.dateFrom.value)):null;to=els.dateTo.value?endOfDay(parseLocalDate(els.dateTo.value)):null;if(!from||!to){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();return;}}else if(range){from=range.from;to=range.to;}const filtered=allCalls.filter((c)=>{const client=String(c?.client||'').trim().toLowerCase();if(client==='личный звонок') return false; const type=normalizeCallTypeLabel(c?.type); const isMissed=type==='Неотвеченный'; const isDropped=type==='Сброшенный'; const mappedType=isMissed?'Пропущенные':(isDropped?'Сброшенные':type); const mappedUnanswered=isMissed?'Неотвеченные':mappedType; const maxType=c?.source==='max'?(type==='Входящий'?'MAX Входящие':type==='Исходящий'?'MAX исходящие':isMissed?'MAX пропущенные':mappedType):''; if(c?.source==='max'? !activeCallTypes.has(maxType):!(activeCallTypes.has(mappedType)||activeCallTypes.has(mappedUnanswered))) return false;const m=(c?.manager||'Не указан').trim()||'Не указан';if(!activeManagers.has(m))return false;if(!from||!to)return true;const norm=normalizeDate(c?.date);const dt=normalizeDateTime(c?.date,c?.time)||(norm?parseLocalDate(norm):null);if(!dt&&norm){const dObj=parseLocalDate(norm);if(!dObj) return false;const dayPoint=createLocalDate(dObj.getFullYear(),dObj.getMonth(),dObj.getDate(),12,0,0);return inDateRange(dayPoint,from,to);}return inDateRange(dt,from,to)});if(!filtered.length){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();return;}hideNoData();const gg=['hour','day','week','month'].includes(g)?g:'day';const s=analyzeCalls(filtered,gg);renderKpi(s);renderCharts(s,gg);}
+function applyFilters(){const g=activeGroupBy,p=activePeriod,range=getPeriodRange(p);let from=null,to=null;if(p==='custom'){from=els.dateFrom.value?startOfDay(parseLocalDate(els.dateFrom.value)):null;to=els.dateTo.value?endOfDay(parseLocalDate(els.dateTo.value)):null;if(!from||!to){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();return;}}else if(range){from=range.from;to=range.to;}const filtered=allCalls.filter((c)=>{const client=String(c?.client||'').trim().toLowerCase();if(client==='личный звонок') return false; const type=normalizeCallTypeLabel(c?.type); const isMissed=type==='Неотвеченный'; const isDropped=type==='Сброшенный'; const mappedType=isMissed?'Пропущенные':(isDropped?'Сброшенные':type); const mappedUnanswered=isMissed?'Неотвеченные':mappedType; if(!(activeCallTypes.has(mappedType)||activeCallTypes.has(mappedUnanswered))) return false;const m=(c?.manager||'Не указан').trim()||'Не указан';if(!activeManagers.has(m))return false;if(!from||!to)return true;const norm=normalizeDate(c?.date);const dt=normalizeDateTime(c?.date,c?.time)||(norm?parseLocalDate(norm):null);if(!dt&&norm){const dObj=parseLocalDate(norm);if(!dObj) return false;const dayPoint=createLocalDate(dObj.getFullYear(),dObj.getMonth(),dObj.getDate(),12,0,0);return inDateRange(dayPoint,from,to);}return inDateRange(dt,from,to)});if(!filtered.length){renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();return;}hideNoData();const gg=['hour','day','week','month'].includes(g)?g:'day';const s=analyzeCalls(filtered,gg);renderKpi(s);renderCharts(s,gg);}
 function bindFilters(){renderCallTypeTags();els.callTypeTags.addEventListener('click',(e)=>{const tag=e.target.closest('.type-tag'); if(!tag) return; const t=tag.dataset.type; if(activeCallTypes.has(t)) activeCallTypes.delete(t); else activeCallTypes.add(t); renderCallTypeTags(); applyFilters();});els.periodShell.addEventListener('click',(e)=>{const btn=e.target.closest('.period-pill');if(!btn||!btn.dataset.period)return;setActivePeriodPill(btn.dataset.period);applyFilters();});els.applyCustomRangeBtn.addEventListener('click',()=>{setActivePeriodPill('custom');applyFilters();});els.groupByFilter.addEventListener('click',(e)=>{const btn=e.target.closest('.detail-pill'); if(!btn||btn.disabled) return; setActiveGroupBy(btn.dataset.group); applyFilters();});els.managerTags.addEventListener('click',(e)=>{const toggle=e.target.closest('.manager-toggle-btn');if(toggle){const tags=[...els.managerTags.querySelectorAll('.manager-tag')];if(activeManagers.size){activeManagers.clear();tags.forEach((tag)=>tag.classList.remove('active'));}else{tags.forEach((tag)=>{activeManagers.add(tag.dataset.manager);tag.classList.add('active');});}updateManagerToggleButton();applyFilters();return;}const tag=e.target.closest('.manager-tag');if(!tag)return;const m=tag.dataset.manager;if(activeManagers.has(m)){activeManagers.delete(m);tag.classList.remove('active');}else{activeManagers.add(m);tag.classList.add('active');}updateManagerToggleButton();applyFilters();});}
 async function fetchCallsPayload(){
   return window.calltrackApi?.loadCalls
@@ -2143,7 +2115,7 @@ async function initDashboard(){
   applyCallsPayload(callsPayload);
 }catch(error){console.error('Ошибка загрузки/обработки данных:',error);els.emptyState.textContent=`Не удалось загрузить данные с сервера: ${error.message||'неизвестная ошибка'}`;renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();}}
 async function requestWebAuth(action='me',body=null){return window.calltrackApi.webAuth(action,body);}
-async function openAuthenticatedApp(user){authenticatedWebUser=user;document.getElementById('authScreen').hidden=true;document.getElementById('appShell').hidden=false;document.getElementById('currentWebUser').textContent=`${user.display_name} · ${webRoleTitle(user.role)}`;if(user.role!=='admin'){document.querySelector('[data-tab="admin"]')?.remove();document.getElementById('adminView')?.remove();}try{bindAdminPanel();startEmailRegistryAutoRefresh();if(user.role==='admin'){adminEls.password.value=ADMIN_PASSWORD;unlockAdminPanel();}}catch(error){console.error('Ошибка инициализации админ-панели:',error);}await initDashboard();}
+async function openAuthenticatedApp(user){authenticatedWebUser=user;document.getElementById('authScreen').hidden=true;document.getElementById('appShell').hidden=false;document.getElementById('currentWebUser').textContent=`${user.display_name} · ${webRoleTitle(user.role)}`;if(user.role!=='admin'){document.querySelector('[data-tab="admin"]')?.remove();document.getElementById('adminView')?.remove();}try{bindAdminPanel();startEmailRegistryAutoRefresh();if(user.role==='admin')setActiveAdminTab('generalSettings');}catch(error){console.error('Ошибка инициализации админ-панели:',error);}await initDashboard();}
 document.getElementById('authForm').addEventListener('submit',async(event)=>{event.preventDefault();const error=document.getElementById('authError');error.textContent='';try{const user=await requestWebAuth('login',{login:document.getElementById('authLogin').value,pin:document.getElementById('authPin').value});await openAuthenticatedApp(user);}catch(reason){error.textContent=reason.message;}});
 document.getElementById('logoutBtn').addEventListener('click',async()=>{await requestWebAuth('logout');location.reload();});
 requestWebAuth().then(openAuthenticatedApp).catch(()=>{document.getElementById('authScreen').hidden=false;});

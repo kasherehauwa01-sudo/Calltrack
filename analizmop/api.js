@@ -74,6 +74,10 @@ if (document.readyState === 'loading') {
 
 // Общие API-методы дашборда используются встроенным скриптом админ-панели.
 window.calltrackApi = window.calltrackApi || {};
+window.calltrackApi.csrfToken = '';
+window.calltrackApi.withCsrf = function withCsrf(headers = {}) {
+  return window.calltrackApi.csrfToken ? { ...headers, 'X-CSRF-Token': window.calltrackApi.csrfToken } : { ...headers };
+};
 window.calltrackApi.endpoints = Object.assign({
   calls: '/vr/calltrack/api/get_calls.php',
   personalContacts: '/vr/calltrack/api/get_personal_contacts.php',
@@ -95,7 +99,12 @@ window.calltrackApi.endpoints = Object.assign({
   saleDetail: '/vr/calltrack/api/sale_detail.php'
 }, window.calltrackApi.endpoints || {});
 window.calltrackApi.requestJson = async function requestJson(url, options = {}) {
-  const response = await fetch(url, { credentials: 'same-origin', ...options });
+  const method = String(options.method || 'GET').toUpperCase();
+  const headers = new Headers(options.headers || {});
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && window.calltrackApi.csrfToken && !headers.has('X-CSRF-Token')) {
+    headers.set('X-CSRF-Token', window.calltrackApi.csrfToken);
+  }
+  const response = await fetch(url, { credentials: 'same-origin', ...options, headers });
   const text = await response.text();
 
   let payload = {};
@@ -124,13 +133,16 @@ window.calltrackApi.requestJson = async function requestJson(url, options = {}) 
 window.calltrackApi.webAuth = async function webAuth(action = 'me', data = null) {
   const endpoint = window.calltrackApi.endpoints.webAuth;
   const separator = endpoint.includes('?') ? '&' : '?';
+  const needsPost = data !== null || action === 'logout';
   const payload = await window.calltrackApi.requestJson(`${endpoint}${separator}action=${encodeURIComponent(action)}`, {
-    method: data ? 'POST' : 'GET',
-    headers: data ? { 'Content-Type': 'application/json; charset=utf-8' } : {},
-    body: data ? JSON.stringify(data) : undefined,
+    method: needsPost ? 'POST' : 'GET',
+    headers: needsPost ? { 'Content-Type': 'application/json; charset=utf-8' } : {},
+    body: needsPost ? JSON.stringify(data || {}) : undefined,
     credentials: 'same-origin',
     cache: 'no-store'
   });
+  if (typeof payload.csrf_token === 'string') window.calltrackApi.csrfToken = payload.csrf_token;
+  if (action === 'logout') window.calltrackApi.csrfToken = '';
   return payload.data || null;
 };
 
@@ -197,25 +209,25 @@ window.calltrackApi.getSaleDetail = function getSaleDetail(id) {
   return request;
 };
 
-window.calltrackApi.clientsCacheStatus = async function clientsCacheStatus(password) {
+window.calltrackApi.clientsCacheStatus = async function clientsCacheStatus() {
   const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientsCache, {
-    headers: { 'X-Calltrack-Admin-Password': password }
+    cache: 'no-store'
   });
   return payload.data || {};
 };
 
-window.calltrackApi.refreshClientsCache = async function refreshClientsCache(password, mode = 'delta') {
+window.calltrackApi.refreshClientsCache = async function refreshClientsCache(mode = 'delta') {
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientsCache, {
     method: 'POST',
-    headers: { 'X-Calltrack-Admin-Password': password, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mode })
   });
 };
 
-window.calltrackApi.installLatestUpdateForAll = async function installLatestUpdateForAll(password) {
+window.calltrackApi.installLatestUpdateForAll = async function installLatestUpdateForAll() {
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.installLatestUpdate, {
     method: 'POST',
-    headers: { 'X-Calltrack-Admin-Password': password, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: '{}'
   });
 };
@@ -293,7 +305,7 @@ window.calltrackApi.getEmailSettings = window.calltrackApi.getEmailSettings || (
 
 window.calltrackApi.syncEmail = window.calltrackApi.syncEmail || (async function syncEmail() {
   const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
-  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=sync`);
+  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=sync`, { method: 'POST', body: '{}' });
   return payload.data || { imported: 0, mailboxes: 0, errors: [] };
 });
 
@@ -379,7 +391,11 @@ function query(params) {
   return sp.toString();
 }
 async function requestJson(endpoint, options = {}) {
-  const response = await fetch(API_BASE + endpoint, options);
+  const method = String(options.method || 'GET').toUpperCase();
+  const headers = !['GET', 'HEAD', 'OPTIONS'].includes(method)
+    ? window.calltrackApi.withCsrf(options.headers || {})
+    : (options.headers || {});
+  const response = await fetch(API_BASE + endpoint, { credentials: 'same-origin', ...options, headers });
   const text = await response.text();
   let payload;
   try { payload = text ? JSON.parse(text) : {}; } catch (error) { throw new Error(`Некорректный JSON от ${endpoint}: ${text.slice(0, 200)}`); }

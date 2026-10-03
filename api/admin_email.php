@@ -186,19 +186,20 @@ try {
         requireWebAdmin($pdo);
         testEmailMailboxSettings($pdo);
     }
+    // Ручная синхронизация изменяет данные и поэтому выполняется только POST
+    // с admin-сессией и CSRF-проверкой внутри requireWebAdmin().
+    if ($action === 'sync') {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') sendJson(['status'=>'error','message'=>'Разрешён только POST'],405);
+        requireWebAdmin($pdo);
+        $mailboxId = isset($_GET['id']) ? (int)$_GET['id'] : nextEmailMailboxId($pdo);
+        sendJson(['status'=>'success', 'data'=>$mailboxId ? syncEmailMailboxes($pdo, $mailboxId, 10) : ['imported'=>0, 'mailboxes'=>0, 'errors'=>[]]]);
+    }
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         requireWebAdmin($pdo);
         saveEmailMailbox($pdo);
     }
     if ($action === 'settings') { requireWebAdmin($pdo); sendEmailSettingsPayload($pdo); }
     if ($action === 'detail') sendEmailDetailPayload($pdo,$webUser);
-    // Ручная кнопка загружает короткую порцию и не держит HTTP-соединение до
-    // тайм-аута прокси. Полную историю каждый час дочитывает CLI cron.
-    if ($action === 'sync') {
-        requireWebAdmin($pdo);
-        $mailboxId = isset($_GET['id']) ? (int)$_GET['id'] : nextEmailMailboxId($pdo);
-        sendJson(['status'=>'success', 'data'=>$mailboxId ? syncEmailMailboxes($pdo, $mailboxId, 10) : ['imported'=>0, 'mailboxes'=>0, 'errors'=>[]]]);
-    }
     if ($_SERVER['REQUEST_METHOD']==='POST') requireWebAdmin($pdo);
     sendEmailRegistryPayload($pdo,$webUser);
 } catch (Throwable $e) {

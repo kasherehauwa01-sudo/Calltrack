@@ -4,7 +4,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/web_auth.php';
 
 try {
-    $pdo=getPdo(); requireWebAdmin($pdo);
+    $pdo=getPdo(); $admin=requireWebAdmin($pdo);
     $data = readJsonBody();
     $ids = $data['ids'] ?? [];
     if (!is_array($ids)) {
@@ -20,6 +20,7 @@ try {
     $stmt = $pdo->prepare("DELETE FROM personal_contacts WHERE id IN ({$placeholders})");
     $stmt->execute($ids);
 
+    recordWebSecurityEvent($pdo,'personal_contacts_deleted','success',(int)$admin['id'],(string)$admin['login'],['deleted'=>$stmt->rowCount()]);
     sendJson(['status' => 'success', 'deleted' => $stmt->rowCount()]);
 } catch (Throwable $e) {
     sendJson(['status' => 'error', 'message' => $e->getMessage()], 500);

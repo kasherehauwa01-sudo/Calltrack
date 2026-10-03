@@ -7,7 +7,12 @@ try {
     $pdo = getPdo();
 
     $data = readJsonBody();
-    $androidUser=optionalAndroidUser($pdo);if($androidUser){$identity=androidManagerIdentity($androidUser);$data['user_phone']=$identity['user_phone'];$data['manager']=$identity['manager'];}
+    $androidUser=optionalAndroidUser($pdo);
+    if($androidUser){
+        $identity=androidManagerIdentity($androidUser);$data['user_phone']=$identity['user_phone'];$data['manager']=$identity['manager'];
+    } else {
+        requireWebAdmin($pdo);
+    }
     $idDb = valueOrNull($data, 'id_db');
     if ($idDb !== null) {
         $existsStmt = $pdo->prepare('SELECT id FROM personal_contacts WHERE id = :id'.($androidUser?' AND user_phone=:user_phone':'').' LIMIT 1');
