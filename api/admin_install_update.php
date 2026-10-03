@@ -4,22 +4,12 @@ declare(strict_types=1);
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/web_auth.php';
 
-function assertInstallUpdateAdmin(): void
-{
-    $provided = (string)($_SERVER['HTTP_X_CALLTRACK_ADMIN_PASSWORD'] ?? '');
-    if ($provided === '' || !hash_equals((string)CALLTRACK_ADMIN_PASSWORD, $provided)) {
-        sendJson(['status' => 'error', 'message' => 'Требуется авторизация администратора'], 403);
-    }
-}
-
 try {
-    assertInstallUpdateAdmin();
+    $pdo = getPdo();
+    requireWebAdmin($pdo);
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
         sendJson(['status' => 'error', 'message' => 'Разрешён только POST'], 405);
     }
-
-    $pdo = getPdo();
-    requireWebAdmin($pdo);
     ensureUserTelemetryTables($pdo);
     ensureAppUpdatesTable($pdo);
     $latest = $pdo->query('SELECT version_name, version_code FROM app_updates ORDER BY version_code DESC, uploaded_at DESC, id DESC LIMIT 1')->fetch();

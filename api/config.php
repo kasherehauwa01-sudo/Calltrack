@@ -5,6 +5,21 @@
 
 declare(strict_types=1);
 
+function applyCalltrackSecurityHeaders(): void
+{
+    if (headers_sent()) return;
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+        strtolower(trim((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))) === 'https';
+    if ($https) header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: same-origin');
+    header('X-Frame-Options: DENY');
+    header("Content-Security-Policy: frame-ancestors 'none'");
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+}
+
+applyCalltrackSecurityHeaders();
+
 $externalConfig = '/etc/calltrack/config.local.php';
 
 if (file_exists($externalConfig)) {
@@ -49,10 +64,6 @@ if (!defined('CLIENTS_PAGINATED_API_URL')) {
 }
 if (!defined('CLIENTS_REFRESH_PAGE_SIZE')) {
     define('CLIENTS_REFRESH_PAGE_SIZE', 1000);
-}
-if (!defined('CALLTRACK_ADMIN_PASSWORD')) {
-    // Для production задайте значение в /etc/calltrack/config.local.php.
-    define('CALLTRACK_ADMIN_PASSWORD', (string)(getenv('CALLTRACK_ADMIN_PASSWORD') ?: '8852285'));
 }
 if (!defined('SALES_JOURNAL_BASE_URL')) {
     define('SALES_JOURNAL_BASE_URL', rtrim((string)(getenv('SALES_JOURNAL_BASE_URL') ?: ''), '/'));

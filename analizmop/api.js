@@ -4,14 +4,80 @@ function removeLegacyHelpTab() {
   document.querySelectorAll('[data-tab="help"], #helpView').forEach((element) => element.remove());
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', removeLegacyHelpTab, { once: true });
-} else {
+// Страница могла остаться в браузерном кэше от версии, где существовали только
+// manager/admin. Внешний скрипт добавляет новую роль и в такой старый HTML.
+function ensureSupervisorRoleOption() {
+  const select = document.getElementById('webUserRole');
+  if (!select || select.querySelector('option[value="supervisor"]')) return;
+  const option = document.createElement('option');
+  option.value = 'supervisor';
+  option.textContent = 'Руководитель';
+  const adminOption = select.querySelector('option[value="admin"]');
+  select.insertBefore(option, adminOption);
+}
+
+function setEmailPasswordEditMode(editExisting) {
+  const input = document.getElementById('emailPassword');
+  const checkbox = document.getElementById('emailChangePassword');
+  const row = document.getElementById('emailChangePasswordRow');
+  if (!input || !checkbox || !row) return;
+  input.value = '';
+  checkbox.checked = false;
+  row.hidden = !editExisting;
+  input.disabled = editExisting;
+}
+
+// Старый HTML разрешал password manager подставлять основной пароль почты и
+// незаметно заменять им сохранённый пароль приложения при редактировании.
+function ensureEmailPasswordControl() {
+  const input = document.getElementById('emailPassword');
+  if (!input) return;
+  input.autocomplete = 'off';
+  input.setAttribute('data-1p-ignore', '');
+  input.setAttribute('data-lpignore', 'true');
+  let row = document.getElementById('emailChangePasswordRow');
+  if (!row) {
+    row = document.createElement('label');
+    row.className = 'inline-check';
+    row.id = 'emailChangePasswordRow';
+    row.hidden = true;
+    row.innerHTML = '<input id="emailChangePassword" type="checkbox" /> Изменить сохранённый пароль';
+    input.closest('label')?.insertAdjacentElement('afterend', row);
+  }
+  const checkbox = document.getElementById('emailChangePassword');
+  if (checkbox && !checkbox.dataset.bound) {
+    checkbox.dataset.bound = '1';
+    checkbox.addEventListener('change', () => {
+      input.disabled = !checkbox.checked;
+      if (checkbox.checked) input.focus(); else input.value = '';
+    });
+  }
+  setEmailPasswordEditMode(true);
+}
+
+function repairCachedDashboardMarkup() {
   removeLegacyHelpTab();
+  ensureSupervisorRoleOption();
+  ensureEmailPasswordControl();
+}
+
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-email-edit]')) setTimeout(() => setEmailPasswordEditMode(true), 0);
+  if (event.target.closest('#emailAddMailboxBtn')) setTimeout(() => setEmailPasswordEditMode(false), 0);
+});
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', repairCachedDashboardMarkup, { once: true });
+} else {
+  repairCachedDashboardMarkup();
 }
 
 // Общие API-методы дашборда используются встроенным скриптом админ-панели.
 window.calltrackApi = window.calltrackApi || {};
+window.calltrackApi.csrfToken = '';
+window.calltrackApi.withCsrf = function withCsrf(headers = {}) {
+  return window.calltrackApi.csrfToken ? { ...headers, 'X-CSRF-Token': window.calltrackApi.csrfToken } : { ...headers };
+};
 window.calltrackApi.endpoints = Object.assign({
   calls: '/vr/calltrack/api/get_calls.php',
   personalContacts: '/vr/calltrack/api/get_personal_contacts.php',
@@ -33,7 +99,12 @@ window.calltrackApi.endpoints = Object.assign({
   saleDetail: '/vr/calltrack/api/sale_detail.php'
 }, window.calltrackApi.endpoints || {});
 window.calltrackApi.requestJson = async function requestJson(url, options = {}) {
-  const response = await fetch(url, { credentials: 'same-origin', ...options });
+  const method = String(options.method || 'GET').toUpperCase();
+  const headers = new Headers(options.headers || {});
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && window.calltrackApi.csrfToken && !headers.has('X-CSRF-Token')) {
+    headers.set('X-CSRF-Token', window.calltrackApi.csrfToken);
+  }
+  const response = await fetch(url, { credentials: 'same-origin', ...options, headers });
   const text = await response.text();
 
   let payload = {};
@@ -62,13 +133,16 @@ window.calltrackApi.requestJson = async function requestJson(url, options = {}) 
 window.calltrackApi.webAuth = async function webAuth(action = 'me', data = null) {
   const endpoint = window.calltrackApi.endpoints.webAuth;
   const separator = endpoint.includes('?') ? '&' : '?';
+  const needsPost = data !== null || action === 'logout';
   const payload = await window.calltrackApi.requestJson(`${endpoint}${separator}action=${encodeURIComponent(action)}`, {
-    method: data ? 'POST' : 'GET',
-    headers: data ? { 'Content-Type': 'application/json; charset=utf-8' } : {},
-    body: data ? JSON.stringify(data) : undefined,
+    method: needsPost ? 'POST' : 'GET',
+    headers: needsPost ? { 'Content-Type': 'application/json; charset=utf-8' } : {},
+    body: needsPost ? JSON.stringify(data || {}) : undefined,
     credentials: 'same-origin',
     cache: 'no-store'
   });
+  if (typeof payload.csrf_token === 'string') window.calltrackApi.csrfToken = payload.csrf_token;
+  if (action === 'logout') window.calltrackApi.csrfToken = '';
   return payload.data || null;
 };
 
@@ -86,7 +160,15 @@ window.calltrackApi.deleteWebUser = async function deleteWebUser(id) {
 
 window.calltrackApi.loadCalls = window.calltrackApi.loadCalls || (async function loadDashboardCalls() {
   const separator = window.calltrackApi.endpoints.calls.includes('?') ? '&' : '?';
-  return window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.calls}${separator}period=all&limit=0`);
+  const baseUrl = `${window.calltrackApi.endpoints.calls}${separator}period=all&limit=0`;
+  try {
+    return await window.calltrackApi.requestJson(baseUrl, { cache: 'no-store' });
+  } catch (error) {
+    // Справочник новых менеджеров дополняет фильтры, но не должен лишать
+    // пользователя самих звонков при несовместимой production-схеме.
+    console.warn('Повторная загрузка звонков без справочника менеджеров:', error);
+    return window.calltrackApi.requestJson(`${baseUrl}&include_managers=0`, { cache: 'no-store' });
+  }
 });
 
 window.calltrackApi.testClientPhone = window.calltrackApi.testClientPhone || (async function testClientPhone(phone) {
@@ -127,25 +209,25 @@ window.calltrackApi.getSaleDetail = function getSaleDetail(id) {
   return request;
 };
 
-window.calltrackApi.clientsCacheStatus = async function clientsCacheStatus(password) {
+window.calltrackApi.clientsCacheStatus = async function clientsCacheStatus() {
   const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientsCache, {
-    headers: { 'X-Calltrack-Admin-Password': password }
+    cache: 'no-store'
   });
   return payload.data || {};
 };
 
-window.calltrackApi.refreshClientsCache = async function refreshClientsCache(password, mode = 'delta') {
+window.calltrackApi.refreshClientsCache = async function refreshClientsCache(mode = 'delta') {
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientsCache, {
     method: 'POST',
-    headers: { 'X-Calltrack-Admin-Password': password, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mode })
   });
 };
 
-window.calltrackApi.installLatestUpdateForAll = async function installLatestUpdateForAll(password) {
+window.calltrackApi.installLatestUpdateForAll = async function installLatestUpdateForAll() {
   return window.calltrackApi.requestJson(window.calltrackApi.endpoints.installLatestUpdate, {
     method: 'POST',
-    headers: { 'X-Calltrack-Admin-Password': password, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: '{}'
   });
 };
@@ -217,13 +299,13 @@ window.calltrackApi.getEmailMessages = window.calltrackApi.getEmailMessages || (
 
 window.calltrackApi.getEmailSettings = window.calltrackApi.getEmailSettings || (async function getEmailSettings() {
   const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
-  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=settings`);
+  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=settings`, { cache: 'no-store' });
   return Array.isArray(payload.data) ? payload.data : [];
 });
 
 window.calltrackApi.syncEmail = window.calltrackApi.syncEmail || (async function syncEmail() {
   const separator = window.calltrackApi.endpoints.email.includes('?') ? '&' : '?';
-  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=sync`);
+  const payload = await window.calltrackApi.requestJson(`${window.calltrackApi.endpoints.email}${separator}action=sync`, { method: 'POST', body: '{}' });
   return payload.data || { imported: 0, mailboxes: 0, errors: [] };
 });
 
@@ -309,7 +391,11 @@ function query(params) {
   return sp.toString();
 }
 async function requestJson(endpoint, options = {}) {
-  const response = await fetch(API_BASE + endpoint, options);
+  const method = String(options.method || 'GET').toUpperCase();
+  const headers = !['GET', 'HEAD', 'OPTIONS'].includes(method)
+    ? window.calltrackApi.withCsrf(options.headers || {})
+    : (options.headers || {});
+  const response = await fetch(API_BASE + endpoint, { credentials: 'same-origin', ...options, headers });
   const text = await response.text();
   let payload;
   try { payload = text ? JSON.parse(text) : {}; } catch (error) { throw new Error(`Некорректный JSON от ${endpoint}: ${text.slice(0, 200)}`); }

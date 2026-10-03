@@ -34,15 +34,30 @@ try {
         ':client' => valueOrNull($data, 'client'),
         ':call_id' => $callId,
         ':user_phone' => valueOrNull($data, 'user_phone'),
+        ':source' => ($data['source'] ?? 'phone') === 'max' ? 'max' : 'phone',
+        ':source_event_id' => valueOrNull($data, 'source_event_id'),
+        ':contact_name' => valueOrNull($data, 'contact_name'),
+        ':direction' => valueOrNull($data, 'direction'),
+        ':status' => valueOrNull($data, 'status'),
+        ':started_at' => empty($data['started_at']) ? null : normalizeDateTime($data['started_at']),
+        ':answered_at' => empty($data['answered_at']) ? null : normalizeDateTime($data['answered_at']),
+        ':ended_at' => empty($data['ended_at']) ? null : normalizeDateTime($data['ended_at']),
+        ':ringing_duration_seconds' => isset($data['ringing_duration_seconds']) ? (int)$data['ringing_duration_seconds'] : null,
+        ':is_video' => !empty($data['is_video']) ? 1 : 0,
+        ':contact_resolution_status' => valueOrNull($data, 'contact_resolution_status'),
     ];
 
     $sql = <<<'SQL'
 INSERT INTO calls (
     call_date, call_time, phone, call_type, duration, manager, comment, tag,
-    reminder, reminder_text, client, call_id, user_phone
+    reminder, reminder_text, client, call_id, user_phone, source, source_event_id,
+    contact_name, direction, status, started_at, answered_at, ended_at,
+    ringing_duration_seconds, is_video, contact_resolution_status
 ) VALUES (
     :call_date, :call_time, :phone, :call_type, :duration, :manager, :comment, :tag,
-    :reminder, :reminder_text, :client, :call_id, :user_phone
+    :reminder, :reminder_text, :client, :call_id, :user_phone, :source, :source_event_id,
+    :contact_name, :direction, :status, :started_at, :answered_at, :ended_at,
+    :ringing_duration_seconds, :is_video, :contact_resolution_status
 )
 ON DUPLICATE KEY UPDATE
     call_date = VALUES(call_date),
@@ -56,7 +71,12 @@ ON DUPLICATE KEY UPDATE
     reminder = VALUES(reminder),
     reminder_text = VALUES(reminder_text),
     client = VALUES(client),
-    user_phone = VALUES(user_phone)
+    user_phone = VALUES(user_phone),
+    source = VALUES(source), source_event_id = VALUES(source_event_id),
+    contact_name = VALUES(contact_name), direction = VALUES(direction), status = VALUES(status),
+    started_at = VALUES(started_at), answered_at = VALUES(answered_at), ended_at = VALUES(ended_at),
+    ringing_duration_seconds = VALUES(ringing_duration_seconds), is_video = VALUES(is_video),
+    contact_resolution_status = VALUES(contact_resolution_status)
 SQL;
 
     $stmt = $pdo->prepare($sql);
