@@ -1059,9 +1059,9 @@ class CallRepository(
         }
     }
 
-    suspend fun syncPending() {
+    suspend fun syncPending(): Boolean {
         StabilityDiagnostics.mark(appContext, "sync_started", "pending")
-        syncMutex.withLock {
+        return syncMutex.withLock {
             val managerName = prefs.getManagerName().ifBlank { "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D" }
             val managerPhone = prefs.getManagerPhone().ifBlank { "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D" }
             val pending = callDao.getPending()
@@ -1069,6 +1069,7 @@ class CallRepository(
                 // Антидубль: на некоторых устройствах один завершённый звонок может попасть в БД несколько раз
                 // с очень близким timestamp. Группируем такие записи в 5-секундное окно и отправляем один webhook.
                 SyncFingerprint(
+                    sourceEventId = entity.sourceEventId,
                     phone = entity.phone,
                     type = entity.type,
                     duration = entity.duration,
@@ -1086,11 +1087,13 @@ class CallRepository(
                     AppLogger.log(appContext, "API", "CALL MARKED AS SYNCED: ids=${duplicates.joinToString { it.id.toString() }}")
                     Log.d(
                         "CallRepository",
-                        "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, phone=${entity.phone}"
+                        "Webhook sent once for ${duplicates.size} record(s): ids=${duplicates.joinToString { it.id.toString() }}, source=${entity.source}"
                     )
                 }
             }
-            StabilityDiagnostics.mark(appContext, "sync_finished", "pending_before=${pending.size}")
+            val completed = callDao.getPendingCount() == 0
+            StabilityDiagnostics.mark(appContext, "sync_finished", "pending_before=${pending.size}; completed=$completed")
+            completed
         }
     }
 
@@ -1346,6 +1349,7 @@ class CallRepository(
     }
 
     private data class SyncFingerprint(
+        val sourceEventId: String,
         val phone: String,
         val type: String,
         val duration: Long,

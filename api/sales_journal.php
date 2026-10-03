@@ -154,14 +154,14 @@ function readSalesJournalCache(string $key,int $maxAge,array $clients): ?array
     $file=salesJournalCacheDirectory().'/'.$key.'.json';$modified=@filemtime($file);
     if($modified===false||$modified<time()-$maxAge)return null;
     $cached=json_decode((string)@file_get_contents($file),true);
-    if(!is_array($cached)||($cached['version']??null)!==2||empty($cached['items'])||!is_array($cached['items']))return null;
+    if(!is_array($cached)||($cached['version']??null)!==2||!array_key_exists('items',$cached)||!is_array($cached['items']))return null;
     return ['items'=>$cached['items'],'client_aliases'=>salesJournalClientAliases($clients),'requests'=>0,'cache_hit'=>true,'cache_stale'=>$modified<time()-SALES_JOURNAL_CACHE_TTL,'cache_age_seconds'=>max(0,time()-$modified)];
 }
 
 function writeSalesJournalCache(string $key,array $result): void
 {
     $directory=salesJournalCacheDirectory();$file=$directory.'/'.$key.'.json';$temporary=$file.'.'.getmypid().'.tmp';
-    if(empty($result['items'])){@unlink($file);return;}
+    if(!array_key_exists('items',$result)||!is_array($result['items']))throw new InvalidArgumentException('Некорректные данные кэша Sales Journal');
     $json=json_encode(['version'=>2,'items'=>$result['items']],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
     if(@file_put_contents($temporary,$json,LOCK_EX)===false||!@rename($temporary,$file)){@unlink($temporary);throw new RuntimeException('Не удалось сохранить кэш Sales Journal');}
     foreach(glob($directory.'/*.json')?:[] as $cachedFile){$modified=@filemtime($cachedFile);if($modified!==false&&$modified<time()-SALES_JOURNAL_STALE_CACHE_TTL)@unlink($cachedFile);}
