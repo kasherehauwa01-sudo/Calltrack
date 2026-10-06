@@ -47,17 +47,73 @@ function clientsChangesBaseUrl(): string
     $authority = $parts['scheme'] . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '');
     return $authority . rtrim((string)($parts['path'] ?? ''), '/') . '/changes';
 }
-function fetchClientsChangesJson(string $url): array
+function safeClientsChangesUrl(string $url): string
+{
+    $parts = parse_url($url);
+    if ($parts === false || !isset($parts['scheme'], $parts['host'])) return '[некорректный URL]';
+    return $parts['scheme'] . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '') . (string)($parts['path'] ?? '');
+}
+
+function clientsChangesHttpRequest(string $url): array
 {
     $context=stream_context_create(['http'=>['timeout'=>30,'ignore_errors'=>true,'follow_location'=>0,'header'=>"Accept: application/json\r\nConnection: close\r\n"]]);
-    $body=@file_get_contents($url,false,$context); $line=(string)($http_response_header[0]??'');
-    if($body===false||!preg_match('/\s2\d\d\s/',$line)) throw new RuntimeException('Clients delta API недоступен'.($line!==''?': '.$line:''));
-    $payload=json_decode($body,true); if(!is_array($payload)||($payload['status']??'')!=='success') {
-        $message=(string)($payload['message']??'Некорректный ответ Clients delta API');
-        if(stripos($message,'cursor')!==false) throw new RuntimeException('Требуется полное обновление кэша: '.$message);
-        throw new RuntimeException($message);
+    $networkError = null;
+    set_error_handler(static function (int $severity, string $message) use (&$networkError): bool {
+        $networkError = preg_replace('~https?://[^\s]+~u', '[URL скрыт]', $message) ?: 'сетевая ошибка PHP';
+        return true;
+    });
+    try {
+        $body = file_get_contents($url, false, $context);
+    } finally {
+        restore_error_handler();
     }
-    return $payload;
+    $line=(string)($http_response_header[0]??'');
+    $status=preg_match('/\s(\d{3})(?:\s|$)/',$line,$matches)?(int)$matches[1]:null;
+    return ['body'=>$body,'status'=>$status,'status_line'=>$line,'error'=>$networkError];
+}
+
+function clientsChangesErrorIsTemporary(?int $status, mixed $body): bool
+{
+    if ($status !== null) return in_array($status, [408, 429, 500, 502, 503, 504], true) || ($status >= 200 && $status < 300 && $body === false);
+    return true;
+}
+
+function safeClientsChangesError(string $error): string
+{
+    $safe=preg_replace('~https?://[^\s]+~u','[URL скрыт]',$error);
+    return trim((string)$safe) ?: 'сетевая ошибка';
+}
+
+function fetchClientsChangesJson(string $url, ?callable $request=null, ?callable $sleep=null, int $maxAttempts=3): array
+{
+    $request=$request??fn(string $requestUrl):array=>clientsChangesHttpRequest($requestUrl);
+    $sleep=$sleep??static fn(int $seconds)=>sleep($seconds);
+    $maxAttempts=max(1,$maxAttempts);$safeUrl=safeClientsChangesUrl($url);$delays=[1,2,4];
+    for($attempt=1;$attempt<=$maxAttempts;$attempt++) {
+        $response=$request($url,$attempt);$body=$response['body']??false;$status=isset($response['status'])?(int)$response['status']:null;
+        if($body!==false&&$status!==null&&$status>=200&&$status<300) {
+            $payload=json_decode((string)$body,true); if(!is_array($payload)||($payload['status']??'')!=='success') {
+                $message=(string)($payload['message']??'Некорректный ответ Clients delta API');
+                if(stripos($message,'cursor')!==false) throw new RuntimeException('Требуется полное обновление кэша: '.$message);
+                throw new RuntimeException($message);
+            }
+            return $payload;
+        }
+
+        $temporary=clientsChangesErrorIsTemporary($status,$body);
+        $reason=$status!==null?'HTTP '.$status:safeClientsChangesError((string)($response['error']??'HTTP status не получен'));
+        if($reason==='')$reason='HTTP status не получен';
+        if(!$temporary) throw new RuntimeException("Clients delta API вернул {$reason}; URL {$safeUrl}; попытка {$attempt}/{$maxAttempts}");
+        if($attempt<$maxAttempts) {
+            $delay=$delays[min($attempt-1,count($delays)-1)];
+            appendClientsRefreshLog("Clients delta API: временная ошибка {$reason}, попытка {$attempt}/{$maxAttempts}, повтор через {$delay} сек.; URL {$safeUrl}");
+            $sleep($delay);
+            continue;
+        }
+        appendClientsRefreshLog("Clients delta API: временная ошибка {$reason}, попытка {$attempt}/{$maxAttempts}, повторы исчерпаны; URL {$safeUrl}");
+        throw new RuntimeException("Clients delta API недоступен: {$reason}; URL {$safeUrl}; попыток {$maxAttempts}");
+    }
+    throw new RuntimeException('Clients delta API недоступен');
 }
 function fetchClientsChangeState(): int { $payload=fetchClientsChangesJson(clientsChangesBaseUrl().'/state'); if(!isset($payload['last_change_id'])||!is_numeric($payload['last_change_id'])) throw new RuntimeException('Clients state API не вернул last_change_id'); return (int)$payload['last_change_id']; }
 function fetchClientsChangesPage(int $afterId,int $limit=CLIENTS_DELTA_PAGE_SIZE): array { return fetchClientsChangesJson(clientsChangesBaseUrl().'?'.http_build_query(['after_id'=>$afterId,'limit'=>$limit])); }
@@ -154,17 +210,17 @@ function runClientsDeltaPages(int $cursor,?callable $fetchPage=null,?callable $b
     do{$page=$fetchPage($cursor);$result=applyClientsDeltaPage($page,$cursor,$beforeCursorCommit);$total['pages']++;foreach(['changes','upserts','deletes'] as $key)$total[$key]+=$result[$key];$cursor=$result['cursor'];$total['cursor']=$cursor;
         // JSON cursor — межпроцессный источник истины. Он меняется только после
         // успешных SQLite COMMIT и публикации всех затронутых shard-файлов.
-        $state=readClientsSyncState();$state['last_change_id']=$cursor;writeClientsSyncState($state);
+        $state=readClientsSyncState();$state['last_change_id']=$cursor;$state['pages_processed']=$total['pages'];$state['changes_processed']=$total['changes'];$state['upserts']=$total['upserts'];$state['deletes']=$total['deletes'];writeClientsSyncState($state);
         $more=(bool)$page['has_more'];if($more&&$result['changes']===0)throw new RuntimeException('Требуется полное обновление кэша: has_more у пустой страницы');}while($more);
     return $total;
 }
 
 function runClientsDeltaRefreshUnlocked(string $source,int $startCursor,?callable $fetchPage=null): array
 {
-    $started=clientsRefreshNow();$state=readClientsSyncState()+[];$state['last_delta_started_at']=$started->format(DATE_ATOM);$state['last_delta_status']='running';$state['last_error']=null;writeClientsSyncState($state);appendClientsRefreshLog('Начато delta обновление');appendClientsRefreshLog('Начальный cursor: '.$startCursor);
-    try{$stats=runClientsDeltaPages($startCursor,$fetchPage);$finished=clientsRefreshNow();$state=array_merge($state,['last_change_id'=>$stats['cursor'],'last_delta_finished_at'=>$finished->format(DATE_ATOM),'last_delta_status'=>'success','changes_processed'=>$stats['changes'],'upserts'=>$stats['upserts'],'deletes'=>$stats['deletes'],'last_error'=>null]);writeClientsSyncState($state);
+    $started=clientsRefreshNow();$state=readClientsSyncState()+[];$state['last_delta_started_at']=$started->format(DATE_ATOM);$state['last_delta_status']='running';$state['last_error']=null;$state['pages_processed']=0;$state['changes_processed']=0;$state['upserts']=0;$state['deletes']=0;writeClientsSyncState($state);appendClientsRefreshLog('Начато delta обновление');appendClientsRefreshLog('Начальный cursor: '.$startCursor);
+    try{$stats=runClientsDeltaPages($startCursor,$fetchPage);$finished=clientsRefreshNow();$currentState=readClientsSyncState();$currentState=array_merge($currentState,['last_change_id'=>$stats['cursor'],'last_delta_finished_at'=>$finished->format(DATE_ATOM),'last_delta_status'=>'success','pages_processed'=>$stats['pages'],'changes_processed'=>$stats['changes'],'upserts'=>$stats['upserts'],'deletes'=>$stats['deletes'],'last_error'=>null]);writeClientsSyncState($currentState);
         appendClientsRefreshLog('Получено страниц: '.$stats['pages']);appendClientsRefreshLog('Изменений: '.$stats['changes']);appendClientsRefreshLog('Upsert: '.$stats['upserts']);appendClientsRefreshLog('Delete: '.$stats['deletes']);appendClientsRefreshLog('Новый cursor: '.$stats['cursor']);appendClientsRefreshLog('Peak memory: '.round(memory_get_peak_usage(true)/1048576,1).' MB');appendClientsRefreshLog('Время: '.round(microtime(true)-(float)$started->format('U.u'),3).' сек.');appendClientsRefreshLog('Delta кэш успешно обновлен');return $stats;
-    }catch(Throwable $e){$state['last_delta_finished_at']=clientsRefreshNow()->format(DATE_ATOM);$state['last_delta_status']='error';$state['last_error']=$e->getMessage();writeClientsSyncState($state);appendClientsRefreshLog('ERROR delta: '.$e->getMessage());throw $e;}
+    }catch(Throwable $e){$currentState=readClientsSyncState();$currentState['last_delta_finished_at']=clientsRefreshNow()->format(DATE_ATOM);$currentState['last_delta_status']='error';$currentState['last_error']=$e->getMessage();writeClientsSyncState($currentState);appendClientsRefreshLog('ERROR delta: '.$e->getMessage());throw $e;}
 }
 
 function acquireClientsRefreshLock() { $lock=@fopen(clientsRefreshLockFile(),'c');if($lock===false)throw new RuntimeException('Не удалось открыть файл блокировки обновления кэша Clients');if(!flock($lock,LOCK_EX|LOCK_NB)){fclose($lock);throw new RuntimeException('Обновление кэша Clients уже выполняется');}return $lock; }

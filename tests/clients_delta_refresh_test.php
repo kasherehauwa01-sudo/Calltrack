@@ -29,6 +29,77 @@ $after=(int)$pdo->query("SELECT value FROM sync_state WHERE key='last_change_id'
 applyClientsDeltaPage($page([$upsert(8,'22','После повтора',['+79990000006'])],7,8),7);deltaExpect(readClientMatchesCache('9990000006')[0]['name']==='После повтора','Повтор после сбоя не применился');
 try{runClientsDeltaPages(8,fn()=>throw new RuntimeException('API unavailable'));throw new RuntimeException('Недоступность API пропущена');}catch(RuntimeException $e){deltaExpect($e->getMessage()==='API unavailable','Ошибка API искажена');}
 
+// Успешно опубликованный cursor и промежуточная статистика не должны
+// откатываться, если следующая страница стала недоступна.
+writeClientsSyncState(['last_change_id'=>50]);
+$partialPages=[50=>$page([$upsert(51,'partial-1','Сохранённый прогресс',['+79990000051'])],50,51,true)];
+try {
+    runClientsDeltaRefreshUnlocked('background_test',50,static function(int $after) use ($partialPages):array {
+        if(isset($partialPages[$after]))return $partialPages[$after];
+        throw new RuntimeException('temporary page failure');
+    });
+    throw new RuntimeException('Сбой после успешной страницы не был вызван');
+} catch(RuntimeException $e) {
+    deltaExpect($e->getMessage()==='temporary page failure','Ошибка следующей страницы искажена');
+}
+$partialState=readClientsSyncState();
+deltaExpect((int)$partialState['last_change_id']===51,'Ошибка откатила cursor к началу запуска');
+deltaExpect(($partialState['last_delta_status']??'')==='error'&&($partialState['pages_processed']??0)===1,'Промежуточная статистика страницы не сохранена');
+deltaExpect(($partialState['last_error']??'')==='temporary page failure','Причина ошибки delta refresh не сохранена');
+deltaExpect(($partialState['changes_processed']??0)===1&&($partialState['upserts']??0)===1&&($partialState['deletes']??0)===0,'Промежуточные счётчики повреждены');
+
+$successState=runClientsDeltaRefreshUnlocked('background_test',51,fn(int $after)=>$page([$delete(52,'partial-1')],$after,52));
+deltaExpect($successState['cursor']===52&&(readClientsSyncState()['last_delta_status']??'')==='success','Обычный delta refresh после возобновления не завершился');
+
+// HTTP retry проверяется без реального ожидания и сетевых запросов.
+$attempts=0;$delays=[];
+$retryPayload=fetchClientsChangesJson('http://127.0.0.1:8015/api/clients/changes?token=secret',
+    static function() use (&$attempts):array {
+        $attempts++;
+        if($attempts===1)return ['body'=>'temporary','status'=>502,'error'=>null];
+        return ['body'=>'{"status":"success","items":[]}','status'=>200,'error'=>null];
+    },
+    static function(int $seconds) use (&$delays):void {$delays[]=$seconds;}
+);
+deltaExpect(($retryPayload['status']??'')==='success'&&$attempts===2&&$delays===[1],'Временная HTTP-ошибка не была повторена');
+
+$attempts=0;
+$networkPayload=fetchClientsChangesJson('http://clients.invalid/changes',static function() use (&$attempts):array {
+    $attempts++;
+    return $attempts===1
+        ? ['body'=>false,'status'=>null,'error'=>'connection reset']
+        : ['body'=>'{"status":"success"}','status'=>200];
+},static function():void {});
+deltaExpect(($networkPayload['status']??'')==='success'&&$attempts===2,'Сетевая ошибка без HTTP status не была повторена');
+
+foreach([400,401,403,404] as $status) {
+    $attempts=0;
+    try {
+        fetchClientsChangesJson('http://clients.invalid/changes?secret=value',static function() use (&$attempts,$status):array {$attempts++;return ['body'=>'error','status'=>$status];},static function():void {});
+        throw new RuntimeException('HTTP '.$status.' ошибочно принят');
+    } catch(RuntimeException $e) {
+        deltaExpect($attempts===1,'HTTP '.$status.' не должен повторяться');
+        deltaExpect(!str_contains($e->getMessage(),'secret=value'),'Query-параметры попали в диагностическую ошибку');
+    }
+}
+foreach([408,429,500,502,503,504] as $status) {
+    $attempts=0;$delays=[];
+    try {
+        fetchClientsChangesJson('http://clients.invalid/changes',static function() use (&$attempts,$status):array {$attempts++;return ['body'=>'error','status'=>$status];},static function(int $seconds) use (&$delays):void {$delays[]=$seconds;});
+        throw new RuntimeException('HTTP '.$status.' ошибочно принят');
+    } catch(RuntimeException $e) {
+        deltaExpect($attempts===3&&$delays===[1,2],'HTTP '.$status.' должен иметь три попытки с backoff');
+        deltaExpect(str_contains($e->getMessage(),'попыток 3'),'Итоговая retry-диагностика неполна');
+    }
+}
+$attempts=0;
+try {
+    fetchClientsChangesJson('http://clients.invalid/changes',static function() use (&$attempts):array {$attempts++;return ['body'=>'{"status":"error","message":"cursor expired"}','status'=>200];},static function():void {});
+    throw new RuntimeException('Ошибка cursor ошибочно принята');
+} catch(RuntimeException $e) {
+    deltaExpect($attempts===1&&str_starts_with($e->getMessage(),'Требуется полное обновление кэша:'),'Ошибка cursor должна требовать full refresh без retry');
+}
+
 // Snapshot cursor и последовательный catch-up моделируют изменения, появившиеся во время full.
 $snapshot=8;$catchup=runClientsDeltaPages($snapshot,fn(int $after)=>$page([$upsert(9,'23','Во время full',['+79990000007'])],$after,9));deltaExpect($catchup['cursor']===9&&count(readClientMatchesCache('9990000007'))===1,'Full snapshot + catch-up потерял изменение');
 $lock=fopen(clientsRefreshLockFile(),'c');flock($lock,LOCK_EX|LOCK_NB);deltaExpect(clientsRefreshIsLocked(),'Общая блокировка full/delta не работает');flock($lock,LOCK_UN);fclose($lock);
