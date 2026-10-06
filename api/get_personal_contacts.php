@@ -7,6 +7,7 @@ try {
     $pdo = getPdo();
 
     $androidUser=optionalAndroidUser($pdo);
+    if (!$androidUser) requireWebAdmin($pdo);
     $userPhone = $androidUser?androidManagerIdentity($androidUser)['user_phone']:valueOrNull($_GET, 'user_phone');
     if ($userPhone !== null) {
         $stmt = $pdo->prepare(
@@ -15,8 +16,6 @@ try {
         $stmt->execute([':user_phone' => $userPhone]);
         sendJson(['status' => 'success', 'data' => $stmt->fetchAll()]);
     }
-
-    requireWebAdmin($pdo);
 
     $stmt = $pdo->query(
         'SELECT id AS id_db, user_phone, manager, contact_phone, personal_flag, updated_at FROM personal_contacts ORDER BY updated_at DESC, id DESC'

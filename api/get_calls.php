@@ -83,6 +83,27 @@ function enrichCallsWithClients(array $rows): array
     return $rows;
 }
 
+function dashboardManagerDirectory(PDO $pdo, array $user): array
+{
+    $scope = webManagerScope($user);
+    if ($scope) {
+        return [['display_name'=>(string)$scope['manager'], 'user_phone'=>(string)$scope['user_phone']]];
+    }
+    try {
+        $stmt = $pdo->query("SELECT id,display_name FROM web_users WHERE role='manager' AND is_active=1 ORDER BY display_name");
+        return array_map(static fn(array $row): array => [
+            'display_name'=>(string)$row['display_name'],
+            'user_phone'=>webUserPhone((int)$row['id']),
+        ], $stmt->fetchAll(PDO::FETCH_ASSOC));
+    } catch (Throwable $error) {
+        // Справочник нужен только для показа новых менеджеров до первого звонка.
+        // Его недоступность не должна блокировать основную статистику и историю:
+        // frontend дополнит фильтры менеджерами из самих звонков и Email.
+        error_log('Dashboard manager directory unavailable: '.$error->getMessage());
+        return [];
+    }
+}
+
 try {
     $pdo = getPdo();
     $androidUser = optionalAndroidUser($pdo);
@@ -91,10 +112,16 @@ try {
         // Bearer identity always wins over query-string filters, so Android
         // analytics cannot request another manager's journal.
         $filters['user_phone'] = androidManagerIdentity($androidUser)['user_phone'];
+        $managerDirectory = [['display_name'=>(string)$androidUser['display_name'], 'user_phone'=>webUserPhone((int)$androidUser['id'])]];
     } else {
         $webUser = requireWebUser($pdo);
         $scope = webManagerScope($webUser);
         if ($scope) $filters['user_phone'] = $scope['user_phone'];
+        // Frontend может повторить запрос без необязательного справочника,
+        // если production-схема web_users временно несовместима с ним.
+        $managerDirectory = ($_GET['include_managers'] ?? '1') === '0'
+            ? []
+            : dashboardManagerDirectory($pdo, $webUser);
     }
     $params = [];
     $where = buildFilters($filters, $params);
@@ -109,7 +136,7 @@ try {
     $countStmt->execute();
     $total = (int)$countStmt->fetchColumn();
 
-    $sql = "SELECT id_db, call_date, call_time, phone, call_type, duration, manager, client, comment, tag, reminder, reminder_text, call_id, user_phone, created_at FROM calls{$where} ORDER BY call_date DESC, call_time DESC, id_db DESC";
+    $sql = "SELECT id_db, call_date, call_time, phone, call_type, duration, manager, client, comment, tag, reminder, reminder_text, call_id, user_phone, created_at, source, source_event_id, contact_name, direction, status, started_at, answered_at, ended_at, ringing_duration_seconds, is_video, contact_resolution_status FROM calls{$where} ORDER BY call_date DESC, call_time DESC, id_db DESC";
     if (!$loadAll) {
         $sql .= ' LIMIT :limit OFFSET :offset';
     }
@@ -123,7 +150,7 @@ try {
     $stmt->execute();
     $rows = enrichCallsWithClients($stmt->fetchAll());
 
-    sendJson(['status' => 'success', 'data' => $rows, 'total' => $total]);
+    sendJson(['status' => 'success', 'data' => $rows, 'total' => $total, 'managers'=>$managerDirectory]);
 } catch (Throwable $e) {
     sendJson(['status' => 'error', 'message' => $e->getMessage()], 500);
 }

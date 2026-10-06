@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__.'/config.php'; require_once __DIR__.'/android_auth.php';
 try {
-    $pdo=getPdo(); ensureWebAuthTables($pdo); ensureUserTelemetryTables($pdo); requireWebAdmin($pdo);
+    $pdo=getPdo(); ensureWebAuthTables($pdo); ensureUserTelemetryTables($pdo); $admin=requireWebAdmin($pdo);
     if ($_SERVER['REQUEST_METHOD']==='GET') {
         $users=$pdo->query('SELECT id,display_name,login,role,is_active,last_login_at,created_at,updated_at FROM web_users ORDER BY display_name')->fetchAll();
         sendJson(['status'=>'success','data'=>$users]);
@@ -15,10 +15,11 @@ try {
         if($target&&$target['role']==='admin'&&(int)$target['is_active']===1&&(int)$pdo->query("SELECT COUNT(*) FROM web_users WHERE role='admin' AND is_active=1")->fetchColumn()<=1)sendJson(['status'=>'error','message'=>'Нельзя удалить последнего активного администратора'],400);
         $stmt=$pdo->prepare('DELETE FROM web_users WHERE id=:id');$stmt->execute([':id'=>$id]);
         if($stmt->rowCount()===0)sendJson(['status'=>'error','message'=>'Пользователь не найден'],404);
+        recordWebSecurityEvent($pdo,'web_user_deleted','success',(int)$admin['id'],(string)$admin['login'],['target_user_id'=>$id]);
         sendJson(['status'=>'success']);
     }
     $data=readJsonBody();$id=(int)($data['id']??0);$role=(string)($data['role']??'');
-    if (!in_array($role,['admin','manager'],true)) sendJson(['status'=>'error','message'=>'Допустимы только роли admin и manager'],400);
+    if (!in_array($role,['admin','supervisor','manager'],true)) sendJson(['status'=>'error','message'=>'Допустимы роли admin, supervisor и manager'],400);
     $fields=[':name'=>trim((string)($data['display_name']??'')),':login'=>normalizeWebLoginEmail((string)($data['login']??'')),':role'=>$role,':active'=>!empty($data['is_active'])?1:0];
     if ($fields[':name']===''||$fields[':login']==='') sendJson(['status'=>'error','message'=>'Заполните ФИО и корректный email'],400);
     $pin=(string)($data['pin']??'');
@@ -29,9 +30,12 @@ try {
         $sql='UPDATE web_users SET display_name=:name,login=:login,role=:role,is_active=:active';
         if($pin!==''){$sql.=',pin_hash=:pin';$fields[':pin']=password_hash($pin,PASSWORD_DEFAULT);}$fields[':id']=$id;$pdo->prepare($sql.' WHERE id=:id')->execute($fields);
         if($pin!==''||$role!==$target['role']||$fields[':active']!==(int)$target['is_active'])revokeAndroidTokens($pdo,$id);
+        recordWebSecurityEvent($pdo,'web_user_updated','success',(int)$admin['id'],(string)$admin['login'],['target_user_id'=>$id,'role_changed'=>$role!==$target['role'],'pin_changed'=>$pin!=='','active_changed'=>$fields[':active']!==(int)$target['is_active']]);
     } else {
         if($pin==='')sendJson(['status'=>'error','message'=>'Укажите PIN-код'],400);$fields[':pin']=password_hash($pin,PASSWORD_DEFAULT);
         $pdo->prepare('INSERT INTO web_users(display_name,login,pin_hash,role,is_active) VALUES(:name,:login,:pin,:role,:active)')->execute($fields);
+        $id=(int)$pdo->lastInsertId();
+        recordWebSecurityEvent($pdo,'web_user_created','success',(int)$admin['id'],(string)$admin['login'],['target_user_id'=>$id,'role'=>$role]);
     }
     if($pin!=='')$pdo->prepare('DELETE FROM web_login_attempts WHERE login=:login')->execute([':login'=>$fields[':login']]);
     sendJson(['status'=>'success']);
