@@ -911,9 +911,6 @@ class MainActivity : BaseActivity() {
                 add("\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 \u0443\u0441\u0442\u0430\u043D\u043E\u0432\u043A\u0443 \u0438\u0437 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0445 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u0432")
             }
             if (!isBatteryOptimizationDisabled()) add("\u0420\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0435 CallTrack \u0440\u0430\u0431\u043E\u0442\u0430\u0442\u044C \u0431\u0435\u0437 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F \u0431\u0430\u0442\u0430\u0440\u0435\u0438")
-            if (Build.MANUFACTURER.lowercase() in AGGRESSIVE_BACKGROUND_MANUFACTURERS) {
-                add("\u041F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u0432 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0430\u0445 \u043F\u0440\u043E\u0438\u0437\u0432\u043E\u0434\u0438\u0442\u0435\u043B\u044F \u0440\u0430\u0437\u0440\u0435\u0448\u0435\u043D\u0438\u044F \u00AB\u0410\u0432\u0442\u043E\u0437\u0430\u043F\u0443\u0441\u043A\u00BB \u0438 \u00AB\u0420\u0430\u0431\u043E\u0442\u0430 \u0432 \u0444\u043E\u043D\u0435\u00BB \u0434\u043B\u044F Calltrack")
-            }
         }
         val warningText = messages.joinToString("\n")
         binding.tvWarning.text = warningText
@@ -970,7 +967,6 @@ class MainActivity : BaseActivity() {
         private const val MENU_ABOUT_ID = 1001
         private const val MENU_SETTINGS_ID = 1002
         private const val MENU_USER_ID = 1003
-        private val AGGRESSIVE_BACKGROUND_MANUFACTURERS = setOf("xiaomi", "redmi", "poco", "oppo", "realme", "vivo", "huawei", "honor")
         private const val MENU_LOGOUT_ID = 1004
         private const val UPDATE_API_URL = "https://kvasmix.ru/vr/calltrack/api/update.php"
         private const val APK_FILE_NAME = "calltrack-update.apk"
