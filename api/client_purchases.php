@@ -20,7 +20,7 @@ try {
     $result=clientHistorySales($context);$sales=purchaseDataset($result['items']);
     if(($input['action']??'')==='summary'){
         $summary=purchaseLifetime($sales);$insights=null;$detailsError=null;
-        try{$insights=clientHistoryInsights($context);}catch(Throwable $e){error_log('Client insights: '.$e->getMessage());$detailsError='Товарные показатели и RFM временно недоступны';}
+        try{$insights=clientHistoryInsights($context);}catch(Throwable $e){error_log('Client insights: '.$e->getMessage());$detailsError=str_contains($e->getMessage(),'HTTP 404')?'Обновите backend Sales Journal: API товарных показателей и RFM ещё не установлен.':'Не удалось получить товарные показатели и RFM из Sales Journal. Повторите загрузку.';}
         if($insights)$summary+=array_intersect_key($insights,array_flip(['unique_products','top_categories','uncategorized_products','rfm','as_of']));
         sendJson(['status'=>'success','context'=>$public,'summary'=>$summary,'details_error'=>$detailsError,'cache_stale'=>$result['cache_stale']||($insights['cache_stale']??false)]);
     }

@@ -22,11 +22,11 @@
   }
   async function loadSummary(){
     const current=epoch;clearSummary();
-    if(needsSelection){$('clientSummaryStatus').textContent='Выберите клиента в списке выше.';return;}
+    if(needsSelection){$('clientSummaryStatus').textContent='Не удалось определить наименование открытого клиента. Закройте карточку и откройте её из списка клиентов.';return;}
     $('clientSummaryStatus').textContent='Загружаем сводку покупок…';
     try{
       const result=await api({action:'summary'});if(current!==epoch)return;
-      if(!applyPurchaseContext(result.context)){$('clientSummaryStatus').textContent='Выберите клиента в списке выше.';return;}
+      if(!applyPurchaseContext(result.context)){$('clientSummaryStatus').textContent='Не удалось определить наименование открытого клиента. Закройте карточку и откройте её из списка клиентов.';return;}
       const s=result.summary;
       const cards=[['Количество продаж',number(s.sales_count)],['Выручка',money(s.revenue)],['Первая покупка',dateLabel(s.first_purchase)],['Последняя продажа',dateLabel(s.last_purchase)],['Частота покупок',s.average_interval===null?'Недостаточно покупок':number(s.average_interval)+' дней'],['Дней без покупки',s.days_without_purchase===null?'—':number(s.days_without_purchase)],['Уникальных товаров',s.unique_products===undefined?'Недоступно':number(s.unique_products)],['RFM статус',s.rfm?.segment||(s.sales_count?'Недоступно':'Нет покупок')]];
       $('clientSummaryKpis').innerHTML=cards.map(([label,value])=>`<div><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join('');
@@ -116,24 +116,14 @@
     } catch(error) {if(current===epoch){$('clientPersonalStatus').textContent=error.message;$('clientMarkPersonal').disabled=false;}}
   });
   function applyPurchaseContext(context) {
-    const candidates=context.candidates||[];
     needsSelection=!!context.selection_required;
     reference.client_key=context.selected_client_key||'';
     $('clientIdentityStatus').textContent='';
     $('clientUnknown').hidden=context.found_in_1c||!context.phone;
     $('clientMarkPersonal').hidden=!context.can_mark_personal;
-    $('purchaseClientChoice').hidden=candidates.length<2;
-    const select=$('purchaseClientSelect');select.replaceChildren();
-    const prompt=document.createElement('option');prompt.value='';prompt.textContent='Выберите клиента';select.append(prompt);
-    for(const candidate of candidates){
-      const option=document.createElement('option');option.value=candidate.key;
-      const sameName=candidates.filter(c=>c.name.trim().toLocaleLowerCase()===candidate.name.trim().toLocaleLowerCase()).length>1;
-      option.textContent=(candidate.name||'Клиент без названия')+(sameName&&candidate.id?` (${candidate.id})`:'');select.append(option);
-    }
-    select.value=reference.client_key;
     if(needsSelection){
       treeLoaded=false;clearAnalytics();$('purchaseTree').replaceChildren();
-      $('purchaseAnalyticsStatus').textContent='Выберите клиента в списке выше.';
+      $('purchaseAnalyticsStatus').textContent='Не удалось определить наименование открытого клиента. Закройте карточку и откройте её из списка клиентов.';
       $('purchaseTreeStatus').textContent='';$('purchaseIdentityNote').textContent='';
       $('purchaseTreeRetry').hidden=true;$('purchaseAnalyticsRetry').hidden=true;
     }
@@ -143,14 +133,6 @@
     $('purchaseIdentityNote').textContent=result.excluded_count
       ? `Не включено продаж по общему номеру: ${result.excluded_count}. Это покупки других клиентов или записи, которые нельзя однозначно отнести к выбранному клиенту.` : '';
   }
-  $('purchaseClientSelect').addEventListener('change',()=>{
-    epoch++;analyticsRequest++;reference.client_key=$('purchaseClientSelect').value;
-    needsSelection=!reference.client_key;treeLoaded=false;treeLoading=false;
-    clearAnalytics();$('purchaseTree').replaceChildren();$('purchaseIdentityNote').textContent='';
-    $('purchaseTreeStatus').textContent='';$('purchaseTreeRetry').hidden=true;$('purchaseAnalyticsRetry').hidden=true;
-    if(needsSelection){clearSummary();$('clientSummaryStatus').textContent='Выберите клиента в списке выше.';$('purchaseAnalyticsStatus').textContent='Выберите клиента в списке выше.';return;}
-    loadTree();loadSummary();
-  });
   function filters() {return {from:$('purchaseFrom').value,to:$('purchaseTo').value,detail:$('purchaseDetail').value,metric:$('purchaseMetric').value};}
   function validFilters() {
     const f=filters();
@@ -229,7 +211,7 @@
   window.clientWorkspace={
     open(ref) {
       const current=++epoch;analyticsRequest++;reference={...ref};treeLoaded=false;treeLoading=false;needsSelection=false;clearAnalytics();clearSummary();tab(false);
-      $('purchaseClientChoice').hidden=true;$('purchaseClientSelect').replaceChildren();$('purchaseIdentityNote').textContent='';
+      $('purchaseIdentityNote').textContent='';
       for(const id of ['purchaseKpis','purchaseComparison','purchaseTree','purchaseTreeStatus','purchaseAnalyticsStatus','clientPersonalStatus'])$(id).replaceChildren();
       $('clientUnknown').hidden=true;$('clientIdentityStatus').textContent='Определяем клиента…';$('clientMarkPersonal').disabled=false;$('clientMarkPersonal').textContent='Пометить как личный контакт';
       $('purchaseTreeRetry').hidden=true;$('purchaseAnalyticsRetry').hidden=true;

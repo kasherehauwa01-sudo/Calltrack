@@ -20,4 +20,4 @@ body.client-workspace-locked{overflow:hidden}
 #purchaseAnalyticsStatus,#purchaseTreeStatus,#clientIdentityStatus{color:#9a3412}
 @media(max-width:640px){#clientHistoryModal{padding:4px}#clientHistoryModal .history-dialog{padding:12px;height:calc(100dvh - 8px);max-height:calc(100dvh - 8px)}.purchase-section{padding:12px}.workspace-tabs button{padding:10px}.workspace-header h2{font-size:1.1rem}.purchase-chart{height:260px}}
 
-#purchaseClientSelect{padding:10px;border:1px solid #d1d5db;border-radius:8px;max-width:100%;font:inherit}#purchaseIdentityNote:not(:empty){padding:12px;margin-bottom:12px;background:#fffbeb;border-radius:8px;color:#92400e}
+#purchaseIdentityNote:not(:empty){padding:12px;margin-bottom:12px;background:#fffbeb;border-radius:8px;color:#92400e}

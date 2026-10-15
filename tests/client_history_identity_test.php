@@ -54,6 +54,8 @@ try {
     identityCheck(array_column(clientHistorySales($fallback,$transport)['items'],'sale_id'),[101,102,103],'persisted interaction name supports missing directory entry');
     scenario('namesakes',[directoryRow('a',$name,'+79000000001'),directoryRow('b',$name,'+79000000001')]);
     identityCheck(array_column(clientHistorySales($context,$transport)['items'],'sale_id'),[101,102,103],'same name across directory IDs shares sales history');
+    identityCheck(clientHistorySelection(['phone'=>'9000000001'])['selection_required'],false,'same name with different IDs auto-resolves without chooser');
+    identityCheck(clientHistorySelection(['phone'=>'9000000001','requested_name'=>'','client_name'=>$name])['selected']['name'],$name,'empty browser hint falls back to saved name');
     echo "client_history_identity_test: $checks checks OK\n";
 } finally {
     putenv($oldStorage===false?'CALLTRACK_STORAGE_DIR':'CALLTRACK_STORAGE_DIR='.$oldStorage);

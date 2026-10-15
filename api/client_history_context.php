@@ -67,9 +67,9 @@ function clientHistorySelection(array $context, string $requestedKey=''): array
     foreach($candidates as $candidate)if($candidate['key']===$requestedKey)$selected=$candidate;
     if($requestedKey!=='' && $selected===null)throw new InvalidArgumentException('Выберите клиента из списка для этого взаимодействия');
     if($requestedKey===''){
-        $name=normalizeSalesJournalClientName((string)($context['requested_name']??$context['client_name']??''));
+        $name=normalizeSalesJournalClientName(trim((string)($context['requested_name']??''))?:((string)($context['client_name']??'')));
         foreach($candidates as $candidate)if($name!=='' && normalizeSalesJournalClientName($candidate['name'])===$name){$selected=$candidate;break;}
-        if($selected===null && count($candidates)===1)$selected=$candidates[0];
+        if($selected===null && count(array_unique(array_map(static fn($c)=>normalizeSalesJournalClientName($c['name']),$candidates)))===1)$selected=$candidates[0];
     }
     return ['candidates'=>$candidates,'selected'=>$selected,'selection_required'=>count($candidates)>1 && $selected===null];
 }
