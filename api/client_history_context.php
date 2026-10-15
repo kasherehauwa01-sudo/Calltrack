@@ -11,16 +11,16 @@ function clientHistoryContext(PDO $pdo, array $user, array $input): array
     if (!$callId && !$emailId) throw new InvalidArgumentException('Выберите взаимодействие с клиентом');
     if ($callId) {
         $params = [':id'=>$callId];
-        $sql = 'SELECT id_db,phone,user_phone,manager FROM calls WHERE id_db=:id';
+        $sql = 'SELECT id_db,phone,user_phone,manager,client FROM calls WHERE id_db=:id';
         if ($scope) { $sql .= ' AND user_phone=:owner'; $params[':owner']=$scope['user_phone']; }
         $stmt=$pdo->prepare($sql); $stmt->execute($params); $row=$stmt->fetch();
         if (!$row) sendJson(['status'=>'error','message'=>'Клиент недоступен'],403);
         $phone=normalizeClientPhone((string)$row['phone']);
         $matches=$phone!=='' ? lookupClientDetailsByPhones([$phone])[$phone] ?? [] : [];
-        return ['phone'=>$phone,'matches'=>$matches,'found_in_1c'=>(bool)$matches,
+        return ['client_name'=>(string)$row['client'],'requested_name'=>(string)($input['client_name']??''),'phone'=>$phone,'matches'=>$matches,'found_in_1c'=>(bool)$matches,
             'user_phone'=>(string)$row['user_phone'],'manager'=>(string)$row['manager'],'call_id'=>(int)$callId];
     }
-    $stmt=$pdo->prepare('SELECT manager_name,client_email,to_emails FROM email_messages WHERE id=:id');
+    $stmt=$pdo->prepare('SELECT manager_name,client_email,to_emails,client_name FROM email_messages WHERE id=:id');
     $stmt->execute([':id'=>$emailId]); $row=$stmt->fetch();
     if (!$row || ($scope && canonicalManagerName((string)$row['manager_name'],canonicalManagerNames($pdo))!==$scope['manager'])) {
         sendJson(['status'=>'error','message'=>'Клиент недоступен'],403);
@@ -28,7 +28,7 @@ function clientHistoryContext(PDO $pdo, array $user, array $input): array
     $email=normalizeClientEmail((string)($row['client_email'] ?: $row['to_emails']));
     $matches=$email!=='' ? lookupClientDetailsByEmails([$email])[$email] ?? [] : [];
     $phones=array_values(array_unique(array_filter(array_map(static fn($m)=>normalizeClientPhone((string)$m['phone']),$matches))));
-    return ['phone'=>count($phones)===1?$phones[0]:'','matches'=>$matches,'found_in_1c'=>(bool)$matches,
+    return ['client_name'=>(string)$row['client_name'],'requested_name'=>(string)($input['client_name']??''),'phone'=>count($phones)===1?$phones[0]:'','matches'=>$matches,'found_in_1c'=>(bool)$matches,
         'user_phone'=>'','manager'=>(string)$row['manager_name'],'call_id'=>null];
 }
 
@@ -57,60 +57,35 @@ function clientHistoryCandidates(array $matches): array
 
 function clientHistorySelection(array $context, string $requestedKey=''): array
 {
-    $matches=$context['phone']!==''?readClientMatchesCache($context['phone']):[];
+    $matches=$context['phone']!==''?readClientMatchesCache($context['phone']):($context['matches']??[]);
     if($matches===null)throw new RuntimeException('Справочник клиентов недоступен');
     $candidates=clientHistoryCandidates($matches);
+    if(!$candidates && trim((string)($context['client_name']??''))!==''){
+        $candidates=clientHistoryCandidates([['name'=>$context['client_name']]]);
+    }
     $selected=null;
     foreach($candidates as $candidate)if($candidate['key']===$requestedKey)$selected=$candidate;
     if($requestedKey!=='' && $selected===null)throw new InvalidArgumentException('Выберите клиента из списка для этого взаимодействия');
-    if($requestedKey==='' && count($candidates)===1)$selected=$candidates[0];
+    if($requestedKey===''){
+        $name=normalizeSalesJournalClientName((string)($context['requested_name']??$context['client_name']??''));
+        foreach($candidates as $candidate)if($name!=='' && normalizeSalesJournalClientName($candidate['name'])===$name){$selected=$candidate;break;}
+        if($selected===null && count($candidates)===1)$selected=$candidates[0];
+    }
     return ['candidates'=>$candidates,'selected'=>$selected,'selection_required'=>count($candidates)>1 && $selected===null];
 }
 
-/** Shared phones require both phone membership and an unambiguous directory name. */
-function filterClientHistorySales(array $items, array $phoneRules): array
-{
-    $filtered=[];$excluded=0;
-    foreach($items as $item){
-        $phone=normalizeClientPhone((string)($item['phone']??''));
-        if(!array_key_exists($phone,$phoneRules)){$excluded++;continue;}
-        $names=$phoneRules[$phone];
-        if($names!==null && !in_array(normalizeSalesJournalClientName((string)($item['client']??'')),$names,true)){$excluded++;continue;}
-        $filtered[]=$item;
-    }
-    return ['items'=>$filtered,'excluded_count'=>$excluded];
-}
-
+/** Search every sale by the selected exact name, irrespective of its phone. */
 function clientHistorySales(array $context, ?callable $transport=null): array
 {
-    if ($context['phone']==='') throw new InvalidArgumentException('Для истории покупок нужен однозначно определённый телефон клиента');
     $selection=clientHistorySelection($context,(string)($context['client_key']??''));
     if($selection['selection_required'])throw new InvalidArgumentException('Выберите клиента для истории покупок');
-    $selected=$selection['selected'];
-    $phones=$selected?$selected['phones']:[$context['phone']];
-    if($selected && $selected['id']!=='' && clientsSqliteAvailable() && is_file(clientsSqliteFile())){
-        $stmt=clientsOpenSqlite()->prepare('SELECT normalized_phone FROM client_phones WHERE client_id=?');
-        $stmt->execute([$selected['id']]);$phones=array_merge($phones,$stmt->fetchAll(PDO::FETCH_COLUMN));
-    }
-    $phones=array_values(array_unique(array_filter(array_map('normalizeClientPhone',$phones))));
-    if(count($phones)>500)throw new InvalidArgumentException('Слишком много телефонов клиента для одного запроса');
-    $rules=[];
-    foreach($phones as $phone){
-        $matches=readClientMatchesCache($phone);
-        if($matches===null)throw new RuntimeException('Справочник клиентов недоступен');
-        $owners=clientHistoryCandidates($matches);
-        $others=array_values(array_filter($owners,static fn($owner)=>$owner['key']!==($selected['key']??'')));
-        // Unknown numbers still use their authorized interaction's phone. Known
-        // aliases shared with another identity must not mix that identity's sales.
-        if($selected && $others){
-            $otherNames=[];foreach($others as $other)$otherNames=array_merge($otherNames,$other['names']);
-            $rules[$phone]=array_values(array_diff($selected['names'],$otherNames));
-        }elseif(!$selected && count($owners)>1){$rules[$phone]=[];}
-        else{$rules[$phone]=null;}
-    }
-    $clients=array_map(static fn($phone)=>['key'=>'phone:+7'.$phone,'id'=>'','phone'=>'+7'.$phone,'name'=>''],$phones);
+    $name=trim((string)($selection['selected']['name']??''));
+    if($name==='')throw new InvalidArgumentException('Для истории покупок нужно наименование клиента');
+    $normalized=normalizeSalesJournalClientName($name);
+    $clients=[['key'=>'name:'.hash('sha256',$normalized),'id'=>'','phone'=>'','name'=>$name]];
     $result=loadSalesJournalBatchCached($clients,'0001-01-01','9999-12-31',$transport);
-    $filtered=filterClientHistorySales($result['items'],$rules);
-    $result['items']=$filtered['items'];$result['excluded_count']=$filtered['excluded_count'];
+    // Recheck cached and upstream data before aggregation and detail authorization.
+    $result['items']=array_values(array_filter($result['items'],static fn($item)=>normalizeSalesJournalClientName((string)($item['client']??''))===$normalized));
+    $result['excluded_count']=0;
     return $result;
 }
