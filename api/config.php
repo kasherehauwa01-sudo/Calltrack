@@ -588,7 +588,8 @@ function normalizeDateTime(mixed $value): ?string
 
 function buildFilters(array $source, array &$params): string
 {
-    $where = [];
+    require_once __DIR__.'/personal_contacts_filter.php';
+    $where = [workingCallsSql()];
     foreach (['manager', 'phone', 'user_phone'] as $field) {
         if (!empty($source[$field])) {
             $where[] = "{$field} = :{$field}";

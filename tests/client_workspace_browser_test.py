@@ -1,0 +1,82 @@
+"""Browser regression with seeded local backend. See docs/client-workspace.md."""
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+from playwright.sync_api import sync_playwright, expect
+
+base=os.environ.get('CALLTRACK_TEST_PAGE','http://127.0.0.1:8090/vr/calltrack/analizmop/')
+chart=os.environ.get('CALLTRACK_TEST_CHART','/workspace/task-audit/chart.umd.min.js')
+with sync_playwright() as p:
+    browser=p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])
+    page=browser.new_page(locale='ru-RU',viewport={'width':1366,'height':768})
+    page.clock.set_fixed_time(datetime(2026,10,15,12,tzinfo=timezone.utc))
+    page.route('https://cdn.jsdelivr.net/npm/chart.js',lambda route:route.fulfill(path=chart,content_type='application/javascript'))
+    page.goto(base)
+    page.locator('#authLogin').fill('one@example.test');page.locator('#authPin').fill('12345678');page.locator('#authForm button').click()
+    expect(page.locator('#appShell')).to_be_visible()
+    page.wait_for_function('allCalls.length > 0')
+    page.locator('[data-tab=clientCalls]').click()
+    page.get_by_role('button',name='Покупатель',exact=True).click()
+    expect(page.locator('#clientIdentityStatus')).to_have_text('')
+    expect(page.locator('#clientUnknown')).to_be_hidden()
+    expect(page.locator('#clientGeneralPanel')).to_be_visible()
+    page.wait_for_function("document.body.classList.contains('client-workspace-locked')")
+    box=page.locator('#clientHistoryModal .history-dialog').bounding_box()
+    assert box['width']>1300 and box['height']>700 and box['y']+box['height']<=768
+    page.locator('#clientPurchasesTab').click()
+    expect(page.locator('#purchaseTree > details')).to_have_count(3)
+    expect(page.locator('#purchaseTree button')).to_have_count(0)
+    assert page.locator('#purchaseFrom').input_value()=='2025-11'
+    assert page.locator('#purchaseTo').input_value()=='2026-10'
+    expect(page.locator('#purchaseKpis')).to_contain_text('41 ₽')
+    page.wait_for_function("Chart.getChart(document.getElementById('purchaseChart'))?.data.datasets.length === 2")
+    page.locator('#purchaseTree > details').first.locator('summary').first.click()
+    page.locator('#purchaseTree > details').first.locator('details > summary').first.click()
+    page.locator('#purchaseTree > details').first.locator('details details > summary').first.click()
+    expect(page.locator('#purchaseTree button')).to_have_count(4)
+    page.locator('#purchaseTree button').first.click()
+    expect(page.locator('#saleModal')).to_have_class('comment-modal sale-modal open sale-detail-open')
+    expect(page.locator('#saleModalContent')).to_contain_text('Test product')
+    page.keyboard.press('Escape')
+    expect(page.locator('#saleModal')).not_to_have_class('open')
+    expect(page.locator('#clientHistoryModal')).to_have_class('comment-modal open')
+    page.locator('#purchaseFrom').fill('2026-10');page.locator('#purchaseFrom').dispatch_event('change')
+    expect(page.locator('#purchaseKpis')).to_contain_text('0,60 ₽')
+    expect(page.locator('#purchaseTree > details')).to_have_count(3)
+    expect(page.locator('#purchaseTree button')).to_have_count(4)
+    page.locator('#clientGeneralTab').click();page.locator('#clientPurchasesTab').click()
+    expect(page.locator('#purchaseTree button')).to_have_count(4)
+    page.keyboard.press('Escape');expect(page.locator('#clientHistoryModal')).not_to_have_class('open')
+    for _ in range(3):
+        page.evaluate("openClientHistoryModal('Unknown',{call_id:1})")
+        expect(page.locator('#clientUnknown')).to_be_visible()
+        page.locator('#clientAdd1c').click();expect(page.locator('#client1cModal')).to_have_class('comment-modal open')
+        page.keyboard.press('Escape');expect(page.locator('#client1cModal')).not_to_have_class('open')
+        expect(page.locator('#clientHistoryModal')).to_have_class('comment-modal open')
+        page.keyboard.press('Escape');expect(page.locator('#clientHistoryModal')).not_to_have_class('open')
+    page.evaluate("openClientHistoryModal('Покупатель',{call_id:4})")
+    page.locator('#clientPurchasesTab').click();expect(page.locator('#purchaseTree > details')).to_have_count(3)
+    page.screenshot(path='/workspace/task-audit/client-workspace-desktop.png')
+    page.keyboard.press('Escape')
+    page.set_viewport_size({'width':390,'height':844})
+    page.evaluate("openClientHistoryModal('Покупатель',{call_id:4})")
+    page.locator('#clientPurchasesTab').click();expect(page.locator('#purchaseTree > details')).to_have_count(3)
+    box=page.locator('#clientHistoryModal .history-dialog').bounding_box()
+    assert box['x']>=0 and box['x']+box['width']<=390 and box['y']+box['height']<=844
+    page.screenshot(path=os.environ.get('CALLTRACK_TEST_SCREENSHOT','/workspace/task-audit/client-workspace-mobile.png'))
+    # Closing/reopening invalidates the old async context.
+    page.evaluate("closeClientHistoryModal();openClientHistoryModal('Unknown',{call_id:1});closeClientHistoryModal();openClientHistoryModal('Покупатель',{call_id:4})")
+    expect(page.locator('#clientIdentityStatus')).to_have_text('');expect(page.locator('#clientUnknown')).to_be_hidden()
+    page.keyboard.press('Escape')
+    page.wait_for_function("!document.body.classList.contains('client-workspace-locked')")
+    page.evaluate("openClientHistoryModal('Unknown',{call_id:1})")
+    expect(page.locator('#clientUnknown')).to_be_visible()
+    page.locator('#clientMarkPersonal').click()
+    expect(page.locator('#clientMarkPersonal')).to_have_text('Личный')
+    page.wait_for_function("allCalls.length===1")
+    expect(page.locator('#clientPersonalStatus')).to_contain_text('Звонки исключены')
+    # Restore fixture via the installed Android-compatible API.
+    result=page.request.post(base.replace('analizmop/','api/personal_contact.php'),headers={'Authorization':'Bearer '+'a'*43},data={'contact_phone':'9991112233','personal_flag':0})
+    assert result.ok
+    browser.close()
+print('client_workspace_browser_test: desktop/mobile, tabs, tree, Chart.js, nested Esc, reopen/races OK')

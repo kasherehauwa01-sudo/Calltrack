@@ -1,0 +1,11 @@
+const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
+const html=fs.readFileSync(__dirname+'/../analizmop/index.html','utf8');
+const source=html.slice(html.indexOf('const formatMoney='),html.indexOf('const formatRubles='));
+const ctx=vm.createContext({Intl});vm.runInContext(source+';this.money=formatMoney;this.line=saleLineAmount;',ctx);
+assert.equal(ctx.money('9999999999999999.99'),'9 999 999 999 999 999,99 ₽');
+assert.equal(ctx.line('1.005','1.00'),'1.01');
+assert.equal(ctx.line('2.000','0.10'),'0.20');
+assert.equal(ctx.line('0.100','0.10'),'0.01');
+assert.equal(ctx.line('-1.005','1.00'),'-1.01');
+assert.equal(ctx.line('999999999999999.999','9999999999999999.99'),'9999999999999999980000000000000.00');
+console.log('purchase_money_test: OK');
