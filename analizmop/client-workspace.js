@@ -9,7 +9,7 @@
     return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + (fraction === '00' ? '' : ',' + fraction.padEnd(2, '0')) + ' ₽';
   };
   const change = item => `${String(item.absolute_change).startsWith('-')?'':'+'}${money(item.absolute_change)} (${item.percentage_change === null ? 'нет базы для сравнения' : new Intl.NumberFormat('ru-RU', {maximumFractionDigits:1,signDisplay:'exceptZero'}).format(item.percentage_change) + '%'})`;
-  let epoch = 0, analyticsRequest = 0, reference = {}, chart = null, treeLoaded = false, treeLoading = false;
+  let epoch = 0, analyticsRequest = 0, reference = {}, chart = null, treeLoaded = false, treeLoading = false, needsSelection = false;
   const api = data => window.calltrackApi.requestJson('/vr/calltrack/api/client_purchases.php', {
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({...reference, ...data})
   });
@@ -87,6 +87,42 @@
       catch {if(current===epoch)$('clientPersonalStatus').textContent+=' Обновите страницу, если списки не обновились.';}
     } catch(error) {if(current===epoch){$('clientPersonalStatus').textContent=error.message;$('clientMarkPersonal').disabled=false;}}
   });
+  function applyPurchaseContext(context) {
+    const candidates=context.candidates||[];
+    needsSelection=!!context.selection_required;
+    reference.client_key=context.selected_client_key||'';
+    $('clientIdentityStatus').textContent='';
+    $('clientUnknown').hidden=context.found_in_1c||!context.phone;
+    $('clientMarkPersonal').hidden=!context.can_mark_personal;
+    $('purchaseClientChoice').hidden=candidates.length<2;
+    const select=$('purchaseClientSelect');select.replaceChildren();
+    const prompt=document.createElement('option');prompt.value='';prompt.textContent='Выберите клиента';select.append(prompt);
+    for(const candidate of candidates){
+      const option=document.createElement('option');option.value=candidate.key;
+      const sameName=candidates.filter(c=>c.name.trim().toLocaleLowerCase()===candidate.name.trim().toLocaleLowerCase()).length>1;
+      option.textContent=(candidate.name||'Клиент без названия')+(sameName&&candidate.id?` (${candidate.id})`:'');select.append(option);
+    }
+    select.value=reference.client_key;
+    if(needsSelection){
+      treeLoaded=false;clearAnalytics();$('purchaseTree').replaceChildren();
+      $('purchaseAnalyticsStatus').textContent='Выберите клиента в списке выше.';
+      $('purchaseTreeStatus').textContent='';$('purchaseIdentityNote').textContent='';
+      $('purchaseTreeRetry').hidden=true;$('purchaseAnalyticsRetry').hidden=true;
+    }
+    return !needsSelection;
+  }
+  function showExcluded(result) {
+    $('purchaseIdentityNote').textContent=result.excluded_count
+      ? `Не включено продаж по общему номеру: ${result.excluded_count}. Это покупки других клиентов или записи, которые нельзя однозначно отнести к выбранному клиенту.` : '';
+  }
+  $('purchaseClientSelect').addEventListener('change',()=>{
+    epoch++;analyticsRequest++;reference.client_key=$('purchaseClientSelect').value;
+    needsSelection=!reference.client_key;treeLoaded=false;treeLoading=false;
+    clearAnalytics();$('purchaseTree').replaceChildren();$('purchaseIdentityNote').textContent='';
+    $('purchaseTreeStatus').textContent='';$('purchaseTreeRetry').hidden=true;$('purchaseAnalyticsRetry').hidden=true;
+    if(needsSelection){$('purchaseAnalyticsStatus').textContent='Выберите клиента в списке выше.';return;}
+    loadTree();
+  });
   function filters() {return {from:$('purchaseFrom').value,to:$('purchaseTo').value,detail:$('purchaseDetail').value};}
   function validFilters() {
     const f=filters();
@@ -101,6 +137,7 @@
     $('purchaseAnalyticsStatus').textContent=(empty?'За выбранный период покупок нет. ':'')+(stale?'Показаны последние сохранённые данные; Sales Journal временно недоступен.':'');
     $('purchaseChartTable').innerHTML='<table><thead><tr><th>Период</th><th>Текущий период</th><th>Прошлый год</th><th>Изменение</th></tr></thead><tbody>'+a.buckets.map(b=>`<tr><td>${escape(b.label)}</td><td>${escape(money(b.current))}</td><td>${escape(money(b.previous))}</td><td>${escape(change(b))}</td></tr>`).join('')+'</tbody></table>';
     if (!window.Chart) { $('purchaseAnalyticsStatus').textContent+=' Диаграмма недоступна; значения доступны в таблице ниже.';return; }
+    $('purchaseChart').parentElement.hidden=false;
     chart=new Chart($('purchaseChart'),{type:'line',data:{labels:a.buckets.map(b=>b.label),datasets:[
       {label:'Текущий период',data:a.buckets.map(b=>Number(b.current)),borderColor:'#15803d',backgroundColor:'#15803d',pointRadius:a.buckets.length>100?0:3,tension:0},
       {label:'Прошлый год',data:a.buckets.map(b=>Number(b.previous)),borderColor:'#64748b',backgroundColor:'#64748b',borderDash:[7,5],pointStyle:'rect',pointRadius:a.buckets.length>100?0:3,tension:0}
@@ -128,17 +165,18 @@
   }
   $('purchaseTree').addEventListener('click',event=>{const sale=event.target.closest('[data-purchase-sale]');if(sale)openSaleCard(sale.dataset.purchaseSale);});
   function clearAnalytics() {
-    chart?.destroy();chart=null;
+    chart?.destroy();chart=null;$('purchaseChart').parentElement.hidden=true;
     for(const id of ['purchaseKpis','purchaseComparison','purchaseChartTable'])$(id).replaceChildren();
   }
   async function loadTree() {
     clearAnalytics();
-    if(!validFilters())return;
+    if(needsSelection||!validFilters())return;
     const current=epoch, request=++analyticsRequest;treeLoading=true;
     $('purchaseTreeStatus').textContent='Загружаем историю покупок...';$('purchaseAnalyticsStatus').textContent='Загружаем динамику продаж...';
     $('purchaseTreeRetry').hidden=true;$('purchaseAnalyticsRetry').hidden=true;
     try {
       const result=await api(filters());if(current!==epoch)return;
+      if(!applyPurchaseContext(result.context))return;showExcluded(result);
       renderTree(result.tree);treeLoaded=true;
       $('purchaseTreeStatus').textContent=result.tree.length?(result.cache_stale?'Показаны последние сохранённые данные.':''):'История покупок не найдена';
       if(request===analyticsRequest){renderAnalytics(result.analytics,result.cache_stale);}
@@ -147,11 +185,11 @@
   }
   async function loadAnalytics() {
     analyticsRequest++;clearAnalytics();
-    if(!validFilters())return;
+    if(needsSelection||!validFilters())return;
     if(!treeLoaded&&!treeLoading){loadTree();return;}
     const current=epoch, request=++analyticsRequest;
     $('purchaseAnalyticsStatus').textContent='Загружаем динамику продаж...';$('purchaseAnalyticsRetry').hidden=true;
-    try {const result=await api({...filters(),action:'analytics'});if(current!==epoch||request!==analyticsRequest)return;renderAnalytics(result.analytics,result.cache_stale);}
+    try {const result=await api({...filters(),action:'analytics'});if(current!==epoch||request!==analyticsRequest)return;if(!applyPurchaseContext(result.context))return;showExcluded(result);renderAnalytics(result.analytics,result.cache_stale);}
     catch(error){if(current!==epoch||request!==analyticsRequest)return;$('purchaseAnalyticsStatus').textContent=error.message;$('purchaseAnalyticsRetry').hidden=false;}
   }
   $('purchaseFilters').addEventListener('submit',event=>{event.preventDefault();loadAnalytics();});
@@ -160,7 +198,8 @@
   $('purchaseTreeRetry').addEventListener('click',loadTree);
   window.clientWorkspace={
     open(ref) {
-      const current=++epoch;analyticsRequest++;reference={...ref};treeLoaded=false;treeLoading=false;chart?.destroy();chart=null;tab(false);
+      const current=++epoch;analyticsRequest++;reference={...ref};treeLoaded=false;treeLoading=false;needsSelection=false;clearAnalytics();tab(false);
+      $('purchaseClientChoice').hidden=true;$('purchaseClientSelect').replaceChildren();$('purchaseIdentityNote').textContent='';
       for(const id of ['purchaseKpis','purchaseComparison','purchaseTree','purchaseTreeStatus','purchaseAnalyticsStatus','purchaseChartTable','clientPersonalStatus'])$(id).replaceChildren();
       $('clientUnknown').hidden=true;$('clientIdentityStatus').textContent='Определяем клиента…';$('clientMarkPersonal').disabled=false;$('clientMarkPersonal').textContent='Пометить как личный контакт';
       $('purchaseTreeRetry').hidden=true;$('purchaseAnalyticsRetry').hidden=true;
@@ -168,7 +207,7 @@
       const year=Number(parts.find(p=>p.type==='year').value),month=Number(parts.find(p=>p.type==='month').value);
       const start=new Date(Date.UTC(year,month-12,1));
       $('purchaseFrom').value=`${start.getUTCFullYear()}-${String(start.getUTCMonth()+1).padStart(2,'0')}`;$('purchaseTo').value=`${year}-${String(month).padStart(2,'0')}`;$('purchaseDetail').value='month';
-      api({action:'context'}).then(result=>{if(current!==epoch)return;$('clientIdentityStatus').textContent='';$('clientUnknown').hidden=result.context.found_in_1c||!result.context.phone;$('clientMarkPersonal').hidden=!result.context.can_mark_personal;}).catch(error=>{if(current===epoch)$('clientIdentityStatus').textContent=error.message;});
+      api({action:'context'}).then(result=>{if(current!==epoch)return;applyPurchaseContext(result.context);}).catch(error=>{if(current===epoch)$('clientIdentityStatus').textContent=error.message;});
     },
     close() {epoch++;analyticsRequest++;treeLoading=false;chart?.destroy();chart=null;closeInstruction();if($('saleModal').classList.contains('open'))closeSaleModal();}
   };

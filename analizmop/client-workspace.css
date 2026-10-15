@@ -19,3 +19,5 @@ body.client-workspace-locked{overflow:hidden}
 #purchaseTree details{margin:8px 0 8px 16px;border-left:2px solid #e5e7eb;padding-left:12px}#purchaseTree>details{margin-left:0}#purchaseTree summary{cursor:pointer;padding:10px;background:#f8fafc;border-radius:8px}#purchaseTree button{display:flex;justify-content:space-between;gap:20px;width:100%;padding:12px;border:0;border-bottom:1px solid #e5e7eb;background:white;color:#5b21b6;cursor:pointer;text-align:left}
 #purchaseAnalyticsStatus,#purchaseTreeStatus,#clientIdentityStatus{color:#9a3412}
 @media(max-width:640px){#clientHistoryModal{padding:4px}#clientHistoryModal .history-dialog{padding:12px;height:calc(100dvh - 8px);max-height:calc(100dvh - 8px)}.purchase-section{padding:12px}.workspace-tabs button{padding:10px}.workspace-header h2{font-size:1.1rem}.purchase-chart{height:260px}}
+
+#purchaseClientSelect{padding:10px;border:1px solid #d1d5db;border-radius:8px;max-width:100%;font:inherit}#purchaseIdentityNote:not(:empty){padding:12px;margin-bottom:12px;background:#fffbeb;border-radius:8px;color:#92400e}
