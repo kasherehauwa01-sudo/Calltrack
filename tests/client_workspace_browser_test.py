@@ -23,7 +23,14 @@ with sync_playwright() as p:
     page.wait_for_function("document.body.classList.contains('client-workspace-locked')")
     box=page.locator('#clientHistoryModal .history-dialog').bounding_box()
     assert box['width']>1300 and box['height']>700 and box['y']+box['height']<=768
+    expect(page.locator('#clientSummaryKpis')).to_contain_text('47,02 ₽')
+    expect(page.locator('#clientSummaryKpis')).to_contain_text('Постоянные активные')
+    expect(page.locator('#clientSummaryKpis')).to_contain_text('29.02.2024')
+    expect(page.locator('#clientTopCategories')).to_contain_text('Посуда')
+    page.screenshot(path='/workspace/task-audit/client-summary-desktop.png')
     page.locator('#clientPurchasesTab').click()
+    expect(page.get_by_text('Данные диаграммы',exact=True)).to_have_count(0)
+    expect(page.locator('#purchaseMetric option')).to_have_count(5)
     expect(page.locator('#purchaseTree > details')).to_have_count(3)
     expect(page.locator('#purchaseTree button')).to_have_count(0)
     assert page.locator('#purchaseFrom').input_value()=='2025-11'
@@ -44,6 +51,13 @@ with sync_playwright() as p:
     expect(page.locator('#purchaseKpis')).to_contain_text('0,60 ₽')
     expect(page.locator('#purchaseTree > details')).to_have_count(3)
     expect(page.locator('#purchaseTree button')).to_have_count(4)
+    for metric,value in [('sales_count','4'),('average_check','0,15 ₽'),('units','14'),('units_per_sale','3,5')]:
+        page.locator('#purchaseMetric').select_option(metric)
+        expect(page.locator('#purchaseKpis > div').first.locator('strong')).to_have_text(value)
+        expect(page.locator('#purchaseTree button')).to_have_count(4)
+    page.locator('#clientGeneralTab').click()
+    expect(page.locator('#clientSummaryKpis')).to_contain_text('47,02 ₽')
+    page.locator('#clientPurchasesTab').click()
     page.locator('#clientGeneralTab').click();page.locator('#clientPurchasesTab').click()
     expect(page.locator('#purchaseTree button')).to_have_count(4)
     page.keyboard.press('Escape');expect(page.locator('#clientHistoryModal')).not_to_have_class('open')

@@ -2,6 +2,10 @@
 if(getenv('CALLTRACK_TEST_FIXTURES')!=='1'){http_response_code(404);exit;}
 header('Content-Type: application/json');
 if(($_SERVER['HTTP_AUTHORIZATION']??'')!=='Bearer test-only-token'){http_response_code(401);echo '{}';return;}
+if(str_ends_with($_SERVER['REQUEST_URI'],'/client-insights')){
+ $quantities=[];foreach([100,200] as $prefix)foreach([1,2,3,4] as $i=>$quantity)$quantities[]=['sale_id'=>$prefix+$i,'quantity'=>(string)$quantity];
+ echo json_encode(['unique_products'=>3,'top_categories'=>[['category'=>'Посуда','revenue'=>'40.00','quantity'=>'12.000'],['category'=>'Упаковка','revenue'=>'7.02','quantity'=>'8.000']],'uncategorized_products'=>0,'rfm'=>['segment'=>'Постоянные активные','code'=>'555','tags'=>[]],'sale_quantities'=>$quantities]);return;
+}
 if($_SERVER['REQUEST_METHOD']==='POST'){
  $data=json_decode(file_get_contents('php://input'),true);$items=[];
  foreach($data['clients'] as $client){if($client['name']!=='' && $client['phone']!=='')throw new RuntimeException('Name query must omit phone');

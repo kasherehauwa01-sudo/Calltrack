@@ -8,7 +8,35 @@
     const [whole, fraction = '00'] = String(value ?? '0.00').split('.');
     return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + (fraction === '00' ? '' : ',' + fraction.padEnd(2, '0')) + ' ₽';
   };
-  const change = item => `${String(item.absolute_change).startsWith('-')?'':'+'}${money(item.absolute_change)} (${item.percentage_change === null ? 'нет базы для сравнения' : new Intl.NumberFormat('ru-RU', {maximumFractionDigits:1,signDisplay:'exceptZero'}).format(item.percentage_change) + '%'})`;
+  const change = (item,format=money) => `${String(item.absolute_change).startsWith('-')?'':'+'}${format(item.absolute_change)} (${item.percentage_change === null ? 'нет базы для сравнения' : new Intl.NumberFormat('ru-RU', {maximumFractionDigits:1,signDisplay:'exceptZero'}).format(item.percentage_change) + '%'})`;
+  const number = value => {
+    const [whole,fraction=''] = String(value??0).split('.');
+    const digits=fraction.replace(/0+$/,'');
+    return whole.replace(/\B(?=(\d{3})+(?!\d))/g,' ')+(digits?','+digits:'');
+  };
+  const metrics={revenue:['Сумма продаж','₽',money],sales_count:['Количество продаж','продаж',number],average_check:['Средний чек','₽',money],units:['Количество проданных товаров','ед.',number],units_per_sale:['Количество товаров в чеке','ед. / чек',number]};
+  const dateLabel = value => value?value.split('-').reverse().join('.'):'—';
+  function clearSummary(){
+    $('clientSummaryKpis').replaceChildren();$('clientTopCategories').replaceChildren();$('clientSummaryRetry').hidden=true;
+    $('clientSummaryStatus').textContent='';
+  }
+  async function loadSummary(){
+    const current=epoch;clearSummary();
+    if(needsSelection){$('clientSummaryStatus').textContent='Выберите клиента в списке выше.';return;}
+    $('clientSummaryStatus').textContent='Загружаем сводку покупок…';
+    try{
+      const result=await api({action:'summary'});if(current!==epoch)return;
+      if(!applyPurchaseContext(result.context)){$('clientSummaryStatus').textContent='Выберите клиента в списке выше.';return;}
+      const s=result.summary;
+      const cards=[['Количество продаж',number(s.sales_count)],['Выручка',money(s.revenue)],['Первая покупка',dateLabel(s.first_purchase)],['Последняя продажа',dateLabel(s.last_purchase)],['Частота покупок',s.average_interval===null?'Недостаточно покупок':number(s.average_interval)+' дней'],['Дней без покупки',s.days_without_purchase===null?'—':number(s.days_without_purchase)],['Уникальных товаров',s.unique_products===undefined?'Недоступно':number(s.unique_products)],['RFM статус',s.rfm?.segment||(s.sales_count?'Недоступно':'Нет покупок')]];
+      $('clientSummaryKpis').innerHTML=cards.map(([label,value])=>`<div><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join('');
+      const categories=s.top_categories;
+      $('clientTopCategories').innerHTML=categories?.length?'<table><thead><tr><th>Категория</th><th>Выручка</th><th>Количество товаров</th></tr></thead><tbody>'+categories.map(c=>`<tr><td>${escape(c.category)}</td><td>${escape(money(c.revenue))}</td><td>${escape(number(c.quantity))}</td></tr>`).join('')+'</tbody></table>':(categories?'Покупок товаров нет.':'Категории временно недоступны.');
+      $('clientSummaryStatus').textContent=[result.details_error,result.cache_stale?'Показаны последние сохранённые данные.':'',s.uncategorized_products?`Без категории: ${number(s.uncategorized_products)} товаров.`:''].filter(Boolean).join(' ');
+      $('clientSummaryRetry').hidden=!result.details_error;
+    }catch(error){if(current!==epoch)return;$('clientSummaryStatus').textContent=error.message;$('clientSummaryRetry').hidden=false;}
+  }
+  $('clientSummaryRetry').addEventListener('click',loadSummary);
   let epoch = 0, analyticsRequest = 0, reference = {}, chart = null, treeLoaded = false, treeLoading = false, needsSelection = false;
   const api = data => window.calltrackApi.requestJson('/vr/calltrack/api/client_purchases.php', {
     method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({...reference, ...data})
@@ -120,31 +148,33 @@
     needsSelection=!reference.client_key;treeLoaded=false;treeLoading=false;
     clearAnalytics();$('purchaseTree').replaceChildren();$('purchaseIdentityNote').textContent='';
     $('purchaseTreeStatus').textContent='';$('purchaseTreeRetry').hidden=true;$('purchaseAnalyticsRetry').hidden=true;
-    if(needsSelection){$('purchaseAnalyticsStatus').textContent='Выберите клиента в списке выше.';return;}
-    loadTree();
+    if(needsSelection){clearSummary();$('clientSummaryStatus').textContent='Выберите клиента в списке выше.';$('purchaseAnalyticsStatus').textContent='Выберите клиента в списке выше.';return;}
+    loadTree();loadSummary();
   });
-  function filters() {return {from:$('purchaseFrom').value,to:$('purchaseTo').value,detail:$('purchaseDetail').value};}
+  function filters() {return {from:$('purchaseFrom').value,to:$('purchaseTo').value,detail:$('purchaseDetail').value,metric:$('purchaseMetric').value};}
   function validFilters() {
     const f=filters();
     if (!f.from || !f.to || f.from>f.to) { $('purchaseAnalyticsStatus').textContent='Укажите период: «С» не позже «По».';return false; }
     return true;
   }
   function renderAnalytics(a, stale) {
+    const [label,unit,format]=metrics[a.metric||'revenue'];
+    $('purchaseChart').setAttribute('aria-label',label+': текущий период и прошлый год');
     chart?.destroy();chart=null;
-    $('purchaseKpis').innerHTML=[['Продажи за период',money(a.current_total)],['Аналогичный период прошлого года',money(a.previous_total)],['Динамика',change(a)]].map(([label,value])=>`<div><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join('');
+    $('purchaseKpis').innerHTML=[[label+' за период',format(a.current_total)],['Аналогичный период прошлого года',format(a.previous_total)],['Динамика',change(a,format)]].map(([label,value])=>`<div><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join('');
     $('purchaseComparison').textContent=`Текущий период: ${a.from} — ${a.to}. Прошлый год: ${a.previous_from} — ${a.previous_to}.`;
     const empty=a.buckets.every(b=>b.current_count===0);
     $('purchaseAnalyticsStatus').textContent=(empty?'За выбранный период покупок нет. ':'')+(stale?'Показаны последние сохранённые данные; Sales Journal временно недоступен.':'');
-    $('purchaseChartTable').innerHTML='<table><thead><tr><th>Период</th><th>Текущий период</th><th>Прошлый год</th><th>Изменение</th></tr></thead><tbody>'+a.buckets.map(b=>`<tr><td>${escape(b.label)}</td><td>${escape(money(b.current))}</td><td>${escape(money(b.previous))}</td><td>${escape(change(b))}</td></tr>`).join('')+'</tbody></table>';
-    if (!window.Chart) { $('purchaseAnalyticsStatus').textContent+=' Диаграмма недоступна; значения доступны в таблице ниже.';return; }
+
+    if (!window.Chart) { $('purchaseAnalyticsStatus').textContent+=' Диаграмма временно недоступна. Итоги показаны выше.';return; }
     $('purchaseChart').parentElement.hidden=false;
     chart=new Chart($('purchaseChart'),{type:'line',data:{labels:a.buckets.map(b=>b.label),datasets:[
       {label:'Текущий период',data:a.buckets.map(b=>Number(b.current)),borderColor:'#15803d',backgroundColor:'#15803d',pointRadius:a.buckets.length>100?0:3,tension:0},
       {label:'Прошлый год',data:a.buckets.map(b=>Number(b.previous)),borderColor:'#64748b',backgroundColor:'#64748b',borderDash:[7,5],pointStyle:'rect',pointRadius:a.buckets.length>100?0:3,tension:0}
-    ]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{y:{title:{display:true,text:'Сумма покупок, ₽'}},x:{ticks:{maxTicksLimit:14}}},plugins:{tooltip:{callbacks:{
+    ]},options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{y:{title:{display:true,text:label+', '+unit}},x:{ticks:{maxTicksLimit:14}}},plugins:{tooltip:{callbacks:{
       title:items=>{const b=a.buckets[items[0].dataIndex];return `${b.current_date||'Нет даты в текущем году'} / ${b.previous_date||'Нет даты в прошлом году'}`;},
-      label:context=>{const b=a.buckets[context.dataIndex];return `${context.dataset.label}: ${money(context.datasetIndex===0?b.current:b.previous)}`;},
-      footer:items=>{const b=a.buckets[items[0].dataIndex];return [`Изменение: ${change(b)}`,`Количество покупок: ${b.current_count} / ${b.previous_count}`];}
+      label:context=>{const b=a.buckets[context.dataIndex];return `${context.dataset.label}: ${format(context.datasetIndex===0?b.current:b.previous)}`;},
+      footer:items=>{const b=a.buckets[items[0].dataIndex];return [`Изменение: ${change(b,format)}`,`Количество покупок: ${b.current_count} / ${b.previous_count}`];}
     }}}}});
   }
   function renderTree(tree) {
@@ -166,7 +196,7 @@
   $('purchaseTree').addEventListener('click',event=>{const sale=event.target.closest('[data-purchase-sale]');if(sale)openSaleCard(sale.dataset.purchaseSale);});
   function clearAnalytics() {
     chart?.destroy();chart=null;$('purchaseChart').parentElement.hidden=true;
-    for(const id of ['purchaseKpis','purchaseComparison','purchaseChartTable'])$(id).replaceChildren();
+    for(const id of ['purchaseKpis','purchaseComparison'])$(id).replaceChildren();
   }
   async function loadTree() {
     clearAnalytics();
@@ -198,16 +228,16 @@
   $('purchaseTreeRetry').addEventListener('click',loadTree);
   window.clientWorkspace={
     open(ref) {
-      const current=++epoch;analyticsRequest++;reference={...ref};treeLoaded=false;treeLoading=false;needsSelection=false;clearAnalytics();tab(false);
+      const current=++epoch;analyticsRequest++;reference={...ref};treeLoaded=false;treeLoading=false;needsSelection=false;clearAnalytics();clearSummary();tab(false);
       $('purchaseClientChoice').hidden=true;$('purchaseClientSelect').replaceChildren();$('purchaseIdentityNote').textContent='';
-      for(const id of ['purchaseKpis','purchaseComparison','purchaseTree','purchaseTreeStatus','purchaseAnalyticsStatus','purchaseChartTable','clientPersonalStatus'])$(id).replaceChildren();
+      for(const id of ['purchaseKpis','purchaseComparison','purchaseTree','purchaseTreeStatus','purchaseAnalyticsStatus','clientPersonalStatus'])$(id).replaceChildren();
       $('clientUnknown').hidden=true;$('clientIdentityStatus').textContent='Определяем клиента…';$('clientMarkPersonal').disabled=false;$('clientMarkPersonal').textContent='Пометить как личный контакт';
       $('purchaseTreeRetry').hidden=true;$('purchaseAnalyticsRetry').hidden=true;
       const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit'}).formatToParts(new Date());
       const year=Number(parts.find(p=>p.type==='year').value),month=Number(parts.find(p=>p.type==='month').value);
       const start=new Date(Date.UTC(year,month-12,1));
-      $('purchaseFrom').value=`${start.getUTCFullYear()}-${String(start.getUTCMonth()+1).padStart(2,'0')}`;$('purchaseTo').value=`${year}-${String(month).padStart(2,'0')}`;$('purchaseDetail').value='month';
-      api({action:'context'}).then(result=>{if(current!==epoch)return;applyPurchaseContext(result.context);}).catch(error=>{if(current===epoch)$('clientIdentityStatus').textContent=error.message;});
+      $('purchaseFrom').value=`${start.getUTCFullYear()}-${String(start.getUTCMonth()+1).padStart(2,'0')}`;$('purchaseTo').value=`${year}-${String(month).padStart(2,'0')}`;$('purchaseDetail').value='month';$('purchaseMetric').value='revenue';
+      api({action:'context'}).then(result=>{if(current!==epoch)return;applyPurchaseContext(result.context);loadSummary();}).catch(error=>{if(current===epoch)$('clientIdentityStatus').textContent=error.message;});
     },
     close() {epoch++;analyticsRequest++;treeLoading=false;chart?.destroy();chart=null;closeInstruction();if($('saleModal').classList.contains('open'))closeSaleModal();}
   };

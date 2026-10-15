@@ -21,6 +21,10 @@ def respond(route):
             'current_total': total, 'previous_total': '0.00', 'absolute_change': total,
             'percentage_change': None, 'from': data.get('from'), 'to': data.get('to'),
             'previous_from': '2024-11', 'previous_to': '2025-10', 'buckets': []})
+    if data.get('action') == 'summary':
+        result['summary'] = {'sales_count': 0, 'revenue': '0.00', 'first_purchase': None, 'last_purchase': None, 'average_interval': None, 'days_without_purchase': None, 'unique_products': 0, 'top_categories': [], 'rfm': None}
+        route.fulfill(json=result)
+        return
     if hold_a and key == 'client:a':
         held.append((route, result))
     else:
