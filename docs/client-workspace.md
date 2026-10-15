@@ -168,8 +168,46 @@ Sales Journal: `git status --short` и `git diff --stat` пусты. Новые 
 
 Товарные показатели и RFM получаются новым защищённым endpoint Sales Journal `/api/integrations/calltrack/client-insights`. PHP проверяет доступ к сохранённому взаимодействию и выбранному наименованию до запроса. Никаких запросов деталей по одному на каждый чек: upstream агрегирует количества по sale_id, товарные строки — по идентичности товара. Категории берутся из существующего локального каталога Sales Journal, товары без сопоставления явно отображаются как «Без категории». Выручка категорий — сумма quantity × actual_price; она может отличаться от итогов документов при отсутствующих товарных строках/ценах.
 
-RFM вычисляется исходным механизмом журнала продаж (`rfm.enrich`, `SegmentSettings`, общий dataset `rfm_data`). База сравнения — все клиенты за всю историю до текущей московской даты, без фильтра менеджера/подразделения. Статусы «Новые» и «Перспективные» остаются отдельными, как в исходном анализе. Снимок RFM кэшируется в Sales Journal на 5 минут; ответ по клиенту — в Calltrack на штатный срок 10 минут. Иной период или настройки в самом RFM-отчёте могут давать иной статус.
+RFM принадлежит Sales Journal. Calltrack читает только результат `client-insights`, не строит population RFM и не запускает rebuild. Актуальное требование к upstream — заранее рассчитанный persistent snapshot в PostgreSQL с атомарной активацией. Calltrack не подключается к этой БД и не сохраняет ответ insights/RFM на диск. Поведение построения snapshot реализуется и развёртывается отдельно в Sales Journal.
 
-Сначала требуется обновить Sales Journal из ветки `feat/calltrack-client-insights`, затем Calltrack из `work`. Дополнительных миграций нет. До обновления upstream базовая сводка и денежные/счётные показатели работают; товарные показатели и RFM показывают явную недоступность с повторной загрузкой, а не фиктивные нули. Production в рамках этой задачи не обновлялся.
+Перед production необходимо отдельно развернуть persistent RFM snapshot в Sales Journal и проверить актуальный контракт `client-insights`. В Calltrack дополнительных миграций нет. До обновления upstream базовая сводка и денежные/счётные показатели работают; товарные показатели и RFM показывают явную недоступность с повторной загрузкой, а не фиктивные нули. Production в рамках этой задачи не обновлялся.
 
 Проверки: `purchase_metrics_test.php` — 48 проверок (все метрики и детализации, взвешенные средние, большие точные суммы, дробные количества, вся история, пустые/недостаточные данные); исходная аналитика — 52; идентичность по наименованию — 17; HTTP — 78. Браузер: все пять показателей, новые поля «Общее», сохранение дерева/общей сводки при смене периода, отсутствие «Данные диаграммы», desktop/mobile, переключение клиента и запоздавшие ответы. В Sales Journal — 26 проверок интеграции, товарной сводки и RFM. Браузер/HTTP используют отдельную тестовую БД и fixture upstream; реальные production данные не проверялись.
+
+
+## Persistent RFM: текущая доработка (15 октября 2026)
+
+Аудит начат с чистого `git status` на HEAD `9d3bd15`. Полноэкранное окно, вкладки, 1С-инструкция, стек Esc/scroll lock, personal contacts, дерево всей истории, денежная аналитика и Chart.js уже присутствовали. Они переиспользуются, без изменений Android и Sales Journal. До отдельного запроса пользователя на публикацию commit/push не выполнялись. Публикация в Git разрешена отдельным запросом; PR и deployment не входят в её scope.
+
+### API и защита
+
+Browser → POST `client_purchases.php` → web session + существующий CSRF + `clientHistoryContext`/`clientHistorySelection` → server-to-server Sales Journal → нормализованный ответ. Произвольные phone/name/id браузера не служат основанием доступа: выбирается сохранённый call/email с manager scope. Admin/supervisor сохраняют существующие роли. `sale_detail.php` использует session allow-list. Personal contact сохраняется через прежний endpoint/таблицу без удаления звонков; фильтрация применяется до статистики и выдачи, Android получает прежний статус штатным API.
+
+История использует `client-sales`, детали — `sales/{sale_id}`, товарные показатели/RFM — `client-insights`. Токен находится исключительно в backend Authorization header. Новый normalizer пропускает только известные поля, в том числе не возвращает snapshot ID. Общий транспорт имеет настраиваемый default timeout 15 секунд (connect — 3 секунды), без повторов ради построения RFM.
+
+Известное ограничение контракта: client-insights сейчас вызывается по `name`; client-sales поддерживает телефон, но существующая история проекта сознательно агрегирует по точному нормализованному имени с любыми/пустыми телефонами. Этот действующий режим сохранён изолированным в `client_history_context.php`. Локальный 1С client ID используется для выбора и проверки доступа, но не является подтверждённым общим ID Sales Journal. Одноимённые клиенты могут объединяться; переход на общий client ID/согласованный phone-first контракт требует подтверждения upstream и обновления адаптера, не UI. Произвольную передачу локального ID как общего идентификатора не добавляли.
+
+### Snapshot и совместимость
+
+Ответ insights больше не читается/пишется в файловом кэше Calltrack, включая stale fallback. Существующий краткосрочный кэш списка продаж/карточек сохранён; он не содержит RFM. Старые файлы `insights-*.json` игнорируются, новые не создаются. При rollout старые файлы можно удалить отдельно из настроенного sales cache directory; runtime их не удаляет.
+
+Legacy ответ с `rfm.segment/code` работает без metadata. Отсутствующее/null RFM допускается. Необязательные `calculated_at`, `period_from`, `period_to` читаются рядом с RFM либо из объекта RFM; даты и код отображаются в «Общее». Поддерживаются additive `rfm_status` (либо `rfm.status`): `snapshot_missing`, `client_missing`, `unavailable`, `stale`. Это совместимые опциональные поля адаптера; фактическую форму нового production ответа нужно подтвердить после rollout upstream. Нет RFM — «RFM пока недоступен»; stale — явная подпись. Snapshot ID не отображается и не передаётся frontend.
+
+Timeout, HTTP 5xx, неверный JSON/структура insights обрабатываются локально: базовая сводка продаж и звонки остаются доступны, товарный/RFM блок предлагает retry. Дерево и денежный график не зависят от insights. Детали продаж по-прежнему загружаются только по клику. Фильтры графика не меняют дерево; обе YoY серии строятся из одного списка продаж, без запросов на bucket. Денежные суммы — int64 minor units на backend, строки в UI.
+
+### Проверки этой доработки
+
+- `client_insights_snapshot_test.php`: 37 проверок legacy/metadata, missing/client_missing/stale RFM, malformed response, timeout/503, отсутствия локального RFM cache и независимых покупок.
+- `client_workspace_http_test.py`: 82 проверки session/RBAC/CSRF, admin/supervisor/manager, IDOR, metadata, token/snapshot ID filtering, personal contact и Android HTTP-совместимости.
+- `client_workspace_browser_test.py`: desktop/mobile, открытие по имени, fullscreen, вкладки, дерево/суммы, Chart.js, nested Esc, scroll lock, личный контакт, RFM code/metadata.
+- `client_snapshot_http_test.py`: настоящие HTTP 503, malformed JSON и missing snapshot от локального upstream сохраняют базовую сводку, дерево и график. Запуск: задать один и тот же временный `CALLTRACK_TEST_INSIGHTS_MODE_FILE` для fixture server и теста.
+- `client_snapshot_browser_test.py`: пять состояний missing snapshot/client, stale, локальная ошибка и legacy; звонки и дерево продолжают работать; retry доступен при отсутствии/устаревании RFM.
+- `client_workspace_shared_browser_test.py`: выбор клиента, фильтры, поздние ответы, повторное открытие.
+- PHP аналитика — 52 проверки, метрики — 48, identity — 17; Node money/grouping/summary; существующие security/auth/supervisor/dashboard и Android API source regressions пройдены.
+- Pre-existing failures подтверждены повторным запуском на отдельной выгрузке неизменённого HEAD: `client_calls_names_test.php` ожидает `width:145px`; `client_directory_test.php` ожидает старую структуру без `fields`. Эти файлы и соответствующая логика не изменялись.
+
+Тесты HTTP/browser используют только отдельную БД `calltrack_snapshot_tests`, временный storage и fixture Sales Journal; production не вызывался. В проекте нет отдельной frontend build/typecheck конфигурации: используются vanilla JS, Node syntax/tests и PHP lint. Android build не выполнялся — Android не менялся.
+
+### После отдельного rollout Sales Journal
+
+Проверить, что `client-insights` читает уже активный persistent snapshot и не запускает population rebuild; проверить отсутствие snapshot, отсутствие клиента и stale на реальном контракте. Сопоставить поля metadata/status с опциональными полями адаптера. Проверить URL/секрет backend без вывода токена, короткий timeout в конфигурации (старое явное значение 90 секунд не заменяется default автоматически), RBAC реальных пользователей, суммы реального клиента, крупную историю и Android-синхронизацию. Удаление старых insights cache files и deployment выполняются отдельно. БД Calltrack не требует миграции.

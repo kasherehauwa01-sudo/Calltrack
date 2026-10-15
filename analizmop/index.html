@@ -2185,6 +2185,6 @@ document.getElementById('authForm').addEventListener('submit',async(event)=>{eve
 document.getElementById('logoutBtn').addEventListener('click',async()=>{await requestWebAuth('logout');location.reload();});
 requestWebAuth().then(openAuthenticatedApp).catch(()=>{document.getElementById('authScreen').hidden=false;});
 </script>
-<script src="client-workspace.js?v=20261015-metrics-profile"></script>
+<script src="client-workspace.js?v=20261015-persistent-rfm"></script>
 </body>
 </html>

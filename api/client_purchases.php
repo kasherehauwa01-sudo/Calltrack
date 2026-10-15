@@ -21,7 +21,7 @@ try {
     if(($input['action']??'')==='summary'){
         $summary=purchaseLifetime($sales);$insights=null;$detailsError=null;
         try{$insights=clientHistoryInsights($context);}catch(Throwable $e){error_log('Client insights: '.$e->getMessage());$detailsError='Товарные показатели и RFM временно недоступны';}
-        if($insights)$summary+=array_intersect_key($insights,array_flip(['unique_products','top_categories','uncategorized_products','rfm','as_of']));
+        if($insights)$summary+=array_intersect_key($insights,array_flip(['unique_products','top_categories','uncategorized_products','rfm','as_of','rfm_status','calculated_at','period_from','period_to']));
         sendJson(['status'=>'success','context'=>$public,'summary'=>$summary,'details_error'=>$detailsError,'cache_stale'=>$result['cache_stale']||($insights['cache_stale']??false)]);
     }
     if(in_array($metric,['units','units_per_sale'],true)){

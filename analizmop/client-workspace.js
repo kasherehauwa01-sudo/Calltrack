@@ -28,12 +28,20 @@
       const result=await api({action:'summary'});if(current!==epoch)return;
       if(!applyPurchaseContext(result.context)){$('clientSummaryStatus').textContent='Выберите клиента в списке выше.';return;}
       const s=result.summary;
-      const cards=[['Количество продаж',number(s.sales_count)],['Выручка',money(s.revenue)],['Первая покупка',dateLabel(s.first_purchase)],['Последняя продажа',dateLabel(s.last_purchase)],['Частота покупок',s.average_interval===null?'Недостаточно покупок':number(s.average_interval)+' дней'],['Дней без покупки',s.days_without_purchase===null?'—':number(s.days_without_purchase)],['Уникальных товаров',s.unique_products===undefined?'Недоступно':number(s.unique_products)],['RFM статус',s.rfm?.segment||(s.sales_count?'Недоступно':'Нет покупок')]];
+      const cards=[['Количество продаж',number(s.sales_count)],['Выручка',money(s.revenue)],['Первая покупка',dateLabel(s.first_purchase)],['Последняя продажа',dateLabel(s.last_purchase)],['Частота покупок',s.average_interval===null?'Недостаточно покупок':number(s.average_interval)+' дней'],['Дней без покупки',s.days_without_purchase===null?'—':number(s.days_without_purchase)],['Уникальных товаров',s.unique_products===undefined?'Недоступно':number(s.unique_products)],['RFM статус',s.rfm?.segment||'RFM пока недоступен'],...(s.rfm?.code?[['RFM',s.rfm.code]]:[])];
       $('clientSummaryKpis').innerHTML=cards.map(([label,value])=>`<div><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join('');
       const categories=s.top_categories;
       $('clientTopCategories').innerHTML=categories?.length?'<table><thead><tr><th>Категория</th><th>Выручка</th><th>Количество товаров</th></tr></thead><tbody>'+categories.map(c=>`<tr><td>${escape(c.category)}</td><td>${escape(money(c.revenue))}</td><td>${escape(number(c.quantity))}</td></tr>`).join('')+'</tbody></table>':(categories?'Покупок товаров нет.':'Категории временно недоступны.');
-      $('clientSummaryStatus').textContent=[result.details_error,result.cache_stale?'Показаны последние сохранённые данные.':'',s.uncategorized_products?`Без категории: ${number(s.uncategorized_products)} товаров.`:''].filter(Boolean).join(' ');
-      $('clientSummaryRetry').hidden=!result.details_error;
+      const rfmNotes=[];
+      if(s.rfm_status==='stale')rfmNotes.push('RFM: данные устарели.');
+      else if(!s.rfm || ['unavailable','snapshot_missing','client_missing'].includes(s.rfm_status))rfmNotes.push('RFM пока недоступен.');
+      if(s.period_from && s.period_to)rfmNotes.push(`RFM рассчитан за период ${dateLabel(s.period_from)} — ${dateLabel(s.period_to)}.`);
+      if(s.calculated_at){
+        const calculated=new Date(s.calculated_at);
+        if(!Number.isNaN(calculated.getTime()))rfmNotes.push('Данные RFM обновлены '+calculated.toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})+'.');
+      }
+      $('clientSummaryStatus').textContent=[...rfmNotes,result.details_error,result.cache_stale?'Показаны последние сохранённые данные.':'',s.uncategorized_products?`Без категории: ${number(s.uncategorized_products)} товаров.`:''].filter(Boolean).join(' ');
+      $('clientSummaryRetry').hidden=!result.details_error && !!s.rfm && s.rfm_status!=='stale';
     }catch(error){if(current!==epoch)return;$('clientSummaryStatus').textContent=error.message;$('clientSummaryRetry').hidden=false;}
   }
   $('clientSummaryRetry').addEventListener('click',loadSummary);
