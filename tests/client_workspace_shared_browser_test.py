@@ -1,4 +1,4 @@
-"""Selector/race regression using controlled purchase responses and the local login fixture."""
+"""Opened-name/race regression using controlled purchase responses and the local login fixture."""
 import os
 from datetime import datetime, timezone
 from playwright.sync_api import sync_playwright, expect
@@ -11,7 +11,7 @@ hold_a = False
 
 def respond(route):
     data = route.request.post_data_json
-    key = data.get('client_key', '')
+    key = 'client:a' if data.get('client_name') == 'Альфа' else 'client:b'
     context = {'found_in_1c': True, 'phone': '9000000001', 'can_mark_personal': False,
                'candidates': candidates, 'selected_client_key': key, 'selection_required': not key}
     result = {'status': 'success', 'context': context}
@@ -41,42 +41,30 @@ with sync_playwright() as p:
     page.locator('#authForm button').click()
     expect(page.locator('#appShell')).to_be_visible()
     page.route('**/api/client_purchases.php', respond)
-    page.evaluate("openClientHistoryModal('Общий номер',{call_id:4})")
+    page.evaluate("openClientHistoryModal('Альфа',{call_id:4})")
+    expect(page.locator('#clientSummaryKpis')).to_contain_text('Количество продаж')
+    expect(page.locator('#purchaseClientChoice')).to_have_count(0)
+    expect(page.locator('#purchaseClientSelect')).to_have_count(0)
     page.locator('#clientPurchasesTab').click()
-    expect(page.locator('#purchaseClientChoice')).to_be_visible()
-    expect(page.locator('#purchaseClientSelect option')).to_have_count(3)
-    expect(page.locator('#purchaseAnalyticsStatus')).to_contain_text('Выберите клиента')
-    expect(page.locator('#purchaseAnalyticsRetry')).to_be_hidden()
-    page.locator('#purchaseClientSelect').select_option('client:a')
     expect(page.locator('#purchaseKpis')).to_contain_text('11,11 ₽')
-    expect(page.locator('#purchaseIdentityNote')).to_contain_text('2')
     page.locator('#purchaseFrom').fill('2026-10')
     page.locator('#purchaseFrom').dispatch_event('change')
     expect(page.locator('#purchaseKpis')).to_contain_text('11,11 ₽')
-    page.locator('#purchaseClientSelect').select_option('client:b')
-    expect(page.locator('#purchaseKpis')).to_contain_text('22,22 ₽')
-    expect(page.locator('#purchaseFrom')).to_have_value('2026-10')
-    # Hold A's response, finish B first, then deliver A late.
+    # Open B while an A request is held; late A data must never replace B.
     hold_a = True
-    page.locator('#purchaseClientSelect').select_option('client:a')
+    page.locator('#purchaseFrom').fill('2026-09')
+    page.locator('#purchaseFrom').dispatch_event('change')
     page.wait_for_timeout(100)
-    assert len(held) == 1
-    page.locator('#purchaseClientSelect').select_option('client:b')
-    expect(page.locator('#purchaseKpis')).to_contain_text('22,22 ₽')
-    route, result = held.pop()
-    with page.expect_response('**/api/client_purchases.php'):
-        route.fulfill(json=result)
-    page.wait_for_timeout(100)
-    expect(page.locator('#purchaseClientSelect')).to_have_value('client:b')
-    expect(page.locator('#purchaseKpis')).to_contain_text('22,22 ₽')
-    page.locator('#purchaseClientSelect').select_option('')
-    expect(page.locator('#purchaseKpis')).to_be_empty()
-    expect(page.locator('#purchaseChart')).to_be_hidden()
-    expect(page.locator('#purchaseAnalyticsStatus')).to_contain_text('Выберите клиента')
-    page.keyboard.press('Escape')
-    page.evaluate("openClientHistoryModal('Общий номер',{call_id:4})")
+    assert len(held) >= 1
+    page.evaluate("closeClientHistoryModal();openClientHistoryModal('Бета',{call_id:4})")
     page.locator('#clientPurchasesTab').click()
-    expect(page.locator('#purchaseClientSelect')).to_have_value('')
-    expect(page.locator('#purchaseKpis')).to_be_empty()
+    expect(page.locator('#purchaseKpis')).to_contain_text('22,22 ₽')
+    while held:
+        route, result = held.pop()
+        with page.expect_response('**/api/client_purchases.php'):
+            route.fulfill(json=result)
+    page.wait_for_timeout(100)
+    expect(page.locator('#purchaseKpis')).to_contain_text('22,22 ₽')
+    expect(page.locator('#purchaseClientChoice')).to_have_count(0)
     browser.close()
-print('client_workspace_shared_browser_test: selection, filters, exclusions, late response, reset OK')
+print('client_workspace_shared_browser_test: opened name, no chooser, filters, late response OK')
