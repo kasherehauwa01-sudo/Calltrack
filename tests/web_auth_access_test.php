@@ -14,5 +14,8 @@ foreach (['password_hash($pin, PASSWORD_DEFAULT)','UPDATE web_users SET pin_hash
 if(!str_contains($users,"if(\$pin!=='')\$pdo->prepare('DELETE FROM web_login_attempts"))throw new RuntimeException('После смены PIN не снимается блокировка входа');
 $scoped=['get_calls.php','dashboard.php','update_call.php'];foreach($scoped as $file){$source=file_get_contents($root.'/api/'.$file);if(!str_contains($source,'webManagerScope('))throw new RuntimeException("Нет manager scope: $file");}
 $admin=['admin_updates.php','admin_install_update.php','admin_clients_cache.php','get_users.php','user_command.php','delete_calls.php','delete_personal_contacts.php','web_users.php'];foreach($admin as $file){$source=file_get_contents($root.'/api/'.$file);if(!str_contains($source,'requireWebAdmin('))throw new RuntimeException("Нет admin guard: $file");}
-foreach (['add_call.php','get_history.php','personal_contact.php','user_report.php','user_command_done.php','update.php'] as $android){$source=file_get_contents($root.'/api/'.$android);if(str_contains($source,'requireWebUser('))throw new RuntimeException("Android endpoint заблокирован web-сессией: $android");}
+foreach (['add_call.php','get_history.php','user_report.php','user_command_done.php','update.php'] as $android){$source=file_get_contents($root.'/api/'.$android);if(str_contains($source,'requireWebUser('))throw new RuntimeException("Android endpoint заблокирован web-сессией: $android");}
+$personal=file_get_contents($root.'/api/personal_contact.php');
+if(!str_contains($personal,'$androidUser=optionalAndroidUser($pdo)') || !str_contains($personal,'} else {
+        $webUser=requireWebUser($pdo);'))throw new RuntimeException('Web auth must only guard the non-Android branch');
 echo "web_auth_access_test: OK\n";

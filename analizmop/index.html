@@ -14,6 +14,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23f8fafc%22/%3E%3Cg%20fill%3D%22%2316a34a%22%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2024%2022%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2040%2022%29%22/%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2024%2038%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2040%2038%29%22/%3E%3C/g%3E%3Cpath%20d%3D%22M32%2032%20C38%2040%2043%2049%2048%2058%22%20fill%3D%22none%22%20stroke%3D%22%2315803d%22%20stroke-width%3D%225%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="api.js?v=20261001-calls-recovery"></script>
+  <link rel="stylesheet" href="client-workspace.css?v=20261015" />
   <style>
     :root { --bg:#f4f6fb; --card:#fff; --text:#1f2a37; --muted:#6b7280; --shadow:0 10px 30px rgba(15,23,42,.08); --radius:14px; }
     *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
@@ -497,15 +498,33 @@
 
     <div class="comment-modal" id="clientHistoryModal" aria-hidden="true">
       <div class="comment-dialog history-dialog" role="dialog" aria-modal="true" aria-labelledby="clientHistoryTitle">
-        <h2 id="clientHistoryTitle">История клиента</h2>
-        <div class="comment-info" id="clientHistoryInfo"></div>
-        <div class="history-list" id="clientHistoryList"></div>
-        <div class="modal-actions">
-          <button class="modal-btn ok" id="clientHistoryCloseBtn" type="button">Закрыть</button>
+        <header class="workspace-header"><h2 id="clientHistoryTitle">История клиента</h2><button class="modal-btn ok" id="clientHistoryCloseBtn" type="button">Закрыть ×</button></header>
+        <div class="workspace-tabs" role="tablist" aria-label="История клиента">
+          <button id="clientGeneralTab" role="tab" aria-controls="clientGeneralPanel" aria-selected="true" type="button">Общее</button>
+          <button id="clientPurchasesTab" role="tab" aria-controls="clientPurchasesPanel" aria-selected="false" tabindex="-1" type="button">История покупок</button>
+        </div>
+        <div class="workspace-scroll">
+          <section id="clientGeneralPanel" role="tabpanel" aria-labelledby="clientGeneralTab">
+            <div id="clientIdentityStatus" aria-live="polite"></div>
+            <div id="clientUnknown" class="client-unknown" hidden><strong>Клиент не найден в базе 1С</strong><div class="workspace-actions"><button id="clientMarkPersonal" class="modal-btn" type="button">Пометить как личный контакт</button><button id="clientAdd1c" class="modal-btn" type="button">Добавить контакт в 1С</button></div><div id="clientPersonalStatus" aria-live="polite"></div></div>
+            <div class="comment-info" id="clientHistoryInfo"></div>
+            <div class="history-list" id="clientHistoryList"></div>
+          </section>
+          <section id="clientPurchasesPanel" role="tabpanel" aria-labelledby="clientPurchasesTab" hidden>
+            <section class="purchase-section"><h3>Динамика продаж</h3>
+              <form id="purchaseFilters" class="purchase-filters"><label>С <input id="purchaseFrom" type="month" required /></label><label>По <input id="purchaseTo" type="month" required /></label><label>Детализация <select id="purchaseDetail"><option value="day">По дням</option><option value="month" selected>По месяцам</option><option value="year">По годам</option></select></label><button type="submit" class="modal-btn">Обновить</button></form>
+              <div id="purchaseAnalyticsStatus" aria-live="polite"></div><button id="purchaseAnalyticsRetry" class="modal-btn" type="button" hidden>Повторить</button>
+              <div id="purchaseKpis" class="purchase-kpis"></div><div id="purchaseComparison" class="history-meta"></div>
+              <div class="purchase-chart"><canvas id="purchaseChart" role="img" aria-label="Динамика продаж: текущий период и прошлый год"></canvas></div>
+              <details><summary>Данные диаграммы</summary><div id="purchaseChartTable" class="purchase-table"></div></details>
+            </section>
+            <section class="purchase-section"><h3>История покупок</h3><p class="history-meta">Вся доступная история. Период диаграммы не ограничивает список покупок.</p><div id="purchaseTreeStatus" aria-live="polite"></div><button id="purchaseTreeRetry" class="modal-btn" type="button" hidden>Повторить</button><div id="purchaseTree"></div></section>
+          </section>
         </div>
       </div>
     </div>
 
+    <div class="comment-modal" id="client1cModal" aria-hidden="true"><div class="comment-dialog" role="dialog" aria-modal="true" aria-labelledby="client1cTitle"><h2 id="client1cTitle">Добавить контакт в 1С</h2><p>Номер не определён, потому что он не найден в базе 1С.</p><p>Если этот номер принадлежит одному из ваших клиентов, откройте его карточку в 1С и добавьте номер в поле «Телефоны прочие».</p><p>Если в этом поле уже указан другой номер, добавьте новый через запятую.</p><p>Если в поле «Телефоны прочие» недостаточно места, внесите номер в поле «Контактное лицо».</p><p><strong>Сохраните изменения. Завтра данные обновятся, и вместо номера Вы увидите своего клиента и всю историю взаимодействия с ним.</strong></p><button id="client1cClose" class="modal-btn ok" type="button">Понятно</button></div></div>
     <div class="comment-modal sale-modal" id="saleModal" aria-hidden="true">
       <div class="comment-dialog sale-dialog" role="dialog" aria-modal="true" aria-labelledby="saleModalTitle">
         <h2 id="saleModalTitle">Карточка продажи</h2>
@@ -1656,7 +1675,17 @@ function groupCallsByClient(calls){
   const salesByClient=new Map(),salesByPhone=new Map(),salesByName=new Map();currentClientSales().forEach((sale)=>{const decorated={...sale,__date:String(sale.sale_date||'')};const key=String(sale.client_key||'');if(key){if(!salesByClient.has(key))salesByClient.set(key,[]);salesByClient.get(key).push(decorated);}const phone=normalizeClientLookupPhone(sale.phone);if(phone){if(!salesByPhone.has(phone))salesByPhone.set(phone,[]);salesByPhone.get(phone).push(decorated);}const name=String(sale.client||'').trim().toLowerCase().replace(/\s+/g,' ');if(name){if(!salesByName.has(name))salesByName.set(name,[]);salesByName.get(name).push(decorated);}});
   return [...grouped.values()].map((row)=>{const rowPhones=[...new Set(row.calls.map((call)=>normalizeClientLookupPhone(call.phone)).filter(Boolean))];const rowNames=[row.client,row.displayName].map((value)=>String(value||'').trim().toLowerCase().replace(/\s+/g,' ')).filter(Boolean);const matches=[...(salesByClient.get(row.integrationKey)||[]),...rowPhones.flatMap((phone)=>salesByPhone.get(phone)||[]),...rowNames.flatMap((name)=>salesByName.get(name)||[])];return{...row,calls:row.calls.sort((a,b)=>a.__dt-b.__dt),emails:(row.emails||[]).sort((a,b)=>a.__dt-b.__dt),sales:[...new Map(matches.map((sale)=>[String(sale.sale_id),sale])).values()].sort((a,b)=>a.__date.localeCompare(b.__date)||Number(a.sale_id)-Number(b.sale_id))};}).sort((a,b)=>b.lastDate-a.lastDate);
 }
-const formatMoney=(value)=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'}).format(Number(value||0));
+const formatMoney=(value)=>{
+  const match=String(value??'0').match(/^(-?)(\d+)(?:\.(\d{1,2}))?$/);
+  if(match)return `${match[1]}${match[2].replace(/\B(?=(\d{3})+(?!\d))/g,' ')},${(match[3]||'').padEnd(2,'0')} ₽`;
+  return new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'}).format(Number(value||0));
+};
+function saleLineAmount(quantity,price){
+  const scaled=(value,digits)=>{const m=String(value??'0').match(/^(-?)(\d+)(?:\.(\d+))?$/);if(!m||(m[3]||'').length>digits)throw new Error('Некорректная сумма позиции');return BigInt(m[1]+m[2]+(m[3]||'').padEnd(digits,'0'));};
+  const product=scaled(quantity,3)*scaled(price,2),absolute=product<0n?-product:product;
+  const cents=(absolute+500n)/1000n;
+  return `${product<0n?'-':''}${cents/100n}.${String(cents%100n).padStart(2,'0')}`;
+}
 const formatRubles=(value)=>`${new Intl.NumberFormat('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(value||0))} руб.`;
 function groupSalesByDate(sales){
   const unique=new Map();(Array.isArray(sales)?sales:[]).forEach((sale)=>{const id=String(sale?.sale_id||'');if(id&&!unique.has(id))unique.set(id,sale);});
@@ -1710,7 +1739,7 @@ function renderClientRow(group){
   const events=[...group.calls.map((call,index)=>({html:callSegments[index],day:formatDateLocal(call.__dt),time:call.__dt.getTime(),saleLast:0,type:1,id:index})),...(group.emails||[]).map((email,index)=>({html:emailSegments[index],day:formatDateLocal(email.__dt),time:email.__dt.getTime(),saleLast:0,type:2,id:index})),...saleGroups.map((saleGroup,index)=>({html:saleSegments[index],day:saleGroup.date,time:0,saleLast:1,type:0,id:Number(saleGroup.sales[0]?.sale_id||0)}))];
   const segments=sortClientTimelineEvents(events).map((item)=>item.html).join('');
   const totalDuration=group.calls.reduce((sum,call)=>sum+parseDurationSeconds(call.duration),0);
-  return `<article class="client-row"><div><button class="client-name client-name-btn" data-client="${escapeHtml(group.client)}" type="button">${escapeHtml(group.displayName)}</button><div class="client-meta">Сумма продаж за период: ${clientSalesAvailable()?escapeHtml(formatRubles(saleGroups.reduce((sum,day)=>sum+day.totalAmount,0))):'—'}</div><div class="client-meta">Количество звонков: ${group.calls.length} · Отправлено email: ${(group.emails||[]).length} · Продаж: ${clientSalesAvailable()?saleGroups.length:'—'} · Общая продолжительность: ${escapeHtml(formatCallDurationDot(totalDuration))}</div></div><div class="call-timeline">${segments}</div></article>`;
+  return `<article class="client-row"><div><button class="client-name client-name-btn" data-client="${escapeHtml(group.client)}" data-history-call="${escapeHtml(group.calls[0]?.sqlId||'')}" data-history-email="${escapeHtml(group.emails?.[0]?.id||'')}" type="button">${escapeHtml(group.displayName)}</button><div class="client-meta">Сумма продаж за период: ${clientSalesAvailable()?escapeHtml(formatRubles(saleGroups.reduce((sum,day)=>sum+day.totalAmount,0))):'—'}</div><div class="client-meta">Количество звонков: ${group.calls.length} · Отправлено email: ${(group.emails||[]).length} · Продаж: ${clientSalesAvailable()?saleGroups.length:'—'} · Общая продолжительность: ${escapeHtml(formatCallDurationDot(totalDuration))}</div></div><div class="call-timeline">${segments}</div></article>`;
 }
 function renderClientCalls(){
   const groups=groupCallsByClient(allCalls);
@@ -1725,9 +1754,12 @@ function renderClientCalls(){
   els.clientCallsList.innerHTML=warning+(groups.length?groups.map(renderClientRow).join(''):'<div class="client-empty">Нет звонков и отправленных email за выбранный период</div>');
 }
 
-function openClientHistoryModal(clientKey){
+function openClientHistoryModal(clientKey,reference={}){
+  const source=allCalls.find(call=>String(call.sqlId)===String(reference.call_id));
+  const historyIdentity=(call)=>{const record=uniqueClientRecord(clientRecordsByPhone.get(normalizeClientLookupPhone(call.phone)));return record?.id?`client:${record.id}`:callClientIntegrationKey(call);};
+  const identity=source?historyIdentity(source):'';
   const calls=allCalls.map((call,index)=>({...call,__index:index,__dt:getCallDateTime(call),__type:normalizeCallTypeLabel(call?.type)}))
-    .filter((call)=>getClientKey(call)===clientKey&&callHasHistoryDetails(call))
+    .filter((call)=>(identity?historyIdentity(call)===identity:getClientKey(call)===clientKey)&&callHasHistoryDetails(call))
     .sort((a,b)=>(b.__dt?b.__dt.getTime():0)-(a.__dt?a.__dt.getTime():0));
   const totalDuration=calls.reduce((sum,call)=>sum+parseDurationSeconds(call.duration),0);
   els.clientHistoryInfo.innerHTML=`<div><span>Клиент</span>${escapeHtml(clientKey)}</div><div><span>Всего звонков</span>${calls.length}</div><div><span>Общая длительность</span>${escapeHtml(formatCallDurationDot(totalDuration))}</div>`;
@@ -1740,10 +1772,12 @@ function openClientHistoryModal(clientKey){
     const tag=String(call.tag||'').trim();
     return `<article class="history-item"><div class="history-top"><span>${escapeHtml(call.__type||'Тип не указан')} · ${escapeHtml(formatCallDurationDot(call.duration))}</span><span>${escapeHtml(date)} · ${escapeHtml(time)}</span></div><div class="history-meta">Менеджер: ${escapeHtml(call.manager||'Не указан')} · Телефон: ${escapeHtml(formatPhoneForDisplay(call.phone)||'—')}</div>${tag?`<div class="history-note"><span>Тег:</span> ${escapeHtml(tag)}</div>`:''}${note?`<div class="history-note"><span>Комментарий:</span> ${escapeHtml(note)}</div>`:''}${reminder?`<div class="history-note"><span>Напоминание:</span> ${escapeHtml(reminder)}</div>`:''}</article>`;
   }).join(''):'<div class="client-empty">История по клиенту не найдена</div>';
+  window.clientWorkspace.open(reference);
   els.clientHistoryModal.classList.add('open');
   els.clientHistoryModal.setAttribute('aria-hidden','false');
 }
 function closeClientHistoryModal(){
+  window.clientWorkspace.close();
   els.clientHistoryModal.classList.remove('open');
   els.clientHistoryModal.setAttribute('aria-hidden','true');
 }
@@ -1760,7 +1794,7 @@ async function openSaleCard(id,returnToGroup=''){
   try{
     const sale=await window.calltrackApi.getSaleDetail(id);if(requestId!==saleModalRequestId)return;if(!sale)throw new Error('Продажа не найдена');
     const items=Array.isArray(sale.items)?sale.items:[];const units=items.reduce((sum,item)=>sum+Number(item.quantity||0),0);
-    const rows=items.map((item)=>{const amount=Number(item.quantity||0)*Number(item.actual_price||0);return `<tr><td>${escapeHtml(item.article||'—')}</td><td>${escapeHtml(item.code||'—')}</td><td>${escapeHtml(item.name||'—')}</td><td>${escapeHtml(formatQuantity(item.quantity))}</td><td>${escapeHtml(formatMoney(item.base_price))}</td><td>${escapeHtml(formatMoney(item.actual_price))}</td><td>${escapeHtml(formatMoney(amount))}</td></tr>`;}).join('');
+    const rows=items.map((item)=>{const amount=saleLineAmount(item.quantity,item.actual_price);return `<tr><td>${escapeHtml(item.article||'—')}</td><td>${escapeHtml(item.code||'—')}</td><td>${escapeHtml(item.name||'—')}</td><td>${escapeHtml(formatQuantity(item.quantity))}</td><td>${escapeHtml(formatMoney(item.base_price))}</td><td>${escapeHtml(formatMoney(item.actual_price))}</td><td>${escapeHtml(formatMoney(amount))}</td></tr>`;}).join('');
     els.saleModalContent.innerHTML=`<section class="sale-section"><h3>Основная информация</h3><div class="sale-fields">${saleField('Дата',formatDateDisplay(sale.sale_date)||sale.sale_date)}${saleField('Номер документа',sale.document_number)}${saleField('Клиент',sale.client)}${saleField('Телефон',sale.phone)}${saleField('Подразделение',sale.department)}${saleField('Менеджер',sale.manager||'Не указан')}${saleField('Автор',sale.author)}${saleField('Тип цены',sale.price_type)}</div></section><section class="sale-section"><h3>Финансы</h3><div class="sale-fields">${saleField('Итоговая сумма',formatMoney(sale.total_amount))}${saleField('По базовым ценам',formatMoney(sale.base_amount))}${saleField('Скидка',sale.discount_percent==null?'':`${formatQuantity(sale.discount_percent)} %`)}${saleField('Скидка по карте',sale.discount_card_percent==null?'':`${formatQuantity(sale.discount_card_percent)} %`)}${saleField('Номер карты',sale.discount_card_number)}${saleField('Сертификаты',sale.certificate_amount==null?'':formatMoney(sale.certificate_amount))}${saleField('Акция',sale.promotion)}</div></section><section class="sale-section"><h3>Дополнительно</h3><div class="sale-fields">${saleField('Основание',sale.reason)}</div></section><section class="sale-section"><h3>Товары</h3><div class="sale-products">${items.length?`<table><thead><tr><th>Артикул</th><th>Код</th><th>Наименование</th><th>Количество</th><th>Базовая цена</th><th>Цена продажи</th><th>Сумма</th></tr></thead><tbody>${rows}</tbody></table>`:'<div class="client-empty">Распознанные товары отсутствуют</div>'}</div><div class="sale-totals"><span>Позиций: ${items.length}</span><span>Единиц: ${escapeHtml(formatQuantity(units))}</span><span>Итого: ${escapeHtml(formatMoney(sale.total_amount))}</span></div></section>`;
   }catch(error){if(requestId===saleModalRequestId)els.saleModalContent.innerHTML=`<div class="client-empty">${escapeHtml(error.message||'Не удалось загрузить карточку продажи')}</div>`;}
 }
@@ -1858,12 +1892,12 @@ function bindClientCalls(){
   els.clientApplyRangeBtn.addEventListener('click',()=>{setActiveClientPeriod('custom');renderClientCalls();refreshClientSalesTimeline();});
   els.clientDateFrom.addEventListener('change',()=>{setActiveClientPeriod('custom');renderClientCalls();});
   els.clientDateTo.addEventListener('change',()=>{setActiveClientPeriod('custom');renderClientCalls();});
-  els.clientCallsList.addEventListener('click',(e)=>{const clientBtn=e.target.closest('.client-name-btn'); if(clientBtn){openClientHistoryModal(clientBtn.dataset.client); return;} const saleGroup=e.target.closest('[data-sale-group]');if(saleGroup){openSaleGroup(saleGroup.dataset.saleGroup);return;} const saleSegment=e.target.closest('[data-sale-id]');if(saleSegment){openSaleCard(saleSegment.dataset.saleId);return;} const emailSegment=e.target.closest('[data-email-id]'); if(emailSegment){openEmailCard(emailSegment.dataset.emailId);return;} const segment=e.target.closest('.call-segment'); if(segment) openCommentModal(Number(segment.dataset.index));});
+  els.clientCallsList.addEventListener('click',(e)=>{const clientBtn=e.target.closest('.client-name-btn'); if(clientBtn){openClientHistoryModal(clientBtn.dataset.client,{call_id:clientBtn.dataset.historyCall,email_id:clientBtn.dataset.historyEmail}); return;} const saleGroup=e.target.closest('[data-sale-group]');if(saleGroup){openSaleGroup(saleGroup.dataset.saleGroup);return;} const saleSegment=e.target.closest('[data-sale-id]');if(saleSegment){openSaleCard(saleSegment.dataset.saleId);return;} const emailSegment=e.target.closest('[data-email-id]'); if(emailSegment){openEmailCard(emailSegment.dataset.emailId);return;} const segment=e.target.closest('.call-segment'); if(segment) openCommentModal(Number(segment.dataset.index));});
   els.clientHistoryCloseBtn.addEventListener('click',closeClientHistoryModal);
   els.clientHistoryModal.addEventListener('click',(e)=>{if(e.target===els.clientHistoryModal) closeClientHistoryModal();});
   els.saleModalContent.addEventListener('click',(e)=>{const sale=e.target.closest('[data-sale-detail-id]');if(sale)openSaleCard(sale.dataset.saleDetailId,activeSaleGroupKey);});
   els.saleModalBackBtn.addEventListener('click',()=>{if(activeSaleGroupKey)openSaleGroup(activeSaleGroupKey);});
-  els.saleModalCloseBtn.addEventListener('click',closeSaleModal);els.saleModal.addEventListener('click',(e)=>{if(e.target===els.saleModal)closeSaleModal();});document.addEventListener('keydown',(e)=>{if(e.key==='Escape'&&els.saleModal.classList.contains('open'))closeSaleModal();});
+  els.saleModalCloseBtn.addEventListener('click',closeSaleModal);els.saleModal.addEventListener('click',(e)=>{if(e.target===els.saleModal)closeSaleModal();});
   els.commentCancelBtn.addEventListener('click',closeCommentModal);
   els.commentSaveBtn.addEventListener('click',saveComment);
   els.commentModal.addEventListener('click',(e)=>{if(e.target===els.commentModal) closeCommentModal();});
@@ -2148,5 +2182,6 @@ document.getElementById('authForm').addEventListener('submit',async(event)=>{eve
 document.getElementById('logoutBtn').addEventListener('click',async()=>{await requestWebAuth('logout');location.reload();});
 requestWebAuth().then(openAuthenticatedApp).catch(()=>{document.getElementById('authScreen').hidden=false;});
 </script>
+<script src="client-workspace.js?v=20261015"></script>
 </body>
 </html>

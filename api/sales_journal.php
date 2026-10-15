@@ -62,7 +62,8 @@ function salesJournalCommunicationClients(PDO $pdo,array $user,string $manager,s
     $scope=webManagerScope($user);if($scope)$manager=(string)$scope['manager'];
     if(trim($manager)==='')throw new InvalidArgumentException('Выберите менеджера');
     $params=[':manager'=>$manager,':from'=>$from,':to'=>$to];
-    $callWhere='manager=:manager AND call_date>=:from AND call_date<=:to';
+    require_once __DIR__.'/personal_contacts_filter.php';
+    $callWhere='manager=:manager AND call_date>=:from AND call_date<=:to AND '.workingCallsSql();
     if($scope){$callWhere.=' AND user_phone=:user_phone';$params[':user_phone']=$scope['user_phone'];}
     $stmt=$pdo->prepare("SELECT phone,client,call_type,duration FROM calls WHERE $callWhere");$stmt->execute($params);$calls=$stmt->fetchAll();
     $phones=[];$fallbacks=[];

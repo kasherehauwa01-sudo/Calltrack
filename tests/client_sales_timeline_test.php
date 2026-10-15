@@ -95,7 +95,7 @@ salesAssert(str_contains($detail,'requireWebUser($pdo)')&&str_contains($detail,'
 salesAssert(strpos($detail,'isSalesJournalDetailAllowed')<strpos($detail,'loadSalesJournalDetailCached'),'Detail cache читается до IDOR-проверки');
 salesAssert(str_contains($batch,"'available'=>false")&&str_contains($html,'Данные о продажах временно недоступны'),'Нет graceful degradation');
 salesAssert(str_contains($html,"items.length?")&&str_contains($html,'Распознанные товары отсутствуют'),'Пустой items ломает карточку');
-salesAssert(str_contains($html,'quantity||0)*Number(item.actual_price||0'),'Сумма товара не рассчитывается');
+salesAssert(str_contains($html,'saleLineAmount(item.quantity,item.actual_price)'),'Сумма товара не рассчитывается');
 salesAssert(str_contains($html,'escapeHtml(item.name')&&str_contains($html,'escapeHtml(sale.document_number'),'Внешние данные выводятся без экранирования');
 salesAssert(!str_contains($html,'CALLTRACK_INTEGRATION_TOKEN')&&!str_contains($api,'CALLTRACK_INTEGRATION_TOKEN'),'Bearer token попал во frontend');
 salesAssert(substr_count($integration,"salesJournalRequest('POST'")===1,'Реализован N+1 вместо одного batch-цикла');
