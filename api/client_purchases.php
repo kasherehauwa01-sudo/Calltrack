@@ -7,12 +7,18 @@ try {
     $pdo=getPdo();$user=requireWebUser($pdo);$input=readJsonBody();
     $context=clientHistoryContext($pdo,$user,$input);
     $public=['found_in_1c'=>$context['found_in_1c'],'phone'=>$context['phone'],'can_mark_personal'=>!$context['found_in_1c'] && $context['phone']!=='' && $context['call_id']!==null && $context['user_phone']!==''];
+    $selection=clientHistorySelection($context,trim((string)($input['client_key']??'')));
+    $public['candidates']=array_map(static fn($c)=>['key'=>$c['key'],'name'=>$c['name'],'id'=>$c['id']],$selection['candidates']);
+    $public['selected_client_key']=$selection['selected']['key']??'';
+    $public['selection_required']=$selection['selection_required'];
+    $context['client_key']=$public['selected_client_key'];
+    if($selection['selection_required'])sendJson(['status'=>'success','context'=>$public]);
     if(($input['action']??'')==='context')sendJson(['status'=>'success','context'=>$public,'period'=>purchaseDefaultPeriod()]);
     $defaults=purchaseDefaultPeriod();$from=(string)($input['from']??$defaults['from']);$to=(string)($input['to']??$defaults['to']);$detail=(string)($input['detail']??'month');
     purchaseAnalytics([],$from,$to,$detail); // Validate before upstream I/O.
     $result=clientHistorySales($context);$sales=purchaseDataset($result['items']);
     allowSalesJournalDetails($result['items']);
-    $response=['status'=>'success','context'=>$public,'analytics'=>purchaseAnalytics($sales,$from,$to,$detail),'cache_stale'=>$result['cache_stale'],'requests'=>$result['requests']];
+    $response=['status'=>'success','context'=>$public,'analytics'=>purchaseAnalytics($sales,$from,$to,$detail),'cache_stale'=>$result['cache_stale'],'requests'=>$result['requests'],'excluded_count'=>$result['excluded_count']];
     if(($input['action']??'')!=='analytics')$response['tree']=purchaseTree($sales);
     sendJson($response);
 } catch(InvalidArgumentException $e){sendJson(['status'=>'error','message'=>$e->getMessage()],400);}
