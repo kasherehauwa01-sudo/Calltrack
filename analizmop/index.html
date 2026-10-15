@@ -14,7 +14,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23f8fafc%22/%3E%3Cg%20fill%3D%22%2316a34a%22%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2024%2022%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2040%2022%29%22/%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2024%2038%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2040%2038%29%22/%3E%3C/g%3E%3Cpath%20d%3D%22M32%2032%20C38%2040%2043%2049%2048%2058%22%20fill%3D%22none%22%20stroke%3D%22%2315803d%22%20stroke-width%3D%225%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="api.js?v=20261001-calls-recovery"></script>
-  <link rel="stylesheet" href="client-workspace.css?v=20261015-client-name" />
+  <link rel="stylesheet" href="client-workspace.css?v=20261015-metrics-profile" />
   <style>
     :root { --bg:#f4f6fb; --card:#fff; --text:#1f2a37; --muted:#6b7280; --shadow:0 10px 30px rgba(15,23,42,.08); --radius:14px; }
     *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
@@ -504,21 +504,22 @@
           <button id="clientPurchasesTab" role="tab" aria-controls="clientPurchasesPanel" aria-selected="false" tabindex="-1" type="button">История покупок</button>
         </div>
         <div class="workspace-scroll">
+            <section id="purchaseClientChoice" class="purchase-section" hidden><p>Этот номер указан у нескольких клиентов. Выберите, чьи покупки показать.</p><label for="purchaseClientSelect">Клиент</label><select id="purchaseClientSelect"></select></section>
           <section id="clientGeneralPanel" role="tabpanel" aria-labelledby="clientGeneralTab">
             <div id="clientIdentityStatus" aria-live="polite"></div>
             <div id="clientUnknown" class="client-unknown" hidden><strong>Клиент не найден в базе 1С</strong><div class="workspace-actions"><button id="clientMarkPersonal" class="modal-btn" type="button">Пометить как личный контакт</button><button id="clientAdd1c" class="modal-btn" type="button">Добавить контакт в 1С</button></div><div id="clientPersonalStatus" aria-live="polite"></div></div>
+            <section class="purchase-section"><h3>Покупки за всю историю</h3><div id="clientSummaryStatus" aria-live="polite"></div><button id="clientSummaryRetry" class="modal-btn" type="button" hidden>Повторить</button><div id="clientSummaryKpis" class="purchase-kpis"></div><h4>Топ 20 категорий</h4><p class="history-meta">По выручке за всю историю</p><div id="clientTopCategories" class="purchase-table"></div></section>
             <div class="comment-info" id="clientHistoryInfo"></div>
             <div class="history-list" id="clientHistoryList"></div>
           </section>
           <section id="clientPurchasesPanel" role="tabpanel" aria-labelledby="clientPurchasesTab" hidden>
-            <section id="purchaseClientChoice" class="purchase-section" hidden><p>Этот номер указан у нескольких клиентов. Выберите, чьи покупки показать.</p><label for="purchaseClientSelect">Клиент</label><select id="purchaseClientSelect"></select></section>
+
             <div id="purchaseIdentityNote" class="history-meta" aria-live="polite"></div>
             <section class="purchase-section"><h3>Динамика продаж</h3>
-              <form id="purchaseFilters" class="purchase-filters"><label>С <input id="purchaseFrom" type="month" required /></label><label>По <input id="purchaseTo" type="month" required /></label><label>Детализация <select id="purchaseDetail"><option value="day">По дням</option><option value="month" selected>По месяцам</option><option value="year">По годам</option></select></label><button type="submit" class="modal-btn">Обновить</button></form>
+              <form id="purchaseFilters" class="purchase-filters"><label>С <input id="purchaseFrom" type="month" required /></label><label>По <input id="purchaseTo" type="month" required /></label><label>Показатель <select id="purchaseMetric"><option value="revenue">Сумма продаж</option><option value="sales_count">Количество продаж</option><option value="average_check">Средний чек</option><option value="units">Количество проданных товаров</option><option value="units_per_sale">Количество товаров в чеке</option></select></label><label>Детализация <select id="purchaseDetail"><option value="day">По дням</option><option value="month" selected>По месяцам</option><option value="year">По годам</option></select></label><button type="submit" class="modal-btn">Обновить</button></form>
               <div id="purchaseAnalyticsStatus" aria-live="polite"></div><button id="purchaseAnalyticsRetry" class="modal-btn" type="button" hidden>Повторить</button>
               <div id="purchaseKpis" class="purchase-kpis"></div><div id="purchaseComparison" class="history-meta"></div>
               <div class="purchase-chart"><canvas id="purchaseChart" role="img" aria-label="Динамика продаж: текущий период и прошлый год"></canvas></div>
-              <details><summary>Данные диаграммы</summary><div id="purchaseChartTable" class="purchase-table"></div></details>
             </section>
             <section class="purchase-section"><h3>История покупок</h3><p class="history-meta">Вся доступная история. Период диаграммы не ограничивает список покупок.</p><div id="purchaseTreeStatus" aria-live="polite"></div><button id="purchaseTreeRetry" class="modal-btn" type="button" hidden>Повторить</button><div id="purchaseTree"></div></section>
           </section>
@@ -2184,6 +2185,6 @@ document.getElementById('authForm').addEventListener('submit',async(event)=>{eve
 document.getElementById('logoutBtn').addEventListener('click',async()=>{await requestWebAuth('logout');location.reload();});
 requestWebAuth().then(openAuthenticatedApp).catch(()=>{document.getElementById('authScreen').hidden=false;});
 </script>
-<script src="client-workspace.js?v=20261015-client-name"></script>
+<script src="client-workspace.js?v=20261015-metrics-profile"></script>
 </body>
 </html>

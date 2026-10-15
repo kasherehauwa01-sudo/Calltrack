@@ -74,8 +74,38 @@ function purchaseTree(array $sales): array
     }unset($year);
     return array_values($years);
 }
-function purchaseAnalytics(array $sales,string $from,string $to,string $detail): array
+function purchaseQuantity(string $value): int
 {
+    if(!preg_match('/^(-?)(\d{1,15})(?:\.(\d{1,3}))?$/D',trim($value),$m))throw new InvalidArgumentException('Некорректное количество товаров');
+    $units=(int)$m[2]*1000+(int)str_pad($m[3]??'',3,'0');
+    return $m[1]==='-'?-$units:$units;
+}
+function purchaseFixed(int $value,int $scale): string
+{
+    $factor=10**$scale;
+    return ($value<0?'-':'').intdiv(abs($value),$factor).($scale?'.'.str_pad((string)(abs($value)%$factor),$scale,'0',STR_PAD_LEFT):'');
+}
+function purchaseMetric(int $cents,int $count,int $units,string $metric): int
+{
+    return match($metric){
+        'sales_count'=>$count,'average_check'=>purchaseAverage($cents,$count),
+        'units'=>$units,'units_per_sale'=>purchaseAverage($units,$count),default=>$cents,
+    };
+}
+function purchaseAverage(int $value,int $count): int
+{
+    if(!$count)return 0;
+    $whole=intdiv($value,$count);$remainder=abs($value%$count);
+    return $whole+($remainder>=intdiv($count,2)+$count%2?($value<0?-1:1):0);
+}
+function purchaseMetricDelta(int $current,int $previous,int $scale): array
+{
+    return ['absolute_change'=>purchaseFixed(purchaseAdd($current,-$previous),$scale),'percentage_change'=>$previous===0?null:round(($current-$previous)/$previous*100,1)];
+}
+function purchaseAnalytics(array $sales,string $from,string $to,string $detail,string $metric='revenue'): array
+{
+    if(!in_array($metric,['revenue','sales_count','average_check','units','units_per_sale'],true))throw new InvalidArgumentException('Неизвестный показатель');
+    $scale=match($metric){'sales_count'=>0,'units','units_per_sale'=>3,default=>2};
     $start=purchaseMonth($from);$end=purchaseMonth($to);
     if($start>$end)throw new InvalidArgumentException('Начало периода должно быть не позже окончания');
     if(!in_array($detail,['day','month','year'],true))throw new InvalidArgumentException('Неизвестная детализация');
@@ -92,22 +122,31 @@ function purchaseAnalytics(array $sales,string $from,string $to,string $detail):
             $current=$detail==='day'?($d<=(int)$month->format('t')?$month->setDate((int)$month->format('Y'),(int)$month->format('m'),$d)->format($format):null):$month->format($format);
             $previous=$detail==='day'?($d<=(int)$prev->format('t')?$prev->setDate((int)$prev->format('Y'),(int)$prev->format('m'),$d)->format($format):null):$prev->format($format);
             $key=$current??($month->format('Y-m').'-29');
-            if(!isset($buckets[$key]))$buckets[$key]=['label'=>$current===null?'29.02 (только прошлый год)':$key,'current_date'=>$current,'previous_date'=>$previous,'current_cents'=>0,'previous_cents'=>0,'current_count'=>0,'previous_count'=>0];
+            if(!isset($buckets[$key]))$buckets[$key]=['label'=>$current===null?'29.02 (только прошлый год)':$key,'current_date'=>$current,'previous_date'=>$previous,'current_cents'=>0,'previous_cents'=>0,'current_count'=>0,'previous_count'=>0,'current_units'=>0,'previous_units'=>0];
             if($current!==null)$currentMap[$current]=$key;
             if($previous!==null)$previousMap[$previous]=$key;
         }
     }
-    $currentTotal=0;$previousTotal=0;
+    $currentTotal=0;$previousTotal=0;$counts=['current'=>0,'previous'=>0];$units=$counts;
     foreach($sales as $sale){
+        $quantity=in_array($metric,['units','units_per_sale'],true)?purchaseQuantity((string)($sale['quantity']??'invalid')):0;
         $date=$sale['sale_date'];$key=substr($date,0,$detail==='day'?10:($detail==='month'?7:4));$c=$sale['amount_cents'];
         foreach(['current','previous'] as $series){
             $min=$series==='current'?$start:$previousStart;$max=$series==='current'?$end:$previousEnd;
             $map=$series==='current'?$currentMap:$previousMap;
             if($date<$min->format('Y-m-d') || $date>$max->format('Y-m-d') || !isset($map[$key]))continue;
-            $bucket=&$buckets[$map[$key]];$bucket[$series.'_cents']=purchaseAdd($bucket[$series.'_cents'],$c);$bucket[$series.'_count']++;unset($bucket);
+            $bucket=&$buckets[$map[$key]];$bucket[$series.'_cents']=purchaseAdd($bucket[$series.'_cents'],$c);$bucket[$series.'_count']++;$bucket[$series.'_units']=purchaseAdd($bucket[$series.'_units'],$quantity);$counts[$series]++;$units[$series]=purchaseAdd($units[$series],$quantity);unset($bucket);
             if($series==='current')$currentTotal=purchaseAdd($currentTotal,$c);else $previousTotal=purchaseAdd($previousTotal,$c);
         }
     }
-    foreach($buckets as &$bucket){$bucket+=purchaseDelta($bucket['current_cents'],$bucket['previous_cents']);$bucket['current']=purchaseMoney($bucket['current_cents']);$bucket['previous']=purchaseMoney($bucket['previous_cents']);unset($bucket['current_cents'],$bucket['previous_cents']);}unset($bucket);
-    return ['from'=>$start->format('Y-m-d'),'to'=>$end->format('Y-m-d'),'previous_from'=>$previousStart->format('Y-m-d'),'previous_to'=>$previousEnd->format('Y-m-d'),'detail'=>$detail,'buckets'=>array_values($buckets),'current_total'=>purchaseMoney($currentTotal),'previous_total'=>purchaseMoney($previousTotal)]+purchaseDelta($currentTotal,$previousTotal);
+    foreach($buckets as &$bucket){
+        $current=purchaseMetric($bucket['current_cents'],$bucket['current_count'],$bucket['current_units'],$metric);
+        $previous=purchaseMetric($bucket['previous_cents'],$bucket['previous_count'],$bucket['previous_units'],$metric);
+        $bucket+=purchaseMetricDelta($current,$previous,$scale);
+        $bucket['current']=purchaseFixed($current,$scale);$bucket['previous']=purchaseFixed($previous,$scale);
+        unset($bucket['current_cents'],$bucket['previous_cents'],$bucket['current_units'],$bucket['previous_units']);
+    }unset($bucket);
+    $currentTotal=purchaseMetric($currentTotal,$counts['current'],$units['current'],$metric);
+    $previousTotal=purchaseMetric($previousTotal,$counts['previous'],$units['previous'],$metric);
+    return ['from'=>$start->format('Y-m-d'),'to'=>$end->format('Y-m-d'),'previous_from'=>$previousStart->format('Y-m-d'),'previous_to'=>$previousEnd->format('Y-m-d'),'detail'=>$detail,'metric'=>$metric,'buckets'=>array_values($buckets),'current_total'=>purchaseFixed($currentTotal,$scale),'previous_total'=>purchaseFixed($previousTotal,$scale)]+purchaseMetricDelta($currentTotal,$previousTotal,$scale);
 }

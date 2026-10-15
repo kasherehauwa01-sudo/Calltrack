@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__.'/client_history_context.php';
-require_once __DIR__.'/purchase_analytics.php';
+require_once __DIR__.'/client_insights.php';
 try {
     if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST')sendJson(['status'=>'error','message'=>'Метод не поддерживается'],405);
     $pdo=getPdo();$user=requireWebUser($pdo);$input=readJsonBody();
@@ -14,11 +14,21 @@ try {
     $context['client_key']=$public['selected_client_key'];
     if($selection['selection_required'])sendJson(['status'=>'success','context'=>$public]);
     if(($input['action']??'')==='context')sendJson(['status'=>'success','context'=>$public,'period'=>purchaseDefaultPeriod()]);
+    $metric=(string)($input['metric']??'revenue');
     $defaults=purchaseDefaultPeriod();$from=(string)($input['from']??$defaults['from']);$to=(string)($input['to']??$defaults['to']);$detail=(string)($input['detail']??'month');
-    purchaseAnalytics([],$from,$to,$detail); // Validate before upstream I/O.
+    purchaseAnalytics([],$from,$to,$detail,$metric); // Validate before upstream I/O.
     $result=clientHistorySales($context);$sales=purchaseDataset($result['items']);
+    if(($input['action']??'')==='summary'){
+        $summary=purchaseLifetime($sales);$insights=null;$detailsError=null;
+        try{$insights=clientHistoryInsights($context);}catch(Throwable $e){error_log('Client insights: '.$e->getMessage());$detailsError='Товарные показатели и RFM временно недоступны';}
+        if($insights)$summary+=array_intersect_key($insights,array_flip(['unique_products','top_categories','uncategorized_products','rfm','as_of']));
+        sendJson(['status'=>'success','context'=>$public,'summary'=>$summary,'details_error'=>$detailsError,'cache_stale'=>$result['cache_stale']||($insights['cache_stale']??false)]);
+    }
+    if(in_array($metric,['units','units_per_sale'],true)){
+        $insights=clientHistoryInsights($context);$sales=purchaseAttachQuantities($sales,$insights);$result['cache_stale']=$result['cache_stale']||$insights['cache_stale'];
+    }
     allowSalesJournalDetails($result['items']);
-    $response=['status'=>'success','context'=>$public,'analytics'=>purchaseAnalytics($sales,$from,$to,$detail),'cache_stale'=>$result['cache_stale'],'requests'=>$result['requests'],'excluded_count'=>$result['excluded_count']];
+    $response=['status'=>'success','context'=>$public,'analytics'=>purchaseAnalytics($sales,$from,$to,$detail,$metric),'cache_stale'=>$result['cache_stale'],'requests'=>$result['requests'],'excluded_count'=>$result['excluded_count']];
     if(($input['action']??'')!=='analytics')$response['tree']=purchaseTree($sales);
     sendJson($response);
 } catch(InvalidArgumentException $e){sendJson(['status'=>'error','message'=>$e->getMessage()],400);}
