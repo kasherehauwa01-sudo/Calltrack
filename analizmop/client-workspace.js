@@ -14,6 +14,20 @@
     const digits=fraction.replace(/0+$/,'');
     return whole.replace(/\B(?=(\d{3})+(?!\d))/g,' ')+(digits?','+digits:'');
   };
+  // Lifetime client revenue is the denominator, including categories outside the top 20.
+  function revenueShare(categoryRevenue, totalRevenue) {
+    const cents = value => {
+      const match = /^(-?)(\d+)(?:\.(\d{1,2}))?$/.exec(String(value ?? ''));
+      return match ? (match[1] ? -1n : 1n) * (BigInt(match[2]) * 100n + BigInt((match[3] || '').padEnd(2, '0'))) : null;
+    };
+    const category = cents(categoryRevenue), total = cents(totalRevenue);
+    if (category === null || total === null || total === 0n) return '—';
+    const negative = (category < 0n) !== (total < 0n);
+    const numerator = (category < 0n ? -category : category) * 10000n;
+    const denominator = total < 0n ? -total : total;
+    const rounded = (numerator * 2n + denominator) / (denominator * 2n);
+    return `${negative && rounded !== 0n ? '-' : ''}${rounded / 100n},${String(rounded % 100n).padStart(2, '0')} %`;
+  }
   const metrics={revenue:['Сумма продаж','₽',money],sales_count:['Количество продаж','продаж',number],average_check:['Средний чек','₽',money],units:['Количество проданных товаров','ед.',number],units_per_sale:['Количество товаров в чеке','ед. / чек',number]};
   const dateLabel = value => value?value.split('-').reverse().join('.'):'—';
   function clearSummary(){
@@ -31,7 +45,7 @@
       const cards=[['Количество продаж',number(s.sales_count)],['Выручка',money(s.revenue)],['Первая покупка',dateLabel(s.first_purchase)],['Последняя продажа',dateLabel(s.last_purchase)],['Частота покупок',s.average_interval===null?'Недостаточно покупок':number(s.average_interval)+' дней'],['Дней без покупки',s.days_without_purchase===null?'—':number(s.days_without_purchase)],['Уникальных товаров',s.unique_products===undefined?'Недоступно':number(s.unique_products)],['RFM статус',s.rfm?.segment||(s.sales_count?'Недоступно':'Нет покупок')]];
       $('clientSummaryKpis').innerHTML=cards.map(([label,value])=>`<div><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join('');
       const categories=s.top_categories;
-      $('clientTopCategories').innerHTML=categories?.length?'<table><thead><tr><th>Категория</th><th>Выручка</th><th>Количество товаров</th></tr></thead><tbody>'+categories.map(c=>`<tr><td>${escape(c.category)}</td><td>${escape(money(c.revenue))}</td><td>${escape(number(c.quantity))}</td></tr>`).join('')+'</tbody></table>':(categories?'Покупок товаров нет.':'Категории временно недоступны.');
+      $('clientTopCategories').innerHTML=categories?.length?'<table><thead><tr><th>Категория</th><th>Выручка</th><th>Доля в общей выручке</th><th>Количество товаров</th></tr></thead><tbody>'+categories.map(c=>`<tr><td>${escape(c.category)}</td><td>${escape(money(c.revenue))}</td><td>${escape(revenueShare(c.revenue,s.revenue))}</td><td>${escape(number(c.quantity))}</td></tr>`).join('')+'</tbody></table>':(categories?'Покупок товаров нет.':'Категории временно недоступны.');
       $('clientSummaryStatus').textContent=[result.details_error,result.cache_stale?'Показаны последние сохранённые данные.':'',s.uncategorized_products?`Без категории: ${number(s.uncategorized_products)} товаров.`:''].filter(Boolean).join(' ');
       $('clientSummaryRetry').hidden=!result.details_error;
     }catch(error){if(current!==epoch)return;$('clientSummaryStatus').textContent=error.message;$('clientSummaryRetry').hidden=false;}
