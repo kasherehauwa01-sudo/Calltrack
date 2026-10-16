@@ -5,6 +5,13 @@ require_once __DIR__.'/purchase_analytics.php';
 
 function clientHistoryInsights(array $context, ?callable $transport=null): array
 {
+    if(array_key_exists('client_keys',$context)){
+        $selected=clientHistorySelectedClients($context);
+        if(count($selected)===1){unset($context['client_keys']);$context['client_key']=$selected[0]['key'];return clientHistoryInsights($context,$transport);}
+        $parts=[];
+        foreach($selected as $candidate){$single=$context;unset($single['client_keys']);$single['client_key']=$candidate['key'];$parts[$candidate['name']]=clientHistoryInsights($single,$transport);}
+        return clientHistoryMergeInsights($parts);
+    }
     $selection=clientHistorySelection($context,(string)($context['client_key']??''));
     $name=(string)($selection['selected']['name']??'');
     if($name==='')throw new InvalidArgumentException('Для сводки нужно наименование клиента');
@@ -23,6 +30,40 @@ function clientHistoryInsights(array $context, ?callable $transport=null): array
         if(is_array($cached) && $modified>=time()-SALES_JOURNAL_STALE_CACHE_TTL)return $cached+['cache_stale'=>true];
         throw $error;
     }
+}
+
+/** Combine complete category lists only; never add overlapping unique-product counts. */
+function clientHistoryMergeInsights(array $parts): array
+{
+    $categories=[];$quantities=[];$stale=false;$complete=true;
+    $unique=[];$rfm=[];
+    foreach($parts as $name=>$part){
+        $stale=$stale||($part['cache_stale']??false);
+        $complete=$complete&&(count($part['top_categories'])<20||($part['categories_complete']??false));
+        $unique[]=['name'=>$name,'count'=>$part['unique_products']];
+        $rfm[]=['name'=>$name,'segment'=>$part['rfm']['segment']??'Недоступно'];
+        foreach($part['sale_quantities'] as $row){
+            $id=(int)$row['sale_id'];
+            if(isset($quantities[$id])&&$quantities[$id]['quantity']!==$row['quantity'])throw new RuntimeException('Несогласованный состав общей продажи');
+            $quantities[$id]=$row;
+        }
+        foreach($part['top_categories'] as $row){
+            $key=(string)$row['category'];
+            if(!isset($categories[$key]))$categories[$key]=['category'=>$key,'revenue'=>0,'quantity'=>0];
+            foreach(['revenue','quantity'] as $field){
+                $value=(string)$row[$field];
+                if(!preg_match('/^(-?)(\d{1,12})(?:\.(\d{1,6}))?$/D',$value,$m))throw new RuntimeException('Некорректный показатель категории');
+                $scaled=(int)$m[2]*1000000+(int)str_pad($m[3]??'',6,'0');
+                $categories[$key][$field]=purchaseAdd($categories[$key][$field],$m[1]==='-'?-$scaled:$scaled);
+            }
+        }
+    }
+    uasort($categories,static fn($a,$b)=>$b['revenue']<=>$a['revenue']);
+    foreach($categories as &$row)foreach(['revenue','quantity'] as $field){$v=$row[$field];$row[$field]=($v<0?'-':'').intdiv(abs($v),1000000).'.'.str_pad((string)(abs($v)%1000000),6,'0',STR_PAD_LEFT);}unset($row);
+    return ['unique_products'=>$parts?null:0,'unique_products_by_client'=>$unique,'rfm'=>null,'rfm_by_client'=>$rfm,
+        'top_categories'=>$complete?array_slice(array_values($categories),0,20):null,'uncategorized_products'=>null,
+        'sale_quantities'=>array_values($quantities),'cache_stale'=>$stale,
+        'notice'=>$complete?'':'Для общего топа категорий нужны полные категории из Sales Journal: текущий API ограничивает ответ топ-20 каждого клиента.'];
 }
 
 function purchaseLifetime(array $sales, ?DateTimeImmutable $today=null): array

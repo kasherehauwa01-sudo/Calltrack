@@ -21,3 +21,5 @@ body.client-workspace-locked{overflow:hidden}
 @media(max-width:640px){#clientHistoryModal{padding:4px}#clientHistoryModal .history-dialog{padding:12px;height:calc(100dvh - 8px);max-height:calc(100dvh - 8px)}.purchase-section{padding:12px}.workspace-tabs button{padding:10px}.workspace-header h2{font-size:1.1rem}.purchase-chart{height:260px}}
 
 #purchaseIdentityNote:not(:empty){padding:12px;margin-bottom:12px;background:#fffbeb;border-radius:8px;color:#92400e}
+
+.client-identity-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}.client-identity-tag{font:inherit;border:1px solid #cbd5e1;border-radius:999px;padding:8px 14px;background:#f8fafc;color:#475569;cursor:pointer}.client-identity-tag[aria-pressed="true"]{background:#dcfce7;border-color:#16a34a;color:#14532d}.client-identity-tag:focus-visible{outline:2px solid #15803d;outline-offset:3px}

@@ -74,18 +74,36 @@ function clientHistorySelection(array $context, string $requestedKey=''): array
     return ['candidates'=>$candidates,'selected'=>$selected,'selection_required'=>count($candidates)>1 && $selected===null];
 }
 
-/** Search every sale by the selected exact name, irrespective of its phone. */
-function clientHistorySales(array $context, ?callable $transport=null): array
+/** Validate every requested tag against the interaction's server-side candidates. */
+function clientHistorySelectedClients(array $context): array
 {
     $selection=clientHistorySelection($context,(string)($context['client_key']??''));
-    if($selection['selection_required'])throw new InvalidArgumentException('Выберите клиента для истории покупок');
-    $name=trim((string)($selection['selected']['name']??''));
-    if($name==='')throw new InvalidArgumentException('Для истории покупок нужно наименование клиента');
-    $normalized=normalizeSalesJournalClientName($name);
-    $clients=[['key'=>'name:'.hash('sha256',$normalized),'id'=>'','phone'=>'','name'=>$name]];
+    if(!array_key_exists('client_keys',$context)){
+        if($selection['selection_required'])throw new InvalidArgumentException('Выберите клиента для истории покупок');
+        return $selection['selected'] ? [$selection['selected']] : [];
+    }
+    if(!is_array($context['client_keys']))throw new InvalidArgumentException('Некорректный список клиентов');
+    $allowed=array_column($selection['candidates'],null,'key');$selected=[];
+    foreach($context['client_keys'] as $key){
+        if(!is_string($key)||!isset($allowed[$key]))throw new InvalidArgumentException('Клиент недоступен для этого взаимодействия');
+        $candidate=$allowed[$key];$name=normalizeSalesJournalClientName($candidate['name']);
+        if($name!=='')$selected[$name]=$candidate;
+    }
+    return array_values($selected);
+}
+
+/** Search every sale by the selected exact names, irrespective of their phones. */
+function clientHistorySales(array $context, ?callable $transport=null): array
+{
+    $selected=clientHistorySelectedClients($context);$clients=[];$names=[];
+    foreach($selected as $candidate){
+        $name=trim($candidate['name']);$normalized=normalizeSalesJournalClientName($name);
+        $names[$normalized]=true;$clients[]=['key'=>'name:'.hash('sha256',$normalized),'id'=>'','phone'=>'','name'=>$name];
+    }
+    if(!$clients)return ['items'=>[],'requests'=>0,'cache_stale'=>false,'excluded_count'=>0];
     $result=loadSalesJournalBatchCached($clients,'0001-01-01','9999-12-31',$transport);
     // Recheck cached and upstream data before aggregation and detail authorization.
-    $result['items']=array_values(array_filter($result['items'],static fn($item)=>normalizeSalesJournalClientName((string)($item['client']??''))===$normalized));
+    $result['items']=array_values(array_filter($result['items'],static fn($item)=>isset($names[normalizeSalesJournalClientName((string)($item['client']??''))])));
     $result['excluded_count']=0;
     return $result;
 }
