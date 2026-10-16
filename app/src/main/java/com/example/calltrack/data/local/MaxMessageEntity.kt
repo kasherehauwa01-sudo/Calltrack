@@ -1,5 +1,6 @@
 ﻿package com.example.calltrack.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -21,5 +22,9 @@ data class MaxMessageEntity(
     val shortcutId: String = "",
     val occurredAt: Long,
     val uploaded: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(defaultValue = "''") val messageText: String = "",
+    @ColumnInfo(defaultValue = "''") val senderName: String = "",
+    @ColumnInfo(defaultValue = "''") val conversationTitle: String = "",
+    @ColumnInfo(defaultValue = "0") val isGroupConversation: Boolean = false
 )

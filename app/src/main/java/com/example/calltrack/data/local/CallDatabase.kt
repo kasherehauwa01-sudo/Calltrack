@@ -19,7 +19,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PersonalContactEntity::class,
         MaxMessageEntity::class
     ],
-    version = 9
+    version = 10
 )
 @TypeConverters(NotificationTypeConverter::class)
 abstract class CallDatabase : RoomDatabase() {
@@ -237,6 +237,15 @@ abstract class CallDatabase : RoomDatabase() {
             }
         }
 
+        internal val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE max_messages ADD COLUMN messageText TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE max_messages ADD COLUMN senderName TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE max_messages ADD COLUMN conversationTitle TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE max_messages ADD COLUMN isGroupConversation INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getInstance(context: Context): CallDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -252,7 +261,8 @@ abstract class CallDatabase : RoomDatabase() {
                         MIGRATION_5_6,
                         MIGRATION_6_7,
                         MIGRATION_7_8,
-                        MIGRATION_8_9
+                        MIGRATION_8_9,
+                        MIGRATION_9_10
                     )
                     .build()
                     .also { INSTANCE = it }

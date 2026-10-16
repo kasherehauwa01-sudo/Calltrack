@@ -20,7 +20,6 @@ class MaxAccessibilityDiagnosticService : AccessibilityService() {
             Log.i(
                 TAG,
                 "OUTGOING_MESSAGE_DETECTED " +
-                    "conversationTitle=${conversationTitle ?: "null"} " +
                     "eventTime=$eventTime " +
                     "timestamp=$occurredAt"
             )
