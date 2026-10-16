@@ -18,6 +18,12 @@ assert.equal(share('invalid', '100.00'), '—');
 assert.equal(share('-25.00', '100.00'), '-25,00 %');
 assert.equal(share('150.00', '100.00'), '150,00 %');
 assert.equal(share('9007199254740993.00', '18014398509481986.00'), '50,00 %');
+assert.equal(share('2489695.02000', '4979390.04'), '50,00 %');
+assert.equal(share('525861.65000', '1051723.30000'), '50,00 %');
+assert.equal(share('0.00001', '0.00004'), '25,00 %');
+assert.equal(share('1', '4.00000'), '25,00 %');
+assert.equal(share('-0.00001', '0.00004'), '-25,00 %');
+assert.equal(share('1.00000', '0.00000'), '—');
 new vm.Script(source);
 
 (async () => {
@@ -27,7 +33,7 @@ new vm.Script(source);
     $: id => elements[id] ||= {}, escape: String, money: String, number: String, dateLabel: String,
     api: async () => ({context: {}, summary: {
       revenue: '100.00', sales_count: 4, average_interval: null,
-      top_categories: [{category:'A', revenue:'25.00', quantity:1}, {category:'B', revenue:'25.00', quantity:1}]
+      top_categories: [{category:'A', revenue:'25.00000', quantity:1}, {category:'B', revenue:'25.00000', quantity:1}]
     }})
   });
   vm.runInContext(renderSource, context);
