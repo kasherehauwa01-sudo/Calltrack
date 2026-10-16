@@ -19,7 +19,7 @@ const { chromium } = require('playwright');
         const context = {candidates, selected_client_keys: keys, selection_required: false, found_in_1c: true};
         if (input.action === 'context') return {context};
         const amount = String((keys.includes('client:a')?11:0)+(keys.includes('client:b')?22:0))+'.00';
-        if (input.action === 'summary') {const result={context, summary: {sales_count: 1, revenue: amount, top_categories: [{category:'Тест',revenue:'1083078.53500',quantity:'1'}], average_interval: null, days_without_purchase: null}};if(window.holdSummary&&keys.length===1)return await new Promise(resolve=>{window.releaseSummary=()=>resolve(result);});return result;}
+        if (input.action === 'summary') {const result={context, summary: {sales_count: 1, revenue: amount, categories_complete: keys.length>1?false:true, notice: keys.length>1?'Показан топ-20 по доступным категориям выбранных клиентов. Суммы могут быть неполными.':'', top_categories: [{category:'Тест',revenue:'1083078.53500',quantity:'1'}], average_interval: null, days_without_purchase: null}};if(window.holdSummary&&keys.length===1)return await new Promise(resolve=>{window.releaseSummary=()=>resolve(result);});return result;}
         return {context, tree: [], analytics: {metric: 'revenue', current_total: amount, previous_total: '0.00', absolute_change: amount, percentage_change: null, buckets: []}};
       }};
     });
@@ -39,8 +39,13 @@ const { chromium } = require('playwright');
     assert.equal(await tags.nth(0).getAttribute('aria-pressed'),'true');
     assert.equal(await tags.nth(1).getAttribute('aria-pressed'),'true');
     assert.match(await page.locator('#clientTopCategories').textContent(),/1 083 078,54 ₽/);
+    assert.match(await page.locator('#clientTopCategories p').textContent(),/Суммы могут быть неполными/);
+    assert.equal(await page.locator('#clientTopCategories table tbody tr').count(),1);
+    assert.ok(!(await page.locator('#clientTopCategories').textContent()).includes('Категории временно недоступны'));
     await tags.nth(0).click();
     await page.waitForFunction(() => document.getElementById('clientSummaryKpis').textContent.includes('22,00 ₽'));
+    assert.equal(await page.locator('#clientTopCategories p').count(),0);
+    assert.equal(await page.locator('#clientTopCategories table tbody tr').count(),1);
     await page.locator('#clientPurchasesTab').click();
     await page.waitForFunction(() => document.getElementById('purchaseKpis').textContent.includes('22,00 ₽'));
     await tags.nth(1).click();

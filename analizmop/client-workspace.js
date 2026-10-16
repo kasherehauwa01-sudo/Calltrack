@@ -54,7 +54,11 @@
       $('clientSummaryKpis').innerHTML=cards.map(([label,value])=>`<div><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join('');
       const categories=s.top_categories;
       $('clientTopCategories').innerHTML=categories?.length?'<table><thead><tr><th>Категория</th><th>Выручка</th><th>Доля в общей выручке</th><th>Количество товаров</th></tr></thead><tbody>'+categories.map(c=>`<tr><td>${escape(c.category)}</td><td>${escape(money(c.revenue))}</td><td>${escape(revenueShare(c.revenue,s.revenue))}</td><td>${escape(number(c.quantity))}</td></tr>`).join('')+'</tbody></table>':(categories?'Покупок товаров нет.':'Категории временно недоступны.');
-      $('clientSummaryStatus').textContent=[result.details_error,s.notice,result.cache_stale?'Показаны последние сохранённые данные.':'',s.uncategorized_products?`Без категории: ${number(s.uncategorized_products)} товаров.`:''].filter(Boolean).join(' ');
+      if(s.categories_complete===false&&s.notice){
+        const note=document.createElement('p');note.className='history-meta';note.textContent=s.notice;
+        $('clientTopCategories').prepend(note);
+      }
+      $('clientSummaryStatus').textContent=[result.details_error,s.categories_complete===false?'':s.notice,result.cache_stale?'Показаны последние сохранённые данные.':'',s.uncategorized_products?`Без категории: ${number(s.uncategorized_products)} товаров.`:''].filter(Boolean).join(' ');
       $('clientSummaryRetry').hidden=!result.details_error;
     }catch(error){if(current!==epoch)return;$('clientSummaryStatus').textContent=error.message;$('clientSummaryRetry').hidden=false;}
   }
