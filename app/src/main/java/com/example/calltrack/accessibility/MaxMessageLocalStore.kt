@@ -17,11 +17,22 @@ class MaxMessageLocalStore internal constructor(
     private val scope: CoroutineScope,
     private val logEvent: (String) -> Unit
 ) {
+    private var beforeInsert: suspend () -> Unit = {}
+    private var afterInsert: () -> Unit = {}
+
     constructor(context: Context) : this(
         CallDatabase.getInstance(context.applicationContext).maxMessageDao(),
         CoroutineScope(SupervisorJob() + Dispatchers.IO),
         { event -> Log.i(TAG, event); Unit }
-    )
+    ) {
+        beforeInsert = {
+            try { com.example.calltrack.maxsync.MaxMessageSyncRuntime.cutoff(context.applicationContext) }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { /* Keep the event local; a later cutoff excludes it safely. */ }
+            Unit
+        }
+        afterInsert = { com.example.calltrack.maxsync.MaxMessageSyncWorker.enqueue(context.applicationContext) }
+    }
 
     fun saveOutgoing(contactName: String, occurredAt: Long) {
         val message = MaxMessageEntity(
@@ -55,7 +66,9 @@ class MaxMessageLocalStore internal constructor(
     private suspend fun persist(message: MaxMessageEntity) {
         try {
             // Unique sourceEventId + IGNORE is the persistent, cross-process deduplication boundary.
+            beforeInsert()
             val id = dao.insert(message)
+            afterInsert()
             logEvent(if (id == -1L) "duplicateMessageIgnored" else if (message.direction == "incoming") "incomingMessageSaved" else "outgoingMessageSaved")
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled

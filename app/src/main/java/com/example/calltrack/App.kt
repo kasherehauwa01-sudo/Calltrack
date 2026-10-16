@@ -23,6 +23,7 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.example.calltrack.maxsync.MaxMessageSyncWorker.schedule(this)
         DynamicColors.applyToActivitiesIfAvailable(this)
         AppLogger.install(this)
         StabilityDiagnostics.mark(this, "app_started", "pid=${android.os.Process.myPid()}")
@@ -31,6 +32,7 @@ class App : Application() {
         val db = CallDatabase.getInstance(this)
         notificationRepository = NotificationRepository(db.notificationDao())
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            runCatching { com.example.calltrack.maxsync.MaxMessageSyncRuntime.cutoff(this@App) }
             notificationRepository.cleanupOldNotifications()
         }
         repository = CallRepository(

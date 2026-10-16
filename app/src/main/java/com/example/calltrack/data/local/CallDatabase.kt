@@ -32,6 +32,7 @@ abstract class CallDatabase : RoomDatabase() {
     abstract fun notificationDao(): NotificationDao
     abstract fun personalContactDao(): PersonalContactDao
     abstract fun maxMessageDao(): MaxMessageDao
+    abstract fun maxMessageSyncDao(): MaxMessageSyncDao
 
     companion object {
 
