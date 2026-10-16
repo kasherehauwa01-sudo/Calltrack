@@ -504,8 +504,8 @@
           <button id="clientPurchasesTab" role="tab" aria-controls="clientPurchasesPanel" aria-selected="false" tabindex="-1" type="button">История покупок</button>
         </div>
         <div class="workspace-scroll">
+          <div id="clientIdentityStatus" aria-live="polite"></div>
           <section id="clientGeneralPanel" role="tabpanel" aria-labelledby="clientGeneralTab">
-            <div id="clientIdentityStatus" aria-live="polite"></div>
             <div id="clientUnknown" class="client-unknown" hidden><strong>Клиент не найден в базе 1С</strong><div class="workspace-actions"><button id="clientMarkPersonal" class="modal-btn" type="button">Пометить как личный контакт</button><button id="clientAdd1c" class="modal-btn" type="button">Добавить контакт в 1С</button></div><div id="clientPersonalStatus" aria-live="polite"></div></div>
             <section class="purchase-section"><h3>Покупки за всю историю</h3><div id="clientSummaryStatus" aria-live="polite"></div><button id="clientSummaryRetry" class="modal-btn" type="button" hidden>Повторить</button><div id="clientSummaryKpis" class="purchase-kpis"></div><h4>Топ 20 категорий</h4><p class="history-meta">По выручке за всю историю</p><div id="clientTopCategories" class="purchase-table"></div></section>
             <div class="comment-info" id="clientHistoryInfo"></div>
@@ -2184,6 +2184,6 @@ document.getElementById('authForm').addEventListener('submit',async(event)=>{eve
 document.getElementById('logoutBtn').addEventListener('click',async()=>{await requestWebAuth('logout');location.reload();});
 requestWebAuth().then(openAuthenticatedApp).catch(()=>{document.getElementById('authScreen').hidden=false;});
 </script>
-<script src="client-workspace.js?v=20261015-direct-client"></script>
+<script src="client-workspace.js?v=20261016-client-selection"></script>
 </body>
 </html>
