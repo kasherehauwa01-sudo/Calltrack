@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.os.Build
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import com.example.calltrack.BuildConfig
 
 /** Temporary MAX diagnostics: metadata only. Message content is never read or stored. */
 class MaxAccessibilityDiagnosticService : AccessibilityService() {
@@ -23,6 +24,15 @@ class MaxAccessibilityDiagnosticService : AccessibilityService() {
                     "eventTime=$eventTime " +
                     "timestamp=$occurredAt"
             )
+
+            if (BuildConfig.DEBUG) {
+                // Isolated diagnostics: a window-access failure must not interrupt existing storage.
+                try {
+                    MaxOutgoingIdentityDiagnostics.log(rootInActiveWindow, eventTime, BuildConfig.DEBUG)
+                } catch (_: Exception) {
+                    Log.d(MaxOutgoingIdentityDiagnostics.TAG, "diagnosticsUnavailable")
+                }
+            }
 
             if (conversationTitle != null) {
                 messageStore.saveOutgoing(
