@@ -5,8 +5,13 @@
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   // Format decimal strings without converting money to IEEE-754 numbers.
   const money = value => {
-    const [whole, fraction = '00'] = String(value ?? '0.00').split('.');
-    return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + (fraction === '00' ? '' : ',' + fraction.padEnd(2, '0')) + ' ₽';
+    const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(value ?? '0.00'));
+    if (!match) return '—';
+    const fraction = (match[3] || '').padEnd(3, '0');
+    let cents = BigInt(match[2]) * 100n + BigInt(fraction.slice(0, 2));
+    if (fraction[2] >= '5') cents++;
+    const whole = String(cents / 100n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return (match[1] && cents !== 0n ? '-' : '') + whole + ',' + String(cents % 100n).padStart(2, '0') + ' ₽';
   };
   const change = (item,format=money) => `${String(item.absolute_change).startsWith('-')?'':'+'}${format(item.absolute_change)} (${item.percentage_change === null ? 'нет базы для сравнения' : new Intl.NumberFormat('ru-RU', {maximumFractionDigits:1,signDisplay:'exceptZero'}).format(item.percentage_change) + '%'})`;
   const number = value => {
@@ -45,11 +50,11 @@
       const result=await api({action:'summary'});if(current!==epoch)return;
       if(!applyPurchaseContext(result.context)){$('clientSummaryStatus').textContent='Выберите клиента выше, чтобы увидеть сводку покупок.';return;}
       const s=result.summary;
-      const cards=[['Количество продаж',number(s.sales_count)],['Выручка',money(s.revenue)],['Первая покупка',dateLabel(s.first_purchase)],['Последняя продажа',dateLabel(s.last_purchase)],['Частота покупок',s.average_interval===null?'Недостаточно покупок':number(s.average_interval)+' дней'],['Дней без покупки',s.days_without_purchase===null?'—':number(s.days_without_purchase)],['Уникальных товаров',s.unique_products===undefined?'Недоступно':number(s.unique_products)],['RFM статус',s.rfm?.segment||(s.sales_count?'Недоступно':'Нет покупок')]];
+      const cards=[['Количество продаж',number(s.sales_count)],['Выручка',money(s.revenue)],['Первая покупка',dateLabel(s.first_purchase)],['Последняя продажа',dateLabel(s.last_purchase)],['Частота покупок',s.average_interval===null?'Недостаточно покупок':number(s.average_interval)+' дней'],['Дней без покупки',s.days_without_purchase===null?'—':number(s.days_without_purchase)],['Уникальных товаров',s.unique_products==null?(s.unique_products_by_client?.map(c=>c.name+': '+number(c.count)).join('; ')||'Недоступно'):number(s.unique_products)],['RFM статус',s.rfm?.segment||s.rfm_by_client?.map(c=>c.name+': '+c.segment).join('; ')||(s.sales_count?'Недоступно':'Нет покупок')]];
       $('clientSummaryKpis').innerHTML=cards.map(([label,value])=>`<div><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join('');
       const categories=s.top_categories;
       $('clientTopCategories').innerHTML=categories?.length?'<table><thead><tr><th>Категория</th><th>Выручка</th><th>Доля в общей выручке</th><th>Количество товаров</th></tr></thead><tbody>'+categories.map(c=>`<tr><td>${escape(c.category)}</td><td>${escape(money(c.revenue))}</td><td>${escape(revenueShare(c.revenue,s.revenue))}</td><td>${escape(number(c.quantity))}</td></tr>`).join('')+'</tbody></table>':(categories?'Покупок товаров нет.':'Категории временно недоступны.');
-      $('clientSummaryStatus').textContent=[result.details_error,result.cache_stale?'Показаны последние сохранённые данные.':'',s.uncategorized_products?`Без категории: ${number(s.uncategorized_products)} товаров.`:''].filter(Boolean).join(' ');
+      $('clientSummaryStatus').textContent=[result.details_error,s.notice,result.cache_stale?'Показаны последние сохранённые данные.':'',s.uncategorized_products?`Без категории: ${number(s.uncategorized_products)} товаров.`:''].filter(Boolean).join(' ');
       $('clientSummaryRetry').hidden=!result.details_error;
     }catch(error){if(current!==epoch)return;$('clientSummaryStatus').textContent=error.message;$('clientSummaryRetry').hidden=false;}
   }
@@ -133,38 +138,34 @@
     } catch(error) {if(current===epoch){$('clientPersonalStatus').textContent=error.message;$('clientMarkPersonal').disabled=false;}}
   });
   function applyPurchaseContext(context) {
-    needsSelection=!!context.selection_required;
-    reference.client_key=context.selected_client_key||'';
-    $('clientIdentityStatus').replaceChildren();
+    needsSelection=false;
+    reference.client_keys=context.selected_client_keys ?? context.candidates.map(c=>c.key);
+    delete reference.client_key;
+    const status=$('clientIdentityStatus');status.replaceChildren();
+    if(context.candidates.length>1){
+      const group=document.createElement('div');group.className='client-identity-tags';
+      group.setAttribute('role','group');group.setAttribute('aria-label','Клиенты для статистики');
+      for(const candidate of context.candidates){
+        const button=document.createElement('button');button.type='button';button.className='client-identity-tag';
+        button.textContent=candidate.name;button.setAttribute('aria-pressed',String(reference.client_keys.includes(candidate.key)));
+        button.addEventListener('click',()=>{
+          const active=new Set(reference.client_keys);
+          if(active.has(candidate.key))active.delete(candidate.key);else active.add(candidate.key);
+          reference.client_keys=context.candidates.filter(c=>active.has(c.key)).map(c=>c.key);
+          for(const [index,tag] of [...group.children].entries())tag.setAttribute('aria-pressed',String(active.has(context.candidates[index].key)));
+          epoch++;analyticsRequest++;treeLoaded=false;treeLoading=false;clearSummary();clearAnalytics();
+          $('purchaseTree').replaceChildren();$('purchaseTreeStatus').textContent='';
+          loadSummary();if(!$('clientPurchasesPanel').hidden)loadTree();
+        });
+        group.append(button);
+      }
+      status.append(group);
+    }
     $('clientUnknown').hidden=context.found_in_1c||!context.phone;
     $('clientMarkPersonal').hidden=!context.can_mark_personal;
-    if(needsSelection){
-      const label=document.createElement('label'),select=document.createElement('select');
-      label.textContent='С этим контактом связаны несколько клиентов. Выберите клиента: ';
-      const placeholder=document.createElement('option');
-      placeholder.value='';placeholder.textContent='Выберите клиента';placeholder.disabled=true;placeholder.selected=true;
-      select.append(placeholder);
-      for(const candidate of context.candidates||[]){
-        const option=document.createElement('option');option.value=candidate.key;
-        option.textContent=candidate.name;select.append(option);
-      }
-      select.addEventListener('change',()=>{
-        if(!select.value)return;
-        // Discard in-flight responses for the previous identity in the same modal.
-        epoch++;analyticsRequest++;reference.client_key=select.value;needsSelection=false;
-        treeLoaded=false;treeLoading=false;clearSummary();clearAnalytics();
-        $('purchaseTree').replaceChildren();$('purchaseTreeStatus').textContent='';
-        select.disabled=true;loadSummary();
-        if(!$('clientPurchasesPanel').hidden)loadTree();
-      });
-      label.append(select);$('clientIdentityStatus').append(label);
-      treeLoaded=false;clearAnalytics();$('purchaseTree').replaceChildren();
-      $('purchaseAnalyticsStatus').textContent='Выберите клиента выше, чтобы увидеть историю покупок.';
-      $('purchaseTreeStatus').textContent='';$('purchaseIdentityNote').textContent='';
-      $('purchaseTreeRetry').hidden=true;$('purchaseAnalyticsRetry').hidden=true;
-    }
-    return !needsSelection;
+    return true;
   }
+
   function showExcluded(result) {
     $('purchaseIdentityNote').textContent=result.excluded_count
       ? `Не включено продаж по общему номеру: ${result.excluded_count}. Это покупки других клиентов или записи, которые нельзя однозначно отнести к выбранному клиенту.` : '';

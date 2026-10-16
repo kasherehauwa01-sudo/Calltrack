@@ -12,7 +12,10 @@ try {
     $public['selected_client_key']=$selection['selected']['key']??'';
     $public['selection_required']=$selection['selection_required'];
     $context['client_key']=$public['selected_client_key'];
-    if($selection['selection_required'])sendJson(['status'=>'success','context'=>$public]);
+    $context['client_keys']=$input['client_keys']??array_column($selection['candidates'],'key');
+    clientHistorySelectedClients($context); // Reject forged or malformed tag selections before any upstream request.
+    $public['selected_client_keys']=array_values(array_unique($context['client_keys']));
+    $public['selection_required']=false;
     if(($input['action']??'')==='context')sendJson(['status'=>'success','context'=>$public,'period'=>purchaseDefaultPeriod()]);
     $metric=(string)($input['metric']??'revenue');
     $defaults=purchaseDefaultPeriod();$from=(string)($input['from']??$defaults['from']);$to=(string)($input['to']??$defaults['to']);$detail=(string)($input['detail']??'month');
@@ -21,7 +24,7 @@ try {
     if(($input['action']??'')==='summary'){
         $summary=purchaseLifetime($sales);$insights=null;$detailsError=null;
         try{$insights=clientHistoryInsights($context);}catch(Throwable $e){error_log('Client insights: '.$e->getMessage());$detailsError=str_contains($e->getMessage(),'HTTP 404')?'Обновите backend Sales Journal: API товарных показателей и RFM ещё не установлен.':'Не удалось получить товарные показатели и RFM из Sales Journal. Повторите загрузку.';}
-        if($insights)$summary+=array_intersect_key($insights,array_flip(['unique_products','top_categories','uncategorized_products','rfm','as_of']));
+        if($insights)$summary+=array_intersect_key($insights,array_flip(['unique_products','unique_products_by_client','top_categories','uncategorized_products','rfm','rfm_by_client','notice','as_of']));
         sendJson(['status'=>'success','context'=>$public,'summary'=>$summary,'details_error'=>$detailsError,'cache_stale'=>$result['cache_stale']||($insights['cache_stale']??false)]);
     }
     if(in_array($metric,['units','units_per_sale'],true)){
