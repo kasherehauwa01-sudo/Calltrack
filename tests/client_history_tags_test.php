@@ -20,8 +20,21 @@ tagCheck($merged['unique_products'],null,'overlapping unique counts are not summ
 tagCheck(count($merged['unique_products_by_client']),2,'individual unique counts retained');
 tagCheck(count($merged['rfm_by_client']),2,'individual RFM retained');
 tagCheck($merged['cache_stale'],true,'stale propagated');
-$other['top_categories']=array_fill(0,20,$part['top_categories'][0]);
-tagCheck(clientHistoryMergeInsights(['Альфа'=>$part,'Бета'=>$other])['top_categories'],null,'truncated lists never presented as exact combined top');
+$other['top_categories']=[];
+for($i=0;$i<20;$i++)$other['top_categories'][]=['category'=>$i===0?'Сад':'Категория '.$i,'revenue'=>(string)(20-$i).'.00500','quantity'=>'1.250'];
+$truncated=clientHistoryMergeInsights(['Альфа'=>$part,'Бета'=>$other]);
+tagCheck(count($truncated['top_categories']),20,'truncated source still displays merged top-20');
+tagCheck($truncated['top_categories'][0]['category'],'Сад','shared category merged and sorted');
+tagCheck($truncated['top_categories'][0]['revenue'],'21.010000','available shared revenue summed exactly');
+tagCheck($truncated['top_categories'][0]['quantity'],'2.500000','available shared quantity summed exactly');
+tagCheck($truncated['categories_complete'],false,'truncated data explicitly marked');
+tagCheck($truncated['notice']!=='',true,'truncated data explained');
+tagCheck($merged['categories_complete'],true,'short complete source lists stay complete');
+$other['categories_complete']=true;
+tagCheck(clientHistoryMergeInsights(['Альфа'=>$part,'Бета'=>$other])['categories_complete'],true,'explicit full list accepted');
+$part['categories_complete']=false;
+tagCheck(clientHistoryMergeInsights(['Альфа'=>$part])['categories_complete'],false,'explicit truncation honored even for short lists');
+tagCheck(clientHistoryMergeInsights([])['top_categories'],[],'no active clients gives an empty category list');
 $temp=sys_get_temp_dir().'/calltrack-tags-'.bin2hex(random_bytes(8));$old=getenv('CALLTRACK_STORAGE_DIR');putenv('CALLTRACK_STORAGE_DIR='.$temp);
 try{
     $transport=static function($method,$path,$body){

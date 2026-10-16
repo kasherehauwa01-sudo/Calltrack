@@ -32,14 +32,14 @@ function clientHistoryInsights(array $context, ?callable $transport=null): array
     }
 }
 
-/** Combine complete category lists only; never add overlapping unique-product counts. */
+/** Merge available categories; expose truncation instead of hiding usable rows. */
 function clientHistoryMergeInsights(array $parts): array
 {
     $categories=[];$quantities=[];$stale=false;$complete=true;
     $unique=[];$rfm=[];
     foreach($parts as $name=>$part){
         $stale=$stale||($part['cache_stale']??false);
-        $complete=$complete&&(count($part['top_categories'])<20||($part['categories_complete']??false));
+        $complete=$complete&&($part['categories_complete']??(count($part['top_categories'])<20));
         $unique[]=['name'=>$name,'count'=>$part['unique_products']];
         $rfm[]=['name'=>$name,'segment'=>$part['rfm']['segment']??'Недоступно'];
         foreach($part['sale_quantities'] as $row){
@@ -61,9 +61,9 @@ function clientHistoryMergeInsights(array $parts): array
     uasort($categories,static fn($a,$b)=>$b['revenue']<=>$a['revenue']);
     foreach($categories as &$row)foreach(['revenue','quantity'] as $field){$v=$row[$field];$row[$field]=($v<0?'-':'').intdiv(abs($v),1000000).'.'.str_pad((string)(abs($v)%1000000),6,'0',STR_PAD_LEFT);}unset($row);
     return ['unique_products'=>$parts?null:0,'unique_products_by_client'=>$unique,'rfm'=>null,'rfm_by_client'=>$rfm,
-        'top_categories'=>$complete?array_slice(array_values($categories),0,20):null,'uncategorized_products'=>null,
+        'top_categories'=>array_slice(array_values($categories),0,20),'categories_complete'=>$complete,'uncategorized_products'=>null,
         'sale_quantities'=>array_values($quantities),'cache_stale'=>$stale,
-        'notice'=>$complete?'':'Для общего топа категорий нужны полные категории из Sales Journal: текущий API ограничивает ответ топ-20 каждого клиента.'];
+        'notice'=>$complete?'':'Показан топ-20 по доступным категориям выбранных клиентов. Sales Journal возвращает только топ-20 каждого клиента: суммы, количества и доли могут быть неполными, а общий порядок категорий — отличаться.'];
 }
 
 function purchaseLifetime(array $sales, ?DateTimeImmutable $today=null): array
