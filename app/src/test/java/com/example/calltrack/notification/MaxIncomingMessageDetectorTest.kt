@@ -4,63 +4,52 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MaxIncomingMessageDetectorTest {
-    private fun candidate(text: String? = "Hello", time: Long = 1000L) =
-        MaxIncomingMessageCandidate(text, "Alice", "key:alice", time)
-
-    private fun extract(vararg messages: MaxIncomingMessageCandidate, chat: String = "chat:one", group: Boolean = false) =
-        MaxIncomingMessageDetector.extract(chat, if (group) "Team" else "", "shortcut", group, messages.toList())
-
+    private fun candidate(name: String = "Офис Менеджер ВР", user: String = "144673255", time: Long = 1792156405906L) =
+        MaxIncomingMessageCandidate(name, user, time)
+    private fun extract(message: MaxIncomingMessageCandidate = candidate(), shortcut: String = "166503071", group: Boolean? = false) =
+        MaxIncomingMessageDetector.extract("notification:account:1", shortcut, group, listOf(message))
     private fun matches(template: String = MaxIncomingMessageDetector.MESSAGING_STYLE, pkg: String = "ru.oneme.app", category: String = "msg", messages: Boolean = true, call: Boolean = false, summary: Boolean = false, ongoing: Boolean = false) =
         MaxIncomingMessageDetector.isMessageNotification(pkg, category, template, messages, call, summary, ongoing)
 
+    @Test fun personalMessageUsesActualPersonAndShortcutMetadata() {
+        val message = extract().single()
+        assertEquals("Офис Менеджер ВР", message.senderName)
+        assertEquals("144673255", message.maxUserId); assertEquals("166503071", message.shortcutId)
+        assertEquals(1792156405906L, message.occurredAt)
+        assertTrue(message.sourceEventId.matches(Regex("max-message-in-v2-[0-9a-f]{64}")))
+    }
     @Test fun messagingStyleIsAccepted() { assertTrue(matches()) }
     @Test fun callStyleAndCallMarkersAreRejected() {
-        assertFalse(matches(template = "android.app.Notification\$CallStyle"))
-        assertFalse(matches(call = true))
+        assertFalse(matches(template = "android.app.Notification\$CallStyle")); assertFalse(matches(call = true))
     }
     @Test fun secondaryBigTextIsRejected() { assertFalse(matches(template = "android.app.Notification\$BigTextStyle", messages = false, summary = true)) }
-    @Test fun onlyMaxMessageHistoryIsAccepted() {
-        assertFalse(matches(pkg = "other.app")); assertFalse(matches(category = "call"))
-        assertFalse(matches(messages = false)); assertFalse(matches(summary = true)); assertFalse(matches(ongoing = true))
+    @Test fun invalidCandidatesAreRejected() {
+        assertFalse(matches(pkg = "other.app")); assertFalse(matches(category = "call")); assertFalse(matches(messages = false))
+        assertFalse(matches(summary = true)); assertFalse(matches(ongoing = true))
     }
-    @Test fun singleTextMessageIsPreserved() {
-        val item = extract(candidate("  Hello\nworld  ")).single()
-        assertEquals("  Hello\nworld  ", item.messageText); assertEquals("Alice", item.senderName)
-        assertEquals(1000L, item.occurredAt)
-        assertTrue(item.sourceEventId.matches(Regex("max-message-in-[0-9a-f]{64}")))
-        assertFalse(item.sourceEventId.contains("Alice"))
+    @Test fun groupAndUnknownGroupFlagAreRejected() { assertTrue(extract(group = true).isEmpty()); assertTrue(extract(group = null).isEmpty()) }
+    @Test fun absentOrBlankSenderDoesNotCreateFalseContact() { assertTrue(extract(candidate(name = "")).isEmpty()); assertTrue(extract(candidate(name = "   ")).isEmpty()) }
+    @Test fun selfAndAttachmentsAndInvalidTimeAreRejected() {
+        assertTrue(extract(candidate().copy(isSelf = true)).isEmpty())
+        assertTrue(extract(candidate().copy(hasAttachment = true)).isEmpty()); assertTrue(extract(candidate(time = 0)).isEmpty())
     }
-    @Test fun historyContainsEveryDistinctMessage() {
-        assertEquals(3, extract(candidate("one"), candidate("two", 1001), candidate("three", 1002)).size)
+    @Test fun keylessSenderRequiresActualDialogShortcut() {
+        val result = extract(candidate(user = "")).single()
+        assertEquals("", result.maxUserId); assertTrue(extract(candidate(user = ""), shortcut = "").isEmpty())
     }
-    @Test fun repeatedPostedHasIdenticalPersistentKeys() {
-        assertEquals(extract(candidate()).single().sourceEventId, extract(candidate()).single().sourceEventId)
-        assertEquals(1, extract(candidate(), candidate()).size)
+    @Test fun senderKeyIsPreferredOverDisplayName() { assertEquals(extract().single().sourceEventId, extract(candidate(name = "Renamed")).single().sourceEventId) }
+    @Test fun repeatedDeliveryHasSameFingerprint() { assertEquals(extract(), extract()) }
+    @Test fun differentTimestampProducesDifferentEvent() { assertNotEquals(extract().single().sourceEventId, extract(candidate(time = 1792156405907L)).single().sourceEventId) }
+    @Test fun differentUserAtSameTimeProducesDifferentEvent() { assertNotEquals(extract().single().sourceEventId, extract(candidate(user = "other")).single().sourceEventId) }
+    @Test fun differentShortcutProducesDifferentEvent() { assertNotEquals(extract().single().sourceEventId, extract(shortcut = "other").single().sourceEventId) }
+    @Test fun messageContentCannotEnterMetadataDtoOrFingerprint() {
+        assertTrue(MaxIncomingMessageCandidate::class.java.declaredFields.none { it.name.contains("text", ignoreCase = true) })
+        assertTrue(MaxIncomingMessage::class.java.declaredFields.none { it.name.contains("text", ignoreCase = true) })
+        assertFalse(extract().single().sourceEventId.contains("144673255"))
     }
-    @Test fun differentTextsAtSameTimeRemainDistinct() { assertEquals(2, extract(candidate("one"), candidate("two")).size) }
-    @Test fun identicalTextsAtDifferentTimesRemainDistinct() { assertEquals(2, extract(candidate(), candidate(time = 1001)).size) }
-    @Test fun emptyTextAndAttachmentsAreIgnored() {
-        assertTrue(extract(candidate(null), candidate(""), candidate(" \n"), candidate().copy(hasAttachment = true)).isEmpty())
-    }
-    @Test fun selfMessagesAndUnknownSendersAreIgnored() {
-        assertTrue(extract(candidate().copy(isSelf = true), candidate().copy(senderName = ""), candidate().copy(timestamp = 0)).isEmpty())
-    }
-    @Test fun groupSenderAndConversationAreSeparate() {
-        val item = extract(candidate(), group = true).single()
-        assertEquals("Team", item.conversationTitle); assertEquals("Alice", item.senderName); assertTrue(item.isGroupConversation)
-    }
-    @Test fun differentConversationsAndSendersHaveDifferentKeys() {
-        assertNotEquals(extract(candidate(), chat = "one").single().sourceEventId, extract(candidate(), chat = "two").single().sourceEventId)
-        assertNotEquals(extract(candidate()).single().sourceEventId, extract(candidate().copy(senderIdentity = "key:bob")).single().sourceEventId)
-    }
-    @Test fun displayTitleChangesDoNotChangeIdentity() {
-        val first = extract(candidate()).single()
-        val second = MaxIncomingMessageDetector.extract("chat:one", "New title", "shortcut", false, listOf(candidate())).single()
-        assertEquals(first.sourceEventId, second.sourceEventId)
-    }
-    @Test fun ambiguousFieldDelimitersDoNotCollide() {
-        val first = extract(candidate().copy(senderIdentity = "b|c"), chat = "a").single()
-        val second = extract(candidate().copy(senderIdentity = "c"), chat = "a|b").single()
-        assertNotEquals(first.sourceEventId, second.sourceEventId)
+    @Test fun historyUsesLastValidIncomingPersonWithoutSelfFallback() {
+        val messages = listOf(candidate(time = 1), candidate(time = 2), candidate(name = "Вы", user = "self", time = 3).copy(isSelf = true))
+        val result = MaxIncomingMessageDetector.extract("chat", "shortcut", false, messages).single()
+        assertEquals(2L, result.occurredAt); assertEquals("144673255", result.maxUserId)
     }
 }

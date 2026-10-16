@@ -42,10 +42,11 @@ class MaxMessageLocalStore internal constructor(
                     contactName = message.senderName,
                     shortcutId = message.shortcutId,
                     occurredAt = message.occurredAt,
-                    messageText = message.messageText,
+                    messageText = "",
                     senderName = message.senderName,
-                    conversationTitle = message.conversationTitle,
-                    isGroupConversation = message.isGroupConversation
+                    conversationTitle = "",
+                    isGroupConversation = false,
+                    maxUserId = message.maxUserId
                 ))
             }
         }

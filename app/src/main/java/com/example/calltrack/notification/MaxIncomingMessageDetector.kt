@@ -5,9 +5,8 @@ import java.security.MessageDigest
 
 /** Framework-independent input, extracted exclusively from Android MessagingStyle. */
 internal data class MaxIncomingMessageCandidate(
-    val text: String?,
     val senderName: String,
-    val senderIdentity: String,
+    val maxUserId: String,
     val timestamp: Long,
     val isSelf: Boolean = false,
     val hasAttachment: Boolean = false
@@ -15,11 +14,9 @@ internal data class MaxIncomingMessageCandidate(
 
 internal data class MaxIncomingMessage(
     val sourceEventId: String,
-    val messageText: String,
     val senderName: String,
-    val conversationTitle: String,
+    val maxUserId: String,
     val shortcutId: String,
-    val isGroupConversation: Boolean,
     val occurredAt: Long
 )
 
@@ -35,36 +32,38 @@ internal object MaxIncomingMessageDetector {
 
     fun extract(
         conversationIdentity: String,
-        conversationTitle: String,
         shortcutId: String,
-        isGroupConversation: Boolean,
+        isGroupConversation: Boolean?,
         messages: List<MaxIncomingMessageCandidate>
     ): List<MaxIncomingMessage> {
-        if (conversationIdentity.isBlank()) return emptyList()
-        return messages.mapNotNull { message ->
-            val text = message.text?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            if (message.isSelf || message.hasAttachment || message.timestamp <= 0L ||
-                message.senderName.isBlank() || message.senderIdentity.isBlank()) return@mapNotNull null
-            MaxIncomingMessage(
-                sourceEventId = fingerprint(conversationIdentity, message.senderIdentity, message.timestamp, text),
-                messageText = text,
-                senderName = message.senderName.trim(),
-                conversationTitle = conversationTitle.trim(),
-                shortcutId = shortcutId,
-                isGroupConversation = isGroupConversation,
-                occurredAt = message.timestamp
-            )
-        }.distinctBy { it.sourceEventId }
+        // Null is not proof of a personal chat. Never inspect participants of a known group.
+        if (isGroupConversation != false) return emptyList()
+        val shortcut = shortcutId.trim()
+        val message = messages.lastOrNull { candidate ->
+            !candidate.isSelf && !candidate.hasAttachment && candidate.timestamp > 0L &&
+                candidate.senderName.isNotBlank() &&
+                (candidate.maxUserId.isNotBlank() || shortcut.isNotBlank())
+        } ?: return emptyList()
+        val conversation = conversationIdentity.ifBlank { if (shortcut.isNotBlank()) "shortcut:$shortcut" else "" }
+        if (conversation.isBlank()) return emptyList()
+        val userId = message.maxUserId.trim()
+        // Name fallback is scoped to an actual MAX shortcut, never a global user ID.
+        val senderIdentity = if (userId.isNotEmpty()) "key:$userId" else "scoped-name:${message.senderName.trim()}"
+        return listOf(MaxIncomingMessage(
+            sourceEventId = fingerprint(conversation, shortcut, senderIdentity, message.timestamp),
+            senderName = message.senderName.trim(), maxUserId = userId,
+            shortcutId = shortcut, occurredAt = message.timestamp
+        ))
     }
 
-    private fun fingerprint(conversation: String, sender: String, timestamp: Long, text: String): String {
+    private fun fingerprint(conversation: String, shortcut: String, sender: String, timestamp: Long): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        // Length framing avoids collisions caused by delimiters inside a message or name.
-        for (part in listOf("max-incoming-v1", MAX_PACKAGE, conversation, sender, timestamp.toString(), text)) {
+        // Metadata only. Length framing avoids ambiguous field separators.
+        for (part in listOf("max-incoming-personal-v2", MAX_PACKAGE, "incoming", conversation, shortcut, sender, timestamp.toString())) {
             val bytes = part.toByteArray(Charsets.UTF_8)
             digest.update(ByteBuffer.allocate(4).putInt(bytes.size).array())
             digest.update(bytes)
         }
-        return "max-message-in-" + digest.digest().joinToString("") { "%02x".format(it) }
+        return "max-message-in-v2-" + digest.digest().joinToString("") { "%02x".format(it) }
     }
 }

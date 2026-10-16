@@ -19,8 +19,8 @@ class MaxMessageLocalStoreTest {
         override suspend fun getCount() = rows.size
         override suspend fun getLatest(limit: Int) = rows.values.sortedByDescending { it.occurredAt }.take(limit)
     }
-    private fun messages() = MaxIncomingMessageDetector.extract("chat", "Team", "shortcut", true,
-        listOf(MaxIncomingMessageCandidate("private body", "private sender", "key:sender", 1000L)))
+    private fun messages() = MaxIncomingMessageDetector.extract("chat", "166503071", false,
+        listOf(MaxIncomingMessageCandidate("Офис Менеджер ВР", "144673255", 1000L)))
 
     @Test fun repeatedHistoryAndRecreatedStoreReuseDaoDeduplication() = runBlocking {
         val dao = TestDao(); val logs = mutableListOf<String>()
@@ -30,9 +30,10 @@ class MaxMessageLocalStoreTest {
         coroutineContext.job.children.toList().joinAll()
         assertEquals(1, dao.getCount()); assertTrue(logs.contains("duplicateMessageIgnored"))
         val item = dao.getLatest().single()
-        assertEquals("incoming", item.direction); assertEquals("private body", item.messageText)
-        assertEquals("private sender", item.senderName); assertEquals("Team", item.conversationTitle)
-        assertEquals(item.senderName, item.contactName); assertTrue(item.isGroupConversation); assertFalse(item.uploaded)
+        assertEquals("incoming", item.direction); assertEquals("", item.messageText)
+        assertEquals("Офис Менеджер ВР", item.senderName); assertEquals("", item.conversationTitle)
+        assertEquals("144673255", item.maxUserId); assertEquals("166503071", item.shortcutId); assertEquals("", item.phone)
+        assertEquals(item.senderName, item.contactName); assertFalse(item.isGroupConversation); assertFalse(item.uploaded)
         assertFalse(logs.joinToString().contains("private")); assertFalse(logs.joinToString().contains("Team"))
     }
     @Test fun outgoingStillUsesSameTableAndDirectionWithoutReadingText() = runBlocking {
@@ -43,6 +44,13 @@ class MaxMessageLocalStoreTest {
         assertEquals("Contact", outgoing.contactName); assertEquals(1000L, outgoing.occurredAt)
         assertTrue(outgoing.sourceEventId.startsWith("max-message-out-1000-"))
         assertEquals("", outgoing.messageText); assertEquals(2, dao.getCount())
+    }
+    @Test fun groupDoesNotCreateAnyEntity() = runBlocking {
+        val dao = TestDao(); val store = MaxMessageLocalStore(dao, this) { }
+        store.saveIncoming(MaxIncomingMessageDetector.extract("chat", "shortcut", true,
+            listOf(MaxIncomingMessageCandidate("Sender", "user", 1000))))
+        coroutineContext.job.children.toList().joinAll()
+        assertEquals(0, dao.getCount())
     }
     @Test fun rapidConcurrentPostedMessagesAreInsertedOnlyOnce() = runBlocking {
         val dao = TestDao(); val store = MaxMessageLocalStore(dao, this) { }

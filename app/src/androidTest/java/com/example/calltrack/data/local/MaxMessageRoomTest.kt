@@ -17,8 +17,8 @@ class MaxMessageRoomTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val name = "max-room-test-${UUID.randomUUID()}.db"
         val message = MaxMessageEntity(sourceEventId = "test-fingerprint", direction = "incoming",
-            contactName = "Alice", senderName = "Alice", conversationTitle = "Team",
-            messageText = "private body", isGroupConversation = true, occurredAt = 1000L)
+            contactName = "Alice", senderName = "Alice", conversationTitle = "",
+            messageText = "", maxUserId = "alice-id", isGroupConversation = false, occurredAt = 1000L)
         try {
             val first = Room.databaseBuilder(context, CallDatabase::class.java, name).build()
             try {
@@ -30,7 +30,8 @@ class MaxMessageRoomTest {
             try {
                 val db = second
                 assertEquals(-1L, db.maxMessageDao().insert(message))
-                assertEquals("private body", db.maxMessageDao().getLatest().single().messageText)
+                assertEquals("", db.maxMessageDao().getLatest().single().messageText)
+                assertEquals("alice-id", db.maxMessageDao().getLatest().single().maxUserId)
                 val outgoing = MaxMessageEntity(sourceEventId = "outgoing-test", direction = "outgoing", contactName = "Contact", occurredAt = 2000L)
                 assertTrue(db.maxMessageDao().insert(outgoing) != -1L)
                 assertEquals(2, db.maxMessageDao().getCount())

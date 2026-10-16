@@ -16,7 +16,12 @@ internal object MaxIncomingNotificationExtractor {
                 extras.containsKey("android.callType") || extras.containsKey("android.callPerson"),
                 n.flags and Notification.FLAG_GROUP_SUMMARY != 0, n.flags and Notification.FLAG_ONGOING_EVENT != 0
             )) return emptyList()
+        // Do not interpret a missing/default AndroidX flag as evidence of a personal chat.
+        @Suppress("DEPRECATION")
+        val groupFlag = extras.get("android.isGroupConversation") as? Boolean
+        if (groupFlag != false) return emptyList()
         val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n) ?: return emptyList()
+        if (style.isGroupConversation) return emptyList()
         val shortcut = n.shortcutId.orEmpty()
         // Notification key includes Android user/UID, package, ID and tag; unlike postTime it is stable on updates.
         val identity = if (shortcut.isNotBlank()) "shortcut:${sbn.uid}:$shortcut" else "notification:${sbn.key}"
@@ -25,26 +30,20 @@ internal object MaxIncomingNotificationExtractor {
             runCatching {
                 val person = message.person
                 val senderName = person?.name?.toString().orEmpty()
-                val senderIdentity = if (person != null) personIdentity(person) else ""
+                val maxUserId = person?.key.orEmpty()
                 // Android represents the current user's own replies with a null sender.
                 val isSelf = person == null || isSamePerson(person, style.user)
                 MaxIncomingMessageCandidate(
-                    text = message.text?.toString(), senderName = senderName,
-                    senderIdentity = senderIdentity, timestamp = message.timestamp, isSelf = isSelf,
+                    senderName = senderName, maxUserId = maxUserId,
+                    timestamp = message.timestamp, isSelf = isSelf,
                     hasAttachment = message.dataMimeType != null || message.dataUri != null
                 )
             }.getOrNull()
         }
         val isGroup = style.isGroupConversation
         return MaxIncomingMessageDetector.extract(
-            identity, style.conversationTitle?.toString().orEmpty(), shortcut, isGroup, candidates
+            identity, shortcut, isGroup, candidates
         )
-    }
-
-    private fun personIdentity(person: Person): String = when {
-        !person.key.isNullOrBlank() -> "key:${person.key}"
-        !person.uri.isNullOrBlank() -> "uri:${person.uri}"
-        else -> "name:${person.name?.toString()?.trim().orEmpty()}"
     }
 
     private fun isSamePerson(sender: Person, self: Person): Boolean = when {

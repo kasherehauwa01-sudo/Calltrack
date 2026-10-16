@@ -26,5 +26,6 @@ data class MaxMessageEntity(
     @ColumnInfo(defaultValue = "''") val messageText: String = "",
     @ColumnInfo(defaultValue = "''") val senderName: String = "",
     @ColumnInfo(defaultValue = "''") val conversationTitle: String = "",
-    @ColumnInfo(defaultValue = "0") val isGroupConversation: Boolean = false
+    @ColumnInfo(defaultValue = "0") val isGroupConversation: Boolean = false,
+    @ColumnInfo(defaultValue = "''") val maxUserId: String = ""
 )

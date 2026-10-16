@@ -19,21 +19,23 @@ class MaxIncomingNotificationExtractorTest {
     private val context: Context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Suppress("DEPRECATION")
-    private fun notification(style: Notification.Style): StatusBarNotification {
+    private fun notification(style: Notification.Style, group: Boolean? = false): StatusBarNotification {
         val n = Notification.Builder(context, "max-incoming-test")
             .setSmallIcon(android.R.drawable.ic_dialog_info).setCategory(Notification.CATEGORY_MESSAGE)
             .setShortcutId("chat").setStyle(style).build()
+        if (group == null) n.extras.remove("android.isGroupConversation")
+        else n.extras.putBoolean("android.isGroupConversation", group)
         return StatusBarNotification("ru.oneme.app", "ru.oneme.app", 1, "chat", Process.myUid(), Process.myPid(), n, Process.myUserHandle(), null, 9000L)
     }
 
     @Suppress("DEPRECATION")
-    @Test fun messagingHistoryIsRestoredAndSelfAndEmptyMessagesAreSkipped() {
+    @Test fun lastValidIncomingPersonIsUsedWithoutReadingBody() {
         val style = Notification.MessagingStyle("Me")
             .addMessage("old", 1000, "Alice").addMessage("new", 1001, "Alice")
-            .addMessage("", 1002, "Alice").addMessage("local reply", 1003, null as CharSequence?)
+             .addMessage("local reply", 1003, null as CharSequence?)
         val sbn = notification(style)
         val first = MaxIncomingNotificationExtractor.extract(sbn)
-        assertEquals(listOf("old", "new"), first.map { it.messageText })
+        assertEquals(1, first.size); assertEquals(1001L, first.single().occurredAt); assertEquals("Alice", first.single().senderName)
         assertEquals(first, MaxIncomingNotificationExtractor.extract(sbn))
     }
 
@@ -41,14 +43,31 @@ class MaxIncomingNotificationExtractorTest {
         assertTrue(MaxIncomingNotificationExtractor.extract(notification(Notification.BigTextStyle().bigText("body"))).isEmpty())
     }
 
-    @Test fun personAndConversationRemainSeparate() {
+    @Test fun groupsAreIgnored() {
         assumeTrue(Build.VERSION.SDK_INT >= 28)
         val self = Person.Builder().setName("Me").setKey("self").build()
         val sender = Person.Builder().setName("Alice").setKey("alice").build()
         val style = Notification.MessagingStyle(self).setConversationTitle("Team").setGroupConversation(true)
             .addMessage(Notification.MessagingStyle.Message("body", 1000, sender))
-        val item = MaxIncomingNotificationExtractor.extract(notification(style)).single()
-        assertEquals("Team", item.conversationTitle); assertEquals("Alice", item.senderName)
-        assertTrue(item.isGroupConversation)
+        assertTrue(MaxIncomingNotificationExtractor.extract(notification(style, group = true)).isEmpty())
     }
+    @Test fun personalRealMetadataDoesNotDependOnBodyOrConversationTitle() {
+        assumeTrue(Build.VERSION.SDK_INT >= 28)
+        val self = Person.Builder().setName("Вы").setKey("bgg@6f51ab4").build()
+        val sender = Person.Builder().setName("Офис Менеджер ВР").setKey("144673255").build()
+        val outputs = listOf<String?>("first body", "edited body", "", null).map { body ->
+            val style = Notification.MessagingStyle(self).setGroupConversation(false)
+                .addMessage(Notification.MessagingStyle.Message(body, 1792156405906L, sender))
+            MaxIncomingNotificationExtractor.extract(notification(style)).single()
+        }
+        assertEquals(1, outputs.map { it.sourceEventId }.distinct().size)
+        assertEquals("Офис Менеджер ВР", outputs.first().senderName)
+        assertEquals("144673255", outputs.first().maxUserId)
+    }
+    @Suppress("DEPRECATION")
+    @Test fun unknownGroupFlagIsNotAssumedPersonal() {
+        val style = Notification.MessagingStyle("Me").addMessage("body", 1000, "Alice")
+        assertTrue(MaxIncomingNotificationExtractor.extract(notification(style, group = null)).isEmpty())
+    }
+
 }

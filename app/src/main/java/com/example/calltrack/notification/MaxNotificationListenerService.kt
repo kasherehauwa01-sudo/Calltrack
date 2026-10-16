@@ -8,7 +8,6 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.example.calltrack.App
-import com.example.calltrack.BuildConfig
 import com.example.calltrack.accessibility.MaxMessageLocalStore
 import com.example.calltrack.auth.AuthStore
 import com.example.calltrack.data.local.CallEntity
@@ -58,9 +57,6 @@ class MaxNotificationListenerService : NotificationListenerService() {
     private fun handlePosted(sbn: StatusBarNotification) {
         val extras = sbn.notification.extras ?: Bundle.EMPTY
         if (!isMaxCallNotification(extras)) {
-            if (BuildConfig.DEBUG && MaxIncomingIdentityDiagnostics.isCandidate(sbn, extras)) {
-                MaxIncomingIdentityDiagnostics.logPosted(sbn, extras)
-            }
             // Message parsing is isolated: exceptions must not expose extras or message content.
             runCatching {
                 val messages = MaxIncomingNotificationExtractor.extract(sbn)
