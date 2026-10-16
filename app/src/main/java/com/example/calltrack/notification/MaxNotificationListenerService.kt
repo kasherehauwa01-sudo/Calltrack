@@ -53,6 +53,7 @@ class MaxNotificationListenerService : NotificationListenerService() {
 
     private fun handlePosted(sbn: StatusBarNotification) {
         val extras = sbn.notification.extras ?: Bundle.EMPTY
+MaxNotificationMessageDiagnostics.logPosted(sbn, extras)
         if (!isMaxCallNotification(extras)) return
         val name = extractCallPerson(extras)?.name?.toString()?.trim().orEmpty()
         if (name.isEmpty()) return

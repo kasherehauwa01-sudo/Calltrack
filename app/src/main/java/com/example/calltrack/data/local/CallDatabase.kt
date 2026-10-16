@@ -16,12 +16,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CommentEntity::class,
         CallHistoryEntity::class,
         NotificationEntity::class,
-        PersonalContactEntity::class
+        PersonalContactEntity::class,
+        MaxMessageEntity::class
     ],
-    version = 8
+    version = 9
 )
 @TypeConverters(NotificationTypeConverter::class)
 abstract class CallDatabase : RoomDatabase() {
+
     abstract fun callDao(): CallDao
     abstract fun contactDao(): ContactDao
     abstract fun reminderDao(): ReminderDao
@@ -29,15 +31,22 @@ abstract class CallDatabase : RoomDatabase() {
     abstract fun callHistoryDao(): CallHistoryDao
     abstract fun notificationDao(): NotificationDao
     abstract fun personalContactDao(): PersonalContactDao
+    abstract fun maxMessageDao(): MaxMessageDao
 
     companion object {
+
         @Volatile
         private var INSTANCE: CallDatabase? = null
 
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE calls ADD COLUMN tag TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE calls ADD COLUMN reminder TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    "ALTER TABLE calls ADD COLUMN tag TEXT NOT NULL DEFAULT ''"
+                )
+                db.execSQL(
+                    "ALTER TABLE calls ADD COLUMN reminder TEXT NOT NULL DEFAULT ''"
+                )
+
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS contacts (
@@ -49,6 +58,7 @@ abstract class CallDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS reminders (
@@ -62,6 +72,7 @@ abstract class CallDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+
                 db.execSQL(
                     """
                     CREATE TABLE IF NOT EXISTS comments (
@@ -77,14 +88,17 @@ abstract class CallDatabase : RoomDatabase() {
 
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE reminders ADD COLUMN message TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    "ALTER TABLE reminders ADD COLUMN message TEXT NOT NULL DEFAULT ''"
+                )
             }
         }
 
-
         private val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE contacts ADD COLUMN client1c TEXT NOT NULL DEFAULT ''")
+                db.execSQL(
+                    "ALTER TABLE contacts ADD COLUMN client1c TEXT NOT NULL DEFAULT ''"
+                )
             }
         }
 
@@ -148,17 +162,78 @@ abstract class CallDatabase : RoomDatabase() {
 
         private val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE calls ADD COLUMN source TEXT NOT NULL DEFAULT 'phone'")
-                db.execSQL("ALTER TABLE calls ADD COLUMN sourceEventId TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE calls ADD COLUMN contactName TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE calls ADD COLUMN direction TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE calls ADD COLUMN status TEXT NOT NULL DEFAULT ''")
-                db.execSQL("ALTER TABLE calls ADD COLUMN answeredAt INTEGER")
-                db.execSQL("ALTER TABLE calls ADD COLUMN endedAt INTEGER")
-                db.execSQL("ALTER TABLE calls ADD COLUMN ringingDurationSeconds INTEGER")
-                db.execSQL("ALTER TABLE calls ADD COLUMN isVideo INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE calls ADD COLUMN contactResolutionStatus TEXT NOT NULL DEFAULT ''")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_calls_sourceEventId ON calls(sourceEventId)")
+                db.execSQL(
+                    "ALTER TABLE calls ADD COLUMN source TEXT NOT NULL DEFAULT 'phone'"
+                )
+                db.execSQL(
+                    "ALTER TABLE calls ADD COLUMN sourceEventId TEXT NOT NULL DEFAULT ''"
+                )
+                db.execSQL(
+                    "ALTER TABLE calls ADD COLUMN contactName TEXT NOT NULL DEFAULT ''"
+                )
+                db.execSQL(
+                    "ALTER TABLE calls ADD COLUMN direction TEXT NOT NULL DEFAULT ''"
+                )
+                db.execSQL(
+                    "ALTER TABLE calls ADD COLUMN status TEXT NOT NULL DEFAULT ''"
+                )
+                db.execSQL(
+                    "ALTER TABLE calls ADD COLUMN answeredAt INTEGER"
+                )
+                db.execSQL(
+                    "ALTER TABLE calls ADD COLUMN endedAt INTEGER"
+                )
+                db.execSQL(
+                    "ALTER TABLE calls ADD COLUMN ringingDurationSeconds INTEGER"
+                )
+                db.execSQL(
+                    "ALTER TABLE calls ADD COLUMN isVideo INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE calls ADD COLUMN contactResolutionStatus TEXT NOT NULL DEFAULT ''"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_calls_sourceEventId " +
+                        "ON calls(sourceEventId)"
+                )
+            }
+        }
+
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS max_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        sourceEventId TEXT NOT NULL,
+                        direction TEXT NOT NULL,
+                        contactName TEXT NOT NULL DEFAULT '',
+                        phone TEXT NOT NULL DEFAULT '',
+                        shortcutId TEXT NOT NULL DEFAULT '',
+                        occurredAt INTEGER NOT NULL,
+                        uploaded INTEGER NOT NULL DEFAULT 0,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS " +
+                        "index_max_messages_sourceEventId " +
+                        "ON max_messages(sourceEventId)"
+                )
+
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS " +
+                        "index_max_messages_shortcutId " +
+                        "ON max_messages(shortcutId)"
+                )
+
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS " +
+                        "index_max_messages_phone " +
+                        "ON max_messages(phone)"
+                )
             }
         }
 
@@ -168,16 +243,19 @@ abstract class CallDatabase : RoomDatabase() {
                     context.applicationContext,
                     CallDatabase::class.java,
                     "calltrack.db"
-                ).addMigrations(
+                )
+                    .addMigrations(
                         MIGRATION_1_2,
                         MIGRATION_2_3,
                         MIGRATION_3_4,
                         MIGRATION_4_5,
                         MIGRATION_5_6,
                         MIGRATION_6_7,
-                        MIGRATION_7_8
+                        MIGRATION_7_8,
+                        MIGRATION_8_9
                     )
-                    .build().also { INSTANCE = it }
+                    .build()
+                    .also { INSTANCE = it }
             }
         }
     }
