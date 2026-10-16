@@ -1183,8 +1183,6 @@ class CallRepository(
 
     private fun buildWebhookCallId(entity: CallEntity): String = entity.sourceEventId.ifBlank { "${entity.id}_${entity.timestamp}" }
 
-    private fun sqlDateTime(timestamp: Long): String =
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(timestamp))
 
     private fun sqlApiUrl(endpoint: String): String {
         return BuildConfig.SQL_API_BASE_URL.trimEnd('/') + "/" + endpoint.trimStart('/')
