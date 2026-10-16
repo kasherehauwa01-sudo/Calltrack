@@ -31,6 +31,12 @@ internal object MaxOutgoingIdentityDiagnostics {
             "${PREFIX}oneme_toolbar_title", "${PREFIX}oneme_toolbar_subtitle"
         )
 
+    internal fun allowToolbarChildMetadata(
+        parentId: String?, id: String?, className: String?, ancestorBlocked: Boolean,
+        toolbarInHeader: Boolean
+    ): Boolean = parentId == "${PREFIX}chat__toolbar" && toolbarInHeader &&
+        !blocked(id, className, ancestorBlocked)
+
     fun log(root: AccessibilityNodeInfo?, eventTime: Long, debug: Boolean) {
         if (root == null) return
         try {
@@ -39,7 +45,7 @@ internal object MaxOutgoingIdentityDiagnostics {
             var visited = 0
             var logged = 0
             Log.d(TAG, "event=OUTGOING_MESSAGE_DETECTED eventTime=$eventTime root.className=${safe(root.className)}")
-            fun visit(node: AccessibilityNodeInfo, parentId: String?, depth: Int) {
+            fun visit(node: AccessibilityNodeInfo, parentId: String?, depth: Int, index: Int, toolbarInHeader: Boolean) {
                 if (visited >= 120 || logged >= 30 || depth > 8) return
                 visited++
                 val id = node.viewIdResourceName
@@ -50,15 +56,18 @@ internal object MaxOutgoingIdentityDiagnostics {
                 val bounds = Rect().also(node::getBoundsInScreen)
                 val inHeader = window.height() > 0 && !bounds.isEmpty &&
                     bounds.top >= window.top && bounds.bottom <= window.top + window.height() / 3
-                if (candidate(id)) {
+                val directChild = allowToolbarChildMetadata(parentId, id, clazz, false, toolbarInHeader)
+                if (candidate(id) || directChild) {
                     logged++
                     val textAllowed = allowText(id, false, inHeader)
-                    Log.d(TAG, "node.depth=$depth viewId=${safe(id)} class=${safe(clazz)} " +
+                    Log.d(TAG, "node.depth=$depth index=$index toolbarDirectChild=$directChild viewId=${safe(id)} class=${safe(clazz)} " +
                         "packageName=${safe(node.packageName)} parentViewId=${safe(parentId)} " +
                         "clickable=${node.isClickable} enabled=${node.isEnabled} selected=${node.isSelected} " +
                         "focused=${node.isFocused} childCount=${node.childCount} textAllowed=$textAllowed")
-                    if (textAllowed) {
-                        Log.d(TAG, "node.text=${safe(node.text)} contentDescription=${safe(node.contentDescription)} " +
+                    if (textAllowed) Log.d(TAG, "index=$index viewId=${safe(id)} node.text=${safe(node.text)}")
+                    // Direct toolbar children may expose labels/technical metadata, never arbitrary text.
+                    if (textAllowed || directChild) {
+                        Log.d(TAG, "index=$index viewId=${safe(id)} contentDescription=${safe(node.contentDescription)} " +
                             "uniqueId=${if (Build.VERSION.SDK_INT >= 33) safe(node.uniqueId) else "unsupported"} " +
                             "extrasKeys=${node.extras.keySet().take(24).map { safe(it) }} " +
                             "paneTitle=${if (Build.VERSION.SDK_INT >= 28) safe(node.paneTitle) else "unsupported"} " +
@@ -69,10 +78,10 @@ internal object MaxOutgoingIdentityDiagnostics {
                 for (i in 0 until minOf(node.childCount, 120)) {
                     if (visited >= 120 || logged >= 30) break
                     val child = node.getChild(i) ?: continue
-                    try { visit(child, id, depth + 1) } finally { release(child) }
+                    try { visit(child, id, depth + 1, i, id == "${PREFIX}chat__toolbar" && inHeader) } finally { release(child) }
                 }
             }
-            visit(root, null, 0)
+            visit(root, null, 0, -1, false)
             Log.d(TAG, "end visited=$visited logged=$logged limits=120nodes/8depth/30candidates")
         } catch (_: Exception) {
             // Exception messages may contain UI data. Diagnostics must not interrupt outgoing storage.

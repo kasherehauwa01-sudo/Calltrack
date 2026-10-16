@@ -42,4 +42,22 @@ class MaxOutgoingIdentityDiagnosticsTest {
         assertFalse(policy.enabled(true, "other.app"))
         assertFalse(policy.enabled(true, null))
     }
+    @Test fun directToolbarChildrenAllowMetadataButNotUnknownText() {
+        for (childId in listOf(null, id("back_button"), id("avatar"))) {
+            assertTrue(policy.allowToolbarChildMetadata(id("chat__toolbar"), childId, "android.widget.ImageView", false, true))
+            assertFalse(policy.allowText(childId, false, true))
+        }
+    }
+    @Test fun toolbarChildMetadataRequiresSafeDirectParent() {
+        assertFalse(policy.allowToolbarChildMetadata(id("other_header"), id("avatar"), null, false, true))
+        assertFalse(policy.allowToolbarChildMetadata(id("chat__toolbar"), id("avatar"), null, true, true))
+        assertFalse(policy.allowToolbarChildMetadata(id("chat__toolbar"), id("avatar"), null, false, false))
+    }
+    @Test fun sensitiveChildrenRemainBlockedEvenInsideToolbar() {
+        for (name in listOf("oneme_message_input_edit_text", "messages_list_recycler_view", "message_bubble", "reply_preview", "quoted_message", "attachments", "media_caption", "draft")) {
+            assertFalse(name, policy.allowToolbarChildMetadata(id("chat__toolbar"), id(name), null, false, true))
+        }
+        assertFalse(policy.allowToolbarChildMetadata(id("chat__toolbar"), null, "android.widget.EditText", false, true))
+    }
+
 }
