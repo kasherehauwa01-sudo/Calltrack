@@ -4,7 +4,6 @@ import android.accessibilityservice.AccessibilityService
 import android.os.Build
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import com.example.calltrack.BuildConfig
 
 /** Temporary MAX diagnostics: metadata only. Message content is never read or stored. */
 class MaxAccessibilityDiagnosticService : AccessibilityService() {
@@ -15,7 +14,11 @@ class MaxAccessibilityDiagnosticService : AccessibilityService() {
 
     private val outgoingMessageDetector =
         MaxOutgoingMessageDetector { eventTime ->
-            val conversationTitle = currentConversationTitle()
+            val identity = try {
+                MaxOutgoingChatIdentityExtractor.extract(rootInActiveWindow)
+            } catch (_: Exception) {
+                null
+            }
             val occurredAt = System.currentTimeMillis()
 
             Log.i(
@@ -25,18 +28,9 @@ class MaxAccessibilityDiagnosticService : AccessibilityService() {
                     "timestamp=$occurredAt"
             )
 
-            if (BuildConfig.DEBUG) {
-                // Isolated diagnostics: a window-access failure must not interrupt existing storage.
-                try {
-                    MaxOutgoingIdentityDiagnostics.log(rootInActiveWindow, eventTime, BuildConfig.DEBUG)
-                } catch (_: Exception) {
-                    Log.d(MaxOutgoingIdentityDiagnostics.TAG, "diagnosticsUnavailable")
-                }
-            }
-
-            if (conversationTitle != null) {
+            if (identity != null && !identity.isGroup) {
                 messageStore.saveOutgoing(
-                    contactName = conversationTitle,
+                    contactName = identity.contactName,
                     occurredAt = occurredAt
                 )
             }
@@ -89,27 +83,6 @@ class MaxAccessibilityDiagnosticService : AccessibilityService() {
             if (Build.VERSION.SDK_INT < 33) {
                 @Suppress("DEPRECATION")
                 source?.recycle()
-            }
-        }
-    }
-
-    private fun currentConversationTitle(): String? {
-        val root = rootInActiveWindow ?: return null
-
-        val nodes = root.findAccessibilityNodeInfosByViewId(
-            "ru.oneme.app:id/oneme_toolbar_title"
-        )
-
-        return try {
-            nodes.firstOrNull()
-                ?.text
-                ?.toString()
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-        } finally {
-            if (Build.VERSION.SDK_INT < 33) {
-                @Suppress("DEPRECATION")
-                nodes.forEach { it.recycle() }
             }
         }
     }

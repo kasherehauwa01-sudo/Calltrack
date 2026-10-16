@@ -44,6 +44,9 @@ class MaxMessageLocalStoreTest {
         assertEquals("Contact", outgoing.contactName); assertEquals(1000L, outgoing.occurredAt)
         assertTrue(outgoing.sourceEventId.startsWith("max-message-out-1000-"))
         assertEquals("", outgoing.messageText); assertEquals(2, dao.getCount())
+        assertEquals("", outgoing.senderName); assertEquals("", outgoing.conversationTitle)
+        assertEquals("", outgoing.phone); assertEquals("", outgoing.maxUserId)
+        assertEquals("", outgoing.shortcutId); assertFalse(outgoing.isGroupConversation)
     }
     @Test fun groupDoesNotCreateAnyEntity() = runBlocking {
         val dao = TestDao(); val store = MaxMessageLocalStore(dao, this) { }
