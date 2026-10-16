@@ -16,15 +16,18 @@
   };
   // Lifetime client revenue is the denominator, including categories outside the top 20.
   function revenueShare(categoryRevenue, totalRevenue) {
-    const cents = value => {
-      const match = /^(-?)(\d+)(?:\.(\d{1,2}))?$/.exec(String(value ?? ''));
-      return match ? (match[1] ? -1n : 1n) * (BigInt(match[2]) * 100n + BigInt((match[3] || '').padEnd(2, '0'))) : null;
+    // Sales Journal can return more than two decimal places. Keep all digits until percentage rounding.
+    const decimal = value => {
+      const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(value ?? '').trim());
+      if (!match) return null;
+      const fraction = match[3] || '';
+      return {coefficient: (match[1] ? -1n : 1n) * BigInt(match[2] + fraction), scale: 10n ** BigInt(fraction.length)};
     };
-    const category = cents(categoryRevenue), total = cents(totalRevenue);
-    if (category === null || total === null || total === 0n) return '—';
-    const negative = (category < 0n) !== (total < 0n);
-    const numerator = (category < 0n ? -category : category) * 10000n;
-    const denominator = total < 0n ? -total : total;
+    const category = decimal(categoryRevenue), total = decimal(totalRevenue);
+    if (category === null || total === null || total.coefficient === 0n) return '—';
+    const negative = (category.coefficient < 0n) !== (total.coefficient < 0n);
+    const numerator = (category.coefficient < 0n ? -category.coefficient : category.coefficient) * total.scale * 10000n;
+    const denominator = (total.coefficient < 0n ? -total.coefficient : total.coefficient) * category.scale;
     const rounded = (numerator * 2n + denominator) / (denominator * 2n);
     return `${negative && rounded !== 0n ? '-' : ''}${rounded / 100n},${String(rounded % 100n).padStart(2, '0')} %`;
   }
