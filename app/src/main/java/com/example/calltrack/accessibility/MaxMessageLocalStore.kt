@@ -15,15 +15,21 @@ import java.util.UUID
 class MaxMessageLocalStore internal constructor(
     private val dao: MaxMessageDao,
     private val scope: CoroutineScope,
-    private val logEvent: (String) -> Unit
+    private val logEvent: (String) -> Unit,
+    private val resolvePhone: (String) -> String
 ) {
+    // Preserve the existing test/store construction API.
+    internal constructor(dao: MaxMessageDao, scope: CoroutineScope, logEvent: (String) -> Unit) :
+        this(dao, scope, logEvent, { "" })
+
     private var beforeInsert: suspend () -> Unit = {}
     private var afterInsert: () -> Unit = {}
 
     constructor(context: Context) : this(
         CallDatabase.getInstance(context.applicationContext).maxMessageDao(),
         CoroutineScope(SupervisorJob() + Dispatchers.IO),
-        { event -> Log.i(TAG, event); Unit }
+        { event -> Log.i(TAG, event); Unit },
+        com.example.calltrack.notification.MaxMessagePhoneResolver(context.applicationContext)::resolve
     ) {
         beforeInsert = {
             try { com.example.calltrack.maxsync.MaxMessageSyncRuntime.cutoff(context.applicationContext) }
@@ -67,7 +73,14 @@ class MaxMessageLocalStore internal constructor(
         try {
             // Unique sourceEventId + IGNORE is the persistent, cross-process deduplication boundary.
             beforeInsert()
-            val id = dao.insert(message)
+            val phone = try {
+                resolvePhone(message.contactName)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                ""
+            }
+            val id = dao.insert(message.copy(phone = phone))
             afterInsert()
             logEvent(if (id == -1L) "duplicateMessageIgnored" else if (message.direction == "incoming") "incomingMessageSaved" else "outgoingMessageSaved")
         } catch (cancelled: kotlinx.coroutines.CancellationException) {

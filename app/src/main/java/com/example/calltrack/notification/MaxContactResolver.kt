@@ -38,7 +38,15 @@ class MaxContactResolver(private val context: Context) {
             .getOrElse { ResolvedContact(null, ContactResolutionStatus.ERROR) }
     }
 
-    private fun findMatches(name: String): List<ContactCandidate> {
+    /** Same provider and exact-name filtering as calls, with message-specific number normalization. */
+    internal fun resolveMessage(name: String): ResolvedContact {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            return ResolvedContact(null, ContactResolutionStatus.PERMISSION_DENIED)
+        }
+        return MaxMessagePhoneResolver.resolveCandidates(findMatches(name, useRawWhenNormalizedBlank = true))
+    }
+
+    private fun findMatches(name: String, useRawWhenNormalizedBlank: Boolean = false): List<ContactCandidate> {
         val result = mutableListOf<ContactCandidate>()
         val uri = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_FILTER_URI, Uri.encode(MaxContactNameMatcher.normalize(name)))
         context.contentResolver.query(uri, arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.DISPLAY_NAME_PRIMARY), null, null, null)?.use { cursor ->
@@ -49,14 +57,14 @@ class MaxContactResolver(private val context: Context) {
                 val displayName = if (cursor.isNull(nameIndex)) null else cursor.getString(nameIndex)
                 if (displayName != null && MaxContactNameMatcher.matches(name, displayName)) {
                     val id = cursor.getLong(idIndex)
-                    result += ContactCandidate(id, findPhones(id))
+                    result += ContactCandidate(id, findPhones(id, useRawWhenNormalizedBlank))
                 }
             }
         }
         return result
     }
 
-    private fun findPhones(contactId: Long): List<String> {
+    private fun findPhones(contactId: Long, useRawWhenNormalizedBlank: Boolean): List<String> {
         val result = mutableListOf<String>()
         context.contentResolver.query(
             ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
@@ -68,7 +76,8 @@ class MaxContactResolver(private val context: Context) {
             while (cursor.moveToNext()) {
                 val normalized = normalizedIndex.takeIf { it >= 0 && !cursor.isNull(it) }?.let(cursor::getString)
                 val raw = rawIndex.takeIf { it >= 0 && !cursor.isNull(it) }?.let(cursor::getString)
-                (normalized ?: raw)?.takeIf(String::isNotBlank)?.let(result::add)
+                val number = if (useRawWhenNormalizedBlank) normalized?.takeIf(String::isNotBlank) ?: raw else normalized ?: raw
+                number?.takeIf(String::isNotBlank)?.let(result::add)
             }
         }
         return result.distinct()
