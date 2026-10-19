@@ -1712,9 +1712,46 @@ function summarizeClientHistory(groups){
   return {clientCount:groups.length,saleCount,totalAmount};
 }
 function clientSalesAvailable(){return clientSalesScope===clientSalesScopeKey()&&!els.clientCallsList.dataset.salesError;}
+// MAX dates and display time use the server's fixed business zone, never the browser zone.
+const maxHistoryCache=new Map();const maxHistoryQueue=[];let maxHistoryInFlight=0;let clientHistoryMaxEpoch=0;
+function maxBusinessTime(stamp){return new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Volgograd',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(stamp));}
+function maxEventTime(item){
+  // Existing call/email timestamps are wall-clock local values. Compare on the same business wall-clock axis.
+  const time=new Intl.DateTimeFormat('ru-RU',{timeZone:'Europe/Volgograd',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(new Date(item.last_event_at)),parts=item.date.split('-').map(Number),clock=time.split(':').map(Number);
+  return createLocalDate(parts[0],parts[1]-1,parts[2],clock[0],clock[1],clock[2]).getTime();
+}
+function renderMaxHistoryCard(item,modal=false){
+  const title='<span class="call-type">Переписка MAX</span>';
+  return `<article class="${modal?'history-item':'call-segment'}"><div class="${modal?'history-top':'call-segment-top'}">${title}</div><div>Входящие: ${escapeHtml(item.incoming_count)}</div><div>Исходящие: ${escapeHtml(item.outgoing_count)}</div><div class="call-datetime">${escapeHtml(formatDateDisplay(item.date))} · ${escapeHtml(maxBusinessTime(item.last_event_at))}</div></article>`;
+}
+function pumpMaxHistory(){
+  while(maxHistoryInFlight<4&&maxHistoryQueue.length){const job=maxHistoryQueue.shift();maxHistoryInFlight++;
+    Promise.resolve().then(job.run).then(job.resolve,job.reject).finally(()=>{maxHistoryInFlight--;pumpMaxHistory();});}
+}
+function loadMaxHistory(identity,reference){
+  if(!identity)return {status:'ready',items:[],promise:Promise.resolve([])};
+  // One full-history request per stable directory client and authenticated user/load cycle.
+  // Timeline periods are filtered locally; modal and timeline share the pending/result entry.
+  const key=JSON.stringify([authenticatedWebUser?.id||'',identity]);
+  if(!maxHistoryCache.has(key)){
+    const entry={status:'loading',items:[]};maxHistoryCache.set(key,entry);
+    entry.promise=new Promise((resolve,reject)=>{maxHistoryQueue.push({run:()=>window.calltrackApi.loadClientMaxHistory(reference),resolve,reject});pumpMaxHistory();})
+      .then(items=>{entry.status='ready';entry.items=items;return items;},()=>{entry.status='error';return [];});
+    entry.promise.then(()=>{if(maxHistoryCache.get(key)===entry&&els.clientCallsList)renderClientCalls();});
+  }
+  return maxHistoryCache.get(key);
+}
+function maxReferenceForGroup(group){return group.calls.length?{call_id:group.calls[0].sqlId}:{email_id:group.emails?.[0]?.id};}
+function maxIdentityForGroup(group){
+  const records=group.calls.flatMap(call=>clientRecordsByPhone.get(normalizeClientLookupPhone(call.phone))||[])
+    .concat((group.emails||[]).flatMap(email=>clientRecordsByEmail.get(normalizeClientLookupEmail(email.client_email||email.to_emails))||[]));
+  const ids=[...new Set(records.map(record=>String(record.id||'')).filter(Boolean))];
+  const owners=new Set(group.calls.map(call=>String(call.userPhone||'')));
+  return ids.length===1&&(!group.calls.length||owners.size===1)?`client:${ids[0]}`:null;
+}
 function sortClientTimelineEvents(events){return [...events].sort((a,b)=>a.day.localeCompare(b.day)||a.saleLast-b.saleLast||a.time-b.time||a.type-b.type||a.id-b.id);}
 function pluralizeSales(count){const mod100=count%100,mod10=count%10;return mod100>=11&&mod100<=14?'продаж':mod10===1?'продажа':mod10>=2&&mod10<=4?'продажи':'продаж';}
-function renderClientRow(group){
+function renderClientRow(group, maxItems=[]){
   const callSegments=group.calls.map((call)=>{
     const date=formatDateDisplay(formatDateLocal(call.__dt));
     const time=`${String(call.__dt.getHours()).padStart(2,'0')}:${String(call.__dt.getMinutes()).padStart(2,'0')}`;
@@ -1739,6 +1776,7 @@ function renderClientRow(group){
     return `<button class="call-segment sale sale-group" data-sale-group="${escapeHtml(groupKey)}" type="button" aria-label="Открыть список продаж за день" title="${escapeHtml(summary)}"><div class="call-segment-top"><span class="call-type">Продаж - ${saleGroup.sales.length}.</span></div><div class="sale-amount">На сумму ${escapeHtml(formatRubles(saleGroup.totalAmount))}</div><div class="call-datetime">${escapeHtml(date)}</div></button>`;
   });
   const events=[...group.calls.map((call,index)=>({html:callSegments[index],day:formatDateLocal(call.__dt),time:call.__dt.getTime(),saleLast:0,type:1,id:index})),...(group.emails||[]).map((email,index)=>({html:emailSegments[index],day:formatDateLocal(email.__dt),time:email.__dt.getTime(),saleLast:0,type:2,id:index})),...saleGroups.map((saleGroup,index)=>({html:saleSegments[index],day:saleGroup.date,time:0,saleLast:1,type:0,id:Number(saleGroup.sales[0]?.sale_id||0)}))];
+  maxItems.forEach((item,index)=>events.push({html:renderMaxHistoryCard(item),day:item.date,time:maxEventTime(item),saleLast:0,type:3,id:index}));
   const segments=sortClientTimelineEvents(events).map((item)=>item.html).join('');
   const totalDuration=group.calls.reduce((sum,call)=>sum+parseDurationSeconds(call.duration),0);
   return `<article class="client-row"><div><button class="client-name client-name-btn" data-client="${escapeHtml(group.client)}" data-history-call="${escapeHtml(group.calls[0]?.sqlId||'')}" data-history-email="${escapeHtml(group.emails?.[0]?.id||'')}" type="button">${escapeHtml(group.displayName)}</button><div class="client-meta">Сумма продаж за период: ${clientSalesAvailable()?escapeHtml(formatRubles(saleGroups.reduce((sum,day)=>sum+day.totalAmount,0))):'—'}</div><div class="client-meta">Количество звонков: ${group.calls.length} · Отправлено email: ${(group.emails||[]).length} · Продаж: ${clientSalesAvailable()?saleGroups.length:'—'} · Общая продолжительность: ${escapeHtml(formatCallDurationDot(totalDuration))}</div></div><div class="call-timeline">${segments}</div></article>`;
@@ -1752,11 +1790,18 @@ function renderClientCalls(){
   renderedSaleGroups=new Map();
   const emailError=String(els.clientCallsList.dataset.emailError||'').trim();
   const salesError=String(els.clientCallsList.dataset.salesError||'').trim();
-  const warning=[emailError,salesError].filter(Boolean).map((message)=>`<div class="client-empty">${escapeHtml(message)}</div>`).join('');
-  els.clientCallsList.innerHTML=warning+(groups.length?groups.map(renderClientRow).join(''):'<div class="client-empty">Нет звонков и отправленных email за выбранный период</div>');
+  const range=getClientPeriodRange();const maxEntries=new Map();const seenMaxClients=new Set();
+  if(range)groups.forEach(group=>{const identity=maxIdentityForGroup(group);if(!identity||seenMaxClients.has(identity))return;
+    const entry=loadMaxHistory(identity,maxReferenceForGroup(group));
+    seenMaxClients.add(identity);
+    maxEntries.set(group,entry);});
+  const maxError=[...maxEntries.values()].some(entry=>entry.status==='error')?'История MAX временно недоступна. Обновите данные, чтобы повторить загрузку.':'';
+  const warning=[emailError,salesError,maxError].filter(Boolean).map((message)=>`<div class="client-empty">${escapeHtml(message)}</div>`).join('');
+  els.clientCallsList.innerHTML=warning+(groups.length?groups.map(group=>renderClientRow(group,(maxEntries.get(group)?.items||[]).filter(item=>item.date>=formatDateLocal(range.from)&&item.date<=formatDateLocal(range.to)))).join(''):'<div class="client-empty">Нет звонков и отправленных email за выбранный период</div>');
 }
 
 function openClientHistoryModal(clientKey,reference={}){
+  const maxEpoch=++clientHistoryMaxEpoch,maxUser=authenticatedWebUser?.id||'';
   const source=allCalls.find(call=>String(call.sqlId)===String(reference.call_id));
   const historyIdentity=(call)=>{const record=uniqueClientRecord(clientRecordsByPhone.get(normalizeClientLookupPhone(call.phone)));return record?.id?`client:${record.id}`:callClientIntegrationKey(call);};
   const identity=source?historyIdentity(source):'';
@@ -1765,7 +1810,7 @@ function openClientHistoryModal(clientKey,reference={}){
     .sort((a,b)=>(b.__dt?b.__dt.getTime():0)-(a.__dt?a.__dt.getTime():0));
   const totalDuration=calls.reduce((sum,call)=>sum+parseDurationSeconds(call.duration),0);
   els.clientHistoryInfo.innerHTML=`<div><span>Клиент</span>${escapeHtml(clientKey)}</div><div><span>Всего звонков</span>${calls.length}</div><div><span>Общая длительность</span>${escapeHtml(formatCallDurationDot(totalDuration))}</div>`;
-  els.clientHistoryList.innerHTML=calls.length?calls.map((call)=>{
+  const callHistoryCards=calls.map((call)=>{
     const dt=call.__dt;
     const date=dt?formatDateDisplay(formatDateLocal(dt)):(formatDateDisplay(normalizeDate(call.date))||'—');
     const time=dt?`${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`:(call.time||'—');
@@ -1773,12 +1818,24 @@ function openClientHistoryModal(clientKey,reference={}){
     const reminder=getReminderText(call);
     const tag=String(call.tag||'').trim();
     return `<article class="history-item"><div class="history-top"><span>${escapeHtml(call.__type||'Тип не указан')} · ${escapeHtml(formatCallDurationDot(call.duration))}</span><span>${escapeHtml(date)} · ${escapeHtml(time)}</span></div><div class="history-meta">Менеджер: ${escapeHtml(call.manager||'Не указан')} · Телефон: ${escapeHtml(formatPhoneForDisplay(call.phone)||'—')}</div>${tag?`<div class="history-note"><span>Тег:</span> ${escapeHtml(tag)}</div>`:''}${note?`<div class="history-note"><span>Комментарий:</span> ${escapeHtml(note)}</div>`:''}${reminder?`<div class="history-note"><span>Напоминание:</span> ${escapeHtml(reminder)}</div>`:''}</article>`;
-  }).join(''):'<div class="client-empty">История по клиенту не найдена</div>';
+  });
+  const callHistoryEvents=calls.map((call,index)=>({html:callHistoryCards[index],day:call.__dt?formatDateLocal(call.__dt):(normalizeDate(call.date)||''),time:call.__dt?call.__dt.getTime():0,saleLast:0,type:1,id:index}));
+  const drawHistory=(items)=>{
+    if(maxEpoch!==clientHistoryMaxEpoch||maxUser!==(authenticatedWebUser?.id||''))return;
+    const events=[...callHistoryEvents,...items.map((item,index)=>({html:renderMaxHistoryCard(item,true),day:item.date,time:maxEventTime(item),saleLast:0,type:3,id:index}))];
+    els.clientHistoryList.innerHTML=events.length?sortClientTimelineEvents(events).reverse().map(item=>item.html).join(''):'<div class="client-empty">История по клиенту не найдена</div>';
+  };
+  drawHistory([]);
+  const maxSource=source?{calls:[source],emails:[]}: {calls:[],emails:clientOutgoingEmails.filter(email=>String(email.id)===String(reference.email_id))};
+  const maxEntry=loadMaxHistory(maxIdentityForGroup(maxSource),reference);
+  if(maxEntry.status==='ready')drawHistory(maxEntry.items);
+  else maxEntry.promise.then(items=>{drawHistory(items);if(maxEpoch===clientHistoryMaxEpoch&&maxEntry.status==='error')els.clientHistoryList.insertAdjacentHTML('beforeend','<div class="client-empty">История MAX временно недоступна</div>');});
   window.clientWorkspace.open({...reference,client_name:clientKey});
   els.clientHistoryModal.classList.add('open');
   els.clientHistoryModal.setAttribute('aria-hidden','false');
 }
 function closeClientHistoryModal(){
+  clientHistoryMaxEpoch++;
   window.clientWorkspace.close();
   els.clientHistoryModal.classList.remove('open');
   els.clientHistoryModal.setAttribute('aria-hidden','true');
@@ -2113,6 +2170,7 @@ async function refreshClientSalesTimeline(){
   renderClientCalls();
 }
 function applyCallsPayload(callsPayload){
+  maxHistoryCache.clear();
   allCalls=parseCallsPayload(callsPayload);
   allCalls.forEach((call,index)=>{call.__index=index;});
   activeManagers.clear();
