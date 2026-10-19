@@ -17,6 +17,10 @@ try {
     $public['selected_client_keys']=array_values(array_unique($context['client_keys']));
     $public['selection_required']=false;
     if(($input['action']??'')==='context')sendJson(['status'=>'success','context'=>$public,'period'=>purchaseDefaultPeriod()]);
+    if(($input['action']??'')==='category_details'){
+        require_once __DIR__.'/client_category_details.php';
+        sendJson(['status'=>'success','data'=>clientCategoryDetails($context,$input)]);
+    }
     $metric=(string)($input['metric']??'revenue');
     $defaults=purchaseDefaultPeriod();$from=(string)($input['from']??$defaults['from']);$to=(string)($input['to']??$defaults['to']);$detail=(string)($input['detail']??'month');
     purchaseAnalytics([],$from,$to,$detail,$metric); // Validate before upstream I/O.

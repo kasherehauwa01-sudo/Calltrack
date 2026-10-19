@@ -47,7 +47,8 @@ assert.equal(ctx.maxIdentityForGroup({calls:[{phone:'9993333333',userPhone:'web-
 assert.equal(ctx.maxIdentityForGroup({calls:[{phone:'9991111111',userPhone:'web-user-1'},{phone:'9992222222',userPhone:'web-user-2'}]}),null);
 // The card date/time and relative wall-clock ordering must be independent of browser timezone.
 if(!process.env.MAX_HISTORY_CHILD){for(const tz of ['UTC','Europe/Volgograd','America/Los_Angeles'])child.execFileSync(process.execPath,[__filename],{env:{...process.env,TZ:tz,MAX_HISTORY_CHILD:'1'}});}
-assert(html.includes('const maxEntry=loadMaxHistory(reference.client_id?'));
+assert(html.includes('const maxEntry=loadMaxHistory(reference.sales_client_key?'))
+assert(html.includes('sales-buyer:${reference.sales_client_key}:manager:'));
 assert(html.includes('maxItems.forEach'));
 assert(!fs.readFileSync(require('node:path').join(__dirname,'../analizmop/api.js'),'utf8').includes('resolvedOptions().timeZone'));
 console.log('max_message_history_ui_test: OK '+(process.env.TZ||'default'));

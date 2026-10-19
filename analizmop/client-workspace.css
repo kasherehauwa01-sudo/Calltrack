@@ -23,3 +23,5 @@ body.client-workspace-locked{overflow:hidden}
 #purchaseIdentityNote:not(:empty){padding:12px;margin-bottom:12px;background:#fffbeb;border-radius:8px;color:#92400e}
 
 .client-identity-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}.client-identity-tag{font:inherit;border:1px solid #cbd5e1;border-radius:999px;padding:8px 14px;background:#f8fafc;color:#475569;cursor:pointer}.client-identity-tag[aria-pressed="true"]{background:#dcfce7;border-color:#16a34a;color:#14532d}.client-identity-tag:focus-visible{outline:2px solid #15803d;outline-offset:3px}
+
+.category-expand{font:inherit;color:inherit;border:0;background:transparent;text-align:left;padding:4px 0;cursor:pointer}.category-expand:hover{color:#166534}.category-expand:focus-visible{outline:2px solid #16a34a;outline-offset:3px}.category-children{padding:8px 12px;border-left:2px solid #d1fae5;background:#f8fafc}.category-children>p{margin:4px 0 10px}.category-product-meta{display:block;margin-top:4px}.category-retry{font:inherit;cursor:pointer}

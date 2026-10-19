@@ -1,111 +1,57 @@
-# Clients tab
+# Clients tab: buyers from Sales Journal
 
-The tab reuses the existing Clients cache, IDs and history workspace. No second directory,
-new database table, index or migration is introduced. Production is not accessed or deployed.
+The list source is real purchases in Sales Journal, not the entire Clients directory.
+Calltrack GET clients_list.php authenticates the current web user, validates paging,
+search/activity/manager filters and calls protected Sales Journal POST
+/api/integrations/calltrack/buyers. Default page50, maximum100. Journal groups sales
+by its existing lower(trim(client)) identity, computes all-history MAX(sale_date),
+counts groups and applies ORDER BY last_purchase_at DESC/client_key + LIMIT/OFFSET.
+Name/normalized-phone search selects buyers without narrowing the sales used for the
+last-purchase calculation. Purchase activity supports yesterday,7,30,inactive; API also
+retains today. The UI labels the filter «Активность покупок». No sort selector.
 
-## Assignment and list
+Manager assignment comes from the existing lightweight Clients name->manager integration,
+never Sale.author. Exact case/spacing/name-order manager matching, no fuzzy selection.
+Manager scope is generated from the authenticated Calltrack account, not frontend
+user_phone/owner. Admin/supervisor may select a validated active manager ID. Calltrack
+rechecks returned owners; upstream assignment errors never become an unscoped success.
+Sales Journal's integration Bearer token stays backend-only. Existing call/email/MAX
+history checks and CSRF remain. No production changes or new persistent tables.
 
-`fields.Менеджер` is the source of assignment, supplied by the existing Clients import.
-It is a full-name string. Match it against active manager accounts using the existing
-`managerNameKey()` convention (case, spacing, name order). Require one matching account;
-missing, structured or ambiguous values are not assigned to a manager automatically.
-The source client `id` is used throughout. Never use a display name, row index or phone as ID.
-Duplicate IDs are excluded. Admin/supervisor can list unassigned clients too.
+The journal has no external Clients client_id. `sales_client_key` is a distinct reference,
+not a fabricated external ID. Existing client_id and interaction entry points retain their
+meaning. A selected buyer key is re-authorized upstream before any history access.
+Only after click does Calltrack resolve its exact directory contact in bounded memory:
+stream records/*.json when ready (delta source), otherwise initial clients.json; reuse
+SQLite if already present. Never decode the huge directory projection. Cache a small
+single-buyer contact context for60 seconds, keyed by source/buyer/owner revision.
+Require a unique same-name, same-owner contact and globally unambiguous phones/email
+before assigning communications; ambiguous/missing contacts still have purchase history.
+Original stable Clients ID is retained when uniquely resolved, including existing MAX
+history's further independent phone/owner checks. No guessing of a contact from a name.
 
-The new endpoints reuse `requireWebUser()` and `webManagerScope()`. A manager sees only
-records assigned to their authenticated account. Manager/user_phone supplied by the browser
-cannot expand the result. Admin/supervisor see the directory and can filter by a manager ID.
-The legacy public Clients/Android endpoints are deliberately unchanged, per the clarified scope;
-this feature does not claim to remediate their previously documented access issues.
+Clients without purchases are excluded. Buyers without calls are included. On selection
+use the existing shared client history/workspace (calls/email/sales/MAX). No per-row
+history request. The list no longer invokes the old full-directory JSON projection,
+activity aggregation, purchases-index builder or polling/warming protocol. Those legacy
+helpers are not a fallback for this route. A missing /buyers upstream shows an explicit
+upgrade error; it does not fall back to the huge JSON cache.
 
-`GET clients_list.php`: search, manager (account ID), activity, page, page_size.
-The response contains items, total, page, page_size and manager filter options.
-Default page size is 50, maximum 100. Filters/fixed purchase sorting/pagination run on the server.
-Public items contain only id, name, phones, manager, last_activity_at, last_purchase_at.
-Search is case-insensitive by name and ignores phone punctuation/country prefix; partial phone
-search is also supported. Empty results, loading, retry, stale-request guards and a 300ms
-search debounce are implemented. The manager selector is hidden for manager-role users.
+Sales Journal executes at most3 set queries for a populated page (count/groups/phones),
+plus its cached lightweight manager map; no sale ORM/items hydration or per-buyer query.
+Phones shared by multiple journal buyer identities are marked separately; Calltrack also
+checks directory ambiguity after click. Textual partial searches can scan SQL candidates;
+no claim that normalized expressions use the old raw-column index. No index/migration
+was deployed automatically.
 
-Activity follows the existing horizontal history's communication sources: working incoming/
-outgoing calls of at least 10 seconds, excluding personal calls, and outgoing Email.
-Use the latest persisted timestamp across all history, independent of the currently displayed
-period. Sales recency and MAX-only messages are not redefined as directory activity.
-Last activity is displayed in the existing communication wall-clock convention.
-Activity filters: all, yesterday, last 7 calendar days, last 30 calendar days, no activity for
-30 days (including clients with no activity). Date boundaries use Europe/Volgograd.
-Fixed order: last purchase descending (no purchases last), then name and stable ID.
-The sort selector is removed.
+Requires coordinated deployment of the new Sales Journal endpoint and Calltrack.
+Production has not been updated by Codex. Existing JSON/shards remain for other consumers.
 
-The normalized directory is cached for 120 seconds, with source-file revision invalidation.
-Manager names are indexed once rather than normalized for every client/account pair.
-Bulk communication aggregates (two queries) are cached for 60 seconds per authenticated scope
-and directory/account revision. Empty results are cached too. Searches reuse these projections,
-abort superseded browser requests and release the PHP session lock before read work.
-Filtering and sorting still scan the derived directory; no production performance measurement
-is claimed. No schema/index changes are made.
-
-## Last purchase dates
-
-Dates come from the existing **all-time name-based Sales Journal history**, not communication
-activity or a new Clients property. A CLI background worker requests batches of at most 100
-unique names using the existing client-sales contract. The maximum sale_date is indexed by
-stable directory ID. No per-row history requests are made from the browser or list endpoint.
-Only a complete successful calculation is atomically published. A source revision change
-invalidates the index; failed refreshes never publish a partial result. A same-revision complete
-index can be served while refreshing. The index refresh interval is 10 minutes (the existing
-Sales Journal cache can serve stale data during an upstream outage).
-
-On first load, HTTP 202 reports preparation progress; the browser polls every two seconds.
-Dates are not fabricated and the initial list waits for a complete index, so global sorting
-is correct before pagination. Later refreshes retain the list and poll every three seconds.
-Leaving the tab cancels polling. Failures show retry; rapid retries have a cooldown.
-The server needs writable configured storage, PHP CLI and exec/nohup. Optionally set
-CALLTRACK_PHP_CLI to the CLI binary. The worker can also be invoked explicitly:
-`php api/refresh_client_purchase_dates.php`. No production configuration is changed here.
-
-## One existing history component
-
-Clicking a list row POSTs only client_id to `client_events.php`. The server re-resolves the
-record and assignment; it does not use a browser owner/name/phone. Calls are limited by the
-resolved owner's user_phone, Email by the canonical owner name. Shared phones/addresses are
-excluded rather than assigned to an arbitrary client. No message bodies are selected.
-Then the existing `openClientHistoryModal()` receives the loaded events, and the same
-`clientWorkspace.open()` renders the existing purchase summary/analytics/tree.
-The Email card renderer is shared by horizontal history and the modal.
-The list itself never loads a history per row. Opening the Clients tab does not initiate
-MAX requests for the hidden horizontal history.
-
-`clientHistoryContext()` accepts an additional client_id route. It reuses directory assignment
-instead of requiring a synthetic call_id/email_id. This works for clients with no interactions.
-Existing interaction-based requests keep their previous behavior. Candidate/tag selection for
-direct history is restricted to the resolved record, even if a phone is shared.
-The purchase upstream is still name-based: where different stable clients share a name,
-direct purchase loading fails closed rather than merging their sales. Calls/Email/MAX still
-render. An unresolvable manager account has no guessed communication owner.
-
-MAX uses the existing max_messages query/aggregation and Europe/Volgograd display rules;
-only context resolution and the frontend request gain client_id support. The direct-directory
-MAX cache uses stable client ID plus the server-resolved manager ID, separate from old
-interaction contexts, so a different interaction owner cannot supply a cached result.
-Incoming/outgoing Android capture, ingestion and sync are unchanged.
-
-## Validation (local disposable fixtures only)
-
-- `client_catalog_test.php`: role filtering, exact manager-name mapping/ambiguity, name and
-  formatted phone search, manager filters/forgery, all activity filters, purchase ordering, pagination,
-  no-activity client, shared addresses, duplicate IDs and response allowlist.
-- `client_catalog_db_test.php`: bulk activity uses exactly two queries for both 1 and 111
-  clients; current owner activity is isolated. Isolated EXPLAIN uses idx_user_phone (ref).
-  No production EXPLAIN and no schema/index changes.
-- `client_catalog_http_test.py`: actual authenticated endpoints, three roles, foreign client
-  ID rejection in events/purchases/MAX, owner injection, paging/search, no-call context and MAX.
-- `client_catalog_browser_test.py`: actual page/API in Chromium, all roles, no eager history,
-  one list request, pagination/search/manager filters, no-call client, shared modal including
-  calls/Email/MAX and purchase analytics, old entry point, mobile and retry/empty state.
-
-Run the new fixture `tests/fixtures/client_catalog_seed.php` only after the existing local
-MAX-history fixtures, with CALLTRACK_TEST_FIXTURES=1 and DB calltrack_max_history_test.
-It refuses other databases. Browser scripts target only 127.0.0.1:8090 and use local Chart.js.
-
-`client_catalog_purchases_test.php` checks batched all-time histories, latest dates, no purchases,
-upstream failures and caching of empty successful results with key invalidation.
+Local validation: client_catalog_http_test.py and client_catalog_browser_test.py cover
+three roles, search/page boundaries, no-call buyer, shared history, no eager history,
+errors and existing entry points; appended HTTP cases reject forged buyer scope and
+exclude a directory client without sales. sales_buyer_catalog_test.php validates bounded
+requests and streams a45,353,781-byte/64,000-row source with2MiB PHP peak under64M cap.
+Sales Journal test_calltrack_buyers.py runs an opt-in disposable PostgreSQL fixture with
+100,004 buyers, page_size50,3 SQL queries, search, owner scope, shared-phone handling and
+purchase recency filters. No production dataset was used in these checks.
