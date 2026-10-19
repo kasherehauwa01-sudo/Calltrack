@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23f8fafc%22/%3E%3Cg%20fill%3D%22%2316a34a%22%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2024%2022%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2222%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2040%2022%29%22/%3E%3Cellipse%20cx%3D%2224%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%2845%2024%2038%29%22/%3E%3Cellipse%20cx%3D%2240%22%20cy%3D%2238%22%20rx%3D%2212%22%20ry%3D%2214%22%20transform%3D%22rotate%28-45%2040%2038%29%22/%3E%3C/g%3E%3Cpath%20d%3D%22M32%2032%20C38%2040%2043%2049%2048%2058%22%20fill%3D%22none%22%20stroke%3D%22%2315803d%22%20stroke-width%3D%225%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="api.js?v=20261001-calls-recovery"></script>
+  <script src="api.js?v=20261001-calls-recovery&amp;catalog=20261019"></script>
   <link rel="stylesheet" href="client-workspace.css?v=20261016-client-tags" />
   <style>
     :root { --bg:#f4f6fb; --card:#fff; --text:#1f2a37; --muted:#6b7280; --shadow:0 10px 30px rgba(15,23,42,.08); --radius:14px; }
@@ -271,8 +271,7 @@
         <form id="clientsFilters" class="clients-filters" role="search">
           <label>Поиск<input id="clientsSearch" type="search" placeholder="Поиск клиента..." maxlength="200" /></label>
           <label id="clientsManagerLabel">Менеджер<select id="clientsManager"><option value="">Все менеджеры</option></select></label>
-          <label>Активность<select id="clientsActivity"><option value="all">Все клиенты</option><option value="today">Сегодня</option><option value="7">Последние 7 дней</option><option value="30">Последние 30 дней</option><option value="inactive">Без активности 30+ дней</option></select></label>
-          <label>Сортировка<select id="clientsSort"><option value="activity_desc">По активности — сначала новые</option><option value="activity_asc">По активности — сначала старые</option><option value="name_asc">По имени А–Я</option><option value="name_desc">По имени Я–А</option></select></label>
+          <label>Активность<select id="clientsActivity"><option value="all">Все клиенты</option><option value="yesterday">Вчера</option><option value="7">Последние 7 дней</option><option value="30">Последние 30 дней</option><option value="inactive">Без активности 30+ дней</option></select></label>
         </form>
         <p id="clientsCount"></p><p id="clientsStatus" role="status" aria-live="polite"></p>
         <button id="clientsRetry" class="registry-refresh-btn" type="button" hidden>Повторить загрузку</button>
@@ -627,7 +626,7 @@ function setActiveTab(tab){
   els.clientCallsView.classList.toggle('active',isClientCalls);
   els.adminView.classList.toggle('active',isAdmin);
   document.getElementById('clientsView').classList.toggle('active',tab==='clients');
-  if(tab==='clients')window.clientCatalog.open();
+  if(tab==='clients')window.clientCatalog.open();else window.clientCatalog?.close();
   if(isClientCalls) refreshClientEmailTimeline();
 }
 
@@ -2274,6 +2273,6 @@ document.getElementById('logoutBtn').addEventListener('click',async()=>{await re
 requestWebAuth().then(openAuthenticatedApp).catch(()=>{document.getElementById('authScreen').hidden=false;});
 </script>
 <script src="client-workspace.js?v=20261016-client-tag-categories"></script>
-<script src="client-catalog.js?v=20261019-clients"></script>
+<script src="client-catalog.js?v=20261019-purchase-order"></script>
 </body>
 </html>

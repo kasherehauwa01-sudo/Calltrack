@@ -2,8 +2,14 @@
 from max_message_history_http_test import Client,check
 one,two,admin,boss=(Client(name) for name in ['one','two','admin','boss'])
 code,data=Client().request('clients_list.php');check(code==401,'catalog requires login')
-code,data=one.request('clients_list.php');check(code==200 and data['total']>50,'manager directory pagination')
+import time
+for attempt in range(60):
+    code,data=one.request('clients_list.php')
+    if code!=202:break
+    time.sleep(1)
+check(code==200 and data['total']>50,'manager directory pagination')
 check(len(data['items'])==50 and all(r['manager']=='One' for r in data['items']),'only assigned clients, 50 per page')
+check(data['items'][0]['id']=='catalog-a' and data['items'][0]['last_purchase_at']=='2026-10-18','latest purchase order')
 check(data['managers']==[],'manager cannot select other managers')
 first_ids={row['id'] for row in data['items']}
 code,second=one.request('clients_list.php?page=2');check(code==200 and not first_ids.intersection(row['id'] for row in second['items']),'second page distinct')

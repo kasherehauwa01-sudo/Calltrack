@@ -602,8 +602,8 @@ window.calltrackApi.loadClientMaxHistory = async function loadClientMaxHistory(r
   return Array.isArray(payload.data) ? payload.data : [];
 };
 
-window.calltrackApi.loadClients = async function loadClients(params) {
-  return window.calltrackApi.requestJson('/vr/calltrack/api/clients_list.php?'+new URLSearchParams(params),{cache:'no-store'});
+window.calltrackApi.loadClients = async function loadClients(params,options={}) {
+  return window.calltrackApi.requestJson('/vr/calltrack/api/clients_list.php?'+new URLSearchParams(params),{cache:'no-store',signal:options.signal});
 };
 window.calltrackApi.loadClientEvents = async function loadClientEvents(clientId) {
   return window.calltrackApi.requestJson('/vr/calltrack/api/client_events.php',{
