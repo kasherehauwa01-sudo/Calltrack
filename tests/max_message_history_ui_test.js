@@ -10,7 +10,7 @@ const ctx={Intl,Date,Map,Set,Promise,JSON,console,createLocalDate:(y,m,d,h=0,min
  clientSalesAvailable:()=>true,renderedSaleGroups:new Map(),groupSalesByDate:items=>items.map(s=>({date:s.sale_date,sales:[s],totalAmount:s.total_amount})),parseDurationSeconds:()=>60,
  clientRecordsByPhone:new Map(),clientRecordsByEmail:new Map(),normalizeClientLookupPhone:v=>String(v).replace(/\D/g,'').slice(-10),normalizeClientLookupEmail:v=>v};
 vm.createContext(ctx);
-for(const name of ['maxBusinessTime','maxEventTime','renderMaxHistoryCard','maxReferenceForGroup','maxIdentityForGroup','sortClientTimelineEvents','renderClientRow'])vm.runInContext(fn(name),ctx);
+for(const name of ['maxBusinessTime','maxEventTime','renderMaxHistoryCard','maxReferenceForGroup','maxIdentityForGroup','sortClientTimelineEvents','renderClientEmailCard','renderClientRow'])vm.runInContext(fn(name),ctx);
 const max={date:'2026-10-19',incoming_count:6,outgoing_count:4,last_event_at:'2026-10-18T21:30:00Z'};
 const call={__dt:new Date(2026,9,19,0,20),__type:'Исходящий',__index:0,duration:60,manager:'One',phone:'9991111111'};
 const group={client:'Client',displayName:'Client',calls:[call],emails:[{id:3,__dt:new Date(2026,9,19,0,40),subject:'Existing email'}],sales:[{sale_id:4,sale_date:'2026-10-19',total_amount:20}]};
@@ -47,7 +47,7 @@ assert.equal(ctx.maxIdentityForGroup({calls:[{phone:'9993333333',userPhone:'web-
 assert.equal(ctx.maxIdentityForGroup({calls:[{phone:'9991111111',userPhone:'web-user-1'},{phone:'9992222222',userPhone:'web-user-2'}]}),null);
 // The card date/time and relative wall-clock ordering must be independent of browser timezone.
 if(!process.env.MAX_HISTORY_CHILD){for(const tz of ['UTC','Europe/Volgograd','America/Los_Angeles'])child.execFileSync(process.execPath,[__filename],{env:{...process.env,TZ:tz,MAX_HISTORY_CHILD:'1'}});}
-assert(html.includes('const maxEntry=loadMaxHistory(maxIdentityForGroup(maxSource),reference)'));
+assert(html.includes('const maxEntry=loadMaxHistory(reference.client_id?'));
 assert(html.includes('maxItems.forEach'));
 assert(!fs.readFileSync(require('node:path').join(__dirname,'../analizmop/api.js'),'utf8').includes('resolvedOptions().timeZone'));
 console.log('max_message_history_ui_test: OK '+(process.env.TZ||'default'));

@@ -143,7 +143,8 @@
     .chart-card h2{font-size:1rem;font-weight:600;color:#111827}.chart-wrap{position:relative;flex:1;min-height:240px}
     .line-chart{grid-column:span 12}.pie-chart{grid-column:span 5}.bar-chart{grid-column:span 7}
     .empty-state{display:none;background:var(--card);border-radius:var(--radius);border:1px dashed #cbd5e1;padding:24px;text-align:center;color:var(--muted);font-size:1.1rem}
-    @media (max-width:900px){.container{grid-template-columns:1fr}.dashboard-tabs{grid-column:1;grid-row:auto;position:static;flex-direction:row;overflow-x:auto;border-radius:18px}.tab-btn{width:auto;white-space:nowrap;text-align:center}.view,.view.active,h1{grid-column:1}.pie-chart,.bar-chart,.line-chart{grid-column:span 12}.period-shell{flex-wrap:wrap;white-space:normal}.date-range{width:100%;margin-left:0;flex-wrap:wrap}.client-row{grid-template-columns:1fr}.comment-info{grid-template-columns:1fr}.sale-dialog{padding:16px}.sale-fields{grid-template-columns:1fr}.sale-day-item{grid-template-columns:minmax(0,1fr)}.sale-day-item .sale-amount{grid-column:1;grid-row:auto}.comment-modal:not(.sale-detail-open){padding:12px}}
+    .clients-catalog{display:grid;gap:16px;min-width:0}.clients-filters{display:flex;flex-wrap:wrap;gap:12px}.clients-filters label{min-width:0;display:grid;gap:5px;flex:1 1 180px;font-size:.86rem;color:var(--muted)}.clients-filters input,.clients-filters select{min-width:0;width:100%;padding:10px;border:1px solid #d1d5db;border-radius:12px;background:#fff;color:var(--text)}.clients-list{display:grid;gap:10px}.client-catalog-row{overflow-wrap:anywhere;display:grid;gap:5px;width:100%;border:1px solid #e5e7eb;border-radius:14px;padding:16px;background:#f8fafc;text-align:left;cursor:pointer;color:var(--text)}.client-catalog-row:hover,.client-catalog-row:focus-visible{background:#eff6ff;border-color:#93c5fd}.client-catalog-row span{font-size:.86rem;color:var(--muted)}.clients-pagination{display:flex;gap:14px;align-items:center;justify-content:center}.history-item.email-outgoing{text-align:left;background:#fffbeb;color:var(--text);cursor:pointer;width:100%}
+    @media (max-width:900px){.container{grid-template-columns:minmax(0,1fr)}.session-bar{grid-column:1;flex-wrap:wrap}.dashboard-tabs{grid-column:1;grid-row:auto;position:static;flex-direction:row;overflow-x:auto;border-radius:18px}.tab-btn{width:auto;white-space:nowrap;text-align:center}.view,.view.active,h1{grid-column:1}.pie-chart,.bar-chart,.line-chart{grid-column:span 12}.period-shell{flex-wrap:wrap;white-space:normal}.date-range{width:100%;margin-left:0;flex-wrap:wrap}.client-row{grid-template-columns:1fr}.comment-info{grid-template-columns:1fr}.sale-dialog{padding:16px}.sale-fields{grid-template-columns:1fr}.sale-day-item{grid-template-columns:minmax(0,1fr)}.sale-day-item .sale-amount{grid-column:1;grid-row:auto}.comment-modal:not(.sale-detail-open){padding:12px}}
   </style>
 </head>
 <body>
@@ -155,6 +156,7 @@
     <nav class="dashboard-tabs" aria-label="Разделы дашборда">
       <button class="tab-btn active" data-tab="dashboard" type="button">Дашборд</button>
       <button class="tab-btn" data-tab="clientCalls" type="button">История клиентов</button>
+      <button class="tab-btn" data-tab="clients" type="button">Клиенты</button>
       <button class="tab-btn" data-tab="admin" type="button">Админ панель</button>
     </nav>
 
@@ -261,6 +263,22 @@
         </section>
         <section class="client-calls-list" id="clientCallsList"></section>
       </div>
+    </section>
+
+    <section class="view" id="clientsView">
+      <article class="filter-card clients-catalog">
+        <h2>Клиенты</h2>
+        <form id="clientsFilters" class="clients-filters" role="search">
+          <label>Поиск<input id="clientsSearch" type="search" placeholder="Поиск клиента..." maxlength="200" /></label>
+          <label id="clientsManagerLabel">Менеджер<select id="clientsManager"><option value="">Все менеджеры</option></select></label>
+          <label>Активность<select id="clientsActivity"><option value="all">Все клиенты</option><option value="today">Сегодня</option><option value="7">Последние 7 дней</option><option value="30">Последние 30 дней</option><option value="inactive">Без активности 30+ дней</option></select></label>
+          <label>Сортировка<select id="clientsSort"><option value="activity_desc">По активности — сначала новые</option><option value="activity_asc">По активности — сначала старые</option><option value="name_asc">По имени А–Я</option><option value="name_desc">По имени Я–А</option></select></label>
+        </form>
+        <p id="clientsCount"></p><p id="clientsStatus" role="status" aria-live="polite"></p>
+        <button id="clientsRetry" class="registry-refresh-btn" type="button" hidden>Повторить загрузку</button>
+        <div id="clientsList" class="clients-list"></div>
+        <nav class="clients-pagination" aria-label="Страницы клиентов"><button id="clientsPrev" class="registry-refresh-btn" type="button">Назад</button><span id="clientsPage"></span><button id="clientsNext" class="registry-refresh-btn" type="button">Далее</button></nav>
+      </article>
     </section>
 
     <section class="view" id="adminView">
@@ -608,6 +626,8 @@ function setActiveTab(tab){
   els.dashboardView.classList.toggle('active',tab==='dashboard');
   els.clientCallsView.classList.toggle('active',isClientCalls);
   els.adminView.classList.toggle('active',isAdmin);
+  document.getElementById('clientsView').classList.toggle('active',tab==='clients');
+  if(tab==='clients')window.clientCatalog.open();
   if(isClientCalls) refreshClientEmailTimeline();
 }
 
@@ -1758,6 +1778,12 @@ function maxIdentityForGroup(group){
 }
 function sortClientTimelineEvents(events){return [...events].sort((a,b)=>a.day.localeCompare(b.day)||a.saleLast-b.saleLast||a.time-b.time||a.type-b.type||a.id-b.id);}
 function pluralizeSales(count){const mod100=count%100,mod10=count%10;return mod100>=11&&mod100<=14?'продаж':mod10===1?'продажа':mod10>=2&&mod10<=4?'продажи':'продаж';}
+function renderClientEmailCard(email,modal=false){
+  const date=formatDateDisplay(formatDateLocal(email.__dt));
+  const time=`${String(email.__dt.getHours()).padStart(2,'0')}:${String(email.__dt.getMinutes()).padStart(2,'0')}`;
+  const subject=String(email.subject||'Без темы').trim()||'Без темы';
+  return `<button class="${modal?'history-item':'call-segment'} email-outgoing" data-email-id="${escapeHtml(email.id||'')}" type="button" aria-label="Открыть отправленное письмо"><div class="call-segment-top"><span class="call-type">Email отправлен</span></div><div class="email-subject" title="${escapeHtml(subject)}">${escapeHtml(subject)}</div><div class="call-datetime">${escapeHtml(date)} · ${escapeHtml(time)}</div></button>`;
+}
 function renderClientRow(group, maxItems=[]){
   const callSegments=group.calls.map((call)=>{
     const date=formatDateDisplay(formatDateLocal(call.__dt));
@@ -1768,12 +1794,7 @@ function renderClientRow(group, maxItems=[]){
     const tooltip=`Источник: ${call.source==='max'?'MAX':'Телефон'}\nДата: ${date}\nВремя: ${time}\nТип звонка: ${call.__type}\nДлительность: ${formatCallDuration(call.duration)}\nМенеджер: ${call.manager||'Не указан'}`;
     return `<button class="call-segment ${cls} ${hasNote?'has-note':''}" title="${escapeHtml(tooltip)}" data-index="${call.__index}" type="button" aria-label="Открыть комментарии"><div class="call-segment-top"><span class="call-type">${escapeHtml(source+call.__type)} · ${escapeHtml(formatCallDurationDot(call.duration))}</span></div><div class="call-datetime">${escapeHtml(date)} · ${escapeHtml(time)}</div></button>`;
   });
-  const emailSegments=(group.emails||[]).map((email)=>{
-    const date=formatDateDisplay(formatDateLocal(email.__dt));
-    const time=`${String(email.__dt.getHours()).padStart(2,'0')}:${String(email.__dt.getMinutes()).padStart(2,'0')}`;
-    const subject=String(email.subject||'Без темы').trim()||'Без темы';
-    return `<button class="call-segment email-outgoing" data-email-id="${escapeHtml(email.id||'')}" type="button" aria-label="Открыть отправленное письмо"><div class="call-segment-top"><span class="call-type">Email отправлен</span></div><div class="email-subject" title="${escapeHtml(subject)}">${escapeHtml(subject)}</div><div class="call-datetime">${escapeHtml(date)} · ${escapeHtml(time)}</div></button>`;
-  });
+  const emailSegments=(group.emails||[]).map(email=>renderClientEmailCard(email));
   const saleGroups=groupSalesByDate(group.sales||[]);
   const saleSegments=saleGroups.map((saleGroup)=>{
     const date=formatDateDisplay(saleGroup.date)||saleGroup.date||'—';
@@ -1798,7 +1819,7 @@ function renderClientCalls(){
   const emailError=String(els.clientCallsList.dataset.emailError||'').trim();
   const salesError=String(els.clientCallsList.dataset.salesError||'').trim();
   const range=getClientPeriodRange();const maxEntries=new Map();const seenMaxClients=new Set();
-  if(range)groups.forEach(group=>{const identity=maxIdentityForGroup(group);if(!identity||seenMaxClients.has(identity))return;
+  if(range&&(!els.clientCallsView||els.clientCallsView.classList.contains('active')))groups.forEach(group=>{const identity=maxIdentityForGroup(group);if(!identity||seenMaxClients.has(identity))return;
     const entry=loadMaxHistory(identity,maxReferenceForGroup(group));
     seenMaxClients.add(identity);
     maxEntries.set(group,entry);});
@@ -1807,13 +1828,14 @@ function renderClientCalls(){
   els.clientCallsList.innerHTML=warning+(groups.length?groups.map(group=>renderClientRow(group,(maxEntries.get(group)?.items||[]).filter(item=>item.date>=formatDateLocal(range.from)&&item.date<=formatDateLocal(range.to)))).join(''):'<div class="client-empty">Нет звонков и отправленных email за выбранный период</div>');
 }
 
-function openClientHistoryModal(clientKey,reference={}){
+function openClientHistoryModal(clientKey,reference={},loadedHistory=null){
   const maxEpoch=++clientHistoryMaxEpoch,maxUser=authenticatedWebUser?.id||'';
   const source=allCalls.find(call=>String(call.sqlId)===String(reference.call_id));
   const historyIdentity=(call)=>{const record=uniqueClientRecord(clientRecordsByPhone.get(normalizeClientLookupPhone(call.phone)));return record?.id?`client:${record.id}`:callClientIntegrationKey(call);};
   const identity=source?historyIdentity(source):'';
-  const calls=allCalls.map((call,index)=>({...call,__index:index,__dt:getCallDateTime(call),__type:normalizeCallTypeLabel(call?.type)}))
-    .filter((call)=>(identity?historyIdentity(call)===identity:getClientKey(call)===clientKey)&&callHasHistoryDetails(call))
+  const historyCalls=loadedHistory?loadedHistory.calls.map(mapCallRecord):allCalls;
+  const calls=historyCalls.map((call,index)=>({...call,__index:index,__dt:getCallDateTime(call),__type:normalizeCallTypeLabel(call?.type)}))
+    .filter((call)=>loadedHistory||((identity?historyIdentity(call)===identity:getClientKey(call)===clientKey)&&callHasHistoryDetails(call)))
     .sort((a,b)=>(b.__dt?b.__dt.getTime():0)-(a.__dt?a.__dt.getTime():0));
   const totalDuration=calls.reduce((sum,call)=>sum+parseDurationSeconds(call.duration),0);
   els.clientHistoryInfo.innerHTML=`<div><span>Клиент</span>${escapeHtml(clientKey)}</div><div><span>Всего звонков</span>${calls.length}</div><div><span>Общая длительность</span>${escapeHtml(formatCallDurationDot(totalDuration))}</div>`;
@@ -1829,12 +1851,13 @@ function openClientHistoryModal(clientKey,reference={}){
   const callHistoryEvents=calls.map((call,index)=>({html:callHistoryCards[index],day:call.__dt?formatDateLocal(call.__dt):(normalizeDate(call.date)||''),time:call.__dt?call.__dt.getTime():0,saleLast:0,type:1,id:index}));
   const drawHistory=(items)=>{
     if(maxEpoch!==clientHistoryMaxEpoch||maxUser!==(authenticatedWebUser?.id||''))return;
-    const events=[...callHistoryEvents,...items.map((item,index)=>({html:renderMaxHistoryCard(item,true),day:item.date,time:maxEventTime(item),saleLast:0,type:3,id:index}))];
+    const emailEvents=(loadedHistory?.emails||[]).map((email,index)=>{const dt=normalizeDateTime(email.sent_at,email.sent_at);return {html:renderClientEmailCard({...email,__dt:dt},true),day:formatDateLocal(dt),time:dt.getTime(),saleLast:0,type:2,id:index};});
+    const events=[...callHistoryEvents,...emailEvents,...items.map((item,index)=>({html:renderMaxHistoryCard(item,true),day:item.date,time:maxEventTime(item),saleLast:0,type:3,id:index}))];
     els.clientHistoryList.innerHTML=events.length?sortClientTimelineEvents(events).reverse().map(item=>item.html).join(''):'<div class="client-empty">История по клиенту не найдена</div>';
   };
   drawHistory([]);
   const maxSource=source?{calls:[source],emails:[]}: {calls:[],emails:clientOutgoingEmails.filter(email=>String(email.id)===String(reference.email_id))};
-  const maxEntry=loadMaxHistory(maxIdentityForGroup(maxSource),reference);
+  const maxEntry=loadMaxHistory(reference.client_id?`directory-client:${reference.client_id}:manager:${loadedHistory?.client.manager_id||''}`:maxIdentityForGroup(maxSource),reference);
   if(maxEntry.status==='ready')drawHistory(maxEntry.items);
   else maxEntry.promise.then(items=>{drawHistory(items);if(maxEpoch===clientHistoryMaxEpoch&&maxEntry.status==='error')els.clientHistoryList.insertAdjacentHTML('beforeend','<div class="client-empty">История MAX временно недоступна</div>');});
   window.clientWorkspace.open({...reference,client_name:clientKey});
@@ -1959,6 +1982,7 @@ function bindClientCalls(){
   els.clientDateFrom.addEventListener('change',()=>{setActiveClientPeriod('custom');renderClientCalls();});
   els.clientDateTo.addEventListener('change',()=>{setActiveClientPeriod('custom');renderClientCalls();});
   els.clientCallsList.addEventListener('click',(e)=>{const clientBtn=e.target.closest('.client-name-btn'); if(clientBtn){openClientHistoryModal(clientBtn.dataset.client,{call_id:clientBtn.dataset.historyCall,email_id:clientBtn.dataset.historyEmail}); return;} const saleGroup=e.target.closest('[data-sale-group]');if(saleGroup){openSaleGroup(saleGroup.dataset.saleGroup);return;} const saleSegment=e.target.closest('[data-sale-id]');if(saleSegment){openSaleCard(saleSegment.dataset.saleId);return;} const emailSegment=e.target.closest('[data-email-id]'); if(emailSegment){openEmailCard(emailSegment.dataset.emailId);return;} const segment=e.target.closest('.call-segment'); if(segment) openCommentModal(Number(segment.dataset.index));});
+  els.clientHistoryList.addEventListener('click',event=>{const email=event.target.closest('[data-email-id]');if(email)openEmailCard(email.dataset.emailId);});
   els.clientHistoryCloseBtn.addEventListener('click',closeClientHistoryModal);
   els.clientHistoryModal.addEventListener('click',(e)=>{if(e.target===els.clientHistoryModal) closeClientHistoryModal();});
   els.saleModalContent.addEventListener('click',(e)=>{const sale=e.target.closest('[data-sale-detail-id]');if(sale)openSaleCard(sale.dataset.saleDetailId,activeSaleGroupKey);});
@@ -2250,5 +2274,6 @@ document.getElementById('logoutBtn').addEventListener('click',async()=>{await re
 requestWebAuth().then(openAuthenticatedApp).catch(()=>{document.getElementById('authScreen').hidden=false;});
 </script>
 <script src="client-workspace.js?v=20261016-client-tag-categories"></script>
+<script src="client-catalog.js?v=20261019-clients"></script>
 </body>
 </html>

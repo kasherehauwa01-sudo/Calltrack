@@ -12,6 +12,8 @@ try {
     $phones=maxHistoryPhones($context);
     $owner=maxHistoryOwner($pdo,$user,$context);
     sendJson(['status'=>'success','data'=>maxHistoryDaily($pdo,$owner,$phones,$from,$to)]);
+} catch (ClientCatalogAccessDenied $error) {
+    sendJson(['status'=>'error','message'=>$error->getMessage()],403);
 } catch (InvalidArgumentException $error) {
     sendJson(['status'=>'error','message'=>'Некорректный запрос истории MAX'],400);
 } catch (Throwable $error) {
