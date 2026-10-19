@@ -18,10 +18,10 @@ cannot expand the result. Admin/supervisor see the directory and can filter by a
 The legacy public Clients/Android endpoints are deliberately unchanged, per the clarified scope;
 this feature does not claim to remediate their previously documented access issues.
 
-`GET clients_list.php`: search, manager (account ID), activity, sort, page, page_size.
+`GET clients_list.php`: search, manager (account ID), activity, page, page_size.
 The response contains items, total, page, page_size and manager filter options.
-Default page size is 50, maximum 100. Filters/sort/pagination run on the server.
-Public items contain only id, name, phones, manager, last_activity_at.
+Default page size is 50, maximum 100. Filters/fixed purchase sorting/pagination run on the server.
+Public items contain only id, name, phones, manager, last_activity_at, last_purchase_at.
 Search is case-insensitive by name and ignores phone punctuation/country prefix; partial phone
 search is also supported. Empty results, loading, retry, stale-request guards and a 300ms
 search debounce are implemented. The manager selector is hidden for manager-role users.
@@ -31,15 +31,37 @@ outgoing calls of at least 10 seconds, excluding personal calls, and outgoing Em
 Use the latest persisted timestamp across all history, independent of the currently displayed
 period. Sales recency and MAX-only messages are not redefined as directory activity.
 Last activity is displayed in the existing communication wall-clock convention.
-Activity filters: all, today, last 7 calendar days, last 30 calendar days, no activity for
+Activity filters: all, yesterday, last 7 calendar days, last 30 calendar days, no activity for
 30 days (including clients with no activity). Date boundaries use Europe/Volgograd.
-Sorts: newest/oldest activity (null last), name ascending/descending, stable ID tie-breaker.
+Fixed order: last purchase descending (no purchases last), then name and stable ID.
+The sort selector is removed.
 
-The backend reads the existing cache once and runs one manager query and two bulk communication
-aggregate queries. There is no per-client SQL/upstream request. Pagination limits the returned
-JSON, not the cache scan: filtering/sorting remain linear in directory/communication-group size
-and use server memory. Profile actual large datasets before considering indexes or a projection.
-Only a small field subset is retained from each cached record. Optional counters are omitted.
+The normalized directory is cached for 120 seconds, with source-file revision invalidation.
+Manager names are indexed once rather than normalized for every client/account pair.
+Bulk communication aggregates (two queries) are cached for 60 seconds per authenticated scope
+and directory/account revision. Empty results are cached too. Searches reuse these projections,
+abort superseded browser requests and release the PHP session lock before read work.
+Filtering and sorting still scan the derived directory; no production performance measurement
+is claimed. No schema/index changes are made.
+
+## Last purchase dates
+
+Dates come from the existing **all-time name-based Sales Journal history**, not communication
+activity or a new Clients property. A CLI background worker requests batches of at most 100
+unique names using the existing client-sales contract. The maximum sale_date is indexed by
+stable directory ID. No per-row history requests are made from the browser or list endpoint.
+Only a complete successful calculation is atomically published. A source revision change
+invalidates the index; failed refreshes never publish a partial result. A same-revision complete
+index can be served while refreshing. The index refresh interval is 10 minutes (the existing
+Sales Journal cache can serve stale data during an upstream outage).
+
+On first load, HTTP 202 reports preparation progress; the browser polls every two seconds.
+Dates are not fabricated and the initial list waits for a complete index, so global sorting
+is correct before pagination. Later refreshes retain the list and poll every three seconds.
+Leaving the tab cancels polling. Failures show retry; rapid retries have a cooldown.
+The server needs writable configured storage, PHP CLI and exec/nohup. Optionally set
+CALLTRACK_PHP_CLI to the CLI binary. The worker can also be invoked explicitly:
+`php api/refresh_client_purchase_dates.php`. No production configuration is changed here.
 
 ## One existing history component
 
@@ -70,7 +92,7 @@ Incoming/outgoing Android capture, ingestion and sync are unchanged.
 ## Validation (local disposable fixtures only)
 
 - `client_catalog_test.php`: role filtering, exact manager-name mapping/ambiguity, name and
-  formatted phone search, manager filters/forgery, all activity filters, sorts, pagination,
+  formatted phone search, manager filters/forgery, all activity filters, purchase ordering, pagination,
   no-activity client, shared addresses, duplicate IDs and response allowlist.
 - `client_catalog_db_test.php`: bulk activity uses exactly two queries for both 1 and 111
   clients; current owner activity is isolated. Isolated EXPLAIN uses idx_user_phone (ref).
@@ -84,3 +106,6 @@ Incoming/outgoing Android capture, ingestion and sync are unchanged.
 Run the new fixture `tests/fixtures/client_catalog_seed.php` only after the existing local
 MAX-history fixtures, with CALLTRACK_TEST_FIXTURES=1 and DB calltrack_max_history_test.
 It refuses other databases. Browser scripts target only 127.0.0.1:8090 and use local Chart.js.
+
+`client_catalog_purchases_test.php` checks batched all-time histories, latest dates, no purchases,
+upstream failures and caching of empty successful results with key invalidation.

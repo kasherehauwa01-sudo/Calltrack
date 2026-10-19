@@ -2,12 +2,14 @@
 declare(strict_types=1);
 require_once __DIR__.'/client_directory.php';
 require_once __DIR__.'/web_auth.php';
+require_once __DIR__.'/client_catalog_cache.php';
 
 class ClientCatalogAccessDenied extends RuntimeException {}
 
 /** The existing directory remains the only source of clients and assignment. */
 function clientCatalogRecords(?iterable $source=null): array
 {
+    if($source===null)return clientCatalogCachedArray('records-v2|'.clientCatalogRevision(),static fn()=>clientCatalogRecords(clientsCacheRowsForEmailLookup()),120);
     $records=[];$duplicates=[];
     foreach($source??clientsCacheRowsForEmailLookup() as $row){
         $fields=is_array($row['fields']??null)?$row['fields']:[];
@@ -16,8 +18,9 @@ function clientCatalogRecords(?iterable $source=null): array
         $manager=$fields['Менеджер']??'';
         $phones=array_values(array_unique(array_filter(array_map('normalizeClientPhone',array_map('strval',(array)($row['phones']??[]))))));
         if(!$phones)$phones=splitClientPhones(clientRawValue($fields,['Телефоны','phones','phone']));
-        $record=['id'=>$id,'name'=>trim((string)($row['name']??'')),'phones'=>$phones,'emails'=>clientEmailsFromFields($fields),
-            'manager'=>is_string($manager)?trim($manager):'','fields'=>['id'=>$id,'Телефоны'=>$phones,'email'=>clientEmailsFromFields($fields),'Менеджер'=>is_string($manager)?trim($manager):'']];
+        $emails=clientEmailsFromFields($fields);
+        $record=['id'=>$id,'name'=>trim((string)($row['name']??'')),'phones'=>$phones,'emails'=>$emails,
+            'manager'=>is_string($manager)?trim($manager):'','manager_key'=>is_string($manager)?managerNameKey($manager):'','fields'=>['id'=>$id,'Телефоны'=>$phones,'email'=>$emails,'Менеджер'=>is_string($manager)?trim($manager):'']];
         if(isset($records[$id]))$duplicates[$id]=true;
         $records[$id]=$record;
     }
@@ -31,11 +34,19 @@ function clientCatalogManagers(PDO $pdo): array
 }
 
 /** Match the existing full-name convention, never a substring/fuzzy match. */
-function clientCatalogOwner(array $record,array $managers): ?array
+function clientCatalogOwnerIndex(array $managers): array
 {
-    $key=managerNameKey($record['manager']);if($key==='')return null;
-    $matches=array_values(array_filter($managers,static fn($m)=>managerNameKey((string)$m['display_name'])===$key));
-    return count($matches)===1?$matches[0]:null;
+    $index=[];$duplicates=[];
+    foreach($managers as $manager){$key=managerNameKey((string)$manager['display_name']);if(isset($index[$key]))$duplicates[$key]=true;$index[$key]=$manager;}
+    foreach($duplicates as $key=>$_)unset($index[$key]);
+    return $index;
+}
+
+function clientCatalogOwner(array $record,array $managers,?array $index=null): ?array
+{
+    $key=$record['manager_key']??managerNameKey($record['manager']);if($key==='')return null;
+    $index??=clientCatalogOwnerIndex($managers);
+    return $index[$key]??null;
 }
 
 function clientCatalogVisible(array $user,array $record,array $managers): bool
@@ -80,7 +91,8 @@ function clientCatalogAddressIndex(array $records,string $field): array
 function clientCatalogActivity(PDO $pdo,array $records,array $managers,array $user): array
 {
     $phones=clientCatalogAddressIndex($records,'phones');$emails=clientCatalogAddressIndex($records,'emails');$result=[];
-    $ownerIds=[];foreach($records as $id=>$record){$owner=clientCatalogOwner($record,$managers);if($owner)$ownerIds[$id]=(int)$owner['id'];}
+    $ownerIndex=clientCatalogOwnerIndex($managers);
+    $ownerIds=[];foreach($records as $id=>$record){$owner=clientCatalogOwner($record,$managers,$ownerIndex);if($owner)$ownerIds[$id]=(int)$owner['id'];}
     $scope=webManagerScope($user);
     $sql="SELECT user_phone,phone,MAX(CONCAT(call_date,' ',call_time)) AS last_at FROM calls WHERE call_type IN ('Входящий','Исходящий') AND COALESCE(client,'')<>'Личный звонок' AND (CASE WHEN duration LIKE '%:%' THEN TIME_TO_SEC(duration) ELSE CAST(REPLACE(duration,',','.') AS DECIMAL(12,2)) END)>=10";
     $params=[];if($scope){$sql.=' AND user_phone=:owner';$params[':owner']=$scope['user_phone'];}
@@ -89,7 +101,7 @@ function clientCatalogActivity(PDO $pdo,array $records,array $managers,array $us
         if($id!==null&&isset($ownerIds[$id])&&webUserPhone($ownerIds[$id])===(string)$row['user_phone'])$result[$id]=max($result[$id]??'',(string)$row['last_at']);}
     $sql="SELECT e.manager_name,e.client_email,e.to_emails,MAX(e.sent_at) AS last_at FROM email_messages e LEFT JOIN email_mailboxes m ON m.id=e.mailbox_id WHERE (e.direction='outgoing' OR (e.from_email<>'' AND LOWER(e.from_email)=LOWER(m.email))) GROUP BY e.manager_name,e.client_email,e.to_emails";
     foreach($pdo->query($sql) as $row){
-        $emailOwner=clientCatalogOwner(['manager'=>(string)$row['manager_name']],$managers);
+        $emailOwner=clientCatalogOwner(['manager'=>(string)$row['manager_name']],$managers,$ownerIndex);
         if(!$emailOwner||($scope&&(int)$emailOwner['id']!==(int)$user['id']))continue;
         foreach(clientEmailsFromFields(['email'=>$row['client_email'].','.$row['to_emails']]) as $address){$id=$emails[$address]??null;
             if($id!==null&&($ownerIds[$id]??null)===(int)$emailOwner['id'])$result[$id]=max($result[$id]??'',(string)$row['last_at']);}
@@ -97,35 +109,34 @@ function clientCatalogActivity(PDO $pdo,array $records,array $managers,array $us
     return $result;
 }
 
-function clientCatalogPage(array $records,array $managers,array $activity,array $user,array $input,?DateTimeImmutable $now=null): array
+function clientCatalogPage(array $records,array $managers,array $activity,array $user,array $input,?DateTimeImmutable $now=null,array $purchases=[]): array
 {
     $now??=new DateTimeImmutable('now',new DateTimeZone('Europe/Volgograd'));
     foreach(['manager','activity','sort','search','page','page_size'] as $key)if(isset($input[$key])&&!is_scalar($input[$key]))throw new InvalidArgumentException('Некорректный фильтр');
     $filter=trim((string)($input['manager']??''));$scope=webManagerScope($user);
     if($scope&&$filter!==''&&$filter!==(string)$user['id'])throw new ClientCatalogAccessDenied('Фильтр менеджера недоступен');
     if($filter!==''&&!in_array($filter,array_map(static fn($m)=>(string)$m['id'],$managers),true))throw new InvalidArgumentException('Неизвестный менеджер');
-    $mode=(string)($input['activity']??'all');$sort=(string)($input['sort']??'activity_desc');
-    if(!in_array($mode,['all','today','7','30','inactive'],true)||!in_array($sort,['activity_desc','activity_asc','name_asc','name_desc'],true))throw new InvalidArgumentException('Неизвестный фильтр');
+    $mode=(string)($input['activity']??'all');
+    if(!in_array($mode,['all','yesterday','7','30','inactive'],true))throw new InvalidArgumentException('Неизвестный фильтр');
     $page=filter_var($input['page']??1,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);$size=filter_var($input['page_size']??50,FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>100]]);
     if($page===false||$size===false)throw new InvalidArgumentException('Некорректная страница');
     $search=mb_strtolower(trim((string)($input['search']??'')));if(mb_strlen($search)>200)throw new InvalidArgumentException('Слишком длинный поиск');
     $digits=preg_match('/^[+\d\s().-]+$/u',$search)?(preg_replace('/\D+/','',$search)??''):'';if(strlen($digits)>=10)$digits=normalizeClientPhone($digits);
-    $today=$now->setTime(0,0);$items=[];
+    $today=$now->setTime(0,0);$items=[];$ownerIndex=clientCatalogOwnerIndex($managers);
     foreach($records as $record){
-        if(!clientCatalogVisible($user,$record,$managers))continue;
-        $owner=clientCatalogOwner($record,$managers);if($filter!==''&&(!$owner||(string)$owner['id']!==$filter))continue;
+        $owner=clientCatalogOwner($record,$managers,$ownerIndex);
+        if($scope&&(!$owner||(int)$owner['id']!==(int)$user['id']))continue;
+        if($filter!==''&&(!$owner||(string)$owner['id']!==$filter))continue;
         if($search!==''&&!str_contains(mb_strtolower($record['name']),$search)&&($digits===''||!array_filter($record['phones'],static fn($p)=>str_contains($p,$digits))))continue;
         $stamp=$activity[$record['id']]??null;$date=$stamp?new DateTimeImmutable($stamp,$today->getTimezone()):null;
-        if($mode==='today'&&(!$date||$date<$today||$date>$now))continue;
+        if($mode==='yesterday'&&(!$date||$date<$today->modify('-1 day')||$date>=$today))continue;
         if(in_array($mode,['7','30'],true)&&(!$date||$date<$today->modify('-'.((int)$mode-1).' days')||$date>$now))continue;
         if($mode==='inactive'&&$date&&$date>=$now->modify('-30 days'))continue;
-        $items[]=['id'=>$record['id'],'name'=>$record['name'],'phones'=>$record['phones'],'manager'=>$owner?(string)$owner['display_name']:$record['manager'],'last_activity_at'=>$stamp];
+        $items[]=['id'=>$record['id'],'name'=>$record['name'],'phones'=>$record['phones'],'manager'=>$owner?(string)$owner['display_name']:$record['manager'],'last_activity_at'=>$stamp,'last_purchase_at'=>$purchases[$record['id']]??null];
     }
-    usort($items,static function($a,$b)use($sort){
-        if(str_starts_with($sort,'name_')){$cmp=strcmp(mb_strtolower($a['name']),mb_strtolower($b['name']));if($sort==='name_desc')$cmp=-$cmp;}
-        else{if($a['last_activity_at']===null||$b['last_activity_at']===null)$cmp=($a['last_activity_at']===null?1:0)-($b['last_activity_at']===null?1:0);
-            else{$cmp=strcmp($a['last_activity_at'],$b['last_activity_at']);if($sort==='activity_desc')$cmp=-$cmp;}}
-        return $cmp?:strcmp($a['id'],$b['id']);
+    usort($items,static function($a,$b){
+        $cmp=strcmp($b['last_purchase_at']??'',$a['last_purchase_at']??'');
+        return $cmp?:strcmp(mb_strtolower($a['name']),mb_strtolower($b['name']))?:strcmp($a['id'],$b['id']);
     });
     $total=count($items);$page=min($page,max(1,(int)ceil($total/$size)));
     return ['items'=>array_slice($items,($page-1)*$size,$size),'total'=>$total,'page'=>$page,'page_size'=>$size,
