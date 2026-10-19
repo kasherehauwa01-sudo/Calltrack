@@ -12,10 +12,14 @@ try {
     $scope=webManagerScope($user);
     if($scope)$managers=in_array($scope['manager'],$managers,true)?[$scope['manager']]:[];
     $result=salesJournalRequest('POST','/api/integrations/calltrack/dashboard-sales',['year'=>$year,'managers'=>$managers]);
-    sendJson(['status'=>'success','items'=>$result['items']??[]]);
+    if(!isset($result['items'])||!is_array($result['items'])||count($result['items'])!==12)throw new RuntimeException('Некорректный ответ dashboard-sales');
+    sendJson(['status'=>'success','items'=>$result['items']]);
 } catch(InvalidArgumentException $e) {
     sendJson(['status'=>'error','message'=>$e->getMessage()],400);
 } catch(Throwable $e) {
     error_log('Dashboard sales unavailable: '.$e->getMessage());
-    sendJson(['status'=>'error','message'=>'Продажи временно недоступны'],503);
+    $message=$e->getMessage()==='Sales Journal HTTP 404'
+        ?'Для диаграммы продаж требуется обновление backend журнала продаж'
+        :'Продажи временно недоступны';
+    sendJson(['status'=>'error','message'=>$message],503);
 }
