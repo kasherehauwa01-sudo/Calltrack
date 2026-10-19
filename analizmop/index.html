@@ -1634,12 +1634,16 @@ function uniqueClientRecord(records){const rows=Array.isArray(records)?records.f
 function callClientIntegrationKey(call){const phone=normalizeClientLookupPhone(call?.phone);return uniqueClientRecord(clientRecordsByPhone.get(phone))?.integration_key||(phone?`phone:+7${phone}`:'');}
 function emailClientIntegrationKey(email){return uniqueClientRecord(clientRecordsByEmail.get(normalizeClientLookupEmail(email?.client_email||email?.to_emails)))?.integration_key||'';}
 function canonicalSalesClientKey(key){return clientSalesAliases[String(key||'')]||String(key||'');}
+// Match the existing backend managerNameKey convention (case, spacing and name order).
+function clientManagerNameKey(value){return String(value||'').trim().toLowerCase().split(/\s+/u).filter(Boolean).sort().join('\0');}
 function populateClientManagers(calls){
   const scopedManager=authenticatedWebUser?.role==='manager'?String(authenticatedWebUser.display_name||'').trim():'';
   const callManagers=calls.map((c)=>((c?.manager||'Не указан').trim()||'Не указан'));
   const emailManagers=clientOutgoingEmails.map((email)=>String(email?.manager_name||'').trim()).filter(Boolean);
-  const managers=scopedManager?[scopedManager]:[...new Set([...availableManagers,...callManagers,...emailManagers])].sort();
-  activeClientManager=managers.includes(activeClientManager)?activeClientManager:(managers[0]||'');
+  const byKey=new Map();
+  [...availableManagers,...callManagers,...emailManagers].forEach(manager=>{const key=clientManagerNameKey(manager);if(key&&!byKey.has(key))byKey.set(key,manager);});
+  const managers=scopedManager?[scopedManager]:[...byKey.values()].sort();
+  activeClientManager=managers.find(manager=>clientManagerNameKey(manager)===clientManagerNameKey(activeClientManager))||(managers[0]||'');
   els.clientManagerTags.innerHTML=managers.map((manager)=>`<button class="manager-tag ${manager===activeClientManager?'active':''}" data-manager="${escapeHtml(manager)}" type="button">${escapeHtml(manager)}</button>`).join('');
 }
 function groupCallsByClient(calls){
@@ -1648,7 +1652,7 @@ function groupCallsByClient(calls){
   const grouped=new Map();
   calls.forEach((call,index)=>{
     const manager=(call?.manager||'Не указан').trim()||'Не указан';
-    if(manager!==activeClientManager) return;
+    if(clientManagerNameKey(manager)!==clientManagerNameKey(activeClientManager)) return;
     if(String(call?.client||'').trim().toLowerCase()==='личный звонок') return;
     const type=normalizeCallTypeLabel(call?.type);
     if(!['Входящий','Исходящий'].includes(type)) return;
@@ -1663,7 +1667,7 @@ function groupCallsByClient(calls){
   });
   clientOutgoingEmails.forEach((email)=>{
     const manager=String(email?.manager_name||'').trim();
-    if(manager!==activeClientManager) return;
+    if(clientManagerNameKey(manager)!==clientManagerNameKey(activeClientManager)) return;
     const dt=normalizeDateTime(email?.sent_at,email?.sent_at)||parseLocalDate(String(email?.sent_at||'').slice(0,10));
     if(!inDateRange(dt,range.from,range.to)) return;
     const recipientEmail=normalizeClientLookupEmail(email?.client_email||email?.to_emails);
