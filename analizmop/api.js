@@ -80,6 +80,7 @@ window.calltrackApi.withCsrf = function withCsrf(headers = {}) {
 };
 window.calltrackApi.endpoints = Object.assign({
   calls: '/vr/calltrack/api/get_calls.php',
+  clientMaxHistory: '/vr/calltrack/api/client_max_history.php',
   personalContacts: '/vr/calltrack/api/get_personal_contacts.php',
   personalContact: '/vr/calltrack/api/personal_contact.php',
   deleteCalls: '/vr/calltrack/api/delete_calls.php',
@@ -591,3 +592,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   loadData().catch((error) => { console.error(error); setStatus(`Ошибка: ${error.message}`); });
 });
+
+// Aggregate-only history; ownership is derived from the persisted interaction by the server.
+window.calltrackApi.loadClientMaxHistory = async function loadClientMaxHistory(reference, range = {}) {
+  const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientMaxHistory, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({call_id: reference.call_id || undefined, email_id: reference.email_id || undefined, ...range})
+  });
+  return Array.isArray(payload.data) ? payload.data : [];
+};

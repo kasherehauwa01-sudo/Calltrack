@@ -8,6 +8,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.example.calltrack.App
+import com.example.calltrack.accessibility.MaxMessageLocalStore
 import com.example.calltrack.auth.AuthStore
 import com.example.calltrack.data.local.CallEntity
 import com.example.calltrack.service.CalltrackRecoveryManager
@@ -24,6 +25,7 @@ class MaxNotificationListenerService : NotificationListenerService() {
     private lateinit var sessionStore: MaxCallSessionStore
     private var session: MaxCallSession? = null
     private var resolution: ResolvedContact? = null
+    private val messageStore by lazy { MaxMessageLocalStore(applicationContext) }
 
     override fun onCreate() {
         super.onCreate()
@@ -42,7 +44,8 @@ class MaxNotificationListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn?.packageName != MAX_PACKAGE) return
         runCatching { handlePosted(sbn) }
-            .onFailure { Log.e(TAG, "event=POSTED error=${safeError(it)}") }
+            // A malformed message Bundle can put its contents in an exception message.
+            .onFailure { Log.e(TAG, "event=POSTED error=${it::class.java.simpleName}") }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
@@ -53,7 +56,15 @@ class MaxNotificationListenerService : NotificationListenerService() {
 
     private fun handlePosted(sbn: StatusBarNotification) {
         val extras = sbn.notification.extras ?: Bundle.EMPTY
-        if (!isMaxCallNotification(extras)) return
+        if (!isMaxCallNotification(extras)) {
+            // Message parsing is isolated: exceptions must not expose extras or message content.
+            runCatching {
+                val messages = MaxIncomingNotificationExtractor.extract(sbn)
+                if (messages.isNotEmpty()) messageStore.saveIncoming(messages)
+            }
+                .onFailure { Log.w("CalltrackMAXIncoming", "incomingMessageParseFailed") }
+            return
+        }
         val name = extractCallPerson(extras)?.name?.toString()?.trim().orEmpty()
         if (name.isEmpty()) return
         updateSession(sbn, extras, name)

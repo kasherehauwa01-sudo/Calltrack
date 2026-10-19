@@ -151,7 +151,7 @@ class ClientDirectory(context: Context) {
     private fun directoryExpired(): Boolean = System.currentTimeMillis() - loadedAt >= CACHE_TTL_MS
 
     private fun normalizePhone(phone: String): String {
-        return phone.replace(Regex("[^0-9]"), "").takeLast(10)
+        return ClientPhoneNumbers.lookupKey(phone)
     }
 
     private fun isMainThread(): Boolean = Looper.getMainLooper() == Looper.myLooper()
