@@ -29,7 +29,7 @@
       $('clientsCount').textContent=`Найдено: ${result.total}`;
       $('clientsStatus').textContent=items.length?(result.purchase_state==='refreshing'?'Обновляем даты последних покупок…':''):'Клиенты не найдены';
       if(result.purchase_state==='refreshing')refreshTimer=setTimeout(()=>load(true),3000);
-      $('clientsList').innerHTML=items.map(client=>`<button type="button" class="client-catalog-row" data-catalog-client="${escape(client.id)}"><strong>${escape(client.name)}</strong><span>${escape(client.phones.map(formatPhoneForDisplay).join(', ')||'Телефон не указан')}</span><span>Менеджер: ${escape(client.manager||'Не указан')}</span><span>Последняя покупка: ${escape(client.last_purchase_at?formatDateDisplay(client.last_purchase_at):'Покупок нет')}</span><span>Последняя активность: ${escape(formatDateTimeDisplay(client.last_activity_at)||'Нет активности')}</span></button>`).join('');
+      $('clientsList').innerHTML=items.map(client=>`<button type="button" class="client-catalog-row" data-catalog-client="${escape(client.id)}"><strong>${escape(client.name)}</strong><span>${escape(client.phones.map(formatPhoneForDisplay).join(', ')||'Телефон не указан')}</span><span>Менеджер: ${escape(client.manager||'Не указан')}</span><span>Последняя покупка: ${escape(client.last_purchase_at?formatDateDisplay(client.last_purchase_at):'Покупок нет')}</span></button>`).join('');
       $('clientsPage').textContent=`Страница ${page} из ${Math.max(1,Math.ceil(result.total/result.page_size))}`;
       $('clientsPrev').disabled=page<=1;$('clientsNext').disabled=page*result.page_size>=result.total;
     }catch(error){if(current!==request)return;$('clientsCount').textContent='';$('clientsPage').textContent='';$('clientsStatus').textContent=error.message;$('clientsRetry').hidden=false;}
@@ -44,9 +44,9 @@
     clearTimeout(refreshTimer);
     const current=++selection;$('clientsStatus').textContent='Загрузка истории клиента…';
     try{
-      const history=await window.calltrackApi.loadClientEvents(client.id);
+      const history=await window.calltrackApi.loadClientEvents({sales_client_key:client.sales_client_key});
       if(current!==selection||!$('clientsView').classList.contains('active'))return;
-      $('clientsStatus').textContent='';openClientHistoryModal(history.client.name,{client_id:history.client.id},history);
+      $('clientsStatus').textContent='';openClientHistoryModal(history.client.name,{sales_client_key:client.sales_client_key},history);
     }catch(error){if(current===selection)$('clientsStatus').textContent=error.message;}
   });
   window.clientCatalog={open(){clearTimeout(timer);load();},close(){clearTimeout(timer);clearTimeout(refreshTimer);request++;selection++;pending?.abort();}};

@@ -53,7 +53,12 @@
       const cards=[['Количество продаж',number(s.sales_count)],['Выручка',money(s.revenue)],['Первая покупка',dateLabel(s.first_purchase)],['Последняя продажа',dateLabel(s.last_purchase)],['Частота покупок',s.average_interval===null?'Недостаточно покупок':number(s.average_interval)+' дней'],['Дней без покупки',s.days_without_purchase===null?'—':number(s.days_without_purchase)],['Уникальных товаров',s.unique_products==null?(s.unique_products_by_client?.map(c=>c.name+': '+number(c.count)).join('; ')||'Недоступно'):number(s.unique_products)],['RFM статус',s.rfm?.segment||s.rfm_by_client?.map(c=>c.name+': '+c.segment).join('; ')||(s.sales_count?'Недоступно':'Нет покупок')]];
       $('clientSummaryKpis').innerHTML=cards.map(([label,value])=>`<div><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join('');
       const categories=s.top_categories;
-      $('clientTopCategories').innerHTML=categories?.length?'<table><thead><tr><th>Категория</th><th>Выручка</th><th>Доля в общей выручке</th><th>Количество товаров</th></tr></thead><tbody>'+categories.map(c=>`<tr><td>${escape(c.category)}</td><td>${escape(money(c.revenue))}</td><td>${escape(revenueShare(c.revenue,s.revenue))}</td><td>${escape(number(c.quantity))}</td></tr>`).join('')+'</tbody></table>':(categories?'Покупок товаров нет.':'Категории временно недоступны.');
+      if(categories?.length){
+        window.calltrackCategoryTree.render($('clientTopCategories'),categories,{
+          money,number,share:revenueShare,totalRevenue:s.revenue,isCurrent:()=>current===epoch,
+          loadDetails:async path=>{const response=await api({action:'category_details',...path});return response.data;}
+        });
+      }else $('clientTopCategories').textContent=categories?'Покупок товаров нет.':'Категории временно недоступны.';
       if(s.categories_complete===false&&s.notice){
         const note=document.createElement('p');note.className='history-meta';note.textContent=s.notice;
         $('clientTopCategories').prepend(note);

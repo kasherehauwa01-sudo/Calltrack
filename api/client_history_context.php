@@ -6,6 +6,7 @@ require_once __DIR__.'/client_catalog.php';
 /** Resolve a persisted interaction, never a browser-supplied client identity. */
 function clientHistoryContext(PDO $pdo, array $user, array $input): array
 {
+    if(array_key_exists('sales_client_key',$input)){require_once __DIR__.'/sales_buyer_catalog.php';return salesBuyerHistoryContext($pdo,$user,$input);}
     if(array_key_exists('client_id',$input))return clientCatalogHistoryContext($pdo,$user,$input);
     $scope = webManagerScope($user);
     $callId = filter_var($input['call_id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
