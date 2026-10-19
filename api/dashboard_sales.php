@@ -13,12 +13,14 @@ try {
     if($scope)$managers=in_array($scope['manager'],$managers,true)?[$scope['manager']]:[];
     $result=salesJournalRequest('POST','/api/integrations/calltrack/dashboard-sales',['year'=>$year,'managers'=>$managers]);
     if(!isset($result['items'])||!is_array($result['items'])||count($result['items'])!==12)throw new RuntimeException('Некорректный ответ dashboard-sales');
-    sendJson(['status'=>'success','items'=>$result['items']]);
+    if(!isset($result['previous_items'],$result['year'],$result['previous_year'],$result['as_of']))throw new RuntimeException('Для сравнения лет требуется обновление backend журнала продаж');
+    if(!is_array($result['previous_items'])||count($result['previous_items'])!==12||(int)$result['year']!==$year||(int)$result['previous_year']!==$year-1)throw new RuntimeException('Некорректный ответ dashboard-sales');
+    sendJson(['status'=>'success','items'=>$result['items'],'previous_items'=>$result['previous_items'],'year'=>$result['year'],'previous_year'=>$result['previous_year'],'as_of'=>$result['as_of']]);
 } catch(InvalidArgumentException $e) {
     sendJson(['status'=>'error','message'=>$e->getMessage()],400);
 } catch(Throwable $e) {
     error_log('Dashboard sales unavailable: '.$e->getMessage());
-    $message=$e->getMessage()==='Sales Journal HTTP 404'
+    $message=in_array($e->getMessage(),['Sales Journal HTTP 404','Для сравнения лет требуется обновление backend журнала продаж'],true)
         ?'Для диаграммы продаж требуется обновление backend журнала продаж'
         :'Продажи временно недоступны';
     sendJson(['status'=>'error','message'=>$message],503);

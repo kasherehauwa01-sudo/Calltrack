@@ -9,18 +9,35 @@ sales_js = html[html.index('let dashboardSalesChart='):html.index('function rend
 filter_js = html[html.index('function applyFilters('):html.index('function bindFilters(')]
 with sync_playwright() as p:
     browser = p.chromium.launch(executable_path='/usr/bin/chromium', args=['--no-sandbox'])
-    for zone in ['UTC', 'America/Los_Angeles']:
-        page = browser.new_page(timezone_id=zone)
+    for zone,width in [('UTC',1200),('America/Los_Angeles',390)]:
+        page = browser.new_page(timezone_id=zone,viewport={"width":width,"height":800})
         page.set_content('<style>'+''.join(re.findall(r'<style[^>]*>(.*?)</style>',html,re.S))+'</style>'+html[html.index('    <section class="charts-grid" id="salesChartsGrid"'):html.index('    <section class="view" id="clientCallsView"')])
         page.add_script_tag(path='/workspace/.calltrack-tools/chart.umd.min.js')
         page.add_script_tag(content="""
 const activeManagers=new Set(['A']); let requests=[];
-window.fetch=async(url)=>{requests.push(url);return {ok:true,json:async()=>({status:'success',items:Array.from({length:12},(_,i)=>({month:i+1,revenue:i?0:'123.45',checks:i?0:2,units:i?0:'5.5'}))})};};
+function fixture(year,empty=false){return {status:'success',year,previous_year:year-1,as_of:'2026-10-19',
+items:Array.from({length:12},(_,i)=>({month:i+1,revenue:i||empty?0:'123.45',checks:i||empty?0:2,units:i||empty?0:'5.5'})),
+previous_items:Array.from({length:12},(_,i)=>({month:i+1,revenue:i||empty?0:100,checks:i||empty?0:1,units:i||empty?0:4}))};}
+window.fetch=async(url)=>{requests.push(url);const year=Number(new URL(url,'http://test').searchParams.get('year'));return {ok:true,json:async()=>fixture(year)};};
 """ + sales_js)
+        page.fill('#dashboardSalesYear','2026')
         page.evaluate('refreshDashboardSales()')
         page.wait_for_function('dashboardSalesRows.length===12')
         assert page.evaluate('dashboardSalesChart.data.datasets[0].data[0]') == 123.45
         assert page.evaluate('dashboardSalesChart.data.labels.length') == 12
+        assert page.evaluate('dashboardSalesChart.config.type') == 'line'
+        assert page.evaluate('dashboardSalesChart.data.datasets.map(row=>row.label)') == ['2026','2025']
+        assert page.evaluate('dashboardSalesChart.data.datasets[0].data.slice(10)') == [None,None]
+        assert page.evaluate('dashboardSalesChart.data.datasets[0].data[1]') == 0
+        assert page.evaluate('dashboardSalesChart.data.datasets[1].data.slice(10)') == [0,0]
+        assert page.evaluate("dashboardSalesChart.options.plugins.tooltip.callbacks.title([{dataIndex:2}])") == 'Март'
+        assert page.evaluate("dashboardSalesChart.options.plugins.tooltip.callbacks.footer([{dataIndex:0}])") == 'Изменение: +23,5%'
+        assert page.evaluate("dashboardSalesChart.options.plugins.tooltip.callbacks.footer([{dataIndex:1}])") == ''
+        assert page.evaluate("dashboardSalesChart.options.plugins.tooltip.callbacks.footer([{dataIndex:11}])") == ''
+        label=page.evaluate("dashboardSalesChart.options.plugins.tooltip.callbacks.label({dataset:{label:'2026'},parsed:{y:2145300}})")
+        assert label.replace('\xa0',' ').replace('\u202f',' ') == '2026: 2 145 300 ₽'
+        assert page.evaluate("dashboardSalesChart.data.datasets.every(row=>row.pointRadius>0 && row.tension>0 && row.spanGaps===false)")
+
         for metric, value in [('checks',2),('units',5.5),('revenue',123.45)]:
             page.select_option('#dashboardSalesMetric', metric)
             assert page.evaluate('dashboardSalesChart.data.datasets[0].data[0]') == value
@@ -32,6 +49,9 @@ window.fetch=async(url)=>{requests.push(url);return {ok:true,json:async()=>({sta
         page.locator('#dashboardSalesYear').dispatch_event('change')
         page.wait_for_function('requests.length===3')
         assert '2025' in page.evaluate('requests[2]')
+        page.wait_for_function('dashboardSalesPayload?.year===2025')
+        assert page.evaluate('dashboardSalesChart.data.datasets.map(row=>row.label)') == ['2025','2024']
+        assert page.evaluate('dashboardSalesChart.data.datasets[0].data.every(value=>value!==null)')
         assert page.locator('#dashboardSalesPlot').is_visible()
         assert not page.locator('#dashboardSalesStatus').is_visible()
         assert html.index('id="salesChartsGrid"') > html.index('id="managerCallsChart"')
@@ -41,11 +61,12 @@ window.fetch=async(url)=>{requests.push(url);return {ok:true,json:async()=>({sta
         page.wait_for_function("document.getElementById('dashboardSalesStatus').textContent==='Backend unavailable'")
         assert not page.locator('#dashboardSalesPlot').is_visible()
         assert page.locator('#dashboardSalesRetry').is_visible()
-        page.evaluate("window.fetch=async()=>({ok:true,json:async()=>({status:'success',items:Array.from({length:12},(_,i)=>({month:i+1,revenue:0,checks:0,units:0}))})})")
+        page.evaluate("window.fetch=async()=>({ok:true,json:async()=>fixture(2025,true)})")
         page.click('#dashboardSalesRetry')
         page.wait_for_function('dashboardSalesRows.length===12')
         assert page.locator('#dashboardSalesPlot').is_visible()
         assert page.evaluate('dashboardSalesChart.data.datasets[0].data.every(v=>v===0)')
+        assert page.locator('#dashboardSalesStatus').inner_text()=='Нет продаж за выбранные годы'
         # Exercise actual dashboard filtering with MAX-only selection.
         page.add_script_tag(content="""
 const activeCallTypes=new Set(['MAX Входящие','MAX исходящие']);
@@ -60,4 +81,4 @@ let captured=[];const analyzeCalls=rows=>(captured=rows,{}),renderCharts=()=>{};
         assert page.evaluate('captured.map(c=>c.type)') == ['Входящий','Исходящий']
         page.close()
     browser.close()
-print('dashboard_sales_browser_test: PASS (2 browser timezones, 3 metrics, managers, year, MAX)')
+print('dashboard_sales_browser_test: PASS (desktop/mobile, two timezones, two lines, future months, tooltip, year/manager/metric filters, empty/error, MAX)')

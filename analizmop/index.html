@@ -2091,15 +2091,38 @@ dashboardSalesYear.value=new Intl.DateTimeFormat('en',{timeZone:'Europe/Volgogra
 dashboardSalesYear.addEventListener('change',()=>refreshDashboardSales());
 dashboardSalesMetric.addEventListener('change',()=>refreshDashboardSales(true));
 document.getElementById('dashboardSalesRetry').addEventListener('click',()=>{dashboardSalesKey='';refreshDashboardSales();});
-let dashboardSalesRows=[];
+let dashboardSalesRows=[],dashboardSalesPreviousRows=[],dashboardSalesPayload=null;
+const salesMonthNames=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+function salesValue(value,metric){
+  return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:metric==='checks'?0:2}).format(value)+(metric==='revenue'?' ₽':metric==='units'?' шт.':' чеков');
+}
+function salesYearValues(rows,year,metric,asOf){
+  const [actualYear,actualMonth]=asOf.split('-').map(Number);
+  return Array.from({length:12},(_,i)=>year>actualYear||(year===actualYear&&i+1>actualMonth)?null:Number(rows.find(row=>Number(row.month)===i+1)?.[metric]||0));
+}
 function drawDashboardSales(){
-  if(typeof Chart==='undefined'||!dashboardSalesRows.length)return;
+  if(typeof Chart==='undefined'||!dashboardSalesPayload||!dashboardSalesRows.length)return;
   dashboardSalesChart?.destroy();
-  const metric=dashboardSalesMetric.value;
-  dashboardSalesChart=new Chart(document.getElementById('dashboardSalesChart'),{type:'bar',data:{
+  const metric=dashboardSalesMetric.value,payload=dashboardSalesPayload;
+  const current=salesYearValues(dashboardSalesRows,payload.year,metric,payload.as_of);
+  const previous=salesYearValues(dashboardSalesPreviousRows,payload.previous_year,metric,payload.as_of);
+  const series=(year,data,color,dashed)=>({label:String(year),data,borderColor:color,backgroundColor:color,borderWidth:2,
+    borderDash:dashed?[6,4]:[],pointRadius:3,pointHoverRadius:5,tension:.25,spanGaps:false,fill:false});
+  dashboardSalesChart=new Chart(document.getElementById('dashboardSalesChart'),{type:'line',data:{
     labels:['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'],
-    datasets:[{label:dashboardSalesMetric.selectedOptions[0].textContent,data:Array.from({length:12},(_,i)=>Number(dashboardSalesRows.find(row=>Number(row.month)===i+1)?.[metric]||0)),backgroundColor:'#14b8a6'}]},
-    options:{maintainAspectRatio:false,scales:{y:{beginAtZero:true,ticks:{precision:metric==='checks'?0:2}}}}});
+    datasets:[series(payload.year,current,'#36867c',false),series(payload.previous_year,previous,'#7186aa',true)]},
+    options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:true,position:'bottom'},tooltip:{callbacks:{
+        title:items=>salesMonthNames[items[0]?.dataIndex]||'',
+        label:context=>context.dataset.label+': '+salesValue(context.parsed.y,metric),
+        footer:items=>{
+          const index=items[0]?.dataIndex,c=current[index],p=previous[index];
+          if(c==null||p==null||p===0)return '';
+          const change=(c-p)/Math.abs(p)*100;
+          return 'Изменение: '+(change>0?'+':'')+new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(change)+'%';
+        }
+      }}},scales:{y:{beginAtZero:true,title:{display:true,text:metric==='revenue'?'Выручка, ₽':metric==='checks'?'Количество чеков':'Количество штук'},
+        ticks:{precision:metric==='checks'?0:2,callback:value=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(value)}}}}});
 }
 async function refreshDashboardSales(redraw=false){
   const year=Number(dashboardSalesYear.value), managers=[...activeManagers].sort();
@@ -2107,14 +2130,17 @@ async function refreshDashboardSales(redraw=false){
   if(key===dashboardSalesKey){if(redraw)drawDashboardSales();return;}
   dashboardSalesKey=key;const epoch=++dashboardSalesEpoch;
   const status=document.getElementById('dashboardSalesStatus'),plot=document.getElementById('dashboardSalesPlot'),retry=document.getElementById('dashboardSalesRetry');
-  dashboardSalesRows=[];dashboardSalesChart?.destroy();dashboardSalesChart=null;plot.hidden=true;retry.hidden=true;status.hidden=false;status.textContent='Загрузка продаж…';
+  dashboardSalesRows=[];dashboardSalesPreviousRows=[];dashboardSalesPayload=null;dashboardSalesChart?.destroy();dashboardSalesChart=null;plot.hidden=true;retry.hidden=true;status.hidden=false;status.textContent='Загрузка продаж…';
   try{
     const response=await fetch('/vr/calltrack/api/dashboard_sales.php?'+new URLSearchParams({year,managers:JSON.stringify(managers)}),{cache:'no-store'});
     const payload=await response.json();
     if(!response.ok||payload.status!=='success')throw new Error(payload.message||'Продажи временно недоступны');
     if(epoch!==dashboardSalesEpoch)return;
     if(!Array.isArray(payload.items)||payload.items.length!==12)throw new Error('Некорректный ответ сервиса продаж');
-    dashboardSalesRows=payload.items;status.textContent='';status.hidden=true;plot.hidden=false;drawDashboardSales();
+    if(!Array.isArray(payload.previous_items)||payload.previous_items.length!==12||Number(payload.year)!==year||Number(payload.previous_year)!==year-1||!/^\d{4}-\d{2}-\d{2}$/.test(payload.as_of||''))throw new Error('Для сравнения лет требуется обновление сервиса продаж');
+    dashboardSalesRows=payload.items;dashboardSalesPreviousRows=payload.previous_items;dashboardSalesPayload=payload;
+    const noSales=[...payload.items,...payload.previous_items].every(row=>Number(row.checks)===0);
+    status.textContent=noSales?'Нет продаж за выбранные годы':'';status.hidden=!noSales;plot.hidden=false;drawDashboardSales();
   }catch(error){if(epoch===dashboardSalesEpoch){status.textContent=error.message;status.hidden=false;retry.hidden=false;plot.hidden=true;dashboardSalesKey='';}}
 }
 
