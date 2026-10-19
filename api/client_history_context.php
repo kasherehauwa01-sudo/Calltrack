@@ -1,10 +1,12 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__.'/sales_journal.php';
+require_once __DIR__.'/client_catalog.php';
 
 /** Resolve a persisted interaction, never a browser-supplied client identity. */
 function clientHistoryContext(PDO $pdo, array $user, array $input): array
 {
+    if(array_key_exists('client_id',$input))return clientCatalogHistoryContext($pdo,$user,$input);
     $scope = webManagerScope($user);
     $callId = filter_var($input['call_id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
     $emailId = filter_var($input['email_id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
@@ -57,7 +59,7 @@ function clientHistoryCandidates(array $matches): array
 
 function clientHistorySelection(array $context, string $requestedKey=''): array
 {
-    $matches=$context['phone']!==''?readClientMatchesCache($context['phone']):($context['matches']??[]);
+    $matches=!empty($context['directory_direct'])?($context['matches']??[]):($context['phone']!==''?readClientMatchesCache($context['phone']):($context['matches']??[]));
     if($matches===null)throw new RuntimeException('Справочник клиентов недоступен');
     $candidates=clientHistoryCandidates($matches);
     if(!$candidates && trim((string)($context['client_name']??''))!==''){
@@ -95,6 +97,7 @@ function clientHistorySelectedClients(array $context): array
 /** Search every sale by the selected exact names, irrespective of their phones. */
 function clientHistorySales(array $context, ?callable $transport=null): array
 {
+    if(!empty($context['directory_direct'])&&empty($context['directory_name_unique']))throw new InvalidArgumentException('История покупок недоступна: несколько клиентов имеют одинаковое наименование.');
     $selected=clientHistorySelectedClients($context);$clients=[];$names=[];
     foreach($selected as $candidate){
         $name=trim($candidate['name']);$normalized=normalizeSalesJournalClientName($name);

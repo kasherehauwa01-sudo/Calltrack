@@ -28,6 +28,7 @@ function maxHistoryEmailMatches(string $email, iterable $records): array
 
 function maxHistoryContext(PDO $pdo, array $user, array $input): array
 {
+    if(array_key_exists('client_id',$input))return clientHistoryContext($pdo,$user,$input);
     if(filter_var($input['call_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]))return clientHistoryContext($pdo,$user,$input);
     $id=filter_var($input['email_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
     if(!$id)throw new InvalidArgumentException('Interaction required');

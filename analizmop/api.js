@@ -597,7 +597,16 @@ document.addEventListener('DOMContentLoaded', () => {
 window.calltrackApi.loadClientMaxHistory = async function loadClientMaxHistory(reference, range = {}) {
   const payload = await window.calltrackApi.requestJson(window.calltrackApi.endpoints.clientMaxHistory, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({call_id: reference.call_id || undefined, email_id: reference.email_id || undefined, ...range})
+    body: JSON.stringify({client_id: reference.client_id || undefined, call_id: reference.call_id || undefined, email_id: reference.email_id || undefined, ...range})
   });
   return Array.isArray(payload.data) ? payload.data : [];
+};
+
+window.calltrackApi.loadClients = async function loadClients(params) {
+  return window.calltrackApi.requestJson('/vr/calltrack/api/clients_list.php?'+new URLSearchParams(params),{cache:'no-store'});
+};
+window.calltrackApi.loadClientEvents = async function loadClientEvents(clientId) {
+  return window.calltrackApi.requestJson('/vr/calltrack/api/client_events.php',{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:clientId})
+  });
 };
