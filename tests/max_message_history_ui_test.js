@@ -21,6 +21,13 @@ assert(out.includes('19.10.2026')&&out.includes('00:30'));
 assert(out.indexOf('Исходящий')<out.indexOf('Переписка MAX'));
 assert(out.indexOf('Переписка MAX')<out.indexOf('Existing email'));
 assert(out.indexOf('Existing email')<out.indexOf('Продаж - 1'));
+for(const [type,direction] of [['Входящий','incoming'],['Исходящий','outgoing']]){
+ const maxCall=ctx.renderClientRow({...group,calls:[{...call,source:'max',__type:type}]});
+ assert(maxCall.includes(`call-segment ${direction} max-call`));
+ assert(maxCall.includes(`MAX · ${type}`));
+ const regularCall=ctx.renderClientRow({...group,calls:[{...call,source:'phone',__type:type}]});
+ assert(!regularCall.includes('max-call'));
+}
 for(const [incoming,outgoing] of [[3,0],[0,5]]){
  const card=ctx.renderMaxHistoryCard({...max,incoming_count:incoming,outgoing_count:outgoing},true);
  assert(card.includes(`Входящие: ${incoming}`)&&card.includes(`Исходящие: ${outgoing}`));assert(card.includes('history-item'));

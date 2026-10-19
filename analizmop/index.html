@@ -120,7 +120,7 @@
     .call-timeline{display:flex;gap:8px;align-items:stretch;overflow-x:auto;overscroll-behavior-inline:contain;padding:4px 2px 10px;min-height:96px;scrollbar-gutter:stable}
     .call-segment{position:relative;border:0;border-radius:14px;padding:8px 10px;width:172px;min-width:172px;max-width:172px;flex:0 0 172px;height:88px;box-sizing:border-box;overflow:hidden;color:#0f172a;display:grid;gap:5px;cursor:pointer;text-align:left;box-shadow:0 6px 16px rgba(15,23,42,.08);transition:.2s ease}
     .call-segment:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(15,23,42,.12)}
-    .call-segment.incoming{background:#dcfce7;border:1px solid #86efac}.call-segment.outgoing{background:#dbeafe;border:1px solid #93c5fd}.call-segment.max-call{background:#9132d5;border:1px solid #9132d5;color:#fff}.call-segment.max-call .call-datetime{color:#f3e8ff}
+    .call-segment.incoming{background:#dcfce7;border:1px solid #86efac}.call-segment.outgoing{background:#dbeafe;border:1px solid #93c5fd}.call-segment.max-call{background:#6d28d9;border:1px solid #5b21b6;color:#fff}.call-segment.max-call.outgoing{background:#a21caf;border-color:#86198f}.call-segment.max-call .call-datetime{color:#fff}
     .call-segment.email-outgoing{background:#fef3c7;border:1px solid #f59e0b;gap:1px}.email-subject{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem}
     .call-segment-top{display:flex;justify-content:space-between;gap:8px;align-items:center}.call-type{font-weight:700;font-size:.86rem}.call-datetime{font-size:.78rem;color:#475569}
     .call-segment.max-message{display:flex;flex-direction:column;gap:2px;padding:6px 10px;font-size:.82rem;line-height:1.15}
@@ -1759,7 +1759,7 @@ function renderClientRow(group, maxItems=[]){
     const date=formatDateDisplay(formatDateLocal(call.__dt));
     const time=`${String(call.__dt.getHours()).padStart(2,'0')}:${String(call.__dt.getMinutes()).padStart(2,'0')}`;
     const hasNote=callHasHistoryDetails(call);
-    const cls=call.__type==='Входящий'?'incoming':'outgoing';
+    const cls=(call.__type==='Входящий'?'incoming':'outgoing')+(call.source==='max'?' max-call':'');
     const source=call.source==='max'?'MAX · ':'';
     const tooltip=`Источник: ${call.source==='max'?'MAX':'Телефон'}\nДата: ${date}\nВремя: ${time}\nТип звонка: ${call.__type}\nДлительность: ${formatCallDuration(call.duration)}\nМенеджер: ${call.manager||'Не указан'}`;
     return `<button class="call-segment ${cls} ${hasNote?'has-note':''}" title="${escapeHtml(tooltip)}" data-index="${call.__index}" type="button" aria-label="Открыть комментарии"><div class="call-segment-top"><span class="call-type">${escapeHtml(source+call.__type)} · ${escapeHtml(formatCallDurationDot(call.duration))}</span></div><div class="call-datetime">${escapeHtml(date)} · ${escapeHtml(time)}</div></button>`;

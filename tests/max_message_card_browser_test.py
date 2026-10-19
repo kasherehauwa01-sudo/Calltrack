@@ -41,6 +41,30 @@ with sync_playwright() as p:
                 }''')
                 assert bounds['fits'] and bounds['last'] and bounds['secondary'], (zone, modal, incoming, bounds)
                 if not modal: assert bounds['height'] == 88, bounds
+        page.evaluate("""()=>{
+            document.querySelector('#modal').innerHTML='';
+            document.querySelector('#timeline').innerHTML=[
+                ['incoming','Входящий'],['outgoing','Исходящий'],
+                ['incoming max-call','MAX · Входящий'],['outgoing max-call','MAX · Исходящий']
+            ].map(([cls,label])=>`<button class="call-segment ${cls}"><div class="call-segment-top"><span class="call-type">${label}</span></div><div class="call-datetime">18.10.2026 · 20:30</div></button>`).join('');
+        }""")
+        palette = page.locator('#timeline .call-segment').evaluate_all("""cards=>cards.map(card=>{
+            const css=getComputedStyle(card), date=getComputedStyle(card.querySelector('.call-datetime'));
+            return {bg:css.backgroundColor,fg:css.color,date:date.color,height:card.getBoundingClientRect().height};
+        })""")
+        assert len({card['bg'] for card in palette}) == 4, palette
+        for card in palette:
+            assert card['height'] == 88, card
+        def luminance(rgb):
+            channels = [int(v)/255 for v in re.findall(r'\d+', rgb)[:3]]
+            linear = [v/12.92 if v<=0.04045 else ((v+0.055)/1.055)**2.4 for v in channels]
+            return sum(v*w for v,w in zip(linear,[0.2126,0.7152,0.0722]))
+        for card in palette[2:]:
+            for field in ['fg','date']:
+                a,b=sorted([luminance(card['bg']),luminance(card[field])])
+                assert (b+0.05)/(a+0.05)>=4.5, card
+        if zone == 'UTC':
+            page.screenshot(path='/tmp/max-call-palette.png')
         page.close()
     browser.close()
-print('MAX card browser smoke: all four lines fit; timeline 88px; modal; 0/1, 1/0, 123/456; three timezones OK')
+print('Call palette: four distinct colors, MAX contrast >= 4.5:1; MAX card browser smoke: all four lines fit; timeline 88px; modal; 0/1, 1/0, 123/456; three timezones OK')
