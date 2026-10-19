@@ -142,6 +142,7 @@
     .chart-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
     .chart-card h2{font-size:1rem;font-weight:600;color:#111827}.chart-wrap{position:relative;flex:1;min-height:240px}
     .line-chart{grid-column:span 12}.pie-chart{grid-column:span 5}.bar-chart{grid-column:span 7}
+    .sales-chart-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.sales-chart-controls label{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.85rem}.sales-chart-controls input,.sales-chart-controls select{font:inherit;color:#4b5563;background:#e3e7ee;border:1px solid transparent;border-radius:999px;padding:7px 12px;min-width:0}.sales-chart-controls input{width:90px}.sales-chart-controls input:focus-visible,.sales-chart-controls select:focus-visible{outline:2px solid #3b82f6;outline-offset:2px}#dashboardSalesStatus{color:var(--muted);font-size:.9rem}#dashboardSalesRetry{align-self:flex-start}#dashboardSalesPlot[hidden],#dashboardSalesRetry[hidden],#dashboardSalesStatus[hidden]{display:none}
     .empty-state{display:none;background:var(--card);border-radius:var(--radius);border:1px dashed #cbd5e1;padding:24px;text-align:center;color:var(--muted);font-size:1.1rem}
     .clients-catalog{display:grid;gap:16px;min-width:0}.clients-filters{display:flex;flex-wrap:wrap;gap:12px}.clients-filters label{min-width:0;display:grid;gap:5px;flex:1 1 180px;font-size:.86rem;color:var(--muted)}.clients-filters input,.clients-filters select{min-width:0;width:100%;padding:10px;border:1px solid #d1d5db;border-radius:12px;background:#fff;color:var(--text)}.clients-list{display:grid;gap:10px}.client-catalog-row{overflow-wrap:anywhere;display:grid;gap:5px;width:100%;border:1px solid #e5e7eb;border-radius:14px;padding:16px;background:#f8fafc;text-align:left;cursor:pointer;color:var(--text)}.client-catalog-row:hover,.client-catalog-row:focus-visible{background:#eff6ff;border-color:#93c5fd}.client-catalog-row span{font-size:.86rem;color:var(--muted)}.clients-pagination{display:flex;gap:14px;align-items:center;justify-content:center}.history-item.email-outgoing{text-align:left;background:#fffbeb;color:var(--text);cursor:pointer;width:100%}
     @media (max-width:900px){.container{grid-template-columns:minmax(0,1fr)}.session-bar{grid-column:1;flex-wrap:wrap}.dashboard-tabs{grid-column:1;grid-row:auto;position:static;flex-direction:row;overflow-x:auto;border-radius:18px}.tab-btn{width:auto;white-space:nowrap;text-align:center}.view,.view.active,h1{grid-column:1}.pie-chart,.bar-chart,.line-chart{grid-column:span 12}.period-shell{flex-wrap:wrap;white-space:normal}.date-range{width:100%;margin-left:0;flex-wrap:wrap}.client-row{grid-template-columns:1fr}.comment-info{grid-template-columns:1fr}.sale-dialog{padding:16px}.sale-fields{grid-template-columns:1fr}.sale-day-item{grid-template-columns:minmax(0,1fr)}.sale-day-item .sale-amount{grid-column:1;grid-row:auto}.comment-modal:not(.sale-detail-open){padding:12px}}
@@ -208,11 +209,6 @@
 
     <section class="empty-state" id="emptyState">Нет данных</section>
 
-    <article class="chart-card" style="margin-bottom:16px">
-      <div class="chart-head"><h2>Продажи</h2><label>Год <input id="dashboardSalesYear" type="number" min="2000" max="2100" style="width:90px"></label>
-      <label>Показатель <select id="dashboardSalesMetric"><option value="revenue">Сумма</option><option value="checks">Количество чеков</option><option value="units">Количество штук</option></select></label></div>
-      <div id="dashboardSalesStatus" role="status"></div><div class="chart-wrap"><canvas id="dashboardSalesChart"></canvas></div>
-    </article>
     <section class="charts-grid" id="chartsGrid">
       <article class="chart-card line-chart">
         <div class="chart-head">
@@ -228,6 +224,20 @@
       </article>
       <article class="chart-card pie-chart"><h2>Типы звонков</h2><div class="chart-wrap"><canvas id="callTypesChart"></canvas></div></article>
       <article class="chart-card bar-chart"><h2>Менеджеры</h2><div class="chart-wrap"><canvas id="managerCallsChart"></canvas></div></article>
+    </section>
+    <section class="charts-grid" id="salesChartsGrid">
+      <article class="chart-card line-chart" id="dashboardSalesCard">
+        <div class="chart-head">
+          <h2>Продажи</h2>
+          <div class="sales-chart-controls">
+            <label>Год <input id="dashboardSalesYear" type="number" min="2000" max="2100"></label>
+            <label>Показатель <select id="dashboardSalesMetric"><option value="revenue">Сумма</option><option value="checks">Количество чеков</option><option value="units">Количество штук</option></select></label>
+          </div>
+        </div>
+        <div id="dashboardSalesStatus" role="status" hidden></div>
+        <button class="detail-pill" id="dashboardSalesRetry" type="button" hidden>Повторить загрузку</button>
+        <div class="chart-wrap" id="dashboardSalesPlot" hidden><canvas id="dashboardSalesChart"></canvas></div>
+      </article>
     </section>
     </div>
 
@@ -2080,9 +2090,10 @@ const dashboardSalesMetric=document.getElementById('dashboardSalesMetric');
 dashboardSalesYear.value=new Intl.DateTimeFormat('en',{timeZone:'Europe/Volgograd',year:'numeric'}).format(new Date());
 dashboardSalesYear.addEventListener('change',()=>refreshDashboardSales());
 dashboardSalesMetric.addEventListener('change',()=>refreshDashboardSales(true));
+document.getElementById('dashboardSalesRetry').addEventListener('click',()=>{dashboardSalesKey='';refreshDashboardSales();});
 let dashboardSalesRows=[];
 function drawDashboardSales(){
-  if(typeof Chart==='undefined')return;
+  if(typeof Chart==='undefined'||!dashboardSalesRows.length)return;
   dashboardSalesChart?.destroy();
   const metric=dashboardSalesMetric.value;
   dashboardSalesChart=new Chart(document.getElementById('dashboardSalesChart'),{type:'bar',data:{
@@ -2095,15 +2106,16 @@ async function refreshDashboardSales(redraw=false){
   const key=JSON.stringify([year,managers]);
   if(key===dashboardSalesKey){if(redraw)drawDashboardSales();return;}
   dashboardSalesKey=key;const epoch=++dashboardSalesEpoch;
-  const status=document.getElementById('dashboardSalesStatus');
-  dashboardSalesRows=[];drawDashboardSales();status.textContent='Загрузка продаж…';
+  const status=document.getElementById('dashboardSalesStatus'),plot=document.getElementById('dashboardSalesPlot'),retry=document.getElementById('dashboardSalesRetry');
+  dashboardSalesRows=[];dashboardSalesChart?.destroy();dashboardSalesChart=null;plot.hidden=true;retry.hidden=true;status.hidden=false;status.textContent='Загрузка продаж…';
   try{
     const response=await fetch('/vr/calltrack/api/dashboard_sales.php?'+new URLSearchParams({year,managers:JSON.stringify(managers)}),{cache:'no-store'});
     const payload=await response.json();
     if(!response.ok||payload.status!=='success')throw new Error(payload.message||'Продажи временно недоступны');
     if(epoch!==dashboardSalesEpoch)return;
-    dashboardSalesRows=payload.items||[];status.textContent='';drawDashboardSales();
-  }catch(error){if(epoch===dashboardSalesEpoch){status.textContent=error.message;dashboardSalesKey='';}}
+    if(!Array.isArray(payload.items)||payload.items.length!==12)throw new Error('Некорректный ответ сервиса продаж');
+    dashboardSalesRows=payload.items;status.textContent='';status.hidden=true;plot.hidden=false;drawDashboardSales();
+  }catch(error){if(epoch===dashboardSalesEpoch){status.textContent=error.message;status.hidden=false;retry.hidden=false;plot.hidden=true;dashboardSalesKey='';}}
 }
 
 function renderCallTypeTags(){
