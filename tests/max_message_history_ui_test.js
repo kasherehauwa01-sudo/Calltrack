@@ -25,6 +25,11 @@ for(const [incoming,outgoing] of [[3,0],[0,5]]){
  const card=ctx.renderMaxHistoryCard({...max,incoming_count:incoming,outgoing_count:outgoing},true);
  assert(card.includes(`Входящие: ${incoming}`)&&card.includes(`Исходящие: ${outgoing}`));assert(card.includes('history-item'));
 }
+for(const modal of [false,true]){
+ const card=ctx.renderMaxHistoryCard({...max,last_event_at:'2026-10-18T17:30:00Z'},modal);
+ assert(card.includes('18.10.2026 · 20:30')); // Date comes from last_event_at, not item.date/browser zone.
+ assert(card.includes('max-message'));
+}
 for(const field of ['source_event_id','max_user_id','shortcut_id','contact_name','message_text'])assert(!out.includes(field));
 ctx.clientRecordsByPhone.set('9991111111',[{id:'a'}]);
 assert.equal(ctx.maxIdentityForGroup({calls:[{phone:'9991111111',userPhone:'web-user-1'}]}),'client:a');
