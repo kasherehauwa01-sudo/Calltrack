@@ -31,6 +31,7 @@ try{
         if(($body['confirm_all_sales_scope']??false)!==true)throw new InvalidArgumentException('Подтвердите проверку всей группы исторических продаж, а не только имени/телефона');
         if(($body['technical']??null)===false&&($body['confirm_nontechnical']??false)!==true)throw new InvalidArgumentException('Подтвердите, что клиент не является техническим или агрегатным');
         if(!$clientId)throw new InvalidArgumentException('Укажите настоящий ClientsVR client_id');
+        if(($event['subject']['kind']??null)==='external_id'&&$clientId!==$event['subject']['key'])throw new InvalidArgumentException('ClientsVR client_id должен совпадать с external_id исходного сигнала');
         $record=analyticsDirectoryRecords([$clientId])[$clientId]??null;if(!$record)throw new InvalidArgumentException('Уникальный ID не найден в кэше ClientsVR');
     }
     $evidence=taskText($body['evidence']??null,2000);if(!is_bool($body['technical']??null))throw new InvalidArgumentException('Укажите признак технического клиента');
