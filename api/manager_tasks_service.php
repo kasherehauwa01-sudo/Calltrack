@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__.'/web_auth.php';
 class TaskConflict extends RuntimeException {}
+require_once __DIR__.'/analytics_budget_service.php';
 function taskUuid(): string { $h=bin2hex(random_bytes(16));return substr($h,0,8).'-'.substr($h,8,4).'-4'.substr($h,13,3).'-'.dechex((hexdec($h[16])&3)|8).substr($h,17,3).'-'.substr($h,20); }
 function taskSlot(string $clientId,string $family): string { return hash('sha256',json_encode(['clientsvr',$clientId,$family],JSON_THROW_ON_ERROR)); }
 function taskCanRead(array $actor,array $task): bool { return in_array($actor['role']??'',['admin','supervisor'],true)||(($actor['role']??'')==='manager'&&(int)$task['assignee_id']===(int)$actor['id']); }
@@ -37,6 +38,7 @@ function createManagerTask(PDO $pdo,array $actor,array $input,?array $automatic=
             $s=$pdo->prepare('SELECT t.* FROM analytics_open_task_slots s JOIN manager_tasks t ON t.id=s.task_id WHERE s.slot_key=?');$s->execute([taskSlot($client,$family)]);
             if($existing=$s->fetch(PDO::FETCH_ASSOC)){if($own)$pdo->commit();return ['task'=>$existing,'existing'=>true];}
         }
+        if($automatic!==null)reserveAnalyticsBudget($pdo);
         $id=taskUuid();$evidence=$automatic?json_encode($automatic['evidence'],JSON_THROW_ON_ERROR):null;
         $pdo->prepare('INSERT INTO manager_tasks(id,client_id,assignee_id,title,description,priority,due_at,result,family,source_signal_key,evidence_json,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$id,$client,$assignee,$title,$description,$priority,$due,'',$family,$automatic['signal_key']??null,$evidence,$automatic?null:(int)$actor['id']]);
         if($family==='INACTIVITY')$pdo->prepare('INSERT INTO analytics_open_task_slots(slot_key,task_id) VALUES(?,?)')->execute([taskSlot($client,$family),$id]);

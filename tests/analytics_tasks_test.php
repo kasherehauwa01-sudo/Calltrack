@@ -2,14 +2,16 @@
 declare(strict_types=1);
 require_once __DIR__.'/../api/analytics_sync.php';
 require_once __DIR__.'/fixtures/analytics/database.php';
+require_once __DIR__.'/fixtures/analytics/phase1_event.php';
 function expect(bool $condition,string $label):void{if(!$condition)throw new RuntimeException($label);}
 function denied(callable $fn,string $class):void{try{$fn();}catch(Throwable $e){if($e instanceof $class)return;throw $e;}throw new RuntimeException('Expected '.$class);}
-$pdo=analyticsTestDatabase();$admin=['id'=>1,'role'=>'admin'];$manager=['id'=>3,'role'=>'manager'];$other=['id'=>4,'role'=>'manager'];$supervisor=['id'=>2,'role'=>'supervisor'];
+$pdo=analyticsTestDatabase();$pdo->exec('UPDATE analytics_task_budget SET approved=1,max_tasks=100 WHERE id=1');$admin=['id'=>1,'role'=>'admin'];$manager=['id'=>3,'role'=>'manager'];$other=['id'=>4,'role'=>'manager'];$supervisor=['id'=>2,'role'=>'supervisor'];
 saveManagerBinding($pdo,$admin,'Legacy Owner',3,null);
 $now=strtotime('2026-10-20T12:00:00Z');$day='2026-10-19';
 $source=['coverage_status'=>'CONFIRMED','business_freshness'=>'CURRENT','accepted_data_through'=>$day,'effective_as_of'=>$day,'source_revision'=>7];
 $run=['id'=>'test-run','status'=>'SUCCEEDED','as_of'=>$day,'source_revision'=>7,'automation_allowed'=>true,'scope'=>['policy'=>'test-policy','department'=>'TEST'],'source_decision'=>$source];
 $event=['source'=>'sales-journal','signal_id'=>'signal-1','revision'=>1,'status'=>'ACTIVE','signal_type'=>'CHURN_RISK','family'=>'INACTIVITY','subject'=>['kind'=>'normalized_name','version'=>1,'key'=>'test customer'],'score'=>70,'confidence'=>0.8,'last_purchase'=>'2026-09-01','as_of'=>$day,'calculated_at'=>'2026-10-20T10:00:00Z','mode'=>'AUTOMATION_APPROVED','automation_allowed'=>true,'analytical_eligible'=>true,'generator_version'=>'inactivity/1','metrics'=>['median_interval'=>7,'days_without_purchase'=>48],'run'=>$run];
+$event=phase1ConsumerFixture($event,'client-100',3,'2026-10-20T15:00:00Z');
 $evidence=['upstream_confirmed'=>true,'complete_through'=>$day,'verified_at'=>'2026-10-20T09:00:00Z','valid_until'=>'2026-10-20T15:00:00Z','source_revision'=>'7'];
 $policy=['approved_scope_policies'=>['test-policy'],'approved_generators'=>['inactivity/1'],'max_signal_age_seconds'=>86400,'sales'=>$evidence,'clientsvr'=>$evidence+['cache_revision'=>'test-cache'],'cache_revision'=>'test-cache','min_confidence'=>0.5,'priorities'=>['CHURN_RISK'=>'HIGH','PURCHASE_OVERDUE'=>'NORMAL'],'due_days_by_type'=>['CHURN_RISK'=>2,'PURCHASE_OVERDUE'=>3],'policy_approved'=>true,'enabled_types'=>['CHURN_RISK','PURCHASE_OVERDUE']];
 $policy['approved_scope_hashes']=[hash('sha256',json_encode(analyticsCanonical($run['scope']),JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR))];
@@ -69,13 +71,13 @@ expect((int)$pdo->query('SELECT assignee_id FROM manager_tasks')->fetchColumn()=
 updateManagerTask($pdo,$manager,$task['id'],['version'=>2,'status'=>'DONE','result'=>'Customer contacted; order planned']);
 processAnalyticsEvent($pdo,$next,$client,$policy,'enabled',$now);
 expect((int)$pdo->query('SELECT COUNT(*) FROM manager_tasks')->fetchColumn()===1,'completed same episode never reopened');
-$third=$event;$third['signal_id']='signal-3';$out=processAnalyticsEvent($pdo,$third,$client,$policy,'enabled',$now);expect($out['decision']==='TASK_CREATED','future episode separate task');
+$third=$event;$third['signal_id']='signal-3';$third['assignment']['manager_id']=4;$out=processAnalyticsEvent($pdo,$third,$client,$policy,'enabled',$now);expect($out['decision']==='TASK_CREATED','future episode separate task');
 expect((int)$pdo->query('SELECT COUNT(*) FROM manager_tasks')->fetchColumn()===2,'two historical tasks');
 // Duplicate names/phones never participate: no verified subject binding => blocked.
 $ambiguous=$event;$ambiguous['signal_id']='unbound';$ambiguous['subject']['key']='same phone different client';
 $out=processAnalyticsEvent($pdo,$ambiguous,$client,$policy,'enabled',$now);expect(in_array('IDENTITY_NOT_FOUND',$out['reasons'],true),'shared phone cannot infer identity');
 // Same contacts/name, distinct verified IDs: never merge task subjects.
-$distinct=$event;$distinct['signal_id']='distinct-stable-client';$distinct['subject']['key']='different source subject';
+$distinct=$event;$distinct['signal_id']='distinct-stable-client';$distinct['subject']['key']='client-102';$distinct['assignment']['client_id']='client-102';$distinct['assignment']['manager_id']=4;
 $distinctKey=analyticsSubjectKey($distinct['subject'],$run['scope']);
 $pdo->prepare('INSERT INTO analytics_client_bindings(subject_key,subject_json,client_id,status,technical,evidence,reviewer_id) VALUES(?,?,?,?,?,?,?)')->execute([$distinctKey,'{}','client-102','VERIFIED',0,'Separate reviewed ID despite same phone/name',1]);
 $separate=$client;$separate['id']='client-102';$separate['phones']=['9000000000'];
