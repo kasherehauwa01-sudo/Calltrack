@@ -32,6 +32,19 @@ function createManagerTask(PDO $pdo,array $actor,array $input,?array $automatic=
     if($automatic!==null&&(($automatic['allowed']??false)!==true||empty($automatic['signal_key'])))throw new DomainException('Автоматизация не разрешена');
     $own=!$pdo->inTransaction();if($own)$pdo->beginTransaction();
     try {
+        if($automatic!==null){
+            // Defense in depth: a direct internal caller cannot bypass persisted revocation.
+            require_once __DIR__.'/analytics_task_policy.php';
+            $policy=analyticsTaskPolicyGateConfig(analyticsTaskPolicy($pdo,true));
+            $signal=$automatic['evidence']['signal']??[];
+            if(($policy['policy_approved']??false)!==true||!in_array('CHURN_RISK',$policy['enabled_types'],true)
+                ||($signal['signal_type']??null)!=='CHURN_RISK'||($signal['mode']??null)!=='AUTOMATION_APPROVED'
+                ||($signal['automation_allowed']??false)!==true||($signal['status']??null)!=='ACTIVE'
+                ||($signal['subject']['kind']??null)!=='external_id'||($signal['subject']['key']??null)!==$client
+                ||($signal['assignment']['client_id']??null)!==$client||($signal['assignment']['manager_id']??null)!==$assignee){
+                throw new DomainException('Persisted CHURN policy and approved assignment required');
+            }
+        }
         taskAssignee($pdo,$assignee);
         if($automatic!==null){$s=$pdo->prepare('SELECT * FROM manager_tasks WHERE source_signal_key=?');$s->execute([$automatic['signal_key']]);if($existing=$s->fetch(PDO::FETCH_ASSOC)){if($own)$pdo->commit();return ['task'=>$existing,'existing'=>true];}}
         if($family==='INACTIVITY'){

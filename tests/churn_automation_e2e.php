@@ -37,9 +37,28 @@ $policy=['approved_scope_policies'=>[$events[0]['run']['scope']['policy']],
  'approved_scope_hashes'=>[hash('sha256',json_encode(analyticsCanonical($events[0]['run']['scope']),JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR))],
  'approved_generators'=>['inactivity/1'],'max_signal_age_seconds'=>3600,'sales'=>$evidence,'clientsvr'=>$evidence+['cache_revision'=>$cache],'cache_revision'=>$cache];
 saveAnalyticsTaskPolicy($pdo,$admin,['revision'=>1,'action'=>'save_draft','min_confidence'=>.5,'types'=>[['signal_type'=>'CHURN_RISK','enabled'=>true,'priority'=>'HIGH','due_days'=>1],['signal_type'=>'PURCHASE_OVERDUE','enabled'=>false,'priority'=>null,'due_days'=>null]]]);
+$disabled=processAnalyticsEvent($pdo,$events[0],$clients[0],$policy,'disabled',$now);
+verify($disabled['decision']==='DISABLED','Disabled does not process');
+$unapproved=processAnalyticsEvent($pdo,$events[0],$clients[0],$policy,'enabled',$now);
+verify(in_array('TASK_POLICY_NOT_APPROVED',$unapproved['reasons'],true),'Actual MariaDB unapproved policy blocks');
 saveAnalyticsTaskPolicy($pdo,$admin,['revision'=>2,'action'=>'approve','confirm_business_approval'=>true]);
 $r=processAnalyticsEvent($pdo,$events[0],$clients[0],$policy,'enabled',$now);verify(in_array('BUDGET_NOT_APPROVED',$r['reasons'],true),'Unset budget blocks');
 saveAnalyticsBudget($pdo,$admin,['revision'=>1,'approved'=>true,'max_tasks'=>1]);
+foreach(['unknown client','unknown manager','stale sales','unknown coverage','disabled type'] as $case){
+ $client=$clients[0];$config=$policy;$event=$events[0];
+ if($case==='unknown client')$client=null;
+ elseif($case==='unknown manager')$client['manager']='No verified mapping';
+ elseif($case==='stale sales')$config['sales']['valid_until']=gmdate('c',$now-1);
+ elseif($case==='unknown coverage')$event['run']['source_decision']['coverage_status']='UNKNOWN';
+ else $pdo->exec("UPDATE analytics_task_type_policy SET enabled=0 WHERE signal_type='CHURN_RISK'");
+ // Avoid conflicting immutable receipt content for the altered UNKNOWN envelope.
+ if($case==='unknown coverage')$event['signal_id']='unknown-coverage-test';
+ $refused=processAnalyticsEvent($pdo,$event,$client,$config,'enabled',$now);
+ verify($refused['decision']==='BLOCKED','Actual MariaDB refusal: '.$case);
+ verify((int)$pdo->query('SELECT COUNT(*) FROM manager_tasks')->fetchColumn()===0,'No task: '.$case);
+ verify((int)analyticsBudget($pdo)['used_tasks']===0,'No spend: '.$case);
+ if($case==='disabled type')$pdo->exec("UPDATE analytics_task_type_policy SET enabled=1 WHERE signal_type='CHURN_RISK'");
+}
 file_put_contents('/tmp/churn-events.json',json_encode(['events'=>$events,'clients'=>$clients,'policy'=>$policy],JSON_THROW_ON_ERROR));
 $processes=[];foreach([0,0,1] as $index){$pipes=[];$processes[]=proc_open([PHP_BINARY,__FILE__,'worker',(string)$index],[0=>['file','/dev/null','r'],1=>STDOUT,2=>STDERR],$pipes);}
 foreach($processes as $process)verify(proc_close($process)===0,'Concurrent workers');
