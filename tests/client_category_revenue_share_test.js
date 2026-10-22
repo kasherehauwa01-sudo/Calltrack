@@ -28,7 +28,9 @@ new vm.Script(source);
 
 (async () => {
   const elements = {};
+  let rendered;
   Object.assign(context, {
+    window: {calltrackCategoryTree: {render: (element, categories, options) => { rendered = {element, categories, options}; }}},
     epoch: 1, needsSelection: false, clearSummary() {}, applyPurchaseContext: () => true,
     $: id => elements[id] ||= {}, escape: String, money: String, number: String, dateLabel: String,
     api: async () => ({context: {}, summary: {
@@ -38,9 +40,16 @@ new vm.Script(source);
   });
   vm.runInContext(renderSource, context);
   await context.loadSummary();
-  const table = elements.clientTopCategories.innerHTML;
-  assert.ok(table.includes('<th>Доля в общей выручке</th>'));
-  assert.equal((table.match(/25,00 %/g) || []).length, 2, 'Use lifetime total, not the sum of displayed categories');
-  assert.ok(!table.includes('50,00 %'));
+  assert.equal(elements.clientSummaryRetry.hidden, true, 'Rendering must not fall into the error handler');
+  assert.ok(rendered, 'Summary must invoke the category tree renderer');
+  assert.equal(rendered.element, elements.clientTopCategories);
+  assert.equal(rendered.options.totalRevenue, '100.00', 'Use lifetime total, not displayed top categories');
+  assert.equal(rendered.categories.length, 2);
+  for (const category of rendered.categories) {
+    assert.equal(rendered.options.share(category.revenue, rendered.options.totalRevenue), '25,00 %');
+  }
+  assert.equal(rendered.options.isCurrent(), true);
+  context.epoch++;
+  assert.equal(rendered.options.isCurrent(), false, 'Late category responses must be ignored after client change');
   console.log('client_category_revenue_share_test: OK');
 })().catch(error => { console.error(error); process.exitCode = 1; });
