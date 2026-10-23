@@ -4,21 +4,48 @@ if(PHP_SAPI!=='cli'){http_response_code(404);exit;}
 require_once __DIR__.'/analytics_migration_state.php';
 function analyticsValidateManifest(array $manifest):array {
  $files=['20261020_manager_bindings.sql','20261020_analytics_tasks.sql','20261020_analytics_task_policy.sql','20261022_analytics_budget.sql','20261023_analytics_daily_budget.sql'];
- if(($manifest['contract_version']??null)!==1||array_keys($manifest['migrations']??[])!==$files)throw new RuntimeException('Unknown migration contract');
+ if(($manifest['contract_version']??null)!==2||array_keys($manifest['migrations']??[])!==$files)throw new RuntimeException('Unknown migration contract');
+ $inherited=[];
  foreach($manifest['migrations'] as $file=>$m){
   if(!is_string($m['sha256']??null)||!hash_equals($m['sha256'],hash_file('sha256',__DIR__.'/../database/'.$file)))throw new RuntimeException('Reviewed SQL checksum differs: '.$file);
   $tables=[];$seeds=[];
   foreach(migrationStatements(file_get_contents(__DIR__.'/../database/'.$file)) as $sql){
-   if(preg_match('/^CREATE TABLE ([a-z_]+)/i',$sql,$a))$tables[]=$a[1];
+   if(preg_match('/^CREATE TABLE ([a-z_]+)/i',$sql,$a)){
+    $tables[]=$a[1];
+    // Only these reviewed CREATEs inherit the database default, not a charset default.
+    if(preg_match('/\) ENGINE=InnoDB$/D',$sql))$inherited[]=$a[1];
+   }
    elseif(preg_match('/^INSERT INTO ([a-z_]+)/i',$sql,$a))$seeds[]=$a[1];
    else throw new RuntimeException('Unreviewed statement kind');
   }
   if(array_keys($m['tables']??[])!==$tables||($m['seeds']??null)!==$seeds)throw new RuntimeException('Incomplete migration contract: '.$file);
  }
+ if(($manifest['database_collation_tables']??null)!==$inherited)throw new RuntimeException('Invalid database collation inheritance contract');
  return $manifest;
 }
 function analyticsMigrationManifest():array {
  return analyticsValidateManifest(json_decode(file_get_contents(__DIR__.'/analytics_schema_contract.json'),true,128,JSON_THROW_ON_ERROR));
+}
+
+function analyticsResolveCollationContract(PDO $db,array $manifest):array {
+ $context=migrationRows($db,'SELECT DEFAULT_CHARACTER_SET_NAME,DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME=DATABASE()');
+ $collation=$context[0]['DEFAULT_COLLATION_NAME']??null;
+ if(($context[0]['DEFAULT_CHARACTER_SET_NAME']??null)!=='utf8mb4'||!in_array($collation,['utf8mb4_uca1400_ai_ci','utf8mb4_unicode_ci'],true))throw new RuntimeException('Unsupported database collation profile');
+ $charsetDefault=$db->query("SELECT DEFAULT_COLLATE_NAME FROM information_schema.CHARACTER_SETS WHERE CHARACTER_SET_NAME='utf8mb4'")->fetchColumn();
+ if($charsetDefault!=='utf8mb4_uca1400_ai_ci')throw new RuntimeException('Unsupported utf8mb4 charset default');
+ // The baseline was captured on 11.8.6/UCA1400. Resolve only database-inherited
+ // slots. Explicit ascii_bin/utf8mb4_bin and charset-only CREATEs stay exact.
+ foreach($manifest['migrations'] as &$m)foreach($m['tables'] as $name=>&$table){
+  if(!in_array($name,$manifest['database_collation_tables'],true))continue;
+  if($table['table']['TABLE_COLLATION']!=='utf8mb4_uca1400_ai_ci')throw new RuntimeException('Unexpected inherited collation baseline');
+  $table['table']['TABLE_COLLATION']=$collation;
+  foreach($table['columns'] as &$column){
+   if($column['CHARACTER_SET_NAME']==='utf8mb4'&&$column['COLLATION_NAME']==='utf8mb4_uca1400_ai_ci')$column['COLLATION_NAME']=$collation;
+  }
+  unset($column);
+ }
+ unset($m,$table);
+ return $manifest;
 }
 
 function analyticsMigrate(PDO $db,bool $apply=false,?callable $afterStep=null):array {
@@ -31,7 +58,8 @@ function analyticsMigrate(PDO $db,bool $apply=false,?callable $afterStep=null):a
  $s=$db->prepare('SELECT GET_LOCK(?,0)');$s->execute([$name]);if((int)$s->fetchColumn()!==1)return ['state'=>'BLOCKED','issues'=>['MIGRATION_BUSY']];
  $operations=[];$stage="PREFLIGHT";
  try {
-  $manifest=analyticsMigrationManifest();$initial=migrationInspect($db,$manifest);
+  $manifest=analyticsMigrationManifest();$stage='COLLATION_PROFILE';
+  $manifest=analyticsResolveCollationContract($db,$manifest);$stage='PREFLIGHT';$initial=migrationInspect($db,$manifest);
   if(!$apply||in_array($initial['state'],['BLOCKED','SCHEMA_DRIFT','APPLIED_AND_VERIFIED'],true))return $initial+['operations'=>[]];
   foreach($manifest['migrations'] as $file=>$m){
    $stage=$file;

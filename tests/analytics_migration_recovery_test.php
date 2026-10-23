@@ -11,14 +11,14 @@ if(($argv[1]??'')==='worker'){
 }
 $admin=recoveryPdo();$created=[];$assertions=0;
 function verifyRecovery(bool $value,string $message):void{global $assertions;$assertions++;if(!$value)throw new RuntimeException($message);}
-function freshRecovery():PDO{global $admin,$created;$name='analytics_migration_test_'.bin2hex(random_bytes(6));$created[]=$name;$admin->exec('CREATE DATABASE '.$name);$db=recoveryPdo($name);ensureWebAuthTables($db);return $db;}
+function freshRecovery():PDO{global $admin,$created;$collation=getenv('ANALYTICS_MIGRATION_TEST_COLLATION')?:'utf8mb4_uca1400_ai_ci';if(!in_array($collation,['utf8mb4_uca1400_ai_ci','utf8mb4_unicode_ci'],true))throw new RuntimeException('Unsupported test collation');$name='analytics_migration_test_'.bin2hex(random_bytes(6));$created[]=$name;$admin->exec('CREATE DATABASE '.$name.' CHARACTER SET utf8mb4 COLLATE '.$collation);$db=recoveryPdo($name);ensureWebAuthTables($db);return $db;}
 function runBase(PDO $db):void{foreach(['20261020_manager_bindings.sql','20261020_analytics_tasks.sql','20261020_analytics_task_policy.sql'] as $file)$db->exec(file_get_contents(__DIR__.'/../database/'.$file));}
 try{
  if(getenv('ANALYTICS_MIGRATION_HTTP_TEST')==='1')foreach(['analytics_migrate.php','analytics_migration_state.php'] as $file){
   @file_get_contents('http://127.0.0.1:8877/vr/calltrack/tools/'.$file.'?--apply+--confirm-maintenance',false,stream_context_create(['http'=>['ignore_errors'=>true,'timeout'=>5]]));
   verifyRecovery(str_contains($http_response_header[0]??'',' 404 '),'No HTTP migration entrypoint '.$file);
  }
- $manifest=analyticsMigrationManifest();$bad=$manifest;$bad['contract_version']=2;
+ $manifest=analyticsMigrationManifest();$bad=$manifest;$bad['contract_version']=999;
  $refused=false;try{analyticsValidateManifest($bad);}catch(RuntimeException $e){$refused=true;}verifyRecovery($refused,'Unknown contract blocked');
  $bad=$manifest;unset($bad['migrations']['20261023_analytics_daily_budget.sql']['tables']['analytics_daily_budget']);
  $refused=false;try{analyticsValidateManifest($bad);}catch(RuntimeException $e){$refused=true;}verifyRecovery($refused,'Incomplete contract blocked');
