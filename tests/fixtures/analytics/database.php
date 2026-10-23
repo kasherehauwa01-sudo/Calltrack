@@ -14,7 +14,7 @@ function analyticsTestDatabase(): PDO {
         $pdo->exec('CREATE TABLE web_users(id INTEGER PRIMARY KEY,display_name TEXT,role TEXT,is_active INTEGER)');
         $pdo->exec("INSERT INTO web_users VALUES(1,'Test Admin','admin',1),(2,'Test Supervisor','supervisor',1),(3,'Test Manager','manager',1),(4,'Other Manager','manager',1),(5,'Inactive','manager',0)");
     }
-    foreach(['20261020_manager_bindings.sql','20261020_analytics_tasks.sql','20261020_analytics_task_policy.sql','20261022_analytics_budget.sql'] as $file){
+    foreach(['20261020_manager_bindings.sql','20261020_analytics_tasks.sql','20261020_analytics_task_policy.sql','20261022_analytics_budget.sql','20261023_analytics_daily_budget.sql'] as $file){
         $sql=file_get_contents(__DIR__.'/../../../database/'.$file);
         if(!$mysql){
             $sql=preg_replace('/BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY/','INTEGER PRIMARY KEY AUTOINCREMENT',$sql);

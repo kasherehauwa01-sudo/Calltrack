@@ -35,8 +35,8 @@ foreach($events as $i=>$event){
 $directory=null;$cache=clientCatalogRevision();
 $policy=['approved_scope_policies'=>[$events[0]['run']['scope']['policy']],
  'approved_scope_hashes'=>[hash('sha256',json_encode(analyticsCanonical($events[0]['run']['scope']),JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR))],
- 'approved_generators'=>['inactivity/1'],'max_signal_age_seconds'=>3600,'sales'=>$evidence,'clientsvr'=>$evidence+['cache_revision'=>$cache],'cache_revision'=>$cache];
-saveAnalyticsTaskPolicy($pdo,$admin,['revision'=>1,'action'=>'save_draft','min_confidence'=>.5,'types'=>[['signal_type'=>'CHURN_RISK','enabled'=>true,'priority'=>'HIGH','due_days'=>1],['signal_type'=>'PURCHASE_OVERDUE','enabled'=>false,'priority'=>null,'due_days'=>null]]]);
+ 'approved_generators'=>['inactivity/aviator-churn-pilot/1'],'max_signal_age_seconds'=>3600,'sales'=>$evidence,'clientsvr'=>$evidence+['cache_revision'=>$cache],'cache_revision'=>$cache];
+saveAnalyticsTaskPolicy($pdo,$admin,['revision'=>1,'action'=>'save_draft','min_confidence'=>.5,'types'=>[['signal_type'=>'CHURN_RISK','enabled'=>true,'priority'=>'HIGH','due_days'=>3],['signal_type'=>'PURCHASE_OVERDUE','enabled'=>false,'priority'=>null,'due_days'=>null]]]);
 $disabled=processAnalyticsEvent($pdo,$events[0],$clients[0],$policy,'disabled',$now);
 verify($disabled['decision']==='DISABLED','Disabled does not process');
 $unapproved=processAnalyticsEvent($pdo,$events[0],$clients[0],$policy,'enabled',$now);
