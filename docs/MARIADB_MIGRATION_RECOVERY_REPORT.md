@@ -1,5 +1,8 @@
 # MARIADB_MIGRATION_RECOVERY_REPORT
 
+Collation-contract follow-up: see [MARIADB_COLLATION_CONTRACT_REPORT.md](MARIADB_COLLATION_CONTRACT_REPORT.md)
+for contract version 2 and the two strictly verified database-default profiles.
+
 PRODUCTION DEPLOYMENT = BLOCKED — NO VERIFIED RECOVERY.
 This tooling does not authorize production writes, migration, deployment or automation.
 

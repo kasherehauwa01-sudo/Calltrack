@@ -1,6 +1,19 @@
 {
-    "contract_version": 1,
+    "contract_version": 2,
     "verified_on": "MariaDB 11.8.6",
+    "database_collation_tables": [
+        "analytics_sync_state",
+        "analytics_delivery_rejections",
+        "analytics_task_policy",
+        "analytics_task_type_policy",
+        "analytics_task_policy_events",
+        "analytics_task_budget",
+        "analytics_task_budget_events",
+        "analytics_automation_sync_state",
+        "analytics_daily_budget_policy",
+        "analytics_daily_budget",
+        "analytics_daily_budget_reservations"
+    ],
     "migrations": {
         "20261020_manager_bindings.sql": {
             "sha256": "e5e79dfbcb1bee70e1d102c27d9c53cf3640289951238584ef80e85dc8c8fce7",

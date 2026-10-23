@@ -2,6 +2,8 @@
 
 Для проверки и безопасного продолжения прерванных миграций analytics см. [MARIADB_MIGRATION_RECOVERY_REPORT.md](docs/MARIADB_MIGRATION_RECOVERY_REPORT.md). CLI сверяет структуру и существующее состояние; слепой повтор SQL-файлов не является восстановлением. Production deployment остаётся заблокированным до проверки восстановления обеих БД.
 
+Проверенные профили сортировки MariaDB 11.8.6 и порядок проверки без перестроения таблиц описаны в [MARIADB_COLLATION_CONTRACT_REPORT.md](docs/MARIADB_COLLATION_CONTRACT_REPORT.md).
+
 
 Android-приложение для корпоративных устройств отдела продаж:
 - выполняет звонки как dialer;
