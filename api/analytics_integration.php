@@ -99,6 +99,7 @@ function analyticsGate(array $event,?array $binding,?array $client,array $manage
     $priorities=$policy['priorities']??[];
     if(!in_array($priorities[$event['signal_type']]??null,['LOW','NORMAL','HIGH','URGENT'],true))$reasons[]='PRIORITY_POLICY_NOT_APPROVED';
     $dueDays=$policy['due_days_by_type'][$event['signal_type']]??null;
+    if(($event['generator_version']??null)==='inactivity/aviator-churn-pilot/1'&&$dueDays!==3)$reasons[]='PILOT_DUE_DAYS_NOT_APPROVED';
     if(!is_int($dueDays)||$dueDays<0||$dueDays>365)$reasons[]='DUE_POLICY_NOT_APPROVED';
     return ['allowed'=>!$reasons,'reasons'=>array_values(array_unique($reasons)),'manager_id'=>$manager['user_id'],'client_id'=>$binding['client_id']??null];
 }
@@ -121,6 +122,7 @@ function processAnalyticsEvent(PDO $pdo,array $event,?array $client,array $polic
         $binding=analyticsBinding($pdo,$subjectKey,true);
         $gate=analyticsGate($event,$binding,$client,managerBindingRows($pdo,true),$policy,$now);$taskId=$old['task_id']??null;
         $budgetReason=null;try{$budgetReason=analyticsBudgetReason(analyticsBudget($pdo,true));}catch(Throwable $e){$budgetReason='BUDGET_UNAVAILABLE';}
+        if(!$budgetReason){try{$budgetReason=analyticsDailyBudgetReason($pdo);}catch(Throwable $e){$budgetReason='DAILY_BUDGET_UNAVAILABLE';}}
         if($budgetReason&&!$taskId){$gate['allowed']=false;$gate['reasons'][]=$budgetReason;}
         $decision=$gate['allowed']?'READY':'BLOCKED';$reasons=$gate['reasons'];
         if($taskId){

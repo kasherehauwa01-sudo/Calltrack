@@ -51,9 +51,18 @@ function createManagerTask(PDO $pdo,array $actor,array $input,?array $automatic=
             $s=$pdo->prepare('SELECT t.* FROM analytics_open_task_slots s JOIN manager_tasks t ON t.id=s.task_id WHERE s.slot_key=?');$s->execute([taskSlot($client,$family)]);
             if($existing=$s->fetch(PDO::FETCH_ASSOC)){if($own)$pdo->commit();return ['task'=>$existing,'existing'=>true];}
         }
-        if($automatic!==null)reserveAnalyticsBudget($pdo);
+        if($automatic!==null){
+            reserveAnalyticsBudget($pdo);
+            analyticsDailyBudgetPolicy($pdo);
+            $createdAt=new DateTimeImmutable('now',new DateTimeZone('UTC'));
+            reserveAnalyticsDailyBudget($pdo,$createdAt,$automatic['signal_key']);
+            if(($signal['generator_version']??null)==='inactivity/aviator-churn-pilot/1'){
+                if(($policy['due_days_by_type']['CHURN_RISK']??null)!==3)throw new DomainException('Pilot requires three calendar days');
+                $due=analyticsPilotDue($createdAt,3);
+            }
+        }
         $id=taskUuid();$evidence=$automatic?json_encode($automatic['evidence'],JSON_THROW_ON_ERROR):null;
-        $pdo->prepare('INSERT INTO manager_tasks(id,client_id,assignee_id,title,description,priority,due_at,result,family,source_signal_key,evidence_json,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$id,$client,$assignee,$title,$description,$priority,$due,'',$family,$automatic['signal_key']??null,$evidence,$automatic?null:(int)$actor['id']]);
+        $pdo->prepare('INSERT INTO manager_tasks(id,client_id,assignee_id,title,description,priority,due_at,result,family,source_signal_key,evidence_json,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$id,$client,$assignee,$title,$description,$priority,$due,'',$family,$automatic['signal_key']??null,$evidence,$automatic?null:(int)$actor['id'],isset($createdAt)?$createdAt->format('Y-m-d H:i:s'):gmdate('Y-m-d H:i:s')]);
         if($family==='INACTIVITY')$pdo->prepare('INSERT INTO analytics_open_task_slots(slot_key,task_id) VALUES(?,?)')->execute([taskSlot($client,$family),$id]);
         taskEvent($pdo,$id,$automatic?null:(int)$actor['id'],'CREATED',['assignee_id'=>$assignee,'priority'=>$priority,'source'=>$automatic?'ANALYTICS':'MANUAL']);
         $s=$pdo->prepare('SELECT * FROM manager_tasks WHERE id=?');$s->execute([$id]);$task=$s->fetch(PDO::FETCH_ASSOC);
