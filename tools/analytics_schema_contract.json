@@ -1,0 +1,2242 @@
+{
+    "contract_version": 1,
+    "verified_on": "MariaDB 11.8.6",
+    "migrations": {
+        "20261020_manager_bindings.sql": {
+            "sha256": "e5e79dfbcb1bee70e1d102c27d9c53cf3640289951238584ef80e85dc8c8fce7",
+            "tables": {
+                "client_manager_bindings": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_unicode_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "designation_key",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "designation",
+                            "COLUMN_TYPE": "varchar(255)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_unicode_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "web_user_id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "revision",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "1",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "updated_by",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "updated_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "on update current_timestamp()",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "ix_client_manager_user",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "web_user_id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "designation_key",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "fk_client_manager_user",
+                            "CONSTRAINT_TYPE": "FOREIGN KEY"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [],
+                    "foreign_keys": [
+                        {
+                            "CONSTRAINT_NAME": "fk_client_manager_user",
+                            "COLUMN_NAME": "web_user_id",
+                            "ORDINAL_POSITION": "1",
+                            "REFERENCED_TABLE_NAME": "web_users",
+                            "REFERENCED_SCHEMA": "__SELF__",
+                            "REFERENCED_COLUMN_NAME": "id",
+                            "UPDATE_RULE": "RESTRICT",
+                            "DELETE_RULE": "RESTRICT"
+                        }
+                    ]
+                },
+                "client_manager_binding_events": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "auto_increment",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "designation_key",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "old_user_id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "new_user_id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "actor_id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "changed_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "ix_manager_binding_event",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "designation_key",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "ix_manager_binding_event",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "2",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [],
+                    "foreign_keys": []
+                }
+            },
+            "seeds": []
+        },
+        "20261020_analytics_tasks.sql": {
+            "sha256": "6a22a6cde875528ec187932a70663250c7b5e8f3f2e6eac824b6dbb952a3227f",
+            "tables": {
+                "analytics_client_bindings": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "subject_key",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "subject_json",
+                            "COLUMN_TYPE": "text",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "client_id",
+                            "COLUMN_TYPE": "varchar(255)",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "status",
+                            "COLUMN_TYPE": "varchar(20)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "technical",
+                            "COLUMN_TYPE": "tinyint(1)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "0",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "evidence",
+                            "COLUMN_TYPE": "text",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "revision",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "1",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "reviewer_id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "updated_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "on update current_timestamp()",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "subject_key",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_2",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CHECK_CLAUSE": "`status` in ('VERIFIED','REVIEW','AMBIGUOUS','NOT_FOUND')"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_2",
+                            "CHECK_CLAUSE": "`status` <> 'VERIFIED' or `client_id` is not null"
+                        }
+                    ],
+                    "foreign_keys": []
+                },
+                "manager_tasks": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "id",
+                            "COLUMN_TYPE": "char(36)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "client_namespace",
+                            "COLUMN_TYPE": "varchar(40)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "'clientsvr'",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "client_id",
+                            "COLUMN_TYPE": "varchar(255)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "assignee_id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "title",
+                            "COLUMN_TYPE": "varchar(255)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "description",
+                            "COLUMN_TYPE": "text",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "status",
+                            "COLUMN_TYPE": "varchar(20)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "'OPEN'",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "priority",
+                            "COLUMN_TYPE": "varchar(12)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "'NORMAL'",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "due_at",
+                            "COLUMN_TYPE": "datetime",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "result",
+                            "COLUMN_TYPE": "text",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "family",
+                            "COLUMN_TYPE": "varchar(32)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "'MANUAL'",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "source_signal_key",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "evidence_json",
+                            "COLUMN_TYPE": "mediumtext",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "version",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "1",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "created_by",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "created_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "updated_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "on update current_timestamp()",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "ix_task_owner_status",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "assignee_id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "ix_task_owner_status",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "2",
+                            "COLUMN_NAME": "status",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "ix_task_owner_status",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "3",
+                            "COLUMN_NAME": "due_at",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "uq_task_signal",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "source_signal_key",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_2",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "fk_manager_task_assignee",
+                            "CONSTRAINT_TYPE": "FOREIGN KEY"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "uq_task_signal",
+                            "CONSTRAINT_TYPE": "UNIQUE"
+                        }
+                    ],
+                    "checks": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CHECK_CLAUSE": "`status` in ('OPEN','IN_PROGRESS','DONE','CANCELLED')"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_2",
+                            "CHECK_CLAUSE": "`priority` in ('LOW','NORMAL','HIGH','URGENT')"
+                        }
+                    ],
+                    "foreign_keys": [
+                        {
+                            "CONSTRAINT_NAME": "fk_manager_task_assignee",
+                            "COLUMN_NAME": "assignee_id",
+                            "ORDINAL_POSITION": "1",
+                            "REFERENCED_TABLE_NAME": "web_users",
+                            "REFERENCED_SCHEMA": "__SELF__",
+                            "REFERENCED_COLUMN_NAME": "id",
+                            "UPDATE_RULE": "RESTRICT",
+                            "DELETE_RULE": "RESTRICT"
+                        }
+                    ]
+                },
+                "analytics_open_task_slots": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "slot_key",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "task_id",
+                            "COLUMN_TYPE": "char(36)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "slot_key",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "task_id",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "task_id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "fk_analytics_slot_task",
+                            "CONSTRAINT_TYPE": "FOREIGN KEY"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "task_id",
+                            "CONSTRAINT_TYPE": "UNIQUE"
+                        }
+                    ],
+                    "checks": [],
+                    "foreign_keys": [
+                        {
+                            "CONSTRAINT_NAME": "fk_analytics_slot_task",
+                            "COLUMN_NAME": "task_id",
+                            "ORDINAL_POSITION": "1",
+                            "REFERENCED_TABLE_NAME": "manager_tasks",
+                            "REFERENCED_SCHEMA": "__SELF__",
+                            "REFERENCED_COLUMN_NAME": "id",
+                            "UPDATE_RULE": "RESTRICT",
+                            "DELETE_RULE": "RESTRICT"
+                        }
+                    ]
+                },
+                "manager_task_events": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "auto_increment",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "task_id",
+                            "COLUMN_TYPE": "char(36)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "actor_id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "event_type",
+                            "COLUMN_TYPE": "varchar(40)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "data_json",
+                            "COLUMN_TYPE": "text",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "created_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "ix_task_event",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "task_id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "ix_task_event",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "2",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "fk_task_event_task",
+                            "CONSTRAINT_TYPE": "FOREIGN KEY"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [],
+                    "foreign_keys": [
+                        {
+                            "CONSTRAINT_NAME": "fk_task_event_task",
+                            "COLUMN_NAME": "task_id",
+                            "ORDINAL_POSITION": "1",
+                            "REFERENCED_TABLE_NAME": "manager_tasks",
+                            "REFERENCED_SCHEMA": "__SELF__",
+                            "REFERENCED_COLUMN_NAME": "id",
+                            "UPDATE_RULE": "RESTRICT",
+                            "DELETE_RULE": "RESTRICT"
+                        }
+                    ]
+                },
+                "analytics_inbox": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "signal_key",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "source",
+                            "COLUMN_TYPE": "varchar(40)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "signal_id",
+                            "COLUMN_TYPE": "varchar(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "signal_revision",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "payload_hash",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "payload_json",
+                            "COLUMN_TYPE": "mediumtext",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "subject_key",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "decision",
+                            "COLUMN_TYPE": "varchar(40)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "reasons_json",
+                            "COLUMN_TYPE": "text",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "task_id",
+                            "COLUMN_TYPE": "char(36)",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "processed_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "ix_analytics_decision",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "decision",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "ix_analytics_decision",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "2",
+                            "COLUMN_NAME": "processed_at",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "signal_key",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "uq_analytics_inbox_source",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "source",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "uq_analytics_inbox_source",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "2",
+                            "COLUMN_NAME": "signal_id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "uq_analytics_inbox_source",
+                            "CONSTRAINT_TYPE": "UNIQUE"
+                        }
+                    ],
+                    "checks": [],
+                    "foreign_keys": []
+                },
+                "analytics_processing_events": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "auto_increment",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "signal_key",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "signal_revision",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "decision",
+                            "COLUMN_TYPE": "varchar(40)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "reasons_json",
+                            "COLUMN_TYPE": "text",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "processed_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "ix_analytics_processing_signal",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "signal_key",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "ix_analytics_processing_signal",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "2",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [],
+                    "foreign_keys": []
+                },
+                "analytics_client_binding_events": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "auto_increment",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "subject_key",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "actor_id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "data_json",
+                            "COLUMN_TYPE": "text",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "created_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "ix_client_binding_event",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "subject_key",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "ix_client_binding_event",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "2",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [],
+                    "foreign_keys": []
+                },
+                "analytics_sync_state": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "id",
+                            "COLUMN_TYPE": "int(11)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "publication_sequence",
+                            "COLUMN_TYPE": "bigint(20)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "0",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "current_run_id",
+                            "COLUMN_TYPE": "varchar(36)",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "current_sequence",
+                            "COLUMN_TYPE": "bigint(20)",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "after_change",
+                            "COLUMN_TYPE": "bigint(20)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "0",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CHECK_CLAUSE": "`id` = 1"
+                        }
+                    ],
+                    "foreign_keys": []
+                },
+                "analytics_delivery_rejections": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "event_key",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "run_id",
+                            "COLUMN_TYPE": "varchar(36)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "signal_id",
+                            "COLUMN_TYPE": "varchar(64)",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "reason_code",
+                            "COLUMN_TYPE": "varchar(40)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "event_hash",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "created_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "event_key",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [],
+                    "foreign_keys": []
+                }
+            },
+            "seeds": [
+                "analytics_sync_state"
+            ]
+        },
+        "20261020_analytics_task_policy.sql": {
+            "sha256": "88259a2100cdec66a00da48e6c3985bdbb79539071c61c3e6068222096b502a2",
+            "tables": {
+                "analytics_task_policy": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "id",
+                            "COLUMN_TYPE": "int(11)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "revision",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "1",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "min_confidence",
+                            "COLUMN_TYPE": "decimal(5,4)",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "approved",
+                            "COLUMN_TYPE": "tinyint(1)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "0",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "approved_by",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "approved_at",
+                            "COLUMN_TYPE": "datetime",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_2",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CHECK_CLAUSE": "`id` = 1"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_2",
+                            "CHECK_CLAUSE": "`min_confidence` is null or `min_confidence` between 0 and 1"
+                        }
+                    ],
+                    "foreign_keys": []
+                },
+                "analytics_task_type_policy": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "signal_type",
+                            "COLUMN_TYPE": "varchar(32)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "enabled",
+                            "COLUMN_TYPE": "tinyint(1)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "0",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "priority",
+                            "COLUMN_TYPE": "varchar(12)",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "due_days",
+                            "COLUMN_TYPE": "int(11)",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "signal_type",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_2",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_3",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CHECK_CLAUSE": "`signal_type` in ('PURCHASE_OVERDUE','CHURN_RISK')"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_2",
+                            "CHECK_CLAUSE": "`priority` is null or `priority` in ('LOW','NORMAL','HIGH','URGENT')"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_3",
+                            "CHECK_CLAUSE": "`due_days` is null or `due_days` between 0 and 365"
+                        }
+                    ],
+                    "foreign_keys": []
+                },
+                "analytics_task_policy_events": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "auto_increment",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "actor_id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "revision",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "action",
+                            "COLUMN_TYPE": "varchar(20)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "policy_json",
+                            "COLUMN_TYPE": "text",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "created_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [],
+                    "foreign_keys": []
+                }
+            },
+            "seeds": [
+                "analytics_task_policy",
+                "analytics_task_type_policy"
+            ]
+        },
+        "20261022_analytics_budget.sql": {
+            "sha256": "4206a9eab7d71b621cfc414329f8ce5c38bcd360a6d4f46f94530c82b0be08df",
+            "tables": {
+                "analytics_task_budget": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "id",
+                            "COLUMN_TYPE": "int(11)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "approved",
+                            "COLUMN_TYPE": "tinyint(1)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "0",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "max_tasks",
+                            "COLUMN_TYPE": "int(11)",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "used_tasks",
+                            "COLUMN_TYPE": "int(11)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "0",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "revision",
+                            "COLUMN_TYPE": "bigint(20)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "1",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_2",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_3",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CHECK_CLAUSE": "`id` = 1"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_2",
+                            "CHECK_CLAUSE": "`max_tasks` is null or `max_tasks` >= 0"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_3",
+                            "CHECK_CLAUSE": "`used_tasks` >= 0"
+                        }
+                    ],
+                    "foreign_keys": []
+                },
+                "analytics_task_budget_events": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "auto_increment",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "actor_id",
+                            "COLUMN_TYPE": "bigint(20) unsigned",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "revision",
+                            "COLUMN_TYPE": "bigint(20)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "data_json",
+                            "COLUMN_TYPE": "text",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "created_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [],
+                    "foreign_keys": []
+                },
+                "analytics_automation_sync_state": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "id",
+                            "COLUMN_TYPE": "int(11)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "publication_sequence",
+                            "COLUMN_TYPE": "bigint(20)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "0",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "current_run_id",
+                            "COLUMN_TYPE": "varchar(36)",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "current_sequence",
+                            "COLUMN_TYPE": "bigint(20)",
+                            "IS_NULLABLE": "YES",
+                            "COLUMN_DEFAULT": "NULL",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "after_change",
+                            "COLUMN_TYPE": "bigint(20)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "0",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [
+                        {
+                            "CONSTRAINT_NAME": "CONSTRAINT_1",
+                            "CHECK_CLAUSE": "`id` = 1"
+                        }
+                    ],
+                    "foreign_keys": []
+                }
+            },
+            "seeds": [
+                "analytics_task_budget",
+                "analytics_automation_sync_state"
+            ]
+        },
+        "20261023_analytics_daily_budget.sql": {
+            "sha256": "feb81593793b2bd615e5cc71ea2e095100c52bb872d8f4f75450de5e6aedbde8",
+            "tables": {
+                "analytics_daily_budget_policy": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "id",
+                            "COLUMN_TYPE": "tinyint(4)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "policy_version",
+                            "COLUMN_TYPE": "varchar(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "timezone",
+                            "COLUMN_TYPE": "varchar(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "utf8mb4",
+                            "COLLATION_NAME": "utf8mb4_uca1400_ai_ci",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "max_tasks",
+                            "COLUMN_TYPE": "int(11)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "ck_daily_policy_id",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "ck_daily_policy_max",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [
+                        {
+                            "CONSTRAINT_NAME": "ck_daily_policy_id",
+                            "CHECK_CLAUSE": "`id` = 1"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "ck_daily_policy_max",
+                            "CHECK_CLAUSE": "`max_tasks` = 5"
+                        }
+                    ],
+                    "foreign_keys": []
+                },
+                "analytics_daily_budget": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "policy_id",
+                            "COLUMN_TYPE": "tinyint(4)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "business_date",
+                            "COLUMN_TYPE": "date",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "used_tasks",
+                            "COLUMN_TYPE": "int(11)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "0",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "policy_id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "2",
+                            "COLUMN_NAME": "business_date",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "ck_daily_used",
+                            "CONSTRAINT_TYPE": "CHECK"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "fk_daily_policy",
+                            "CONSTRAINT_TYPE": "FOREIGN KEY"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [
+                        {
+                            "CONSTRAINT_NAME": "ck_daily_used",
+                            "CHECK_CLAUSE": "`used_tasks` between 0 and 5"
+                        }
+                    ],
+                    "foreign_keys": [
+                        {
+                            "CONSTRAINT_NAME": "fk_daily_policy",
+                            "COLUMN_NAME": "policy_id",
+                            "ORDINAL_POSITION": "1",
+                            "REFERENCED_TABLE_NAME": "analytics_daily_budget_policy",
+                            "REFERENCED_SCHEMA": "__SELF__",
+                            "REFERENCED_COLUMN_NAME": "id",
+                            "UPDATE_RULE": "RESTRICT",
+                            "DELETE_RULE": "RESTRICT"
+                        }
+                    ]
+                },
+                "analytics_daily_budget_reservations": {
+                    "table": {
+                        "ENGINE": "InnoDB",
+                        "TABLE_COLLATION": "utf8mb4_uca1400_ai_ci"
+                    },
+                    "columns": [
+                        {
+                            "COLUMN_NAME": "reservation_key",
+                            "COLUMN_TYPE": "char(64)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": "ascii",
+                            "COLLATION_NAME": "ascii_bin",
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "policy_id",
+                            "COLUMN_TYPE": "tinyint(4)",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "business_date",
+                            "COLUMN_TYPE": "date",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": null,
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        },
+                        {
+                            "COLUMN_NAME": "reserved_at",
+                            "COLUMN_TYPE": "timestamp",
+                            "IS_NULLABLE": "NO",
+                            "COLUMN_DEFAULT": "current_timestamp()",
+                            "EXTRA": "",
+                            "CHARACTER_SET_NAME": null,
+                            "COLLATION_NAME": null,
+                            "GENERATION_EXPRESSION": null
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "INDEX_NAME": "ix_daily_reservation_bucket",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "policy_id",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "ix_daily_reservation_bucket",
+                            "NON_UNIQUE": "1",
+                            "SEQ_IN_INDEX": "2",
+                            "COLUMN_NAME": "business_date",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        },
+                        {
+                            "INDEX_NAME": "PRIMARY",
+                            "NON_UNIQUE": "0",
+                            "SEQ_IN_INDEX": "1",
+                            "COLUMN_NAME": "reservation_key",
+                            "COLLATION": "A",
+                            "SUB_PART": null,
+                            "INDEX_TYPE": "BTREE"
+                        }
+                    ],
+                    "constraints": [
+                        {
+                            "CONSTRAINT_NAME": "fk_daily_reservation_bucket",
+                            "CONSTRAINT_TYPE": "FOREIGN KEY"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "PRIMARY",
+                            "CONSTRAINT_TYPE": "PRIMARY KEY"
+                        }
+                    ],
+                    "checks": [],
+                    "foreign_keys": [
+                        {
+                            "CONSTRAINT_NAME": "fk_daily_reservation_bucket",
+                            "COLUMN_NAME": "policy_id",
+                            "ORDINAL_POSITION": "1",
+                            "REFERENCED_TABLE_NAME": "analytics_daily_budget",
+                            "REFERENCED_SCHEMA": "__SELF__",
+                            "REFERENCED_COLUMN_NAME": "policy_id",
+                            "UPDATE_RULE": "RESTRICT",
+                            "DELETE_RULE": "RESTRICT"
+                        },
+                        {
+                            "CONSTRAINT_NAME": "fk_daily_reservation_bucket",
+                            "COLUMN_NAME": "business_date",
+                            "ORDINAL_POSITION": "2",
+                            "REFERENCED_TABLE_NAME": "analytics_daily_budget",
+                            "REFERENCED_SCHEMA": "__SELF__",
+                            "REFERENCED_COLUMN_NAME": "business_date",
+                            "UPDATE_RULE": "RESTRICT",
+                            "DELETE_RULE": "RESTRICT"
+                        }
+                    ]
+                }
+            },
+            "seeds": [
+                "analytics_daily_budget_policy"
+            ]
+        }
+    }
+}
