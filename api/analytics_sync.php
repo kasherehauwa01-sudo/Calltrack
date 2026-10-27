@@ -25,21 +25,36 @@ function rejectAnalyticsDelivery(PDO $pdo,array $event,string $runId,string $rea
     $pdo->prepare('INSERT INTO analytics_delivery_rejections(event_key,run_id,signal_id,reason_code,event_hash) VALUES(?,?,?,?,?)')->execute([$key,$runId,$id,$reason,$hash]);
 }
 /** Caller holds single-consumer DB/CLI lock. Every retry reuses immutable run ID. */
+function analyticsFeedPath(string $path):string {
+    $feed=getenv('CALLTRACK_ANALYTICS_FEED')?:'shadow';
+    if(!in_array($feed,['shadow','approved_churn'],true))throw new RuntimeException('Invalid analytics feed');
+    return $feed==='approved_churn'?str_replace('/analytics/','/analytics/automation/',$path):$path;
+}
 function syncAnalytics(PDO $pdo,string $mode,array $policy,?callable $transport=null,int $maxPages=5): array {
     if($mode==='disabled')return ['mode'=>$mode,'pages'=>0,'processed'=>0];
     if(!in_array($mode,['dry_run','enabled'],true))throw new InvalidArgumentException('Invalid mode');
+    $stateTable=(getenv('CALLTRACK_ANALYTICS_FEED')?:'shadow')==='approved_churn'?'analytics_automation_sync_state':'analytics_sync_state';
     $result=['mode'=>$mode,'pages'=>0,'processed'=>0,'rejected'=>0];
     for($page=0;$page<min(20,max(1,$maxPages));$page++){
-        $state=$pdo->query('SELECT * FROM analytics_sync_state WHERE id=1')->fetch(PDO::FETCH_ASSOC);if(!$state)throw new RuntimeException('Sync migration missing');
+        $state=$pdo->query('SELECT * FROM '.$stateTable.' WHERE id=1')->fetch(PDO::FETCH_ASSOC);if(!$state)throw new RuntimeException('Sync migration missing');
         if(!$state['current_run_id']){
-            $response=salesJournalRequest('GET','/api/integrations/calltrack/analytics/publications?after='.(int)$state['publication_sequence'].'&page_size=1',null,$transport);
-            $publication=$response['items'][0]??null;if(!$publication)break;
+            $response=salesJournalRequest('GET',analyticsFeedPath('/api/integrations/calltrack/analytics/publications?after='.(int)$state['publication_sequence'].'&page_size=1'),null,$transport);
+            if(!is_array($response['items']??null)||!array_is_list($response['items'])||count($response['items'])>1
+                ||!array_key_exists('next_after',$response)||!is_bool($response['automation_allowed']??null))throw new RuntimeException('Invalid publication page');
+            $publication=$response['items'][0]??null;
+            $publicationNext=$response['next_after'];
+            if($publicationNext!==null&&(!is_int($publicationNext)||$publicationNext<=(int)$state['publication_sequence']||!$publication))throw new RuntimeException('Invalid publication cursor');
+            if(!$publication)break;
             if(!is_int($publication['sequence']??null)||$publication['sequence']<=(int)$state['publication_sequence']||!preg_match('/^[a-zA-Z0-9-]{1,36}$/D',(string)($publication['run_id']??'')))throw new RuntimeException('Invalid publication');
-            $pdo->prepare('UPDATE analytics_sync_state SET current_run_id=?,current_sequence=?,after_change=0 WHERE id=1')->execute([$publication['run_id'],$publication['sequence']]);
+            $pdo->prepare('UPDATE '.$stateTable.' SET current_run_id=?,current_sequence=?,after_change=0 WHERE id=1')->execute([$publication['run_id'],$publication['sequence']]);
             $state['current_run_id']=$publication['run_id'];$state['current_sequence']=$publication['sequence'];$state['after_change']=0;
         }
-        $response=salesJournalRequest('GET','/api/integrations/calltrack/analytics/runs/'.rawurlencode($state['current_run_id']).'/changes?after='.(int)$state['after_change'].'&page_size=50',null,$transport);
-        if(($response['run']['id']??null)!==$state['current_run_id']||($response['run']['status']??null)!=='SUCCEEDED'||!is_array($response['items']??null)||count($response['items'])>50)throw new RuntimeException('Invalid frozen run page');
+        $response=salesJournalRequest('GET',analyticsFeedPath('/api/integrations/calltrack/analytics/runs/'.rawurlencode($state['current_run_id']).'/changes?after='.(int)$state['after_change'].'&page_size=50'),null,$transport);
+        if(($response['run']['id']??null)!==$state['current_run_id']||($response['run']['status']??null)!=='SUCCEEDED'||!is_array($response['items']??null)||!array_is_list($response['items'])||count($response['items'])>50
+            ||!array_key_exists('next_after',$response)||!is_bool($response['automation_allowed']??null))throw new RuntimeException('Invalid frozen run page');
+        // Validate progress before processing any receipt/task. Missing cursor is not end-of-run.
+        $next=$response['next_after'];
+        if($next!==null&&(!is_int($next)||$next<=(int)$state['after_change']||!$response['items']))throw new RuntimeException('Invalid progress cursor');
         $events=$response['items'];$ids=[];$valid=[];
         foreach($events as $event){
             if(!is_array($event))throw new RuntimeException('Invalid event page');
@@ -56,11 +71,9 @@ function syncAnalytics(PDO $pdo,string $mode,array $policy,?callable $transport=
             $currentPolicy=$policy;$currentPolicy['cache_revision']=clientCatalogRevision();
             foreach($valid as $event){$binding=analyticsBinding($pdo,analyticsSubjectKey($event['subject'],$event['run']['scope']));try{processAnalyticsEvent($pdo,$event,$clients[(string)($binding['client_id']??'')]??null,$currentPolicy,$mode,time());$result['processed']++;}catch(TaskConflict $e){rejectAnalyticsDelivery($pdo,$event,$state['current_run_id'],'EVENT_CONFLICT');$result['rejected']++;}}
         }finally{flock($refreshLock,LOCK_UN);fclose($refreshLock);}
-        $next=$response['next_after']??null;
         if($next!==null){
-            if(!is_int($next)||$next<=(int)$state['after_change']||!$events)throw new RuntimeException('Invalid progress cursor');
-            $pdo->prepare('UPDATE analytics_sync_state SET after_change=? WHERE id=1')->execute([$next]);
-        }else{$pdo->prepare('UPDATE analytics_sync_state SET publication_sequence=current_sequence,current_run_id=NULL,current_sequence=NULL,after_change=0 WHERE id=1')->execute();}
+            $pdo->prepare('UPDATE '.$stateTable.' SET after_change=? WHERE id=1')->execute([$next]);
+        }else{$pdo->prepare('UPDATE '.$stateTable.' SET publication_sequence=current_sequence,current_run_id=NULL,current_sequence=NULL,after_change=0 WHERE id=1')->execute();}
         $result['pages']++;
     }
     return $result;

@@ -55,6 +55,13 @@ function analyticsSourceCurrent(array $evidence,string $day,string $revision,int
 function analyticsGate(array $event,?array $binding,?array $client,array $managers,array $policy,int $now): array {
     analyticsValidateEvent($event);$reasons=[];$run=$event['run'];$source=$run['source_decision']??[];
     if(($event['automation_allowed']??false)!==true||$event['mode']!=='AUTOMATION_APPROVED'||($run['automation_allowed']??false)!==true)$reasons[]='SHADOW_OR_AUTOMATION_NOT_APPROVED';
+    if($event['signal_type']!=='CHURN_RISK')$reasons[]='PHASE1_CHURN_ONLY';
+    if($event['mode']==='AUTOMATION_APPROVED'&&(
+        ($event['subject']['kind']??null)!=='external_id'||!is_array($event['assignment']??null)
+        ||($event['assignment']['binding_revision']??0)<1
+        ||($source['method']??null)!=='INDEPENDENT_SIGNED_UPSTREAM_MANIFEST_V1'
+        ||!preg_match('/^[a-f0-9]{64}$/D',(string)($source['proof_hash']??''))
+        ||!is_int($source['policy_revision']??null)||$source['policy_revision']<1))$reasons[]='PHASE1_APPROVAL_CONTRACT_REQUIRED';
     $scope=$run['scope']['policy']??'';
     if($scope===''||!in_array($scope,$policy['approved_scope_policies']??[],true))$reasons[]='SCOPE_NOT_APPROVED';
     $scopeHash=hash('sha256',json_encode(analyticsCanonical($run['scope']),JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
@@ -68,7 +75,13 @@ function analyticsGate(array $event,?array $binding,?array $client,array $manage
     if($client&&($client['manager_conflict']??false))$reasons[]='MANAGER_FIELD_CONFLICT';
     if($client&&in_array($client['status'],['archived','Архивный'],true))$reasons[]='CLIENT_ARCHIVED';
     if(!$binding||!array_key_exists('technical',$binding)||(int)$binding['technical']!==0)$reasons[]='TECHNICAL_OR_UNREVIEWED_CLIENT';
+    if(($event['subject']['kind']??'')==='external_id'&&($event['subject']['key']??null)!==($client['id']??null))$reasons[]='EXTERNAL_ID_MISMATCH';
+    if(isset($event['assignment'])){
+        $until=strtotime((string)($source['valid_until']??''));
+        if(($event['assignment']['client_id']??null)!==($client['id']??null)||$until===false||$until<=$now)$reasons[]='PRODUCER_ASSIGNMENT_OR_PROOF_INVALID';
+    }
     $manager=resolveBoundManager((string)($client['manager']??''),$managers);
+    if(isset($event['assignment'])&&($event['assignment']['manager_id']??null)!==$manager['user_id'])$reasons[]='PRODUCER_MANAGER_MISMATCH';
     if($manager['status']!=='VERIFIED')$reasons[]=$manager['status'];
     if($event['status']!=='ACTIVE')$reasons[]='SOURCE_'.$event['status'];
     if($event['last_purchase']>$event['as_of'])$reasons[]='PURCHASE_AFTER_CALCULATION';
@@ -86,6 +99,7 @@ function analyticsGate(array $event,?array $binding,?array $client,array $manage
     $priorities=$policy['priorities']??[];
     if(!in_array($priorities[$event['signal_type']]??null,['LOW','NORMAL','HIGH','URGENT'],true))$reasons[]='PRIORITY_POLICY_NOT_APPROVED';
     $dueDays=$policy['due_days_by_type'][$event['signal_type']]??null;
+    if(($event['generator_version']??null)==='inactivity/aviator-churn-pilot/1'&&$dueDays!==3)$reasons[]='PILOT_DUE_DAYS_NOT_APPROVED';
     if(!is_int($dueDays)||$dueDays<0||$dueDays>365)$reasons[]='DUE_POLICY_NOT_APPROVED';
     return ['allowed'=>!$reasons,'reasons'=>array_values(array_unique($reasons)),'manager_id'=>$manager['user_id'],'client_id'=>$binding['client_id']??null];
 }
@@ -107,6 +121,9 @@ function processAnalyticsEvent(PDO $pdo,array $event,?array $client,array $polic
         $policy=array_replace($policy,analyticsTaskPolicyGateConfig(analyticsTaskPolicy($pdo,true)));
         $binding=analyticsBinding($pdo,$subjectKey,true);
         $gate=analyticsGate($event,$binding,$client,managerBindingRows($pdo,true),$policy,$now);$taskId=$old['task_id']??null;
+        $budgetReason=null;try{$budgetReason=analyticsBudgetReason(analyticsBudget($pdo,true));}catch(Throwable $e){$budgetReason='BUDGET_UNAVAILABLE';}
+        if(!$budgetReason){try{$budgetReason=analyticsDailyBudgetReason($pdo);}catch(Throwable $e){$budgetReason='DAILY_BUDGET_UNAVAILABLE';}}
+        if($budgetReason&&!$taskId){$gate['allowed']=false;$gate['reasons'][]=$budgetReason;}
         $decision=$gate['allowed']?'READY':'BLOCKED';$reasons=$gate['reasons'];
         if($taskId){
             $s=$pdo->prepare('SELECT * FROM manager_tasks WHERE id=?');$s->execute([$taskId]);$task=$s->fetch(PDO::FETCH_ASSOC);

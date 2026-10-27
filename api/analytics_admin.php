@@ -2,12 +2,13 @@
 declare(strict_types=1);
 require_once __DIR__.'/config.php';
 require_once __DIR__.'/analytics_sync.php';
+require_once __DIR__.'/analytics_candidate_report.php';
 try{
     $pdo=getPdo();$admin=requireWebAdmin($pdo);$method=$_SERVER['REQUEST_METHOD'];
     if($method==='GET'){
         $counts=$pdo->query('SELECT decision,COUNT(*) AS total FROM analytics_inbox GROUP BY decision')->fetchAll(PDO::FETCH_ASSOC);
         $after=(string)($_GET['after']??'');$s=$pdo->prepare('SELECT signal_key,source,signal_id,signal_revision,subject_key,decision,reasons_json,task_id,processed_at,payload_json FROM analytics_inbox WHERE signal_key>? ORDER BY signal_key LIMIT 51');$s->execute([$after]);$items=$s->fetchAll(PDO::FETCH_ASSOC);$more=count($items)>50;$items=array_slice($items,0,50);
-        foreach($items as &$item){$payload=json_decode($item['payload_json'],true,64,JSON_THROW_ON_ERROR);unset($item['payload_json']);$item['subject']=$payload['subject'];$item['signal_type']=$payload['signal_type'];$item['last_purchase']=$payload['last_purchase'];$item['as_of']=$payload['as_of'];$item['metrics']=$payload['metrics'];$item['score']=$payload['score'];$item['confidence']=$payload['confidence'];$item['binding']=analyticsBinding($pdo,$item['subject_key']);}unset($item);
+        foreach($items as &$item){$payload=json_decode($item['payload_json'],true,64,JSON_THROW_ON_ERROR);unset($item['payload_json']);$item['subject']=$payload['subject'];$item['signal_type']=$payload['signal_type'];$item['last_purchase']=$payload['last_purchase'];$item['as_of']=$payload['as_of'];$item['metrics']=$payload['metrics'];$item['score']=$payload['score'];$item['confidence']=$payload['confidence'];$item['binding']=analyticsBinding($pdo,$item['subject_key']);$item['candidate']=analyticsCandidateReportLookup($payload);}unset($item);
         $completed=(int)$pdo->query("SELECT COUNT(*) FROM manager_tasks WHERE source_signal_key IS NOT NULL AND status='DONE'")->fetchColumn();
         $summary=$pdo->query("SELECT COUNT(*) AS received,SUM(CASE WHEN decision IN ('READY','DRY_RUN_READY','TASK_CREATED','TASK_EXISTS') THEN 1 ELSE 0 END) AS passed,SUM(CASE WHEN decision='BLOCKED' THEN 1 ELSE 0 END) AS blocked,SUM(CASE WHEN decision='REVIEW' OR reasons_json LIKE '%IDENTITY_%' OR reasons_json LIKE '%UNMAPPED_MANAGER%' OR reasons_json LIKE '%TECHNICAL_%' THEN 1 ELSE 0 END) AS review,SUM(CASE WHEN decision='TASK_EXISTS' THEN 1 ELSE 0 END) AS existing_tasks,SUM(CASE WHEN reasons_json LIKE '%MISSING_MANAGER%' OR reasons_json LIKE '%UNMAPPED_MANAGER%' OR reasons_json LIKE '%INACTIVE_OR_INELIGIBLE_MANAGER%' THEN 1 ELSE 0 END) AS without_eligible_manager FROM analytics_inbox")->fetch(PDO::FETCH_ASSOC);
         $summary['rejected_events']=(int)$pdo->query('SELECT COUNT(*) FROM analytics_delivery_rejections')->fetchColumn();
@@ -31,6 +32,7 @@ try{
         if(($body['confirm_all_sales_scope']??false)!==true)throw new InvalidArgumentException('Подтвердите проверку всей группы исторических продаж, а не только имени/телефона');
         if(($body['technical']??null)===false&&($body['confirm_nontechnical']??false)!==true)throw new InvalidArgumentException('Подтвердите, что клиент не является техническим или агрегатным');
         if(!$clientId)throw new InvalidArgumentException('Укажите настоящий ClientsVR client_id');
+        if(($event['subject']['kind']??null)==='external_id'&&$clientId!==$event['subject']['key'])throw new InvalidArgumentException('ClientsVR client_id должен совпадать с external_id исходного сигнала');
         $record=analyticsDirectoryRecords([$clientId])[$clientId]??null;if(!$record)throw new InvalidArgumentException('Уникальный ID не найден в кэше ClientsVR');
     }
     $evidence=taskText($body['evidence']??null,2000);if(!is_bool($body['technical']??null))throw new InvalidArgumentException('Укажите признак технического клиента');

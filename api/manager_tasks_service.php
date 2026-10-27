@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__.'/web_auth.php';
 class TaskConflict extends RuntimeException {}
+require_once __DIR__.'/analytics_budget_service.php';
 function taskUuid(): string { $h=bin2hex(random_bytes(16));return substr($h,0,8).'-'.substr($h,8,4).'-4'.substr($h,13,3).'-'.dechex((hexdec($h[16])&3)|8).substr($h,17,3).'-'.substr($h,20); }
 function taskSlot(string $clientId,string $family): string { return hash('sha256',json_encode(['clientsvr',$clientId,$family],JSON_THROW_ON_ERROR)); }
 function taskCanRead(array $actor,array $task): bool { return in_array($actor['role']??'',['admin','supervisor'],true)||(($actor['role']??'')==='manager'&&(int)$task['assignee_id']===(int)$actor['id']); }
@@ -31,14 +32,37 @@ function createManagerTask(PDO $pdo,array $actor,array $input,?array $automatic=
     if($automatic!==null&&(($automatic['allowed']??false)!==true||empty($automatic['signal_key'])))throw new DomainException('Автоматизация не разрешена');
     $own=!$pdo->inTransaction();if($own)$pdo->beginTransaction();
     try {
+        if($automatic!==null){
+            // Defense in depth: a direct internal caller cannot bypass persisted revocation.
+            require_once __DIR__.'/analytics_task_policy.php';
+            $policy=analyticsTaskPolicyGateConfig(analyticsTaskPolicy($pdo,true));
+            $signal=$automatic['evidence']['signal']??[];
+            if(($policy['policy_approved']??false)!==true||!in_array('CHURN_RISK',$policy['enabled_types'],true)
+                ||($signal['signal_type']??null)!=='CHURN_RISK'||($signal['mode']??null)!=='AUTOMATION_APPROVED'
+                ||($signal['automation_allowed']??false)!==true||($signal['status']??null)!=='ACTIVE'
+                ||($signal['subject']['kind']??null)!=='external_id'||($signal['subject']['key']??null)!==$client
+                ||($signal['assignment']['client_id']??null)!==$client||($signal['assignment']['manager_id']??null)!==$assignee){
+                throw new DomainException('Persisted CHURN policy and approved assignment required');
+            }
+        }
         taskAssignee($pdo,$assignee);
         if($automatic!==null){$s=$pdo->prepare('SELECT * FROM manager_tasks WHERE source_signal_key=?');$s->execute([$automatic['signal_key']]);if($existing=$s->fetch(PDO::FETCH_ASSOC)){if($own)$pdo->commit();return ['task'=>$existing,'existing'=>true];}}
         if($family==='INACTIVITY'){
             $s=$pdo->prepare('SELECT t.* FROM analytics_open_task_slots s JOIN manager_tasks t ON t.id=s.task_id WHERE s.slot_key=?');$s->execute([taskSlot($client,$family)]);
             if($existing=$s->fetch(PDO::FETCH_ASSOC)){if($own)$pdo->commit();return ['task'=>$existing,'existing'=>true];}
         }
+        if($automatic!==null){
+            reserveAnalyticsBudget($pdo);
+            analyticsDailyBudgetPolicy($pdo);
+            $createdAt=new DateTimeImmutable('now',new DateTimeZone('UTC'));
+            reserveAnalyticsDailyBudget($pdo,$createdAt,$automatic['signal_key']);
+            if(($signal['generator_version']??null)==='inactivity/aviator-churn-pilot/1'){
+                if(($policy['due_days_by_type']['CHURN_RISK']??null)!==3)throw new DomainException('Pilot requires three calendar days');
+                $due=analyticsPilotDue($createdAt,3);
+            }
+        }
         $id=taskUuid();$evidence=$automatic?json_encode($automatic['evidence'],JSON_THROW_ON_ERROR):null;
-        $pdo->prepare('INSERT INTO manager_tasks(id,client_id,assignee_id,title,description,priority,due_at,result,family,source_signal_key,evidence_json,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$id,$client,$assignee,$title,$description,$priority,$due,'',$family,$automatic['signal_key']??null,$evidence,$automatic?null:(int)$actor['id']]);
+        $pdo->prepare('INSERT INTO manager_tasks(id,client_id,assignee_id,title,description,priority,due_at,result,family,source_signal_key,evidence_json,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$id,$client,$assignee,$title,$description,$priority,$due,'',$family,$automatic['signal_key']??null,$evidence,$automatic?null:(int)$actor['id'],isset($createdAt)?$createdAt->format('Y-m-d H:i:s'):gmdate('Y-m-d H:i:s')]);
         if($family==='INACTIVITY')$pdo->prepare('INSERT INTO analytics_open_task_slots(slot_key,task_id) VALUES(?,?)')->execute([taskSlot($client,$family),$id]);
         taskEvent($pdo,$id,$automatic?null:(int)$actor['id'],'CREATED',['assignee_id'=>$assignee,'priority'=>$priority,'source'=>$automatic?'ANALYTICS':'MANUAL']);
         $s=$pdo->prepare('SELECT * FROM manager_tasks WHERE id=?');$s->execute([$id]);$task=$s->fetch(PDO::FETCH_ASSOC);

@@ -72,13 +72,139 @@
       try {const result = await api(endpoint,'POST',data);showTask(result.id);}catch(error){panel().querySelector('#newTaskMessage').textContent = error.message;}
     };
   }
+  const candidateView = row => {
+    const c = row.candidate;
+    if (!c || c.status !== 'CANDIDATE') return '';
+
+    const ids = Array.isArray(c.client_ids) ? c.client_ids : [];
+
+    return `<div class="analytics-candidate-box">
+      <strong>Предварительное сопоставление — ${esc(c.manager_name)}</strong>
+      <p>Ответственный менеджер · ID ${esc(c.manager_id)}</p>
+      <p>Найдены рабочие карточки ClientsVR:</p>
+      <div class="analytics-candidate-options">
+        ${ids.map(id => `<button type="button"
+          class="updates-action-btn"
+          data-candidate-id="${esc(id)}"
+          data-candidate-signal="${esc(row.signal_key)}"
+          title="Подставить ID без подтверждения клиента"
+        >Карточка ${esc(id)}</button>`).join('')}
+      </div>
+      <p class="analytics-review-note">
+        Выбор карточки только заполняет форму. Если карточек несколько,
+        необходимо проверить всю историю продаж и установить,
+        какая карточка должна быть привязана.
+      </p>
+      <p role="status" class="analytics-candidate-message"></p>
+    </div>`;
+  };
+
+  const analyticsReviewStyle = `<style>
+    .analytics-candidate-box {
+      margin: 16px 0;
+      padding: 18px;
+      background: #fff;
+      border: 1px solid #d7dfe9;
+      border-radius: 14px;
+    }
+    .analytics-candidate-box p {
+      margin: 9px 0;
+      line-height: 1.5;
+    }
+    .analytics-candidate-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .analytics-review-note {
+      color: #526173;
+      font-size: .9em;
+    }
+    .analytics-review-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px 18px;
+      margin-top: 14px;
+      align-items: start;
+    }
+    .analytics-review-form > label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+      line-height: 1.45;
+    }
+    .analytics-review-form > label:has(input[type="checkbox"]) {
+      grid-column: 1 / -1;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .analytics-review-form input[type="checkbox"] {
+      flex: 0 0 auto;
+      margin: 4px 0 0;
+      width: 17px;
+      height: 17px;
+    }
+    .analytics-review-form input:not([type="checkbox"]),
+    .analytics-review-form select,
+    .analytics-review-form textarea {
+      box-sizing: border-box;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #fff;
+      color: #172336;
+      font: inherit;
+    }
+    .analytics-review-form label:has(textarea),
+    .analytics-review-form > button,
+    .analytics-review-form > p[role="status"] {
+      grid-column: 1 / -1;
+    }
+    .analytics-review-form textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+    .analytics-review-form > button {
+      justify-self: start;
+    }
+    @media (max-width: 700px) {
+      .analytics-review-form {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+  </style>`;
+
   async function showDiagnostics(after = '') {
     window.closeAnalyticsTaskPolicy?.();
     const requestEpoch = ++epoch;
     try {
       const data = await api(`${diagnostics}?after=${encodeURIComponent(after)}`);
       if (requestEpoch !== epoch) return;
-      panel().innerHTML = `<section class="filter-card clients-catalog"><button type="button" id="diagnosticsBack" class="updates-action-btn">К задачам</button><h2>Аналитические сигналы</h2><button type="button" class="updates-action-btn" id="analyticsPolicy">Политика автоматизации</button><p>Режим: ${esc(data.mode)}. Сопоставление клиента само по себе не создаёт задачу.</p><p>Получено: ${data.summary.received} · Прошли проверки: ${data.summary.passed || 0} · На проверке: ${data.summary.review || 0} · Заблокировано: ${data.summary.blocked || 0} · Создано задач: ${data.summary.created_tasks} · Уже существовали: ${data.summary.existing_tasks || 0} · Без менеджера: ${data.summary.without_eligible_manager || 0} · Выполненных задач: ${data.completed_analytics_tasks} · Отклонённых событий: ${data.summary.rejected_events}</p><details><summary>Отклонённые доставки</summary><ul>${(data.rejections || []).map(row=>`<li>${esc(row.signal_id)} · ${esc(row.reason_code)} · ${esc(row.created_at)}</li>`).join('')}</ul></details>${data.items.map(row => `<article class="client-catalog-row"><strong>${esc(row.subject?.key)} · ${esc(row.signal_type)} · ${esc(row.decision)}</strong><span>Сигнал: ${esc(row.signal_id)} · Срез: ${esc(row.as_of)} · Последняя покупка: ${esc(row.last_purchase)} · Confidence: ${esc(row.confidence)}</span><details><summary>Обоснование расчёта</summary><pre style="white-space:pre-wrap">${esc(JSON.stringify(row.metrics,null,2))}</pre></details><p>${esc(row.reasons_json)}</p><button type="button" class="updates-action-btn" data-dry-run="${esc(row.signal_key)}">Dry-run: проверить без задач</button>${row.task_id ? `<button type="button" class="updates-action-btn" data-linked-task="${esc(row.task_id)}">Задача</button>` : ''}<details><summary>Идентификация клиента</summary><form data-binding="${esc(row.signal_key)}"><label>ClientsVR client_id<input name="client_id" value="${esc(row.binding?.client_id || '')}"></label><label>Статус<select name="binding_status">${options({VERIFIED:'Подтверждено вручную',REVIEW:'На проверке',AMBIGUOUS:'Неоднозначно',NOT_FOUND:'Не найден'},row.binding?.status || 'REVIEW')}</select></label><label><input type="checkbox" name="technical" ${Number(row.binding?.technical) ? 'checked' : ''}> Технический/агрегатный покупатель</label><label><input type="checkbox" name="confirm_nontechnical"> Проверено: это не технический и не агрегатный покупатель</label><label><input type="checkbox" name="confirm_all_sales_scope"> Проверена вся группа исторических продаж; совпадение имени или телефона само по себе не является подтверждением</label><label>Основание проверки<textarea name="evidence" required maxlength="2000">${esc(row.binding?.evidence || '')}</textarea></label><input type="hidden" name="revision" value="${esc(row.binding?.revision || '')}"><button type="submit" class="updates-action-btn">Сохранить и проверить без создания задач</button><p role="status"></p></form></details></article>`).join('')}<button type="button" id="diagnosticsNext" ${data.next_after ? '' : 'disabled'}>Далее</button></section>`;
+      panel().innerHTML = `<section class="filter-card clients-catalog"><button type="button" id="diagnosticsBack" class="updates-action-btn">К задачам</button><h2>Аналитические сигналы</h2>${analyticsReviewStyle}<button type="button" class="updates-action-btn" id="analyticsPolicy">Политика автоматизации</button><p>Режим: ${esc(data.mode)}. Сопоставление клиента само по себе не создаёт задачу.</p><p>Получено: ${data.summary.received} · Прошли проверки: ${data.summary.passed || 0} · На проверке: ${data.summary.review || 0} · Заблокировано: ${data.summary.blocked || 0} · Создано задач: ${data.summary.created_tasks} · Уже существовали: ${data.summary.existing_tasks || 0} · Без менеджера: ${data.summary.without_eligible_manager || 0} · Выполненных задач: ${data.completed_analytics_tasks} · Отклонённых событий: ${data.summary.rejected_events}</p><details><summary>Отклонённые доставки</summary><ul>${(data.rejections || []).map(row=>`<li>${esc(row.signal_id)} · ${esc(row.reason_code)} · ${esc(row.created_at)}</li>`).join('')}</ul></details>${data.items.map(row => `<article class="client-catalog-row"><strong>${esc(row.subject?.key)} · ${esc(row.signal_type)} · ${esc(row.decision)}</strong><span>Сигнал: ${esc(row.signal_id)} · Срез: ${esc(row.as_of)} · Последняя покупка: ${esc(row.last_purchase)} · Confidence: ${esc(row.confidence)}</span><details><summary>Обоснование расчёта</summary><pre style="white-space:pre-wrap">${esc(JSON.stringify(row.metrics,null,2))}</pre></details><p>${esc(row.reasons_json)}</p><button type="button" class="updates-action-btn" data-dry-run="${esc(row.signal_key)}">Dry-run: проверить без задач</button>${row.task_id ? `<button type="button" class="updates-action-btn" data-linked-task="${esc(row.task_id)}">Задача</button>` : ''}${candidateView(row)}<details><summary>Идентификация клиента</summary><form class="analytics-review-form" data-binding="${esc(row.signal_key)}"><label>ClientsVR client_id<input name="client_id" value="${esc(row.binding?.client_id || '')}"></label><label>Статус<select name="binding_status">${options({VERIFIED:'Подтверждено вручную',REVIEW:'На проверке',AMBIGUOUS:'Неоднозначно',NOT_FOUND:'Не найден'},row.binding?.status || 'REVIEW')}</select></label><label><input type="checkbox" name="technical" ${Number(row.binding?.technical) ? 'checked' : ''}> Технический/агрегатный покупатель</label><label><input type="checkbox" name="confirm_nontechnical"> Проверено: это не технический и не агрегатный покупатель</label><label><input type="checkbox" name="confirm_all_sales_scope"> Проверена вся группа исторических продаж; совпадение имени или телефона само по себе не является подтверждением</label><label>Основание проверки<textarea name="evidence" required maxlength="2000">${esc(row.binding?.evidence || '')}</textarea></label><input type="hidden" name="revision" value="${esc(row.binding?.revision || '')}"><button type="submit" class="updates-action-btn">Сохранить и проверить без создания задач</button><p role="status"></p></form></details></article>`).join('')}<button type="button" id="diagnosticsNext" ${data.next_after ? '' : 'disabled'}>Далее</button></section>`;
+      panel().querySelectorAll('[data-candidate-id]').forEach(button => {
+        button.onclick = () => {
+          const form = [...panel().querySelectorAll('[data-binding]')]
+            .find(item => item.dataset.binding === button.dataset.candidateSignal);
+
+          if (!form) return;
+
+          form.elements.namedItem('client_id').value = button.dataset.candidateId;
+          form.elements.namedItem('binding_status').value = 'REVIEW';
+
+          const message = button.closest('.analytics-candidate-box')
+            ?.querySelector('.analytics-candidate-message');
+
+          if (message) {
+            message.textContent = 'ID подставлен. Статус: На проверке. Данные не сохранены.';
+          }
+        };
+      });
       panel().querySelector('#diagnosticsBack').onclick = showList;
       panel().querySelector('#analyticsPolicy').onclick = () => window.showAnalyticsTaskPolicy(() => showDiagnostics(after));
       panel().querySelectorAll('[data-dry-run]').forEach(button => button.onclick = async () => {
