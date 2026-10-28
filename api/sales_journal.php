@@ -101,14 +101,17 @@ function salesJournalRequest(string $method,string $path,?array $body=null,?call
     $options=[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CUSTOMREQUEST=>$method,CURLOPT_CONNECTTIMEOUT=>(int)SALES_JOURNAL_CONNECT_TIMEOUT,CURLOPT_TIMEOUT=>(int)SALES_JOURNAL_TIMEOUT,CURLOPT_HTTPHEADER=>$headers];
     if($body!==null){$encoded=json_encode($body,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);$options[CURLOPT_POSTFIELDS]=$encoded;$headers[]='Content-Type: application/json';$options[CURLOPT_HTTPHEADER]=$headers;}
     curl_setopt_array($curl,$options);$raw=curl_exec($curl);$status=(int)curl_getinfo($curl,CURLINFO_RESPONSE_CODE);$error=curl_error($curl);curl_close($curl);
-    error_log('Sales Journal request: path='.$path.' status='.$status.' duration_ms='.(int)round((microtime(true)-$started)*1000));
+    error_log('Sales Journal request: path='.(parse_url($path,PHP_URL_PATH)?:'[invalid]').' status='.$status.' duration_ms='.(int)round((microtime(true)-$started)*1000));
     return salesJournalDecodeResponse($raw===false?'':(string)$raw,$status,$error);
 }
 
+class SalesJournalHttpException extends RuntimeException {
+    public function __construct(public readonly int $status,public readonly ?array $body){parent::__construct('Sales Journal HTTP '.$status);}
+}
 function salesJournalDecodeResponse(string $raw,int $status,string $networkError=''): array
 {
     if($networkError!=='')throw new RuntimeException('Sales Journal network error');
-    if($status<200||$status>=300)throw new RuntimeException('Sales Journal HTTP '.$status);
+    if($status<200||$status>=300){$body=strlen($raw)<=16384?json_decode($raw,true):null;throw new SalesJournalHttpException($status,is_array($body)?$body:null);}
     $decoded=json_decode($raw,true);if(!is_array($decoded))throw new RuntimeException('Sales Journal вернул некорректный JSON');
     return $decoded;
 }

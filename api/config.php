@@ -127,9 +127,6 @@ function getPdo(): PDO
     $pass = $config['pass'];
     $charset = $config['charset'];
 
-    error_log('DB HOST: ' . $host);
-    error_log('DB USER: ' . $user);
-
     $dsn = "mysql:host={$host};dbname={$db};charset={$charset}";
     $options = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,

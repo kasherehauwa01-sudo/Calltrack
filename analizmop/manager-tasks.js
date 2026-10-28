@@ -31,6 +31,7 @@
       if (data.role === 'admin') {panel().querySelector('#taskCreate').onclick = showCreate;panel().querySelector('#taskDiagnostics').onclick = () => showDiagnostics();}
     } catch (error) { if (requestEpoch !== epoch) return; panel().innerHTML = `<section class="filter-card"><p role="alert">${esc(error.message)}</p><button type="button" id="tasksRetry">Повторить</button></section>`;panel().querySelector('#tasksRetry').onclick = showList; }
   }
+  const matchingNotice = task => {let e;try{e=JSON.parse(task.evidence_json || '{}');}catch{return '';}const m=e.signal?.matching;if(m?.status!=='PRELIMINARY_MATCH')return '';return `<p role="note">Предварительное сопоставление — ручная проверка не выполнялась. Способ: ${esc(m.method)}. Связанные карточки: ${(m.member_ids || []).map(esc).join(', ')}. Группа: ${esc(m.group_key)}</p>`;};
   async function showTask(id) {
     window.closeAnalyticsTaskPolicy?.();
     const requestEpoch = ++epoch;
@@ -38,10 +39,10 @@
       const {task, history, client, role} = await api(`${endpoint}?id=${encodeURIComponent(id)}`);
       if (requestEpoch !== epoch) return;
       const editable = role !== 'supervisor' && !['DONE','CANCELLED'].includes(task.status);
-      panel().innerHTML = `<section class="filter-card clients-catalog"><button type="button" class="updates-action-btn" id="tasksBack">К списку</button><h2>${esc(task.title)}</h2>
+      panel().innerHTML = `<section class="filter-card clients-catalog"><button type="button" class="updates-action-btn" id="tasksBack">К списку</button><h2>${esc(task.title)}</h2>${matchingNotice(task)}
         <p>Клиент: ${esc(client?.name || task.client_id)} (ClientsVR ID: ${esc(task.client_id)}) <button type="button" class="updates-action-btn" id="taskClientCard">Карточка клиента</button></p>
         <p style="white-space:pre-wrap">${esc(task.description)}</p><p>Ответственный: ${esc(task.assignee_name)}</p>
-        ${task.source_signal_key ? `<p>Источник: <button type="button" class="updates-action-btn" id="taskSource">Аналитический сигнал</button></p>` : ''}
+        ${task.source_signal_key ? `<p>Источник: <a href="#taskSourceEvidence" class="updates-action-btn" id="taskSource">Исходный аналитический сигнал</a></p>` : ''}
         <form id="taskEdit" class="updates-form"><label>Статус<select name="status" ${editable ? '' : 'disabled'}>${options(statuses,task.status)}</select></label>
         ${role === 'admin' && editable ? `<label>Менеджер<select name="assignee_id">${assignees.some(row=>String(row.id)===String(task.assignee_id)) ? '' : `<option value="${task.assignee_id}" selected>${esc(task.assignee_name)} (неактивен)</option>`}${managerOptions(task.assignee_id)}</select></label><label>Приоритет<select name="priority">${options(priorities,task.priority)}</select></label><label>Срок UTC (YYYY-MM-DD HH:MM:SS)<input name="due_at" value="${esc(task.due_at || '')}"></label>` : `<p>Приоритет: ${esc(priorities[task.priority])} · Срок UTC: ${esc(task.due_at || 'не задан')}</p>`}
         <label>Результат работы<textarea name="result" maxlength="10000" ${editable ? '' : 'disabled'}>${esc(task.result)}</textarea></label>${editable ? '<button type="submit" class="registry-refresh-btn">Сохранить</button>' : ''}<p role="status" id="taskMessage"></p></form>
@@ -51,7 +52,8 @@
         try { const history = await window.calltrackApi.loadClientEvents({client_id:task.client_id});openClientHistoryModal(client?.name || task.client_id, {client_id:task.client_id}, history); }
         catch (error) { panel().querySelector('#taskMessage').textContent = error.message; }
       };
-      if (task.source_signal_key) panel().querySelector('#taskSource').onclick = () => {
+      if (task.source_signal_key) panel().querySelector('#taskSource').onclick = event => {
+        event.preventDefault();
         const evidence = document.createElement('pre'); evidence.style.whiteSpace = 'pre-wrap';
         try { evidence.textContent = JSON.stringify(JSON.parse(task.evidence_json || '{}'),null,2); } catch { evidence.textContent = 'Сведения недоступны'; }
         panel().querySelector('#taskSourceEvidence').replaceChildren(evidence);
@@ -186,7 +188,7 @@
     try {
       const data = await api(`${diagnostics}?after=${encodeURIComponent(after)}`);
       if (requestEpoch !== epoch) return;
-      panel().innerHTML = `<section class="filter-card clients-catalog"><button type="button" id="diagnosticsBack" class="updates-action-btn">К задачам</button><h2>Аналитические сигналы</h2>${analyticsReviewStyle}<button type="button" class="updates-action-btn" id="analyticsPolicy">Политика автоматизации</button><p>Режим: ${esc(data.mode)}. Сопоставление клиента само по себе не создаёт задачу.</p><p>Получено: ${data.summary.received} · Прошли проверки: ${data.summary.passed || 0} · На проверке: ${data.summary.review || 0} · Заблокировано: ${data.summary.blocked || 0} · Создано задач: ${data.summary.created_tasks} · Уже существовали: ${data.summary.existing_tasks || 0} · Без менеджера: ${data.summary.without_eligible_manager || 0} · Выполненных задач: ${data.completed_analytics_tasks} · Отклонённых событий: ${data.summary.rejected_events}</p><details><summary>Отклонённые доставки</summary><ul>${(data.rejections || []).map(row=>`<li>${esc(row.signal_id)} · ${esc(row.reason_code)} · ${esc(row.created_at)}</li>`).join('')}</ul></details>${data.items.map(row => `<article class="client-catalog-row"><strong>${esc(row.subject?.key)} · ${esc(row.signal_type)} · ${esc(row.decision)}</strong><span>Сигнал: ${esc(row.signal_id)} · Срез: ${esc(row.as_of)} · Последняя покупка: ${esc(row.last_purchase)} · Confidence: ${esc(row.confidence)}</span><details><summary>Обоснование расчёта</summary><pre style="white-space:pre-wrap">${esc(JSON.stringify(row.metrics,null,2))}</pre></details><p>${esc(row.reasons_json)}</p><button type="button" class="updates-action-btn" data-dry-run="${esc(row.signal_key)}">Dry-run: проверить без задач</button>${row.task_id ? `<button type="button" class="updates-action-btn" data-linked-task="${esc(row.task_id)}">Задача</button>` : ''}${candidateView(row)}<details><summary>Идентификация клиента</summary><form class="analytics-review-form" data-binding="${esc(row.signal_key)}"><label>ClientsVR client_id<input name="client_id" value="${esc(row.binding?.client_id || '')}"></label><label>Статус<select name="binding_status">${options({VERIFIED:'Подтверждено вручную',REVIEW:'На проверке',AMBIGUOUS:'Неоднозначно',NOT_FOUND:'Не найден'},row.binding?.status || 'REVIEW')}</select></label><label><input type="checkbox" name="technical" ${Number(row.binding?.technical) ? 'checked' : ''}> Технический/агрегатный покупатель</label><label><input type="checkbox" name="confirm_nontechnical"> Проверено: это не технический и не агрегатный покупатель</label><label><input type="checkbox" name="confirm_all_sales_scope"> Проверена вся группа исторических продаж; совпадение имени или телефона само по себе не является подтверждением</label><label>Основание проверки<textarea name="evidence" required maxlength="2000">${esc(row.binding?.evidence || '')}</textarea></label><input type="hidden" name="revision" value="${esc(row.binding?.revision || '')}"><button type="submit" class="updates-action-btn">Сохранить и проверить без создания задач</button><p role="status"></p></form></details></article>`).join('')}<button type="button" id="diagnosticsNext" ${data.next_after ? '' : 'disabled'}>Далее</button></section>`;
+      panel().innerHTML = `<section class="filter-card clients-catalog"><button type="button" id="diagnosticsBack" class="updates-action-btn">К задачам</button><h2>Аналитические сигналы</h2>${analyticsReviewStyle}<button type="button" class="updates-action-btn" id="analyticsPolicy">Политика автоматизации</button><p>Режим: ${esc(data.mode)}. Сопоставление клиента само по себе не создаёт задачу.</p><p>Получено: ${data.summary.received} · Прошли проверки: ${data.summary.passed || 0} · На проверке: ${data.summary.review || 0} · Заблокировано: ${data.summary.blocked || 0} · Создано задач: ${data.summary.created_tasks} · Уже существовали: ${data.summary.existing_tasks || 0} · Без менеджера: ${data.summary.without_eligible_manager || 0} · Выполненных задач: ${data.completed_analytics_tasks} · Отклонённых событий: ${data.summary.rejected_events}</p><details><summary>Отклонённые доставки</summary><ul>${(data.rejections || []).map(row=>`<li>${esc(row.signal_id)} · ${esc(row.reason_code)} · ${esc(row.created_at)}</li>`).join('')}</ul></details>${data.items.map(row => `<article class="client-catalog-row"><strong>${esc(row.subject?.key)} · ${esc(row.signal_type)} · ${esc(row.decision)}</strong><span>Сигнал: ${esc(row.signal_id)} · Срез: ${esc(row.as_of)} · Последняя покупка: ${esc(row.last_purchase)} · Confidence: ${esc(row.confidence)}</span><details><summary>Обоснование расчёта</summary><pre style="white-space:pre-wrap">${esc(JSON.stringify(row.metrics,null,2))}</pre></details><p>${esc(row.reasons_json)}</p><button type="button" class="updates-action-btn" data-dry-run="${esc(row.signal_key)}">Dry-run: проверить без задач</button>${row.task_id ? `<button type="button" class="updates-action-btn" data-linked-task="${esc(row.task_id)}">Задача</button>` : ''}${candidateView(row)}${row.subject?.kind === 'normalized_name' ? `<button type="button" class="updates-action-btn" data-group-review="${esc(row.signal_key)}">Проверить группу карточек и историю</button>` : ''}<details><summary>Идентификация клиента</summary><form class="analytics-review-form" data-binding="${esc(row.signal_key)}"><label>ClientsVR client_id<input name="client_id" value="${esc(row.binding?.client_id || '')}"></label><label>Статус<select name="binding_status">${options({REVIEW:'На проверке',AMBIGUOUS:'Неоднозначно',NOT_FOUND:'Не найден'},row.binding?.status || 'REVIEW')}</select></label><label><input type="checkbox" name="technical" ${Number(row.binding?.technical) ? 'checked' : ''}> Технический/агрегатный покупатель</label><label><input type="checkbox" name="confirm_nontechnical"> Проверено: это не технический и не агрегатный покупатель</label><label><input type="checkbox" name="confirm_all_sales_scope"> Проверена вся группа исторических продаж; совпадение имени или телефона само по себе не является подтверждением</label><label>Основание проверки<textarea name="evidence" required maxlength="2000">${esc(row.binding?.evidence || '')}</textarea></label><input type="hidden" name="revision" value="${esc(row.binding?.revision || '')}"><button type="submit" class="updates-action-btn">Сохранить и проверить без создания задач</button><p role="status"></p></form></details></article>`).join('')}<button type="button" id="diagnosticsNext" ${data.next_after ? '' : 'disabled'}>Далее</button></section>`;
       panel().querySelectorAll('[data-candidate-id]').forEach(button => {
         button.onclick = () => {
           const form = [...panel().querySelectorAll('[data-binding]')]
@@ -212,12 +214,51 @@
       });
       panel().querySelector('#diagnosticsNext').onclick = () => showDiagnostics(data.next_after);
       panel().querySelectorAll('[data-linked-task]').forEach(button => button.onclick = () => showTask(button.dataset.linkedTask));
+      panel().querySelectorAll('[data-group-review]').forEach(button => button.onclick = () => showVerifiedReview(button.dataset.groupReview));
       panel().querySelectorAll('[data-binding]').forEach(form => form.onsubmit = async event => {
         event.preventDefault();const values = new FormData(form);
         const body = {signal_key:form.dataset.binding,client_id:values.get('client_id') || null,binding_status:values.get('binding_status'),technical:values.has('technical'),confirm_nontechnical:values.has('confirm_nontechnical'),confirm_all_sales_scope:values.has('confirm_all_sales_scope'),evidence:values.get('evidence'),expected_revision:values.get('revision') ? Number(values.get('revision')) : null};
         try {await api(diagnostics,'POST',body);showDiagnostics(after);}catch(error){form.querySelector('[role="status"]').textContent = error.message;}
       });
     } catch (error) {if (requestEpoch === epoch) panel().textContent = error.message;}
+  }
+  async function showVerifiedReview(signalKey) {
+    const requestEpoch = ++epoch;
+    const reviewUrl = '/vr/calltrack/api/analytics_verified_review.php';
+    panel().textContent = 'Загрузка всей группы…';
+    try {
+      const data = await api(`${reviewUrl}?signal_key=${encodeURIComponent(signalKey)}`);
+      if (requestEpoch !== epoch) return;
+      const revision = Number(data.binding?.revision || 0);
+      let review = {};try {review = JSON.parse(data.binding?.evidence || '{}');} catch {}
+      panel().innerHTML = `<section class="filter-card"><button id="reviewBack">Назад</button><h2>Ручная проверка покупателя</h2><p>Этап: ${esc(review.stage || data.group.stage)} · Версия: ${revision} · Автор: ${esc(review.reviewer_id || 'не подтверждён')}</p><p>Совпадение имени или телефона не подтверждает идентичность. Проверьте все карточки и всю историю продаж. Подтверждение не создаёт задачу.</p><p>Блокеры: ${esc(data.group.reasons.join(', ') || 'нет конфликтов менеджера; требуется ручная проверка')}</p><div class="clients-list">${data.group.cards.map(c=>`<article class="client-catalog-row"><strong>${esc(c.name)}</strong><span>ClientsVR ID: ${esc(c.client_id)} · ${c.technical ? 'Техническая карточка без менеджера' : 'Менеджер: ' + esc(c.manager) + ' (ID ' + esc(c.manager_id) + ')'}${c.archived ? ' · Архивная' : ''}</span><span>Телефоны: ${esc((c.phones || []).join(', ') || 'не указаны')}</span></article>`).join('')}</div><p>Продаж: ${esc(data.history.sale_count)} · ${esc(data.history.first_purchase)} — ${esc(data.history.last_purchase)}</p><button id="loadReviewHistory">Загрузить историю с начала</button><div id="reviewHistory"></div><form id="verifiedReviewForm"><label>Конкретная рабочая карточка<select name="client_id"><option value="">Выберите явно</option>${data.group.cards.filter(c=>!c.technical&&!c.archived).map(c=>`<option value="${esc(c.client_id)}">${esc(c.name)} · ${esc(c.client_id)} · менеджер ${esc(c.manager_id)}</option>`).join('')}</select></label><label>Основание проверки<textarea name="reason" required maxlength="2000">${esc(review.reason || '')}</textarea></label><label><input type="checkbox" name="confirm_identity"> Личность покупателя проверена независимо от совпадения имени/телефона</label><label><input type="checkbox" name="confirm_all_history"> Проверена вся группа исторических продаж</label><button type="button" data-review-action="begin">Начать ручную проверку</button><button type="submit">Подтвердить проверенную карточку</button><button type="button" data-review-action="revoke">Отозвать подтверждение</button><button type="button" data-review-action="export">Получить подписанную квитанцию</button><p role="status"></p></form><pre id="reviewReceipt"></pre></section>`;
+      panel().querySelector('#reviewBack').onclick = () => showDiagnostics();
+      let after = 0;
+      const loadHistory = async () => {
+        try {
+          const result = await api(`${reviewUrl}?signal_key=${encodeURIComponent(signalKey)}&action=history_rows&after=${after}`);
+          if (requestEpoch !== epoch) return;
+          const pre = document.createElement('pre'); pre.textContent = JSON.stringify(result.history.items,null,2);
+          panel().querySelector('#reviewHistory').append(pre);
+          after = result.history.next_after;
+          const button = panel().querySelector('#loadReviewHistory');
+          button.disabled = after === null; button.textContent = result.all_history_loaded ? 'Вся история загружена' : 'Следующая страница';
+        } catch(error) {panel().querySelector('[role="status"]').textContent=error.message;}
+      };
+      panel().querySelector('#loadReviewHistory').onclick = loadHistory;
+      const form = panel().querySelector('#verifiedReviewForm');
+      const save = async action => {
+        const values = new FormData(form);
+        try {
+          const result = await api(reviewUrl,'POST',{signal_key:signalKey,action,expected_revision:revision,client_id:values.get('client_id'),reason:values.get('reason'),confirm_identity:values.has('confirm_identity'),confirm_all_history:values.has('confirm_all_history')});
+          if (requestEpoch !== epoch) return;
+          if(action==='export')panel().querySelector('#reviewReceipt').textContent=JSON.stringify(result.receipt,null,2);
+          else await showVerifiedReview(signalKey);
+        } catch(error) {form.querySelector('[role="status"]').textContent=error.message;}
+      };
+      form.onsubmit = event => {event.preventDefault();save('confirm');};
+      form.querySelectorAll('[data-review-action]').forEach(button=>button.onclick=()=>save(button.dataset.reviewAction));
+    } catch(error) {if(requestEpoch===epoch)panel().textContent=error.message;}
   }
   window.closeManagerTasks = () => { ++epoch;window.closeAnalyticsTaskPolicy?.(); };
   window.openManagerTasks = account => { user = account;pageAfter = '';showList(); };

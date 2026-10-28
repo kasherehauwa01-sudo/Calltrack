@@ -27,6 +27,7 @@ try{
         sendJson(['status'=>'success','decision'=>processAnalyticsEvent($pdo,$event,$client,analyticsIntegrationPolicy($pdo),'dry_run',time())]);
     }
     $status=$body['binding_status']??null;if(!in_array($status,['VERIFIED','REVIEW','AMBIGUOUS','NOT_FOUND'],true))throw new InvalidArgumentException('Некорректный статус идентификации');
+    if($status==='VERIFIED')throw new InvalidArgumentException('Используйте проверку всей группы карточек и истории в новом процессе подтверждения');
     $clientId=$body['client_id']??null;if($clientId!==null)$clientId=taskText($clientId,255);
     if($status==='VERIFIED'){
         if(($body['confirm_all_sales_scope']??false)!==true)throw new InvalidArgumentException('Подтвердите проверку всей группы исторических продаж, а не только имени/телефона');
@@ -40,6 +41,8 @@ try{
     $pdo->beginTransaction();
     try{
         $s=$pdo->prepare('SELECT * FROM analytics_client_bindings WHERE subject_key=?'.($pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql'?' FOR UPDATE':''));$s->execute([$subject]);$old=$s->fetch(PDO::FETCH_ASSOC);
+        $review=$old?json_decode($old['evidence'],true):null;
+        if(is_array($review)&&isset($review['origin_subject_key']))throw new InvalidArgumentException('Изменяйте или отзывайте эту привязку через проверку всей группы: обе идентичности должны обновляться вместе');
         if(!array_key_exists('expected_revision',$body)||($old?(int)$old['revision']:null)!==$body['expected_revision'])throw new TaskConflict('Привязка изменилась. Обновите список.');
         if($old)$pdo->prepare('UPDATE analytics_client_bindings SET client_id=?,status=?,technical=?,evidence=?,revision=revision+1,reviewer_id=?,updated_at=CURRENT_TIMESTAMP WHERE subject_key=?')->execute([$clientId,$status,$body['technical']?1:0,$evidence,(int)$admin['id'],$subject]);
         else $pdo->prepare('INSERT INTO analytics_client_bindings(subject_key,subject_json,client_id,status,technical,evidence,reviewer_id) VALUES(?,?,?,?,?,?,?)')->execute([$subject,json_encode(['subject'=>$event['subject'],'scope'=>$event['run']['scope']],JSON_THROW_ON_ERROR),$clientId,$status,$body['technical']?1:0,$evidence,(int)$admin['id']]);

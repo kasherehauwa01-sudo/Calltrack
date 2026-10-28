@@ -1,0 +1,40 @@
+<?php
+declare(strict_types=1);
+if(getenv('CALLTRACK_TEST_FIXTURES')!=='1')throw new RuntimeException('Synthetic only');
+require_once __DIR__.'/../api/analytics_preliminary.php';
+require_once __DIR__.'/fixtures/analytics/database.php';
+$db=analyticsTestDatabase();$admin=['id'=>1,'role'=>'admin'];saveManagerBinding($db,$admin,'Owner',3,null);saveManagerBinding($db,$admin,'Other',4,null);$n=0;
+function pc(bool $ok,string $why):void{global $n;$n++;if(!$ok)throw new RuntimeException($why);}
+$event=['subject'=>['kind'=>'normalized_name','version'=>1,'key'=>'fixture buyer'],'run'=>['scope'=>['policy'=>'aviatorov-wholesale-corporate/2','department'=>'Авиаторов','buyer_types'=>['Оптовик','Корпоративный']]]];
+$card=fn($id,$owner='Owner')=>['id'=>$id,'name'=>'Fixture Buyer','phones'=>[],'fields'=>['Менеджер'=>$owner,'status'=>'active','analytics_customer_kind'=>'CUSTOMER']];
+$group=fn($rows)=>analyticsReviewGroup($event,$rows,managerBindingRows($db),str_repeat('a',64));
+$single=$group([$card('one')]);$m=analyticsPreliminaryMatch($single);pc($m['status']==='PRELIMINARY_MATCH'&&$m['manual_verified']===false&&$m['client_id']==='one','Unique client without VERIFIED');
+pc(analyticsPreliminaryMatch($group([]))['status']==='BLOCKED','No card');
+pc(analyticsPreliminaryMatch($group([$card('one','')]))['status']==='BLOCKED','No manager/technical');
+$technical=$card('one');$technical['fields']['analytics_customer_kind']='AGGREGATE';pc(analyticsPreliminaryMatch($group([$technical]))['status']==='BLOCKED','Aggregate');
+$missing=$card('unassigned','');pc(analyticsPreliminaryMatch($group([$card('one'),$missing]))['status']==='BLOCKED','Missing owner not silently discarded as technical');
+$unicode=$card('two');$unicode['name']="  FIXTURE\u{00a0}BUYER  ";pc(analyticsPreliminaryMatch($group([$card('one'),$unicode]))['status']==='PRELIMINARY_MATCH','Normalization v1 handles case and Unicode whitespace');
+$two=[$card('one'),$card('two')];$names=analyticsPreliminaryMatch($group($two));pc($names['status']==='PRELIMINARY_MATCH'&&$names['client_id']==='one'&&$names['method']==='EXACT_NAME_SINGLE_MANAGER','Approved same-name single-owner policy');
+pc(analyticsPreliminaryMatch($group(array_reverse($two)))===$names,'Stable lexical primary and order-independent matching');
+$singleton=analyticsPreliminaryMatch($group([$two[0]]));pc($singleton['group_key']===$names['group_key'],'Name-group key independent of membership');
+$archive=$card('old','Other');$archive['fields']['status']='archived';pc(analyticsPreliminaryMatch($group([$two[0],$archive]))['status']==='PRELIMINARY_MATCH','Archived other manager excluded');
+$tech=$card('technical','Other');$tech['fields']['analytics_customer_kind']='TECHNICAL';pc(analyticsPreliminaryMatch($group([$two[0],$tech]))['status']==='PRELIMINARY_MATCH','Explicit technical card excluded');
+foreach($two as &$c){$c['fields']['analytics_customer_identity']='synthetic-customer';$c['fields']['analytics_primary_client_id']='two';}unset($c);
+$partial=$two;unset($partial[1]['fields']['analytics_customer_identity']);pc(analyticsPreliminaryMatch($group($partial))['reasons']===['GROUP_IDENTITY_UNCONFIRMED'],'Missing one member identity is not completeness');
+$multi=$group($two);$mm=analyticsPreliminaryMatch($multi);pc($mm['status']==='PRELIMINARY_MATCH'&&$mm['client_id']==='two'&&count($mm['member_ids'])===2,'Explicit primary, never first card');
+$oneKnown=$group([$two[1]]);pc(analyticsPreliminaryMatch($oneKnown)['group_key']===$mm['group_key'],'Authoritative identity remains stable on singleton');
+$reordered=$group(array_reverse($two));pc(analyticsPreliminaryMatch($reordered)['group_key']===$mm['group_key'],'Stable order-independent group');
+$bad=$two;$bad[1]['fields']['Менеджер']='Other';pc(analyticsPreliminaryMatch($group($bad))['reasons']===['MANAGER_CONFLICT'],'Conflicting managers');
+$bad=$two;$bad[1]['fields']['analytics_customer_identity']='different-buyer';pc(analyticsPreliminaryMatch($group($bad))['status']==='BLOCKED','Different buyers with same name cannot merge');
+$history=['version'=>1,'department'=>'Авиаторов','normalization_version'=>1,'client_key'=>'fixture buyer','sale_count'=>3,'history_hash'=>str_repeat('b',64),'last_positive_purchase'=>'2026-09-01'];
+analyticsPreparePreliminary($db,$event,$multi,$history,false);pc((int)$db->query('SELECT COUNT(*) FROM analytics_client_bindings')->fetchColumn()===0,'Preparation dry-run no writes');
+analyticsPreparePreliminary($db,$event,$multi,$history,true);
+$key=analyticsSubjectKey($event['subject'],$event['run']['scope']);$binding=analyticsBinding($db,$key);
+pc($binding['status']==='REVIEW'&&json_decode($binding['evidence'],true)['stage']==='PRELIMINARY_MATCH'&&(int)$binding['reviewer_id']===0,'No fabricated VERIFIED/reviewer');
+pc(analyticsPreparePreliminary($db,$event,$multi,$history,true)['existing']===true,'Idempotent preparation');
+analyticsSaveGroupReview($db,$admin,$event,$multi,$history,['action'=>'begin','expected_revision'=>1,'reason'=>'Synthetic admin independent history review']);
+analyticsSaveGroupReview($db,$admin,$event,$multi,$history,['action'=>'confirm','expected_revision'=>2,'reason'=>'Synthetic independent identity','client_id'=>'two','confirm_identity'=>true,'confirm_all_history'=>true]);
+pc(analyticsBinding($db,$key)['status']==='VERIFIED','Manual verification still works');
+try{analyticsPreparePreliminary($db,$event,$multi,$history,true);throw new LogicException('Overwrote admin');}catch(DomainException $e){pc($e->getMessage()==='EXISTING_ADMIN_DECISION','Auto cannot replace manual decision');}
+pc((int)$db->query('SELECT COUNT(*) FROM manager_tasks')->fetchColumn()===0,'Preparation never creates tasks');
+echo "PASS preliminary matching: $n assertions\n";

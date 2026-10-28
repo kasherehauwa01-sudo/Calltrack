@@ -67,6 +67,17 @@ function filledClientFields(array $row): array
         if (!clientFieldIsFilled($value)) continue;
         $fields[(string)$key] = $value;
     }
+    // Owner-approved pilot classification; phone presence is irrelevant.
+    $companies = [];
+    foreach (['company', 'Фирма'] as $key) {
+        if (isset($row[$key]) && is_string($row[$key]) && trim($row[$key]) !== '') {
+            $companies[] = trim($row[$key]);
+        }
+    }
+    $companies = array_values(array_unique($companies));
+    $fields['analytics_customer_kind'] =
+        count($companies) === 1 && $companies[0] === 'ИП Куприянова О.В.'
+        ? 'CUSTOMER' : 'UNKNOWN';
     return $fields;
 }
 
@@ -82,9 +93,9 @@ function normalizeClientsPayload(array $rows): array
             foreach (splitClientPhones((string)$rawPhone) as $phone) $phones[$phone] = $phone;
         }
         $phones = array_values($phones);
-        if ($name === '' || !$phones) continue;
-        // Исходные заполненные поля сохраняются для карточки клиента в тесте API.
         $id = clientRawValue($row, ['id', 'client_id', 'ID']);
+        if ($name === '' || (!$phones && (string)$id === '')) continue;
+        // Cards with stable IDs remain available without a phone.
         $client = ['name'=>$name, 'phones'=>$phones, 'fields'=>filledClientFields($row)];
         if ((string)$id !== '') $client['id'] = (string)$id;
         $result[] = $client;

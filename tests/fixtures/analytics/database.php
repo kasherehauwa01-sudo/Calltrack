@@ -14,7 +14,7 @@ function analyticsTestDatabase(): PDO {
         $pdo->exec('CREATE TABLE web_users(id INTEGER PRIMARY KEY,display_name TEXT,role TEXT,is_active INTEGER)');
         $pdo->exec("INSERT INTO web_users VALUES(1,'Test Admin','admin',1),(2,'Test Supervisor','supervisor',1),(3,'Test Manager','manager',1),(4,'Other Manager','manager',1),(5,'Inactive','manager',0)");
     }
-    foreach(['20261020_manager_bindings.sql','20261020_analytics_tasks.sql','20261020_analytics_task_policy.sql'] as $file){
+    foreach(['20261020_manager_bindings.sql','20261020_analytics_tasks.sql','20261020_analytics_task_policy.sql','20261022_analytics_budget.sql','20261023_analytics_daily_budget.sql'] as $file){
         $sql=file_get_contents(__DIR__.'/../../../database/'.$file);
         if(!$mysql){
             $sql=preg_replace('/BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY/','INTEGER PRIMARY KEY AUTOINCREMENT',$sql);
@@ -26,50 +26,5 @@ function analyticsTestDatabase(): PDO {
         }
         $pdo->exec($sql);
     }
-
-    // SQLite-only synthetic budget fixtures. Never touch production MariaDB.
-    if (!$mysql) {
-        $pdo->exec("CREATE TABLE analytics_task_budget (
-            id INTEGER PRIMARY KEY CHECK(id=1),
-            approved INTEGER NOT NULL DEFAULT 0,
-            max_tasks INTEGER,
-            used_tasks INTEGER NOT NULL DEFAULT 0,
-            revision INTEGER NOT NULL DEFAULT 1
-        )");
-        $pdo->exec("CREATE TABLE analytics_task_budget_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            actor_id INTEGER NOT NULL,
-            revision INTEGER NOT NULL,
-            data_json TEXT NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )");
-        $pdo->exec("CREATE TABLE analytics_daily_budget_policy (
-            id INTEGER PRIMARY KEY CHECK(id=1),
-            policy_version TEXT NOT NULL,
-            timezone TEXT NOT NULL,
-            max_tasks INTEGER NOT NULL CHECK(max_tasks=5)
-        )");
-        $pdo->exec("CREATE TABLE analytics_daily_budget (
-            policy_id INTEGER NOT NULL,
-            business_date TEXT NOT NULL,
-            used_tasks INTEGER NOT NULL DEFAULT 0 CHECK(used_tasks BETWEEN 0 AND 5),
-            PRIMARY KEY(policy_id,business_date)
-        )");
-        $pdo->exec("CREATE TABLE analytics_daily_budget_reservations (
-            reservation_key TEXT PRIMARY KEY,
-            policy_id INTEGER NOT NULL,
-            business_date TEXT NOT NULL,
-            reserved_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )");
-
-        $pdo->exec("INSERT INTO analytics_task_budget
-            (id,approved,max_tasks,used_tasks,revision)
-            VALUES (1,1,100,0,1)");
-        $pdo->exec("INSERT INTO analytics_daily_budget_policy
-            (id,policy_version,timezone,max_tasks)
-            VALUES (1,'aviator-churn-pilot/1','Europe/Moscow',5)");
-    }
-
-
     return $pdo;
 }
