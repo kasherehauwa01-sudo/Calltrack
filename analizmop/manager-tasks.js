@@ -43,6 +43,8 @@
   async function showTask(id) {
     window.closeAnalyticsTaskPolicy?.();
     const requestEpoch = ++epoch;
+    panel().innerHTML = '<section class="filter-card"><button type="button" class="updates-action-btn" id="taskLoadingBack">← К списку задач</button><p role="status"><span class="task-spinner" aria-hidden="true"></span> Загрузка задачи…</p></section>';
+    panel().querySelector('#taskLoadingBack').onclick = showList;
     try {
       const {task, history, client, role} = await api(`${endpoint}?id=${encodeURIComponent(id)}`);
       if (requestEpoch !== epoch) return;
@@ -51,7 +53,7 @@
         <nav class="task-detail-nav" aria-label="Навигация по задачам"><button type="button" class="updates-action-btn" id="tasksBack">← К списку задач</button><span>Добавлена: ${createdDate(task.created_at)}</span></nav>
         <header class="task-detail-header"><div><p class="task-eyebrow">Задача</p><h2 id="taskDetailTitle">${esc(task.title)}</h2></div><span class="task-status task-status--${Object.hasOwn(statuses,task.status) ? task.status.toLowerCase() : 'unknown'}">${esc(statuses[task.status] || 'Неизвестный статус')}</span></header>
         <section class="task-client-panel" aria-label="Клиент"><div><p class="task-eyebrow">Клиент</p><h3>${esc(client?.name || 'Клиент не указан')}</h3><p class="task-muted">Ответственный: ${esc(task.assignee_name || 'Не назначен')}</p></div><div class="task-client-actions"><button type="button" class="updates-action-btn" id="taskClientCard" aria-describedby="taskClientLoading">Карточка клиента</button><span id="taskClientLoading" class="task-client-feedback" role="status" aria-live="polite"></span></div></section>
-        <section class="task-description-panel"><h3>Что нужно сделать</h3><p>${esc(task.description || 'Описание задачи не добавлено.')}</p></section>
+        <section class="task-description-panel"><h3>Что нужно сделать</h3><p id="taskDescription">${esc(task.description || 'Описание задачи не добавлено.')}</p></section>
         <form id="taskEdit" class="task-detail-form">
           <section class="task-result-panel"><h3>Результат работы</h3><label for="taskResult" class="task-muted">${editable ? 'Зафиксируйте итог общения и дальнейшие договорённости.' : 'Сохранённый результат выполнения задачи.'}</label><textarea id="taskResult" name="result" maxlength="10000" rows="7" placeholder="Например: связались с клиентом, выяснили причину и договорились о следующем шаге…" ${editable ? '' : 'disabled'}>${esc(task.result)}</textarea>${task.status==='DONE' && editable ? '<p class="task-field-hint">Можно уточнить результат. Задача останется выполненной.</p>' : ''}</section>
           <aside class="task-settings-panel" aria-label="Параметры задачи"><h3>Параметры задачи</h3><label>Статус<select name="status" ${editable ? '' : 'disabled'}>${options(task.status === 'DONE' ? {DONE:statuses.DONE} : role === 'admin' ? statuses : {OPEN:statuses.OPEN,IN_PROGRESS:statuses.IN_PROGRESS,DONE:statuses.DONE,...(task.status==='CANCELLED'?{CANCELLED:statuses.CANCELLED}:{})},task.status)}</select></label>
@@ -62,6 +64,25 @@
         ${role !== 'manager' ? `<details class="task-extra"><summary>Дополнительные сведения и история</summary><div class="task-extra-content"><p class="task-muted">ID клиента: ${esc(task.client_id)}</p>${matchingNotice(task)}${task.source_signal_key ? '<p><a href="#taskSourceEvidence" class="updates-action-btn" id="taskSource">Исходный аналитический сигнал</a></p>' : ''}<div id="taskSourceEvidence"></div><h3>История</h3><ul class="task-history">${history.map(row => `<li><span>${esc(row.created_at)} · ${esc(({CREATED:'Задача создана',UPDATED:'Задача изменена'})[row.event_type] || row.event_type)}</span><details><summary>Подробности изменения</summary><pre>${esc(row.data_json)}</pre></details></li>`).join('') || '<li>История изменений пока пуста.</li>'}</ul></div></details>` : ''}
       </section>`;
       panel().querySelector('#tasksBack').onclick = showList;
+      if (task.source_signal_key) {
+        const description = panel().querySelector('#taskDescription');
+        description.textContent = 'Загрузка показателей покупок…';
+        const loadMetrics = async () => {
+          description.textContent = 'Загрузка показателей покупок…';
+          try {
+            const {summary} = await api('/vr/calltrack/api/client_purchases.php', 'POST', {client_id:task.client_id,action:'purchase_metrics'});
+            if (requestEpoch !== epoch) return;
+            const interval = Number(summary.average_interval);
+            const frequency = summary.average_interval != null && Number.isFinite(interval) && interval > 0 ? `каждые ${interval.toLocaleString('ru-RU')} дней` : 'не определена';
+            description.textContent = `Частота покупок: ${frequency}. Последняя покупка: ${summary.last_purchase || 'нет покупок'}. Без покупок: ${summary.days_without_purchase == null ? 'неизвестно' : summary.days_without_purchase + ' дн.'} Связаться с клиентом, выяснить причину отсутствия заказов и зафиксировать результат.`;
+          } catch (error) {
+            if (requestEpoch !== epoch) return;
+            description.textContent = 'Не удалось загрузить актуальные показатели. ';
+            const retry = document.createElement('button');retry.type='button';retry.className='updates-action-btn';retry.textContent='Повторить';retry.onclick=loadMetrics;description.append(retry);
+          }
+        };
+        loadMetrics();
+      }
       panel().querySelector('#taskClientCard').onclick = async event => {
         const button=event.currentTarget;button.disabled=true;button.setAttribute('aria-busy','true');
         const feedback=panel().querySelector('#taskClientLoading');
@@ -85,7 +106,7 @@
         const submit=event.target.querySelector('[type=submit]');submit.disabled=true;submit.textContent='Сохранение…';submit.setAttribute('aria-busy','true');panel().querySelector('#taskMessage').textContent='';
         try {await api(endpoint,'PATCH',body);window.refreshManagerTasksCount();if(requestEpoch===epoch){pageAfter='';showList();}} catch(error) {if(requestEpoch===epoch)panel().querySelector('#taskMessage').textContent = error.message;}finally{submit.disabled=false;submit.textContent='Сохранить';submit.removeAttribute('aria-busy');}
       };
-    } catch (error) {if (requestEpoch === epoch) panel().textContent = error.message;}
+    } catch (error) {if (requestEpoch === epoch) {panel().innerHTML=`<section class="filter-card"><p role="alert">${esc(error.message)}</p><button type="button" id="taskLoadRetry">Повторить</button><button type="button" id="taskLoadBack">К списку задач</button></section>`;panel().querySelector('#taskLoadRetry').onclick=()=>showTask(id);panel().querySelector('#taskLoadBack').onclick=showList;}}
   }
   function showCreate() {
     ++epoch;

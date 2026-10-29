@@ -39,12 +39,15 @@ for(const modal of [false,true]){
 }
 for(const field of ['source_event_id','max_user_id','shortcut_id','contact_name','message_text'])assert(!out.includes(field));
 ctx.clientRecordsByPhone.set('9991111111',[{id:'a'}]);
-assert.equal(ctx.maxIdentityForGroup({calls:[{phone:'9991111111',userPhone:'web-user-1'}]}),'client:a');
+assert.equal(ctx.maxIdentityForGroup({calls:[{phone:'9991111111',userPhone:'web-user-1'}]}),'client:a:owner:["web-user-1"]');
 ctx.clientRecordsByPhone.set('9992222222',[{id:'a'}]);
-assert.equal(ctx.maxIdentityForGroup({calls:[{phone:'9992222222',userPhone:'web-user-1'}]}),'client:a');
+assert.equal(ctx.maxIdentityForGroup({calls:[{phone:'9992222222',userPhone:'web-user-1'}]}),'client:a:owner:["web-user-1"]');
 ctx.clientRecordsByPhone.set('9993333333',[{id:'a'},{id:'b'}]);
 assert.equal(ctx.maxIdentityForGroup({calls:[{phone:'9993333333',userPhone:'web-user-1'}]}),null);
 assert.equal(ctx.maxIdentityForGroup({calls:[{phone:'9991111111',userPhone:'web-user-1'},{phone:'9992222222',userPhone:'web-user-2'}]}),null);
+assert.equal(ctx.maxIdentityForGroup({calls:[{sqlId:71,phone:'9990000000',userPhone:'web-user-1'}]}),'call:71');
+assert.equal(ctx.maxIdentityForGroup({calls:[],emails:[{id:72,client_email:'unknown@example.com'}]}),'email:72');
+assert.notEqual(ctx.maxIdentityForGroup({calls:[{phone:'9991111111',userPhone:'web-user-1'}]}),ctx.maxIdentityForGroup({calls:[{phone:'9991111111',userPhone:'web-user-2'}]}));
 // The card date/time and relative wall-clock ordering must be independent of browser timezone.
 if(!process.env.MAX_HISTORY_CHILD){for(const tz of ['UTC','Europe/Volgograd','America/Los_Angeles'])child.execFileSync(process.execPath,[__filename],{env:{...process.env,TZ:tz,MAX_HISTORY_CHILD:'1'}});}
 assert(html.includes('const maxEntry=loadMaxHistory(reference.sales_client_key?'))

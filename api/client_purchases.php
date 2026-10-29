@@ -5,6 +5,7 @@ require_once __DIR__.'/client_insights.php';
 try {
     if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST')sendJson(['status'=>'error','message'=>'Метод не поддерживается'],405);
     $pdo=getPdo();$user=requireWebUser($pdo);$input=readJsonBody();
+    if(($input['action']??'')==='purchase_metrics' && session_status()===PHP_SESSION_ACTIVE)session_write_close();
     $context=clientHistoryContext($pdo,$user,$input);
     $public=['found_in_1c'=>$context['found_in_1c'],'phone'=>$context['phone'],'can_mark_personal'=>!$context['found_in_1c'] && $context['phone']!=='' && $context['call_id']!==null && $context['user_phone']!==''];
     $selection=clientHistorySelection($context,trim((string)($input['client_key']??'')));
@@ -25,6 +26,7 @@ try {
     $defaults=purchaseDefaultPeriod();$from=(string)($input['from']??$defaults['from']);$to=(string)($input['to']??$defaults['to']);$detail=(string)($input['detail']??'month');
     purchaseAnalytics([],$from,$to,$detail,$metric); // Validate before upstream I/O.
     $result=clientHistorySales($context);$sales=purchaseDataset($result['items']);
+    if(($input['action']??'')==='purchase_metrics')sendJson(['status'=>'success','summary'=>purchaseLifetime($sales),'cache_stale'=>$result['cache_stale']]);
     if(($input['action']??'')==='summary'){
         $summary=purchaseLifetime($sales);$insights=null;$detailsError=null;
         try{$insights=clientHistoryInsights($context);}catch(Throwable $e){error_log('Client insights: '.$e->getMessage());$detailsError=str_contains($e->getMessage(),'HTTP 404')?'Обновите backend Sales Journal: API товарных показателей и RFM ещё не установлен.':'Не удалось получить товарные показатели и RFM из Sales Journal. Повторите загрузку.';}

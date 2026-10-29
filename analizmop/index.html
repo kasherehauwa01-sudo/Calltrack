@@ -15,7 +15,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="api.js?v=20261001-calls-recovery&amp;catalog=20261019-buyers"></script>
 <script src="manager-bindings.js?v=1"></script>
-<script src="manager-tasks.js?v=20261029-tasks-4"></script>
+<script src="manager-tasks.js?v=20261029-tasks-5"></script>
 <script src="analytics-policy.js?v=1"></script>
   <link rel="stylesheet" href="client-workspace.css?v=20261019-category-drill" />
   <style>
@@ -1797,7 +1797,14 @@ function maxIdentityForGroup(group){
     .concat((group.emails||[]).flatMap(email=>clientRecordsByEmail.get(normalizeClientLookupEmail(email.client_email||email.to_emails))||[]));
   const ids=[...new Set(records.map(record=>String(record.id||'')).filter(Boolean))];
   const owners=new Set(group.calls.map(call=>String(call.userPhone||'')));
-  return ids.length===1&&(!group.calls.length||owners.size===1)?`client:${ids[0]}`:null;
+  if(ids.length>1||owners.size>1)return null;
+  if(ids.length===1)return `client:${ids[0]}:owner:${JSON.stringify([...owners])}`;
+  // Directory lookup may be incomplete in the browser. Resolve a persisted
+  // interaction on the server, where ownership and client identity are checked.
+  const reference=maxReferenceForGroup(group);
+  if(reference.call_id)return `call:${reference.call_id}`;
+  if(reference.email_id)return `email:${reference.email_id}`;
+  return null;
 }
 function sortClientTimelineEvents(events){return [...events].sort((a,b)=>a.day.localeCompare(b.day)||a.saleLast-b.saleLast||a.time-b.time||a.type-b.type||a.id-b.id);}
 function pluralizeSales(count){const mod100=count%100,mod10=count%10;return mod100>=11&&mod100<=14?'продаж':mod10===1?'продажа':mod10>=2&&mod10<=4?'продажи':'продаж';}
