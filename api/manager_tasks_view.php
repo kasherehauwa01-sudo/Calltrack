@@ -55,8 +55,14 @@ function taskViewList(PDO $pdo, array $user, array $input): array {
     }
     $after=(string)($input['after'] ?? '');$type=(string)($input['type'] ?? '');
     if($type!==''){$from.=" AND $typeSql=?";$params[]=$type;}
-    if($after!==''){$from.=' AND t.id>?';$params[]=$after;}
-    $q=$pdo->prepare("SELECT t.id,t.client_id,t.title,t.assignee_id,t.status,t.priority,t.due_at,t.version,t.family,$typeSql AS type_key,u.display_name AS assignee_name".$from.' ORDER BY t.id LIMIT 51');
+    if($after!==''){
+        $cursor=json_decode((string)base64_decode($after,true),true);
+        if(!is_array($cursor)||count($cursor)!==2||!is_string($cursor[0]??null)||!is_string($cursor[1]??null)
+            ||!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D',$cursor[0]))throw new InvalidArgumentException('Обновите список задач: некорректный курсор');
+        $from.=' AND (t.created_at<? OR (t.created_at=? AND t.id<?))';
+        array_push($params,$cursor[0],$cursor[0],$cursor[1]);
+    }
+    $q=$pdo->prepare("SELECT t.id,t.created_at,t.client_id,t.title,t.assignee_id,t.status,t.priority,t.due_at,t.version,t.family,$typeSql AS type_key,u.display_name AS assignee_name".$from.' ORDER BY t.created_at DESC,t.id DESC LIMIT 51');
     $q->execute($params);$items=$q->fetchAll(PDO::FETCH_ASSOC);
     $more=count($items)>50;$items=array_slice($items,0,50);
     foreach($items as &$row){$row['task_type']=taskViewType(['family'=>$row['type_key']]);unset($row['type_key']);}unset($row);
@@ -64,5 +70,5 @@ function taskViewList(PDO $pdo, array $user, array $input): array {
     foreach($items as &$row)$row['client_name']=$clients[(string)$row['client_id']]['name'] ?? (string)$row['client_id'];
     unset($row);ksort($types);
     $assignees=$user['role']==='manager'?[]:$pdo->query("SELECT id,display_name,is_active FROM web_users WHERE role='manager' ORDER BY display_name,id")->fetchAll(PDO::FETCH_ASSOC);
-    return ['status'=>'success','items'=>$items,'types'=>array_values($types),'unfinished_count'=>$count,'next_after'=>$more?end($items)['id']:null,'role'=>$user['role'],'assignees'=>$assignees];
+    return ['status'=>'success','items'=>$items,'types'=>array_values($types),'unfinished_count'=>$count,'next_after'=>$more?base64_encode(json_encode([end($items)['created_at'],end($items)['id']],JSON_THROW_ON_ERROR)):null,'role'=>$user['role'],'assignees'=>$assignees];
 }

@@ -4,6 +4,7 @@ require_once __DIR__.'/client_directory.php';
 require_once __DIR__.'/web_auth.php';
 require_once __DIR__.'/client_catalog_cache.php';
 require_once __DIR__.'/client_manager.php';
+require_once __DIR__.'/client_catalog_lookup.php';
 
 class ClientCatalogAccessDenied extends RuntimeException {}
 
@@ -74,10 +75,10 @@ function clientCatalogVisible(array $user,array $record,array $managers): bool
 
 function clientCatalogResolve(PDO $pdo,array $user,string $id): array
 {
-    $records=clientCatalogRecords();$record=$records[$id]??null;$managers=clientCatalogManagers($pdo);
+    $lookup=clientCatalogCachedArray('client-lookup-v1|'.clientCatalogRevision().'|'.hash('sha256',$id),static fn()=>clientCatalogLookup($id),60);$record=$lookup['record'];$managers=clientCatalogManagers($pdo);
     if(!$record||!clientCatalogVisible($user,$record,$managers))throw new ClientCatalogAccessDenied('Клиент недоступен');
     $owner=clientCatalogOwner($record,$managers);
-    return ['record'=>$record,'owner'=>$owner,'records'=>$records,'managers'=>$managers];
+    return $lookup+['owner'=>$owner,'managers'=>$managers];
 }
 
 /** Full client context also works without a single call/email. Browser owner fields are ignored. */
@@ -86,12 +87,10 @@ function clientCatalogHistoryContext(PDO $pdo,array $user,array $input): array
     if(!is_string($input['client_id']??null)||trim($input['client_id'])===''||strlen($input['client_id'])>255)throw new InvalidArgumentException('Передайте client_id');
     $resolved=clientCatalogResolve($pdo,$user,trim($input['client_id']));$record=$resolved['record'];$owner=$resolved['owner'];
     $match=['client_id'=>$record['id'],'name'=>$record['name'],'phone'=>$record['phones'][0]??'','fields'=>$record['fields']];
-    $nameKey=static fn($value)=>mb_strtolower(trim(preg_replace('/\s+/u',' ',$value)??''));
-    $sameNames=array_filter($resolved['records'],static fn($r)=>$nameKey($r['name'])===$nameKey($record['name']));
     return ['client_name'=>$record['name'],'requested_name'=>$record['name'],'phone'=>$record['phones'][0]??'',
         'matches'=>[$match],'found_in_1c'=>true,'user_phone'=>$owner?webUserPhone((int)$owner['id']):'',
         'manager'=>$owner?(string)$owner['display_name']:$record['manager'],'call_id'=>null,'client_id'=>$record['id'],
-        'directory_direct'=>true,'directory_name_unique'=>count($sameNames)===1];
+        'directory_direct'=>true,'directory_name_unique'=>$resolved['name_unique']];
 }
 
 /** Shared addresses do not assign activity/history to an arbitrary client. */

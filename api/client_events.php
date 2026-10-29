@@ -4,6 +4,7 @@ require_once __DIR__.'/sales_buyer_catalog.php';
 try{
     if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST')sendJson(['status'=>'error','message'=>'Разрешён только POST'],405);
     $pdo=getPdo();$user=requireWebUser($pdo);$input=readJsonBody();
+    if(session_status()===PHP_SESSION_ACTIVE)session_write_close();
     if(array_key_exists('sales_client_key',$input)){
         $resolved=salesBuyerResolve($pdo,$user,$input);$b=$resolved['buyer'];$contact=$resolved['contact'];
         $record=['id'=>$b['id'],'name'=>$b['name'],'phones'=>$contact['phones'],'manager'=>$b['manager']];
@@ -12,7 +13,7 @@ try{
     }else{
     if(!is_string($input['client_id']??null)||trim($input['client_id'])==='')throw new InvalidArgumentException('Передайте client_id');
     $resolved=clientCatalogResolve($pdo,$user,trim($input['client_id']));$record=$resolved['record'];$owner=$resolved['owner'];
-    $phoneIndex=clientCatalogAddressIndex($resolved['records'],'phones');$emailIndex=clientCatalogAddressIndex($resolved['records'],'emails');
+    $phoneIndex=$resolved['phone_index'];$emailIndex=$resolved['email_index'];
     }
     $calls=[];$emails=[];
     if($owner){

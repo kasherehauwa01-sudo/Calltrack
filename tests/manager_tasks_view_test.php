@@ -8,7 +8,7 @@ function check(bool $ok,string $message):void{if(!$ok)throw new RuntimeException
 function rejects(callable $fn,string $class):void{try{$fn();}catch(Throwable $e){check($e instanceof $class,'Wrong exception: '.get_class($e));return;}throw new RuntimeException('Expected rejection');}
 $p=new PDO('sqlite::memory:');$p->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
 $p->exec('CREATE TABLE web_users(id INTEGER PRIMARY KEY, display_name TEXT, role TEXT,is_active INTEGER); INSERT INTO web_users VALUES(1,"Первый","manager",1),(2,"Второй","manager",1)');
-$p->exec('CREATE TABLE manager_tasks(id TEXT PRIMARY KEY,client_id TEXT,title TEXT,assignee_id INTEGER,status TEXT,priority TEXT,due_at TEXT,version INTEGER DEFAULT 1,evidence_json TEXT,family TEXT,result TEXT,description TEXT,updated_at TEXT)');
+$p->exec('CREATE TABLE manager_tasks(id TEXT PRIMARY KEY,client_id TEXT,title TEXT,assignee_id INTEGER,status TEXT,priority TEXT,due_at TEXT,version INTEGER DEFAULT 1,evidence_json TEXT,family TEXT,result TEXT,description TEXT,updated_at TEXT,created_at TEXT DEFAULT "2026-01-01 00:00:00")');
 $p->exec('CREATE TABLE manager_task_events(task_id TEXT,actor_id INTEGER,event_type TEXT,data_json TEXT)');
 $p->exec('CREATE TABLE analytics_open_task_slots(slot_key TEXT,task_id TEXT)');
 $e=json_encode(['signal'=>['signal_type'=>'CHURN_RISK','last_purchase'=>'2026-08-27','metrics'=>['median_interval'=>20,'days_without_purchase'=>60]]]);
@@ -18,8 +18,8 @@ $q->execute(['060','c2','Done',1,'DONE','NORMAL',$e,'INACTIVITY','Done','Old']);
 $q->execute(['061','c2','Other',2,'OPEN','NORMAL',json_encode(['signal'=>['signal_type'=>'FUTURE_TYPE']]),'MANUAL','','']);
 $q->execute(['062','c2','Cancelled',1,'CANCELLED','NORMAL',null,'MANUAL','No','']);
 $m=['id'=>1,'role'=>'manager'];$admin=['id'=>3,'role'=>'admin'];$boss=['id'=>4,'role'=>'supervisor'];
-$r=taskViewList($p,$m,[]);check(count($r['items'])===50&&$r['next_after']==='050','Pagination first');check($r['unfinished_count']===55,'Manager count');check($r['items'][0]['client_name']==='ООО Радуга','Client name');check($r['assignees']===[],'No manager selector');check(!in_array('FUTURE_TYPE',array_column($r['types'],'key')),'Types scoped');
-$r=taskViewList($p,$m,['after'=>'050']);check(count($r['items'])===6&&$r['next_after']===null,'Pagination tail');
+$r=taskViewList($p,$m,[]);check(count($r['items'])===50&&$r['items'][0]['id']==='062','Pagination first');check($r['unfinished_count']===55,'Manager count');check($r['items'][0]['client_name']==='ООО Радуга','Client name');check($r['assignees']===[],'No manager selector');check(!in_array('FUTURE_TYPE',array_column($r['types'],'key')),'Types scoped');
+$cursor=$r['next_after'];$r=taskViewList($p,$m,['after'=>$cursor]);check(count($r['items'])===6&&$r['next_after']===null,'Pagination tail');
 $r=taskViewList($p,$m,['completed'=>'1']);check(array_column($r['items'],'id')===['060'],'Only done');check($r['unfinished_count']===55,'Count independent');
 $r=taskViewList($p,$m,['manager'=>'2','type'=>'FUTURE_TYPE']);check($r['items']===[],'Manager cannot escape scope');
 $r=taskViewList($p,$boss,['manager'=>'2']);check(count($r['items'])===1&&count($r['assignees'])===2&&$r['unfinished_count']===56,'Supervisor filtering');
@@ -40,3 +40,9 @@ $r=taskViewList($p,$m,['type'=>'MANUAL','status'=>'OPEN']);
 check(array_column($r['items'],'id')===['090'],'Malformed evidence uses family without SQL error');
 check(!array_key_exists('evidence_json',$r['items'][0]),'List never transfers proof bundles');
 echo "PASS: malformed legacy JSON and bounded list payload\n";
+
+$p->exec("UPDATE manager_tasks SET created_at='2026-10-29 12:00:00' WHERE id='002'");
+$r=taskViewList($p,$m,[]);check($r['items'][0]['id']==='002','Creation date outranks UUID');
+$seen=array_column($r['items'],'id');while($r['next_after']){$r=taskViewList($p,$m,['after'=>$r['next_after']]);$seen=array_merge($seen,array_column($r['items'],'id'));}
+check(count($seen)===count(array_unique($seen))&&count($seen)===56,'Ties paginate without duplicates or omissions');
+echo "PASS: newest first, stable timestamp ties and complete pagination\n";
