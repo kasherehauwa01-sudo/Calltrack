@@ -7,7 +7,7 @@ const path=require('node:path');const root=process.argv[2] || path.resolve(__dir
   const page=await browser.newPage();await page.setContent('<span id="tasksCount" hidden></span><div id="tasksView"></div>');
   await page.evaluate(role=>{
    window.role=role;window.calls=[];window.saved=false;window.openClientHistoryModal=(name,reference)=>{window.openedClient=reference.client_id;};
-   window.calltrackApi={loadClientEvents:async()=>({calls:[],emails:[]}),requestJson:async(url,opts)=>{
+   window.calltrackApi={loadClientEvents:()=>new Promise((resolve,reject)=>{window.finishClientLoad=()=>window.failClientLoad ? reject(new Error('Ошибка сервера')) : resolve({calls:[],emails:[]});}),requestJson:async(url,opts)=>{
     window.calls.push([url,opts]);
     if(opts.method==='PATCH'){window.saved=true;return {};}
     if(url.includes('count_only'))return {unfinished_count:7};
@@ -18,12 +18,25 @@ const path=require('node:path');const root=process.argv[2] || path.resolve(__dir
   await page.addScriptTag({path:path.join(root,'analizmop/manager-tasks.js')});
   await page.evaluate(()=>window.refreshManagerTasksCount());assert.equal(await page.locator('#tasksCount').textContent(),'7');
   await page.evaluate(role=>window.openManagerTasks({id:1,role}),role);
-  await page.locator('[data-task="1"]').waitFor();assert.equal(await page.locator('#taskManagerFilter').count(),role==='manager'?0:1);
+  await page.locator('[data-task="1"]').waitFor();
+  const cardText=await page.locator('[data-task="1"]').textContent();
+  for(const label of ['Клиент ID','Приоритет','Срок (UTC)'])assert.equal(cardText.includes(label),false);
+  assert.equal(await page.locator('.task-status--open').textContent(),'Открыта');assert.equal(await page.locator('#taskManagerFilter').count(),role==='manager'?0:1);
   assert.match(await page.locator('[data-task="1"]').textContent(),/ООО Радуга/);assert.match(await page.locator('[data-task="1"]').textContent(),/Добавлена: 29.10.2026/);
   await page.locator('#tasksCompleted').click();await page.waitForFunction(()=>window.calls.at(-1)[0].includes('completed=1'));
   await page.locator('[data-task-type="NEW"]').click();await page.waitForFunction(()=>window.calls.at(-1)[0].includes('type=NEW'));
   await page.locator('[data-task="1"]').click();await page.locator('#taskEdit').waitFor();
-  await page.locator('#taskClientCard').click();assert.equal(await page.evaluate(()=>window.openedClient),'c');
+  await page.locator('#taskClientCard').click();
+  assert.equal(await page.locator('#taskClientCard').isDisabled(),true);
+  assert.match(await page.locator('#taskClientLoading').textContent(),/Загрузка карточки/);
+  assert.equal(await page.locator('.task-spinner').count(),1);
+  await page.evaluate(()=>window.finishClientLoad());await page.waitForFunction(()=>window.openedClient==='c');
+  assert.equal(await page.locator('#taskClientCard').isEnabled(),true);
+  assert.equal(await page.locator('#taskClientLoading').textContent(),'');
+  await page.evaluate(()=>window.failClientLoad=true);await page.locator('#taskClientCard').click();await page.evaluate(()=>window.finishClientLoad());
+  await page.waitForFunction(()=>document.querySelector('#taskClientLoading').textContent.includes('Попробуйте ещё раз'));
+  assert.equal(await page.locator('#taskClientCard').isEnabled(),true);
+  assert.equal(await page.locator('.task-spinner').count(),0);
   const body=await page.locator('#tasksView').textContent();
   for(const word of ['Предварительное сопоставление','Исходный аналитический сигнал','Приоритет','История'])assert.equal(body.includes(word),role!=='manager',word+' '+role);
   if(role!=='supervisor'){
