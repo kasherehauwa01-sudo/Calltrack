@@ -3,24 +3,25 @@ declare(strict_types=1);
 require_once __DIR__.'/client_directory.php';
 require_once __DIR__.'/web_auth.php';
 require_once __DIR__.'/client_catalog_cache.php';
+require_once __DIR__.'/client_manager.php';
 
 class ClientCatalogAccessDenied extends RuntimeException {}
 
 /** The existing directory remains the only source of clients and assignment. */
 function clientCatalogRecords(?iterable $source=null): array
 {
-    if($source===null)return clientCatalogCachedArray('records-v2|'.clientCatalogRevision(),static fn()=>clientCatalogRecords(clientsCacheRowsForEmailLookup()),120);
+    if($source===null)return clientCatalogCachedArray('records-v3|'.clientCatalogRevision(),static fn()=>clientCatalogRecords(clientsCacheRowsForEmailLookup()),120);
     $records=[];$duplicates=[];
     foreach($source??clientsCacheRowsForEmailLookup() as $row){
         $fields=is_array($row['fields']??null)?$row['fields']:[];
         $id=trim((string)($row['id']??$fields['id']??$fields['client_id']??''));
         if($id==='')continue;
-        $manager=$fields['Менеджер']??'';
+        $assignment=clientManagerField($fields);$manager=$assignment['label'];
         $phones=array_values(array_unique(array_filter(array_map('normalizeClientPhone',array_map('strval',(array)($row['phones']??[]))))));
         if(!$phones)$phones=splitClientPhones(clientRawValue($fields,['Телефоны','phones','phone']));
         $emails=clientEmailsFromFields($fields);
         $record=['id'=>$id,'name'=>trim((string)($row['name']??'')),'phones'=>$phones,'emails'=>$emails,
-            'manager'=>is_string($manager)?trim($manager):'','manager_key'=>is_string($manager)?managerNameKey($manager):'','fields'=>['id'=>$id,'Телефоны'=>$phones,'email'=>$emails,'Менеджер'=>is_string($manager)?trim($manager):'']];
+            'manager_conflict'=>$assignment['conflict'],'manager'=>is_string($manager)?trim($manager):'','manager_key'=>is_string($manager)?managerNameKey($manager):'','fields'=>['id'=>$id,'Телефоны'=>$phones,'email'=>$emails,'Менеджер'=>is_string($manager)?trim($manager):'']];
         if(isset($records[$id]))$duplicates[$id]=true;
         $records[$id]=$record;
     }
@@ -30,7 +31,14 @@ function clientCatalogRecords(?iterable $source=null): array
 
 function clientCatalogManagers(PDO $pdo): array
 {
-    return $pdo->query("SELECT id,display_name FROM web_users WHERE role='manager' AND is_active=1 ORDER BY display_name,id")->fetchAll();
+    $managers=$pdo->query("SELECT id,display_name FROM web_users WHERE role='manager' AND is_active=1 ORDER BY display_name,id")->fetchAll();
+    if(getenv('CALLTRACK_MANAGER_BINDINGS_ENABLED')==='1'){
+        require_once __DIR__.'/manager_bindings_service.php';
+        $bindings=managerBindingRows($pdo);
+        // The same immutable batch of explicit aliases is attached once, not queried per client.
+        if($managers)$managers[0]['clientsvr_bindings']=$bindings;
+    }
+    return $managers;
 }
 
 /** Match the existing full-name convention, never a substring/fuzzy match. */
@@ -39,6 +47,12 @@ function clientCatalogOwnerIndex(array $managers): array
     $index=[];$duplicates=[];
     foreach($managers as $manager){$key=managerNameKey((string)$manager['display_name']);if(isset($index[$key]))$duplicates[$key]=true;$index[$key]=$manager;}
     foreach($duplicates as $key=>$_)unset($index[$key]);
+    $explicit=[];
+    foreach($managers[0]['clientsvr_bindings']??[] as $binding){
+        $explicit[$binding['designation_key']]=(($binding['role']??'')==='manager'&&(int)($binding['is_active']??0)===1)
+            ?['id'=>$binding['web_user_id'],'display_name'=>$binding['display_name']]:null;
+    }
+    $index['__explicit_bindings']=$explicit;
     return $index;
 }
 
@@ -46,6 +60,8 @@ function clientCatalogOwner(array $record,array $managers,?array $index=null): ?
 {
     $key=$record['manager_key']??managerNameKey($record['manager']);if($key==='')return null;
     $index??=clientCatalogOwnerIndex($managers);
+    $designation=clientManagerDesignationKey((string)($record['manager']??''));
+    if(array_key_exists($designation,$index['__explicit_bindings']??[]))return $index['__explicit_bindings'][$designation];
     return $index[$key]??null;
 }
 
