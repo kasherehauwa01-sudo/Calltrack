@@ -26,7 +26,7 @@
         <div class="clients-filters"><label>Статус<select id="taskStatusFilter"><option value="">Все</option>${options(completed ? {DONE:statuses.DONE} : {OPEN:statuses.OPEN,IN_PROGRESS:statuses.IN_PROGRESS,CANCELLED:statuses.CANCELLED},status)}</select></label>${data.role !== 'manager' ? `<label>Менеджер<select id="taskManagerFilter"><option value="">Все менеджеры</option>${managerOptions(manager)}</select></label>` : ''}</div>
         <div class="updates-actions" aria-label="Фильтры задач"><button type="button" class="updates-action-btn" id="tasksCompleted" aria-pressed="${completed}">Выполненные</button><button type="button" class="updates-action-btn" data-task-type="" aria-pressed="${type===''}">Все типы</button>${(data.types || []).map(tag=>`<button type="button" class="updates-action-btn" data-task-type="${esc(tag.key)}" aria-pressed="${type===tag.key}">${esc(tag.label)}</button>`).join('')}</div>
         <div class="updates-actions"><button type="button" class="updates-action-btn" id="taskRefresh">Обновить</button>${data.role === 'admin' ? '<button type="button" class="registry-refresh-btn" id="taskCreate">Создать задачу</button><button type="button" class="updates-action-btn" id="taskDiagnostics">Аналитические сигналы</button>' : ''}</div>
-        <div class="clients-list">${data.items.map(row => `<button type="button" class="client-catalog-row" data-task="${esc(row.id)}"><strong>${esc(row.title)} · ${esc(row.client_name || row.client_id)}</strong><span>Добавлена: ${createdDate(row.created_at)}</span><span>Клиент ID: ${esc(row.client_id)} · ${esc(row.assignee_name)}</span><span>${esc(statuses[row.status])} · ${esc(priorities[row.priority])} · Срок (UTC): ${esc(row.due_at || 'не задан')}</span></button>`).join('') || '<p>Задач нет.</p>'}</div>
+        <div class="task-list">${data.items.map(row => `<button type="button" class="task-card" data-task="${esc(row.id)}"><span class="task-card-top"><span class="task-card-title">${esc(row.title)}</span><span class="task-status task-status--${Object.hasOwn(statuses,row.status) ? row.status.toLowerCase() : 'unknown'}">${esc(statuses[row.status] || 'Неизвестный статус')}</span></span><strong class="task-card-client">${esc(row.client_name || 'Клиент не указан')}</strong><span class="task-card-bottom"><span>Добавлена: ${createdDate(row.created_at)}</span><span>Ответственный: ${esc(row.assignee_name || 'Не назначен')}</span><span class="task-card-open" aria-hidden="true">Открыть →</span></span></button>`).join('') || '<p class="task-empty">Нет задач по выбранным фильтрам.</p>'}</div>
         <div class="clients-pagination"><button type="button" class="updates-action-btn" id="tasksFirst">В начало</button><button type="button" class="updates-action-btn" id="tasksNext" ${nextAfter ? '' : 'disabled'}>Далее</button></div></section>`;
       panel().querySelector('#taskStatusFilter').onchange = event => {status = event.target.value;pageAfter = '';showList();};
       panel().querySelector('#taskRefresh').onclick = showList;
@@ -48,7 +48,7 @@
       if (requestEpoch !== epoch) return;
       const editable = role !== 'supervisor' && task.status !== 'CANCELLED';
       panel().innerHTML = `<section class="filter-card clients-catalog"><button type="button" class="updates-action-btn" id="tasksBack">К списку</button><h2>${esc(task.title)}</h2>${role !== 'manager' ? matchingNotice(task) : ''}
-        <p>Клиент: ${esc(client?.name || task.client_id)} (ClientsVR ID: ${esc(task.client_id)}) <button type="button" class="updates-action-btn" id="taskClientCard">Карточка клиента</button></p>
+        <p>Клиент: ${esc(client?.name || task.client_id)} (ClientsVR ID: ${esc(task.client_id)}) <button type="button" class="updates-action-btn" id="taskClientCard" aria-describedby="taskClientLoading">Карточка клиента</button> <span id="taskClientLoading" class="task-client-feedback" role="status" aria-live="polite"></span></p>
         <p style="white-space:pre-wrap">${esc(task.description)}</p><p>Ответственный: ${esc(task.assignee_name)}</p>
         ${role !== 'manager' && task.source_signal_key ? `<p>Источник: <a href="#taskSourceEvidence" class="updates-action-btn" id="taskSource">Исходный аналитический сигнал</a></p>` : ''}
         <form id="taskEdit" class="updates-form"><label>Статус<select name="status" ${editable ? '' : 'disabled'}>${options(task.status === 'DONE' ? {DONE:statuses.DONE} : statuses,task.status)}</select></label>
@@ -57,13 +57,15 @@
         ${role !== 'manager' ? `<h3>История</h3><ul>${history.map(row => `<li>${esc(row.created_at)} · ${esc(row.event_type)} · ${esc(row.data_json)}</li>`).join('')}</ul><div id="taskSourceEvidence"></div>` : ''}</section>`;
       panel().querySelector('#tasksBack').onclick = showList;
       panel().querySelector('#taskClientCard').onclick = async event => {
-        const button=event.currentTarget;button.disabled=true;
+        const button=event.currentTarget;button.disabled=true;button.setAttribute('aria-busy','true');
+        const feedback=panel().querySelector('#taskClientLoading');
+        feedback.innerHTML='<span class="task-spinner" aria-hidden="true"></span><span>Загрузка карточки…</span>';
         try {
           const history = await window.calltrackApi.loadClientEvents({client_id:task.client_id});
-          if(requestEpoch===epoch)openClientHistoryModal(client?.name || task.client_id, {client_id:task.client_id}, history);
+          if(requestEpoch===epoch){openClientHistoryModal(client?.name || task.client_id, {client_id:task.client_id}, history);feedback.textContent='';}
         } catch (error) {
-          if(requestEpoch===epoch)panel().querySelector('#taskMessage').textContent = `Не удалось открыть карточку клиента (client_events.php): ${error.message}`;
-        } finally {button.disabled=false;}
+          if(requestEpoch===epoch)feedback.textContent = `Не удалось загрузить карточку. ${error.message}. Попробуйте ещё раз.`;
+        } finally {button.disabled=false;button.removeAttribute('aria-busy');}
       };
       if (role !== 'manager' && task.source_signal_key) panel().querySelector('#taskSource').onclick = event => {
         event.preventDefault();
