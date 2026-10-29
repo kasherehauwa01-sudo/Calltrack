@@ -11,7 +11,7 @@ try{
             if(!$task||!taskCanRead($user,$task))sendJson(['status'=>'error','message'=>'Задача недоступна'],404);
             $s=$pdo->prepare('SELECT id,actor_id,event_type,data_json,created_at FROM manager_task_events WHERE task_id=? ORDER BY id DESC LIMIT 100');$s->execute([$id]);
             $client=analyticsDirectoryRecords([(string)$task['client_id']])[(string)$task['client_id']]??null;
-            sendJson(['status'=>'success','task'=>$task,'history'=>$s->fetchAll(PDO::FETCH_ASSOC),'client'=>$client?['id'=>$client['id'],'name'=>$client['name']]:null,'role'=>$user['role']]);
+            sendJson(['status'=>'success','task'=>taskEvidenceForViewer($task,$user),'history'=>$s->fetchAll(PDO::FETCH_ASSOC),'client'=>$client?['id'=>$client['id'],'name'=>$client['name']]:null,'role'=>$user['role']]);
         }
         $after=(string)($_GET['after']??'');$where=[];$params=[];
         if($user['role']==='manager'){$where[]='t.assignee_id=?';$params[]=(int)$user['id'];}

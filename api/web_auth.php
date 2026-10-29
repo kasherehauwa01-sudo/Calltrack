@@ -124,10 +124,10 @@ function recordWebSecurityEvent(PDO $pdo, string $eventType, string $outcome, ?i
     }
 }
 
-function currentWebUser(PDO $pdo): ?array
+function currentWebUser(PDO $pdo, bool $initializeTelemetry=true): ?array
 {
     startWebSession();
-    ensureUserTelemetryTables($pdo);
+    if($initializeTelemetry)ensureUserTelemetryTables($pdo);
     $id = (int)($_SESSION['web_user_id'] ?? 0);
     if ($id <= 0) return null;
     $now = time();
@@ -147,17 +147,17 @@ function currentWebUser(PDO $pdo): ?array
     return $user;
 }
 
-function requireWebUser(PDO $pdo, bool $requireCsrf=true): array
+function requireWebUser(PDO $pdo, bool $requireCsrf=true, bool $initializeTelemetry=true): array
 {
-    $user = currentWebUser($pdo);
+    $user = currentWebUser($pdo,$initializeTelemetry);
     if (!$user) sendJson(['status'=>'error','message'=>'Требуется авторизация'], 401);
     if ($requireCsrf) requireWebCsrf();
     return $user;
 }
 
-function requireWebAdmin(PDO $pdo): array
+function requireWebAdmin(PDO $pdo, bool $initializeTelemetry=true): array
 {
-    $user = requireWebUser($pdo);
+    $user = requireWebUser($pdo,true,$initializeTelemetry);
     if ($user['role'] !== 'admin') sendJson(['status'=>'error','message'=>'Доступ разрешён только администратору'], 403);
     return $user;
 }

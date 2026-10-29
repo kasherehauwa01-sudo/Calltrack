@@ -6,6 +6,13 @@ require_once __DIR__.'/analytics_budget_service.php';
 function taskUuid(): string { $h=bin2hex(random_bytes(16));return substr($h,0,8).'-'.substr($h,8,4).'-4'.substr($h,13,3).'-'.dechex((hexdec($h[16])&3)|8).substr($h,17,3).'-'.substr($h,20); }
 function taskSlot(string $clientId,string $family): string { return hash('sha256',json_encode(['clientsvr',$clientId,$family],JSON_THROW_ON_ERROR)); }
 function taskCanRead(array $actor,array $task): bool { return in_array($actor['role']??'',['admin','supervisor'],true)||(($actor['role']??'')==='manager'&&(int)$task['assignee_id']===(int)$actor['id']); }
+function taskEvidenceForViewer(array $task,array $actor):array {
+    if(($actor['role']??'')==='admin'||empty($task['evidence_json']))return $task;
+    $e=json_decode($task['evidence_json'],true,64,JSON_THROW_ON_ERROR);$signal=$e['signal']??[];
+    // Proof bundles include assignments to other managers; only admins audit them.
+    $safe=array_intersect_key($signal,array_flip(['source','signal_id','revision','signal_type','family','status','subject','assignment','score','confidence','last_purchase','as_of','calculated_at','metrics','provenance','matching']));
+    $task['evidence_json']=json_encode(['signal'=>$safe],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);return $task;
+}
 function taskAssertWrite(array $actor,array $task): void { if(!taskCanRead($actor,$task)||($actor['role']??'')==='supervisor')throw new DomainException('Недостаточно прав'); }
 function taskEvent(PDO $pdo,string $id,?int $actor,string $type,array $data): void { $pdo->prepare('INSERT INTO manager_task_events(task_id,actor_id,event_type,data_json) VALUES(?,?,?,?)')->execute([$id,$actor,$type,json_encode($data,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)]); }
 function taskAssignee(PDO $pdo,int $id): void {
@@ -22,12 +29,34 @@ function taskDue(mixed $value): ?string {
     $d=DateTimeImmutable::createFromFormat('!Y-m-d H:i:s',$value,new DateTimeZone('UTC'));
     if(!$d||$d->format('Y-m-d H:i:s')!==$value)throw new InvalidArgumentException('Срок должен быть UTC YYYY-MM-DD HH:MM:SS');return $value;
 }
+function automaticTaskSlot(string $client,string $family,?array $automatic):string {
+ $m=$automatic['evidence']['signal']['matching']??null;
+ if(is_array($m)&&($m['status']??null)==='PRELIMINARY_MATCH'){if(!preg_match('/^[a-f0-9]{64}$/D',(string)($m['group_key']??'')))throw new DomainException('Invalid matching group');return hash('sha256',json_encode(['clientsvr-group',$m['group_key'],$family],JSON_THROW_ON_ERROR));}
+ return taskSlot($client,$family);
+}
+function findAutomaticManagerTask(PDO $pdo,string $client,array $automatic):?array {
+    $s=$pdo->prepare('SELECT * FROM manager_tasks WHERE source_signal_key=?');$s->execute([$automatic['signal_key']]);if($found=$s->fetch(PDO::FETCH_ASSOC))return $found;
+    $anchor=$automatic['evidence']['signal']['last_purchase']??null;
+    if(!is_string($anchor)||!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$anchor))throw new DomainException('Purchase episode anchor required');
+    $peers=$automatic['evidence']['identity_peer_ids']??[];
+    if(!is_array($peers)||count($peers)>1000||array_filter($peers,fn($v)=>!is_string($v)))throw new DomainException('Reviewed identity peers invalid');
+    $ids=array_values(array_unique(array_merge([$client],$peers)));
+    $s=$pdo->prepare('SELECT * FROM manager_tasks WHERE client_namespace=\'clientsvr\' AND client_id IN ('.implode(',',array_fill(0,count($ids),'?')).') AND family=\'INACTIVITY\' AND source_signal_key IS NOT NULL ORDER BY created_at DESC LIMIT 1001');$s->execute($ids);$history=$s->fetchAll(PDO::FETCH_ASSOC);
+    if(count($history)>1000)throw new DomainException('Historical task review bound exceeded');
+    foreach($history as $prior){$e=json_decode((string)$prior['evidence_json'],true,64,JSON_THROW_ON_ERROR);$previousAnchor=$e['signal']['last_purchase']??null;
+        if(!is_string($previousAnchor))throw new DomainException('Historical automatic task lacks episode evidence');
+        if($previousAnchor===$anchor){return $prior;}}
+    $s=$pdo->prepare('SELECT t.* FROM analytics_open_task_slots s JOIN manager_tasks t ON t.id=s.task_id WHERE s.slot_key=?');$s->execute([automaticTaskSlot($client,'INACTIVITY',$automatic)]);
+    return $s->fetch(PDO::FETCH_ASSOC)?:null;
+}
+
 /** Automatic caller supplies trusted gate result; API cannot set source/evidence. */
 function createManagerTask(PDO $pdo,array $actor,array $input,?array $automatic=null): array {
     if($automatic===null&&($actor['role']??'')!=='admin')throw new DomainException('Создание и назначение задач доступно администратору');
     $client=taskText($input['client_id']??null,255);$title=taskText($input['title']??null,255);$description=taskText($input['description']??'',10000,false);
     $priority=$input['priority']??'NORMAL';if(!in_array($priority,['LOW','NORMAL','HIGH','URGENT'],true))throw new InvalidArgumentException('Некорректный приоритет');
     $family=$input['family']??'MANUAL';if(!in_array($family,['MANUAL','INACTIVITY'],true))throw new InvalidArgumentException('Некорректная категория');
+    if($automatic!==null&&$family!=='INACTIVITY')throw new DomainException('Automatic tasks require INACTIVITY category');
     $due=taskDue($input['due_at']??null);$assignee=$input['assignee_id']??null;if(!is_int($assignee)||$assignee<=0)throw new InvalidArgumentException('Укажите менеджера');
     if($automatic!==null&&(($automatic['allowed']??false)!==true||empty($automatic['signal_key'])))throw new DomainException('Автоматизация не разрешена');
     $own=!$pdo->inTransaction();if($own)$pdo->beginTransaction();
@@ -46,12 +75,14 @@ function createManagerTask(PDO $pdo,array $actor,array $input,?array $automatic=
             }
         }
         taskAssignee($pdo,$assignee);
-        if($automatic!==null){$s=$pdo->prepare('SELECT * FROM manager_tasks WHERE source_signal_key=?');$s->execute([$automatic['signal_key']]);if($existing=$s->fetch(PDO::FETCH_ASSOC)){if($own)$pdo->commit();return ['task'=>$existing,'existing'=>true];}}
+        if($automatic!==null&&($existing=findAutomaticManagerTask($pdo,$client,$automatic))){if($own)$pdo->commit();return ['task'=>$existing,'existing'=>true];}
         if($family==='INACTIVITY'){
-            $s=$pdo->prepare('SELECT t.* FROM analytics_open_task_slots s JOIN manager_tasks t ON t.id=s.task_id WHERE s.slot_key=?');$s->execute([taskSlot($client,$family)]);
+            $s=$pdo->prepare('SELECT t.* FROM analytics_open_task_slots s JOIN manager_tasks t ON t.id=s.task_id WHERE s.slot_key=?');$s->execute([automaticTaskSlot($client,$family,$automatic)]);
             if($existing=$s->fetch(PDO::FETCH_ASSOC)){if($own)$pdo->commit();return ['task'=>$existing,'existing'=>true];}
         }
         if($automatic!==null){
+            require_once __DIR__.'/analytics_manager_pilot_budget.php';
+            assertAnalyticsManagerPilotBudget($pdo, $assignee);
             reserveAnalyticsBudget($pdo);
             analyticsDailyBudgetPolicy($pdo);
             $createdAt=new DateTimeImmutable('now',new DateTimeZone('UTC'));
@@ -63,7 +94,7 @@ function createManagerTask(PDO $pdo,array $actor,array $input,?array $automatic=
         }
         $id=taskUuid();$evidence=$automatic?json_encode($automatic['evidence'],JSON_THROW_ON_ERROR):null;
         $pdo->prepare('INSERT INTO manager_tasks(id,client_id,assignee_id,title,description,priority,due_at,result,family,source_signal_key,evidence_json,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$id,$client,$assignee,$title,$description,$priority,$due,'',$family,$automatic['signal_key']??null,$evidence,$automatic?null:(int)$actor['id'],isset($createdAt)?$createdAt->format('Y-m-d H:i:s'):gmdate('Y-m-d H:i:s')]);
-        if($family==='INACTIVITY')$pdo->prepare('INSERT INTO analytics_open_task_slots(slot_key,task_id) VALUES(?,?)')->execute([taskSlot($client,$family),$id]);
+        if($family==='INACTIVITY')$pdo->prepare('INSERT INTO analytics_open_task_slots(slot_key,task_id) VALUES(?,?)')->execute([automaticTaskSlot($client,$family,$automatic),$id]);
         taskEvent($pdo,$id,$automatic?null:(int)$actor['id'],'CREATED',['assignee_id'=>$assignee,'priority'=>$priority,'source'=>$automatic?'ANALYTICS':'MANUAL']);
         $s=$pdo->prepare('SELECT * FROM manager_tasks WHERE id=?');$s->execute([$id]);$task=$s->fetch(PDO::FETCH_ASSOC);
         if($own)$pdo->commit();return ['task'=>$task,'existing'=>false];

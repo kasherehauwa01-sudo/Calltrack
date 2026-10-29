@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/analytics_integration.php';
 require_once __DIR__.'/sales_journal.php';
 require_once __DIR__.'/analytics_task_policy.php';
+require_once __DIR__.'/analytics_preview_cursor.php';
 function analyticsIntegrationMode(): string {
     $mode=getenv('CALLTRACK_ANALYTICS_MODE')?:'disabled';
     if(!in_array($mode,['disabled','dry_run','enabled'],true))throw new RuntimeException('Invalid CALLTRACK_ANALYTICS_MODE');return $mode;
@@ -34,9 +35,11 @@ function syncAnalytics(PDO $pdo,string $mode,array $policy,?callable $transport=
     if($mode==='disabled')return ['mode'=>$mode,'pages'=>0,'processed'=>0];
     if(!in_array($mode,['dry_run','enabled'],true))throw new InvalidArgumentException('Invalid mode');
     $stateTable=(getenv('CALLTRACK_ANALYTICS_FEED')?:'shadow')==='approved_churn'?'analytics_automation_sync_state':'analytics_sync_state';
-    $result=['mode'=>$mode,'pages'=>0,'processed'=>0,'rejected'=>0];
+    $result=['mode'=>$mode,'pages'=>0,'processed'=>0,'rejected'=>0];$previewState=null;
+    $previewFile=$previewAuthority=$previewPassCache=null;
+    if($mode==='dry_run')[$previewState,$previewFile,$previewAuthority,$previewPassCache]=analyticsPreviewLoad($pdo,$policy,$stateTable);
     for($page=0;$page<min(20,max(1,$maxPages));$page++){
-        $state=$pdo->query('SELECT * FROM '.$stateTable.' WHERE id=1')->fetch(PDO::FETCH_ASSOC);if(!$state)throw new RuntimeException('Sync migration missing');
+        $state=$previewState??$pdo->query('SELECT * FROM '.$stateTable.' WHERE id=1')->fetch(PDO::FETCH_ASSOC);if(!$state)throw new RuntimeException('Sync migration missing');
         if(!$state['current_run_id']){
             $response=salesJournalRequest('GET',analyticsFeedPath('/api/integrations/calltrack/analytics/publications?after='.(int)$state['publication_sequence'].'&page_size=1'),null,$transport);
             if(!is_array($response['items']??null)||!array_is_list($response['items'])||count($response['items'])>1
@@ -46,10 +49,21 @@ function syncAnalytics(PDO $pdo,string $mode,array $policy,?callable $transport=
             if($publicationNext!==null&&(!is_int($publicationNext)||$publicationNext<=(int)$state['publication_sequence']||!$publication))throw new RuntimeException('Invalid publication cursor');
             if(!$publication)break;
             if(!is_int($publication['sequence']??null)||$publication['sequence']<=(int)$state['publication_sequence']||!preg_match('/^[a-zA-Z0-9-]{1,36}$/D',(string)($publication['run_id']??'')))throw new RuntimeException('Invalid publication');
-            $pdo->prepare('UPDATE '.$stateTable.' SET current_run_id=?,current_sequence=?,after_change=0 WHERE id=1')->execute([$publication['run_id'],$publication['sequence']]);
+            if($mode==='enabled')$pdo->prepare('UPDATE '.$stateTable.' SET current_run_id=?,current_sequence=?,after_change=0 WHERE id=1')->execute([$publication['run_id'],$publication['sequence']]);
             $state['current_run_id']=$publication['run_id'];$state['current_sequence']=$publication['sequence'];$state['after_change']=0;
         }
-        $response=salesJournalRequest('GET',analyticsFeedPath('/api/integrations/calltrack/analytics/runs/'.rawurlencode($state['current_run_id']).'/changes?after='.(int)$state['after_change'].'&page_size=50'),null,$transport);
+        try{$response=salesJournalRequest('GET',analyticsFeedPath('/api/integrations/calltrack/analytics/runs/'.rawurlencode($state['current_run_id']).'/changes?after='.(int)$state['after_change'].'&page_size=50'),null,$transport);}
+        catch(SalesJournalHttpException $error){
+            $detail=$error->body['detail']??[];
+            if($error->status!==410||!is_array($detail)||($detail['code']??null)!=='RELEASE_TERMINATED'||($detail['terminal']??null)!==true||($detail['run_id']??null)!==$state['current_run_id'])throw $error;
+            $reason=is_string($detail['reason']??null)&&preg_match('/^[A-Z0-9_]{1,64}$/D',$detail['reason'])?$detail['reason']:'UNSPECIFIED';
+            // reason_code is VARCHAR(64) in the existing physical contract.
+            // Bounded source codes must not prevent retirement on strict MariaDB.
+            rejectAnalyticsDelivery($pdo,[],$state['current_run_id'],'TERMINAL:'.substr($reason,0,55));
+            if($mode==='enabled')$pdo->prepare('UPDATE '.$stateTable.' SET publication_sequence=current_sequence,current_run_id=NULL,current_sequence=NULL,after_change=0 WHERE id=1')->execute();
+            else{$previewState=array_replace($state,['publication_sequence'=>$state['current_sequence'],'current_run_id'=>null,'current_sequence'=>null,'after_change'=>0]);analyticsPreviewSave($previewFile,$previewAuthority,$previewState,$previewPassCache);}
+            $result['retired']=($result['retired']??0)+1;$result['pages']++;continue;
+        }
         if(($response['run']['id']??null)!==$state['current_run_id']||($response['run']['status']??null)!=='SUCCEEDED'||!is_array($response['items']??null)||!array_is_list($response['items'])||count($response['items'])>50
             ||!array_key_exists('next_after',$response)||!is_bool($response['automation_allowed']??null))throw new RuntimeException('Invalid frozen run page');
         // Validate progress before processing any receipt/task. Missing cursor is not end-of-run.
@@ -61,7 +75,7 @@ function syncAnalytics(PDO $pdo,string $mode,array $policy,?callable $transport=
             try{analyticsValidateEvent($event);}catch(InvalidArgumentException $e){rejectAnalyticsDelivery($pdo,$event,$state['current_run_id'],'INVALID_EVENT');$result['rejected']++;continue;}
             $valid[]=$event;
             if(($event['run']['id']??null)!==$state['current_run_id'])throw new RuntimeException('Mixed run page');
-            $binding=analyticsBinding($pdo,analyticsSubjectKey($event['subject'],$event['run']['scope']));if($binding&&$binding['status']==='VERIFIED'&&!empty($binding['client_id']))$ids[(string)$binding['client_id']]=(string)$binding['client_id'];
+            $binding=analyticsBinding($pdo,analyticsSubjectKey($event['subject'],$event['run']['scope']));if(analyticsBindingAssignable($binding)&&!empty($binding['client_id']))$ids[(string)$binding['client_id']]=(string)$binding['client_id'];
         }
         // Coordinate with the existing refresh writer, not a new independent lock.
         $refreshLock=fopen(clientsEnsureDirectory(clientsProjectStorageDirectory()).'/clients_cache_refresh.lock','c');
@@ -69,12 +83,17 @@ function syncAnalytics(PDO $pdo,string $mode,array $policy,?callable $transport=
         try{
             $clients=analyticsDirectoryRecords(array_values($ids));
             $currentPolicy=$policy;$currentPolicy['cache_revision']=clientCatalogRevision();
+            require_once __DIR__.'/analytics_verified_bindings.php';
+            analyticsPrimeReviewGroups($valid,managerBindingRows($pdo),$currentPolicy['cache_revision']);
             foreach($valid as $event){$binding=analyticsBinding($pdo,analyticsSubjectKey($event['subject'],$event['run']['scope']));try{processAnalyticsEvent($pdo,$event,$clients[(string)($binding['client_id']??'')]??null,$currentPolicy,$mode,time());$result['processed']++;}catch(TaskConflict $e){rejectAnalyticsDelivery($pdo,$event,$state['current_run_id'],'EVENT_CONFLICT');$result['rejected']++;}}
         }finally{flock($refreshLock,LOCK_UN);fclose($refreshLock);}
         if($next!==null){
-            $pdo->prepare('UPDATE '.$stateTable.' SET after_change=? WHERE id=1')->execute([$next]);
-        }else{$pdo->prepare('UPDATE '.$stateTable.' SET publication_sequence=current_sequence,current_run_id=NULL,current_sequence=NULL,after_change=0 WHERE id=1')->execute();}
+            if($mode==='enabled')$pdo->prepare('UPDATE '.$stateTable.' SET after_change=? WHERE id=1')->execute([$next]);
+            else{$state['after_change']=$next;$previewState=$state;}
+        }else{if($mode==='enabled')$pdo->prepare('UPDATE '.$stateTable.' SET publication_sequence=current_sequence,current_run_id=NULL,current_sequence=NULL,after_change=0 WHERE id=1')->execute();
+            else{$previewState=array_replace($state,['publication_sequence'=>$state['current_sequence'],'current_run_id'=>null,'current_sequence'=>null,'after_change'=>0]);}}
         $result['pages']++;
+        if($mode==='dry_run')analyticsPreviewSave($previewFile,$previewAuthority,$previewState,$previewPassCache);
     }
     return $result;
 }
