@@ -42,17 +42,25 @@ function taskViewList(PDO $pdo, array $user, array $input): array {
     if (!in_array($status,['','OPEN','IN_PROGRESS','CANCELLED','DONE'],true)) throw new InvalidArgumentException('Некорректный статус');
     $scope .= $mode==='1' ? " AND t.status='DONE'" : " AND t.status<>'DONE'";
     if ($status !== '') {$scope.=' AND t.status=?';$params[]=$status;}
-    // Signal type lives in evidence JSON; decode in PHP for MySQL/MariaDB compatibility.
-    $q=$pdo->prepare("SELECT t.id,t.client_id,t.title,t.assignee_id,t.status,t.priority,t.due_at,t.version,t.family,t.evidence_json,u.display_name AS assignee_name FROM manager_tasks t JOIN web_users u ON u.id=t.assignee_id WHERE $scope ORDER BY t.id");
-    $q->execute($params);$items=[];$types=[];$more=false;
-    $after=(string)($input['after'] ?? '');$type=(string)($input['type'] ?? '');
-    while ($row=$q->fetch(PDO::FETCH_ASSOC)) {
-        $tag=taskViewType($row);$types[$tag['key']]=$tag;
-        if (($type!=='' && $tag['key']!==$type) || ($after!=='' && strcmp($row['id'],$after)<=0)) continue;
-        if(count($items)>=50){$more=true;continue;}
-        unset($row['evidence_json']);$row['task_type']=$tag;$items[]=$row;
+    // Only the page crosses the DB/PHP boundary; evidence bundles stay in the DB.
+    $typeSql = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='sqlite'
+        ? "CASE WHEN json_valid(t.evidence_json) THEN CASE WHEN json_type(t.evidence_json,'$.signal.signal_type')='text' THEN json_extract(t.evidence_json,'$.signal.signal_type') END END"
+        : "CASE WHEN JSON_VALID(t.evidence_json) THEN CASE WHEN JSON_TYPE(JSON_EXTRACT(t.evidence_json,'$.signal.signal_type'))='STRING' THEN JSON_UNQUOTE(JSON_EXTRACT(t.evidence_json,'$.signal.signal_type')) END END";
+    $typeSql="COALESCE(($typeSql),t.family,'MANUAL')";
+    $from=" FROM manager_tasks t JOIN web_users u ON u.id=t.assignee_id WHERE $scope";
+    $q=$pdo->prepare("SELECT DISTINCT $typeSql AS type_key".$from);
+    $q->execute($params);$types=[];
+    while($key=$q->fetch(PDO::FETCH_ASSOC)) {
+        $tag=taskViewType(['family'=>$key['type_key']]);$types[$tag['key']]=$tag;
     }
-    $clients=analyticsDirectoryRecords(array_values(array_unique(array_column($items,'client_id'))));
+    $after=(string)($input['after'] ?? '');$type=(string)($input['type'] ?? '');
+    if($type!==''){$from.=" AND $typeSql=?";$params[]=$type;}
+    if($after!==''){$from.=' AND t.id>?';$params[]=$after;}
+    $q=$pdo->prepare("SELECT t.id,t.client_id,t.title,t.assignee_id,t.status,t.priority,t.due_at,t.version,t.family,$typeSql AS type_key,u.display_name AS assignee_name".$from.' ORDER BY t.id LIMIT 51');
+    $q->execute($params);$items=$q->fetchAll(PDO::FETCH_ASSOC);
+    $more=count($items)>50;$items=array_slice($items,0,50);
+    foreach($items as &$row){$row['task_type']=taskViewType(['family'=>$row['type_key']]);unset($row['type_key']);}unset($row);
+    $clients=taskViewClients(array_values(array_unique(array_column($items,'client_id'))));
     foreach($items as &$row)$row['client_name']=$clients[(string)$row['client_id']]['name'] ?? (string)$row['client_id'];
     unset($row);ksort($types);
     $assignees=$user['role']==='manager'?[]:$pdo->query("SELECT id,display_name,is_active FROM web_users WHERE role='manager' ORDER BY display_name,id")->fetchAll(PDO::FETCH_ASSOC);
