@@ -6,7 +6,10 @@
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const api = (url, method = 'GET', body) => window.calltrackApi.requestJson(url, {method, credentials:'same-origin',cache:'no-store',...(body ? {headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {})});
   let epoch = 0;
-  let user, pageAfter = '', nextAfter = null, status = '', assignees = [];
+  let user, pageAfter = '', nextAfter = null, status = '', assignees = [], manager = '', type = '', completed = false;
+  let badgeEpoch = 0;
+  const drawCount = count => { const badge=document.getElementById('tasksCount'); if(badge){badge.hidden=false;badge.textContent=String(count);badge.setAttribute('aria-label',`Невыполненных задач: ${count}`);} };
+  window.refreshManagerTasksCount = async () => {const request=++badgeEpoch;try {const data=await api(`${endpoint}?count_only=1`);if(request===badgeEpoch)drawCount(data.unfinished_count);} catch {if(request===badgeEpoch){const badge=document.getElementById('tasksCount');if(badge)badge.hidden=true;}}};
   const panel = () => document.getElementById('tasksView');
   const options = (values, selected) => Object.entries(values).map(([key,label]) => `<option value="${key}"${key === selected ? ' selected' : ''}>${label}</option>`).join('');
   const managerOptions = selected => assignees.map(row => `<option value="${row.id}"${String(row.id) === String(selected) ? ' selected' : ''}>${esc(row.display_name)}</option>`).join('');
@@ -15,16 +18,20 @@
     const requestEpoch = ++epoch;
     panel().innerHTML = '<section class="filter-card"><p role="status">Загрузка задач…</p></section>';
     try {
-      const data = await api(`${endpoint}?after=${encodeURIComponent(pageAfter)}&status=${encodeURIComponent(status)}`);
+      const data = await api(`${endpoint}?after=${encodeURIComponent(pageAfter)}&status=${encodeURIComponent(status)}&manager=${encodeURIComponent(manager)}&type=${encodeURIComponent(type)}&completed=${completed ? '1' : '0'}`);
       if (requestEpoch !== epoch) return;
-      nextAfter = data.next_after; assignees = data.assignees || [];
+      nextAfter = data.next_after; assignees = data.assignees || [];drawCount(data.unfinished_count);
       panel().innerHTML = `<section class="filter-card clients-catalog"><h2>Задачи менеджеров</h2>
-        <div class="clients-filters"><label>Статус<select id="taskStatusFilter"><option value="">Все</option>${options(statuses,status)}</select></label></div>
+        <div class="clients-filters"><label>Статус<select id="taskStatusFilter"><option value="">Все</option>${options(completed ? {DONE:statuses.DONE} : {OPEN:statuses.OPEN,IN_PROGRESS:statuses.IN_PROGRESS,CANCELLED:statuses.CANCELLED},status)}</select></label>${data.role !== 'manager' ? `<label>Менеджер<select id="taskManagerFilter"><option value="">Все менеджеры</option>${managerOptions(manager)}</select></label>` : ''}</div>
+        <div class="updates-actions" aria-label="Фильтры задач"><button type="button" class="updates-action-btn" id="tasksCompleted" aria-pressed="${completed}">Выполненные</button><button type="button" class="updates-action-btn" data-task-type="" aria-pressed="${type===''}">Все типы</button>${(data.types || []).map(tag=>`<button type="button" class="updates-action-btn" data-task-type="${esc(tag.key)}" aria-pressed="${type===tag.key}">${esc(tag.label)}</button>`).join('')}</div>
         <div class="updates-actions"><button type="button" class="updates-action-btn" id="taskRefresh">Обновить</button>${data.role === 'admin' ? '<button type="button" class="registry-refresh-btn" id="taskCreate">Создать задачу</button><button type="button" class="updates-action-btn" id="taskDiagnostics">Аналитические сигналы</button>' : ''}</div>
-        <div class="clients-list">${data.items.map(row => `<button type="button" class="client-catalog-row" data-task="${esc(row.id)}"><strong>${esc(row.title)}</strong><span>Клиент ID: ${esc(row.client_id)} · ${esc(row.assignee_name)}</span><span>${esc(statuses[row.status])} · ${esc(priorities[row.priority])} · Срок (UTC): ${esc(row.due_at || 'не задан')}</span></button>`).join('') || '<p>Задач нет.</p>'}</div>
+        <div class="clients-list">${data.items.map(row => `<button type="button" class="client-catalog-row" data-task="${esc(row.id)}"><strong>${esc(row.title)} · ${esc(row.client_name || row.client_id)}</strong><span>Клиент ID: ${esc(row.client_id)} · ${esc(row.assignee_name)}</span><span>${esc(statuses[row.status])} · ${esc(priorities[row.priority])} · Срок (UTC): ${esc(row.due_at || 'не задан')}</span></button>`).join('') || '<p>Задач нет.</p>'}</div>
         <div class="clients-pagination"><button type="button" class="updates-action-btn" id="tasksFirst">В начало</button><button type="button" class="updates-action-btn" id="tasksNext" ${nextAfter ? '' : 'disabled'}>Далее</button></div></section>`;
       panel().querySelector('#taskStatusFilter').onchange = event => {status = event.target.value;pageAfter = '';showList();};
       panel().querySelector('#taskRefresh').onclick = showList;
+      const managerFilter=panel().querySelector('#taskManagerFilter');if(managerFilter)managerFilter.onchange=event=>{manager=event.target.value;pageAfter='';showList();};
+      panel().querySelector('#tasksCompleted').onclick=()=>{completed=!completed;status='';pageAfter='';showList();};
+      panel().querySelectorAll('[data-task-type]').forEach(button=>button.onclick=()=>{type=button.dataset.taskType;pageAfter='';showList();});
       panel().querySelector('#tasksFirst').onclick = () => {pageAfter = '';showList();};
       panel().querySelector('#tasksNext').onclick = () => {pageAfter = nextAfter;showList();};
       panel().querySelectorAll('[data-task]').forEach(button => button.onclick = () => showTask(button.dataset.task));
@@ -38,21 +45,26 @@
     try {
       const {task, history, client, role} = await api(`${endpoint}?id=${encodeURIComponent(id)}`);
       if (requestEpoch !== epoch) return;
-      const editable = role !== 'supervisor' && !['DONE','CANCELLED'].includes(task.status);
-      panel().innerHTML = `<section class="filter-card clients-catalog"><button type="button" class="updates-action-btn" id="tasksBack">К списку</button><h2>${esc(task.title)}</h2>${matchingNotice(task)}
+      const editable = role !== 'supervisor' && task.status !== 'CANCELLED';
+      panel().innerHTML = `<section class="filter-card clients-catalog"><button type="button" class="updates-action-btn" id="tasksBack">К списку</button><h2>${esc(task.title)}</h2>${role !== 'manager' ? matchingNotice(task) : ''}
         <p>Клиент: ${esc(client?.name || task.client_id)} (ClientsVR ID: ${esc(task.client_id)}) <button type="button" class="updates-action-btn" id="taskClientCard">Карточка клиента</button></p>
         <p style="white-space:pre-wrap">${esc(task.description)}</p><p>Ответственный: ${esc(task.assignee_name)}</p>
-        ${task.source_signal_key ? `<p>Источник: <a href="#taskSourceEvidence" class="updates-action-btn" id="taskSource">Исходный аналитический сигнал</a></p>` : ''}
-        <form id="taskEdit" class="updates-form"><label>Статус<select name="status" ${editable ? '' : 'disabled'}>${options(statuses,task.status)}</select></label>
-        ${role === 'admin' && editable ? `<label>Менеджер<select name="assignee_id">${assignees.some(row=>String(row.id)===String(task.assignee_id)) ? '' : `<option value="${task.assignee_id}" selected>${esc(task.assignee_name)} (неактивен)</option>`}${managerOptions(task.assignee_id)}</select></label><label>Приоритет<select name="priority">${options(priorities,task.priority)}</select></label><label>Срок UTC (YYYY-MM-DD HH:MM:SS)<input name="due_at" value="${esc(task.due_at || '')}"></label>` : `<p>Приоритет: ${esc(priorities[task.priority])} · Срок UTC: ${esc(task.due_at || 'не задан')}</p>`}
+        ${role !== 'manager' && task.source_signal_key ? `<p>Источник: <a href="#taskSourceEvidence" class="updates-action-btn" id="taskSource">Исходный аналитический сигнал</a></p>` : ''}
+        <form id="taskEdit" class="updates-form"><label>Статус<select name="status" ${editable ? '' : 'disabled'}>${options(task.status === 'DONE' ? {DONE:statuses.DONE} : statuses,task.status)}</select></label>
+        ${role === 'admin' && editable ? `<label>Менеджер<select name="assignee_id">${assignees.some(row=>String(row.id)===String(task.assignee_id)) ? '' : `<option value="${task.assignee_id}" selected>${esc(task.assignee_name)} (неактивен)</option>`}${managerOptions(task.assignee_id)}</select></label><label>Приоритет<select name="priority">${options(priorities,task.priority)}</select></label><label>Срок UTC (YYYY-MM-DD HH:MM:SS)<input name="due_at" value="${esc(task.due_at || '')}"></label>` : `<p>${role !== 'manager' ? `Приоритет: ${esc(priorities[task.priority])} · ` : ''}Срок UTC: ${esc(task.due_at || 'не задан')}</p>`}
         <label>Результат работы<textarea name="result" maxlength="10000" ${editable ? '' : 'disabled'}>${esc(task.result)}</textarea></label>${editable ? '<button type="submit" class="registry-refresh-btn">Сохранить</button>' : ''}<p role="status" id="taskMessage"></p></form>
-        <h3>История</h3><ul>${history.map(row => `<li>${esc(row.created_at)} · ${esc(row.event_type)} · ${esc(row.data_json)}</li>`).join('')}</ul><div id="taskSourceEvidence"></div></section>`;
+        ${role !== 'manager' ? `<h3>История</h3><ul>${history.map(row => `<li>${esc(row.created_at)} · ${esc(row.event_type)} · ${esc(row.data_json)}</li>`).join('')}</ul><div id="taskSourceEvidence"></div>` : ''}</section>`;
       panel().querySelector('#tasksBack').onclick = showList;
-      panel().querySelector('#taskClientCard').onclick = async () => {
-        try { const history = await window.calltrackApi.loadClientEvents({client_id:task.client_id});openClientHistoryModal(client?.name || task.client_id, {client_id:task.client_id}, history); }
-        catch (error) { panel().querySelector('#taskMessage').textContent = error.message; }
+      panel().querySelector('#taskClientCard').onclick = async event => {
+        const button=event.currentTarget;button.disabled=true;
+        try {
+          const history = await window.calltrackApi.loadClientEvents({client_id:task.client_id});
+          if(requestEpoch===epoch)openClientHistoryModal(client?.name || task.client_id, {client_id:task.client_id}, history);
+        } catch (error) {
+          if(requestEpoch===epoch)panel().querySelector('#taskMessage').textContent = `Не удалось открыть карточку клиента (client_events.php): ${error.message}`;
+        } finally {button.disabled=false;}
       };
-      if (task.source_signal_key) panel().querySelector('#taskSource').onclick = event => {
+      if (role !== 'manager' && task.source_signal_key) panel().querySelector('#taskSource').onclick = event => {
         event.preventDefault();
         const evidence = document.createElement('pre'); evidence.style.whiteSpace = 'pre-wrap';
         try { evidence.textContent = JSON.stringify(JSON.parse(task.evidence_json || '{}'),null,2); } catch { evidence.textContent = 'Сведения недоступны'; }
@@ -61,7 +73,8 @@
       panel().querySelector('#taskEdit').onsubmit = async event => {
         event.preventDefault();const form = new FormData(event.target);const body = {id:task.id,version:Number(task.version),status:form.get('status'),result:form.get('result')};
         if (role === 'admin') {body.assignee_id = Number(form.get('assignee_id'));body.priority = form.get('priority');body.due_at = form.get('due_at') || null;}
-        try {await api(endpoint,'PATCH',body);showTask(id);} catch(error) {panel().querySelector('#taskMessage').textContent = error.message;}
+        const submit=event.target.querySelector('[type=submit]');submit.disabled=true;
+        try {await api(endpoint,'PATCH',body);window.refreshManagerTasksCount();if(requestEpoch===epoch){pageAfter='';showList();}} catch(error) {if(requestEpoch===epoch)panel().querySelector('#taskMessage').textContent = error.message;}finally{submit.disabled=false;}
       };
     } catch (error) {if (requestEpoch === epoch) panel().textContent = error.message;}
   }
@@ -71,7 +84,7 @@
     panel().querySelector('#newTaskBack').onclick = showList;
     panel().querySelector('#taskNew').onsubmit = async event => {
       event.preventDefault();const data = Object.fromEntries(new FormData(event.target));data.assignee_id = Number(data.assignee_id);data.due_at ||= null;
-      try {const result = await api(endpoint,'POST',data);showTask(result.id);}catch(error){panel().querySelector('#newTaskMessage').textContent = error.message;}
+      try {const result = await api(endpoint,'POST',data);window.refreshManagerTasksCount();showTask(result.id);}catch(error){panel().querySelector('#newTaskMessage').textContent = error.message;}
     };
   }
   const candidateView = row => {
@@ -261,5 +274,5 @@
     } catch(error) {if(requestEpoch===epoch)panel().textContent=error.message;}
   }
   window.closeManagerTasks = () => { ++epoch;window.closeAnalyticsTaskPolicy?.(); };
-  window.openManagerTasks = account => { user = account;pageAfter = '';showList(); };
+  window.openManagerTasks = account => { if(user?.id!==account?.id){manager='';type='';completed=false;status='';}user = account;pageAfter = '';showList(); };
 })();

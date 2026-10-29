@@ -106,8 +106,9 @@ function updateManagerTask(PDO $pdo,array $actor,string $id,array $input): array
         $s=$pdo->prepare('SELECT * FROM manager_tasks WHERE id=?'.($pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql'?' FOR UPDATE':''));$s->execute([$id]);$task=$s->fetch(PDO::FETCH_ASSOC);
         if(!$task||!taskCanRead($actor,$task))throw new DomainException('Задача недоступна');taskAssertWrite($actor,$task);
         if(!is_int($input['version']??null)||(int)$task['version']!==$input['version'])throw new TaskConflict('Задача изменилась. Обновите карточку.');
-        if(in_array($task['status'],['DONE','CANCELLED'],true))throw new TaskConflict('Завершённую задачу нельзя изменять или автоматически открывать повторно');
+        if($task['status']==='CANCELLED')throw new TaskConflict('Отменённую задачу нельзя изменять');
         $status=$input['status']??$task['status'];
+        if($task['status']==='DONE'&&$status!=='DONE')throw new TaskConflict('Выполненную задачу можно редактировать без изменения статуса');
         if(!in_array($status,['OPEN','IN_PROGRESS','DONE','CANCELLED'],true))throw new InvalidArgumentException('Некорректный статус');
         if($status==='CANCELLED'&&$actor['role']!=='admin')throw new DomainException('Отмена доступна администратору');
         $result=taskText($input['result']??$task['result'],10000,false);

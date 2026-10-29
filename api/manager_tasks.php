@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__.'/config.php';
 require_once __DIR__.'/analytics_integration.php';
+require_once __DIR__.'/manager_tasks_view.php';
 try{
     $pdo=getPdo();$user=requireWebUser($pdo);$method=$_SERVER['REQUEST_METHOD'];
     if($method==='GET'){
@@ -11,17 +12,9 @@ try{
             if(!$task||!taskCanRead($user,$task))sendJson(['status'=>'error','message'=>'Задача недоступна'],404);
             $s=$pdo->prepare('SELECT id,actor_id,event_type,data_json,created_at FROM manager_task_events WHERE task_id=? ORDER BY id DESC LIMIT 100');$s->execute([$id]);
             $client=analyticsDirectoryRecords([(string)$task['client_id']])[(string)$task['client_id']]??null;
-            sendJson(['status'=>'success','task'=>taskEvidenceForViewer($task,$user),'history'=>$s->fetchAll(PDO::FETCH_ASSOC),'client'=>$client?['id'=>$client['id'],'name'=>$client['name']]:null,'role'=>$user['role']]);
+            sendJson(['status'=>'success','task'=>taskEvidenceForViewer(array_replace($task,['description'=>taskViewDescription($task)]),$user),'history'=>$s->fetchAll(PDO::FETCH_ASSOC),'client'=>$client?['id'=>$client['id'],'name'=>$client['name']]:null,'role'=>$user['role']]);
         }
-        $after=(string)($_GET['after']??'');$where=[];$params=[];
-        if($user['role']==='manager'){$where[]='t.assignee_id=?';$params[]=(int)$user['id'];}
-        elseif(!in_array($user['role'],['admin','supervisor'],true))throw new DomainException('Недостаточно прав');
-        if($after!==''){$where[]='t.id>?';$params[]=$after;}
-        $status=$_GET['status']??'';if($status!==''){if(!in_array($status,['OPEN','IN_PROGRESS','DONE','CANCELLED'],true))throw new InvalidArgumentException('Некорректный статус');$where[]='t.status=?';$params[]=$status;}
-        $sql='SELECT t.id,t.client_id,t.title,t.assignee_id,u.display_name AS assignee_name,t.status,t.priority,t.due_at,t.version FROM manager_tasks t JOIN web_users u ON u.id=t.assignee_id'.($where?' WHERE '.implode(' AND ',$where):'').' ORDER BY t.id LIMIT 51';
-        $s=$pdo->prepare($sql);$s->execute($params);$items=$s->fetchAll(PDO::FETCH_ASSOC);$more=count($items)>50;$items=array_slice($items,0,50);
-        $assignees=$user['role']==='admin'?$pdo->query("SELECT id,display_name FROM web_users WHERE role='manager' AND is_active=1 ORDER BY display_name,id")->fetchAll(PDO::FETCH_ASSOC):[];
-        sendJson(['status'=>'success','items'=>$items,'next_after'=>$more?$items[count($items)-1]['id']:null,'role'=>$user['role'],'assignees'=>$assignees]);
+        sendJson(taskViewList($pdo,$user,$_GET));
     }
     if($method==='POST'){
         if($user['role']!=='admin')throw new DomainException('Создание доступно администратору');

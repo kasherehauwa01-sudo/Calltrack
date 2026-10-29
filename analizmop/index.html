@@ -15,7 +15,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="api.js?v=20261001-calls-recovery&amp;catalog=20261019-buyers"></script>
 <script src="manager-bindings.js?v=1"></script>
-<script src="manager-tasks.js?v=20261026-v3"></script>
+<script src="manager-tasks.js?v=20261028-tasks-1"></script>
 <script src="analytics-policy.js?v=1"></script>
   <link rel="stylesheet" href="client-workspace.css?v=20261019-category-drill" />
   <style>
@@ -150,6 +150,7 @@
     .clients-catalog{display:grid;gap:16px;min-width:0}.clients-filters{display:flex;flex-wrap:wrap;gap:12px}.clients-filters label{min-width:0;display:grid;gap:5px;flex:1 1 180px;font-size:.86rem;color:var(--muted)}.clients-filters input,.clients-filters select{min-width:0;width:100%;padding:10px;border:1px solid #d1d5db;border-radius:12px;background:#fff;color:var(--text)}.clients-list{display:grid;gap:10px}.client-catalog-row{overflow-wrap:anywhere;display:grid;gap:5px;width:100%;border:1px solid #e5e7eb;border-radius:14px;padding:16px;background:#f8fafc;text-align:left;cursor:pointer;color:var(--text)}.client-catalog-row:hover,.client-catalog-row:focus-visible{background:#eff6ff;border-color:#93c5fd}.client-catalog-row span{font-size:.86rem;color:var(--muted)}.clients-pagination{display:flex;gap:14px;align-items:center;justify-content:center}.history-item.email-outgoing{text-align:left;background:#fffbeb;color:var(--text);cursor:pointer;width:100%}
     @media (max-width:900px){.container{grid-template-columns:minmax(0,1fr)}.session-bar{grid-column:1;flex-wrap:wrap}.dashboard-tabs{grid-column:1;grid-row:auto;position:static;flex-direction:row;overflow-x:auto;border-radius:18px}.tab-btn{width:auto;white-space:nowrap;text-align:center}.view,.view.active,h1{grid-column:1}.pie-chart,.bar-chart,.line-chart{grid-column:span 12}.period-shell{flex-wrap:wrap;white-space:normal}.date-range{width:100%;margin-left:0;flex-wrap:wrap}.client-row{grid-template-columns:1fr}.comment-info{grid-template-columns:1fr}.sale-dialog{padding:16px}.sale-fields{grid-template-columns:1fr}.sale-day-item{grid-template-columns:minmax(0,1fr)}.sale-day-item .sale-amount{grid-column:1;grid-row:auto}.comment-modal:not(.sale-detail-open){padding:12px}}
   </style>
+<style>#tasksView button[aria-pressed="true"]{background:#dcfce7;border-color:#16a34a;color:#14532d}</style>
 </head>
 <body>
   <section class="auth-screen" id="authScreen"><form class="auth-card" id="authForm"><h1>Вход в Calltrack</h1><label>Email<input id="authLogin" type="email" autocomplete="username" required /></label><label>PIN-код<input id="authPin" type="password" inputmode="numeric" autocomplete="current-password" required /></label><button class="auth-submit" type="submit">Войти</button><div class="auth-error" id="authError" aria-live="polite"></div></form></section>
@@ -161,7 +162,7 @@
       <button class="tab-btn active" data-tab="dashboard" type="button">Дашборд</button>
       <button class="tab-btn" data-tab="clientCalls" type="button">История клиентов</button>
       <button class="tab-btn" data-tab="clients" type="button">Клиенты</button>
-      <button class="tab-btn" data-tab="tasks" type="button">Задачи</button>
+      <button class="tab-btn" data-tab="tasks" type="button">Задачи <span id="tasksCount" style="color:#dc2626;font-weight:700" hidden></span></button>
       <button class="tab-btn" data-tab="admin" type="button">Админ панель</button>
     </nav>
 
@@ -2349,7 +2350,7 @@ async function initDashboard(){
   applyCallsPayload(callsPayload);
 }catch(error){console.error('Ошибка загрузки/обработки данных:',error);els.emptyState.textContent=`Не удалось загрузить данные с сервера: ${error.message||'неизвестная ошибка'}`;renderKpi({total:0,incoming:0,outgoing:0,missed:0,unanswered:0,dropped:0});destroyCharts();showNoData();}}
 async function requestWebAuth(action='me',body=null){return window.calltrackApi.webAuth(action,body);}
-async function openAuthenticatedApp(user){authenticatedWebUser=user;document.getElementById('authScreen').hidden=true;document.getElementById('appShell').hidden=false;document.getElementById('currentWebUser').textContent=`${user.display_name} · ${webRoleTitle(user.role)}`;if(user.role!=='admin'){document.querySelector('[data-tab="admin"]')?.remove();document.getElementById('adminView')?.remove();}try{bindAdminPanel();startEmailRegistryAutoRefresh();if(user.role==='admin')setActiveAdminTab('generalSettings');}catch(error){console.error('Ошибка инициализации админ-панели:',error);}await initDashboard();}
+async function openAuthenticatedApp(user){authenticatedWebUser=user;window.refreshManagerTasksCount?.();document.getElementById('authScreen').hidden=true;document.getElementById('appShell').hidden=false;document.getElementById('currentWebUser').textContent=`${user.display_name} · ${webRoleTitle(user.role)}`;if(user.role!=='admin'){document.querySelector('[data-tab="admin"]')?.remove();document.getElementById('adminView')?.remove();}try{bindAdminPanel();startEmailRegistryAutoRefresh();if(user.role==='admin')setActiveAdminTab('generalSettings');}catch(error){console.error('Ошибка инициализации админ-панели:',error);}await initDashboard();}
 document.getElementById('authForm').addEventListener('submit',async(event)=>{event.preventDefault();const error=document.getElementById('authError');error.textContent='';try{const user=await requestWebAuth('login',{login:document.getElementById('authLogin').value,pin:document.getElementById('authPin').value});await openAuthenticatedApp(user);}catch(reason){error.textContent=reason.message;}});
 document.getElementById('logoutBtn').addEventListener('click',async()=>{await requestWebAuth('logout');location.reload();});
 requestWebAuth().then(openAuthenticatedApp).catch(()=>{document.getElementById('authScreen').hidden=false;});
