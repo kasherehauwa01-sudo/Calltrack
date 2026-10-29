@@ -11,7 +11,8 @@ const path=require('node:path');const root=process.argv[2] || path.resolve(__dir
     window.calls.push([url,opts]);
     if(opts.method==='PATCH'){window.saved=true;return {};}
     if(url.includes('count_only'))return {unfinished_count:7};
-    if(url.includes('?id='))return {role,client:{name:'ООО Радуга'},history:[{event_type:'CREATED'}],task:{id:'1',created_at:'2026-10-29 10:00:00',client_id:'c',title:'Риск ухода клиента',assignee_id:1,assignee_name:'Менеджер',status:'DONE',priority:'NORMAL',version:1,result:'Готово',source_signal_key:'s',description:'Частота покупок: каждые 20 дней.',evidence_json:JSON.stringify({signal:{matching:{status:'PRELIMINARY_MATCH',member_ids:[]}}})}};
+    if(url.includes('client_purchases.php'))return {summary:{average_interval:42.5,last_purchase:'2026-09-05',days_without_purchase:54}};
+    if(url.includes('?id=')){await new Promise(resolve=>{window.finishTaskLoad=resolve;});return {role,client:{name:'ООО Радуга'},history:[{event_type:'CREATED'}],task:{id:'1',created_at:'2026-10-29 10:00:00',client_id:'c',title:'Риск ухода клиента',assignee_id:1,assignee_name:'Менеджер',status:'DONE',priority:'NORMAL',version:1,result:'Готово',source_signal_key:'s',description:'Частота покупок: каждые 20 дней.',evidence_json:JSON.stringify({signal:{matching:{status:'PRELIMINARY_MATCH',member_ids:[]}}})}};}
     return {role,items:[{id:'1',created_at:'2026-10-29 10:00:00',client_id:'c',client_name:'ООО Радуга',title:'Риск ухода клиента',status:'OPEN',priority:'NORMAL'}],assignees:role==='manager'?[]:[{id:1,display_name:'Менеджер'}],types:[{key:'CHURN_RISK',label:'Риск ухода клиента'},{key:'NEW',label:'Новый тип'}],unfinished_count:7,next_after:null};
    }};
   },role);
@@ -27,7 +28,12 @@ const path=require('node:path');const root=process.argv[2] || path.resolve(__dir
   assert.match(await page.locator('[data-task="1"]').textContent(),/ООО Радуга/);assert.match(await page.locator('[data-task="1"]').textContent(),/Добавлена: 29.10.2026/);
   await page.locator('#tasksCompleted').click();await page.waitForFunction(()=>window.calls.at(-1)[0].includes('completed=1'));
   await page.locator('[data-task-type="NEW"]').click();await page.waitForFunction(()=>window.calls.at(-1)[0].includes('type=NEW'));
-  await page.locator('[data-task="1"]').click();await page.locator('#taskEdit').waitFor();
+  await page.locator('[data-task="1"]').click();
+  assert.match(await page.locator('#tasksView').textContent(),/Загрузка задачи/);
+  assert.equal(await page.locator('.task-spinner').count(),1);
+  await page.evaluate(()=>window.finishTaskLoad());await page.locator('#taskEdit').waitFor();
+  await page.waitForFunction(()=>document.querySelector('#taskDescription').textContent.includes('42,5'));
+  assert.match(await page.locator('#taskDescription').textContent(),/Без покупок: 54 дн/);
   assert.equal(await page.locator('.task-detail').count(),1);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'No horizontal overflow');
   if(process.env.TASK_PREVIEW_DIR)await page.screenshot({path:process.env.TASK_PREVIEW_DIR+'/task-detail-'+role+'.png',fullPage:true});
