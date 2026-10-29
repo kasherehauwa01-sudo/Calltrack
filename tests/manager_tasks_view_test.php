@@ -3,7 +3,7 @@ declare(strict_types=1);
 $root=$argv[1] ?? dirname(__DIR__);
 require $root.'/api/manager_tasks_view.php';
 require $root.'/api/manager_tasks_service.php';
-function analyticsDirectoryRecords(array $ids): array {return array_fill_keys($ids,['name'=>'ООО Радуга']);}
+function taskViewClients(array $ids): array {return array_fill_keys($ids,['name'=>'ООО Радуга']);}
 function check(bool $ok,string $message):void{if(!$ok)throw new RuntimeException($message);}
 function rejects(callable $fn,string $class):void{try{$fn();}catch(Throwable $e){check($e instanceof $class,'Wrong exception: '.get_class($e));return;}throw new RuntimeException('Expected rejection');}
 $p=new PDO('sqlite::memory:');$p->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
@@ -34,3 +34,9 @@ rejects(fn()=>updateManagerTask($p,$m,'001',['version'=>1,'priority'=>'HIGH']),D
 rejects(fn()=>updateManagerTask($p,$m,'001',['version'=>1,'status'=>'DONE','result'=>'']),InvalidArgumentException::class);
 $p->exec("INSERT INTO analytics_open_task_slots VALUES('slot','001')");updateManagerTask($p,$m,'001',['version'=>1,'status'=>'DONE','result'=>'Связались']);check($p->query('SELECT COUNT(*) FROM analytics_open_task_slots')->fetchColumn()==0,'Slot released');
 echo "PASS: scoped counts, filters, pagination, dynamic types, description, completed editing, conflicts, permissions, slots\n";
+
+$q->execute(['090','c2','Legacy',1,'OPEN','NORMAL','{broken','MANUAL','','']);
+$r=taskViewList($p,$m,['type'=>'MANUAL','status'=>'OPEN']);
+check(array_column($r['items'],'id')===['090'],'Malformed evidence uses family without SQL error');
+check(!array_key_exists('evidence_json',$r['items'][0]),'List never transfers proof bundles');
+echo "PASS: malformed legacy JSON and bounded list payload\n";

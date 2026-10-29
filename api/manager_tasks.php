@@ -3,9 +3,14 @@ declare(strict_types=1);
 require_once __DIR__.'/config.php';
 require_once __DIR__.'/analytics_integration.php';
 require_once __DIR__.'/manager_tasks_view.php';
+require_once __DIR__.'/manager_tasks_clients.php';
 try{
-    $pdo=getPdo();$user=requireWebUser($pdo);$method=$_SERVER['REQUEST_METHOD'];
+    $pdo=getPdo();$method=$_SERVER['REQUEST_METHOD'];
+    // Reading tasks does not need telemetry schema initialization on every poll.
+    $user=requireWebUser($pdo,true,$method!=='GET');
     if($method==='GET'){
+        // Authentication is complete; do not serialize other requests from this browser.
+        if(session_status()===PHP_SESSION_ACTIVE)session_write_close();
         $id=(string)($_GET['id']??'');
         if($id!==''){
             $s=$pdo->prepare('SELECT t.*,u.display_name AS assignee_name FROM manager_tasks t JOIN web_users u ON u.id=t.assignee_id WHERE t.id=?');$s->execute([$id]);$task=$s->fetch(PDO::FETCH_ASSOC);
