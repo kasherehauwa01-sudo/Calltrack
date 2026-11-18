@@ -46,10 +46,18 @@ assert api(manager, 'manager_tasks.php?id='+id)[0] == 200
 assert api(other, 'manager_tasks.php?id='+id)[0] == 404
 assert api(other, 'manager_tasks.php')[1]['items'] == []
 assert api(supervisor, 'manager_tasks.php', 'PATCH', {'id':id,'version':1,'status':'DONE','result':'Forbidden'})[0] == 403
-assert api(manager, 'manager_tasks.php', 'PATCH', {'id':id,'version':1,'status':'DONE','result':''})[0] == 422
-assert api(manager, 'manager_tasks.php', 'PATCH', {'id':id,'version':1,'status':'IN_PROGRESS','result':'Synthetic follow-up'})[0] == 200
+assert api(manager, 'manager_tasks.php', 'PATCH', {'id':id,'version':1,'status':'DONE','result':''})[0] == 200
+assert api(manager, 'manager_tasks.php', 'PATCH', {'id':id,'version':2,'status':'IN_PROGRESS','result':'Synthetic follow-up'})[0] == 200
 assert api(manager, 'manager_tasks.php', 'PATCH', {'id':id,'version':1,'status':'DONE','result':'Old revision'})[0] == 409
 assert api(admin, 'manager_tasks.php', 'POST', {'client_id':'missing','assignee_id':3,'title':'Not allowed'})[0] == 422
+status, deletable = api(admin, 'manager_tasks.php', 'POST', {'client_id':'client-100','assignee_id':3,'title':'Delete test'})
+assert status == 201
+delete_body = {'id':deletable['id'],'version':1}
+assert api(manager, 'manager_tasks.php', 'DELETE', delete_body)[0] == 403
+assert api(supervisor, 'manager_tasks.php', 'DELETE', delete_body, csrf=False)[0] == 403
+assert api(supervisor, 'manager_tasks.php', 'DELETE', delete_body)[0] == 200
+assert api(admin, 'manager_tasks.php?id='+deletable['id'])[0] == 404
+assert all(row['id'] != deletable['id'] for row in api(admin, 'manager_tasks.php')[1]['items'])
 policy = api(admin, 'analytics_policy_admin.php')[1]['policy']
 assert int(policy['approved']) == 0 and policy['min_confidence'] is None
 assert all(int(t['enabled']) == 0 and t['priority'] is None and t['due_days'] is None for t in policy['types'])
@@ -76,12 +84,13 @@ with sync_playwright() as p:
     page.locator('textarea[name="description"]').fill('Manual task while automation unapproved')
     page.get_by_role('button',name='Создать',exact=True).click()
     page.get_by_role('heading',name='Browser synthetic task').wait_for()
-    page.locator('textarea[name="result"]').fill('Synthetic result')
     page.locator('select[name="status"]').select_option('DONE')
     page.get_by_role('button',name='Сохранить',exact=True).click()
-    page.locator('select[name="status"][disabled]').wait_for()
-    assert page.locator('textarea[name="result"]').input_value() == 'Synthetic result'
-    page.get_by_role('button',name='К списку',exact=True).click()
+    page.get_by_role('button',name='Выполненные',exact=True).click()
+    page.get_by_role('button',name='Browser synthetic task',exact=False).click()
+    assert page.locator('textarea[name="result"]').input_value() == ''
+    page.locator('select[name="status"]').select_option('IN_PROGRESS')
+    page.get_by_role('button',name='Сохранить',exact=True).click()
     page.get_by_role('button',name='Аналитические сигналы',exact=True).click()
     page.get_by_role('button',name='Политика автоматизации',exact=True).click()
     assert page.locator('input[name="min_confidence"]').input_value() == ''

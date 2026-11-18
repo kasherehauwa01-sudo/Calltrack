@@ -33,6 +33,9 @@ try{
     if($method==='PATCH'){
         $body=readJsonBody();$id=taskText($body['id']??null,36);sendJson(updateManagerTask($pdo,$user,$id,$body));
     }
+    if($method==='DELETE'){
+        $body=readJsonBody();$id=taskText($body['id']??null,36);sendJson(deleteManagerTask($pdo,$user,$id,$body['version']??null));
+    }
     sendJson(['status'=>'error','message'=>'Метод не разрешён'],405);
 }catch(TaskConflict $e){sendJson(['status'=>'error','message'=>$e->getMessage()],409);
 }catch(DomainException $e){sendJson(['status'=>'error','message'=>$e->getMessage()],403);

@@ -11,6 +11,8 @@ $p->exec('CREATE TABLE web_users(id INTEGER PRIMARY KEY, display_name TEXT, role
 $p->exec('CREATE TABLE manager_tasks(id TEXT PRIMARY KEY,client_id TEXT,title TEXT,assignee_id INTEGER,status TEXT,priority TEXT,due_at TEXT,version INTEGER DEFAULT 1,evidence_json TEXT,family TEXT,result TEXT,description TEXT,updated_at TEXT,created_at TEXT DEFAULT "2026-01-01 00:00:00")');
 $p->exec('CREATE TABLE manager_task_events(task_id TEXT,actor_id INTEGER,event_type TEXT,data_json TEXT)');
 $p->exec('CREATE TABLE analytics_open_task_slots(slot_key TEXT,task_id TEXT)');
+$migration=file_get_contents($root.'/database/20261117_manager_task_lifecycle.sql');
+$p->exec(str_replace(' CHARACTER SET ascii COLLATE ascii_bin','',$migration));
 $e=json_encode(['signal'=>['signal_type'=>'CHURN_RISK','last_purchase'=>'2026-08-27','metrics'=>['median_interval'=>20,'days_without_purchase'=>60]]]);
 $q=$p->prepare('INSERT INTO manager_tasks(id,client_id,title,assignee_id,status,priority,evidence_json,family,result,description) VALUES(?,?,?,?,?,?,?,?,?,?)');
 for($i=1;$i<=55;$i++)$q->execute([sprintf('%03d',$i),'c1','Риск ухода клиента',1,'OPEN','NORMAL',$e,'INACTIVITY','','Old']);
@@ -27,12 +29,12 @@ check(taskViewDescription(['evidence_json'=>$e])==='Частота покупо�
 updateManagerTask($p,$m,'060',['version'=>1,'status'=>'DONE','result'=>'Исправлено']);
 check($p->query("SELECT result FROM manager_tasks WHERE id='060'")->fetchColumn()==='Исправлено','Done editable');
 rejects(fn()=>updateManagerTask($p,$m,'060',['version'=>1,'result'=>'stale']),TaskConflict::class);
-rejects(fn()=>updateManagerTask($p,$m,'060',['version'=>2,'status'=>'OPEN']),TaskConflict::class);
+updateManagerTask($p,$m,'060',['version'=>2,'status'=>'OPEN']);
+updateManagerTask($p,$m,'060',['version'=>3,'status'=>'DONE']);
 rejects(fn()=>updateManagerTask($p,$m,'061',['version'=>1,'result'=>'other']),DomainException::class);
 rejects(fn()=>updateManagerTask($p,$boss,'001',['version'=>1,'result'=>'other']),DomainException::class);
 rejects(fn()=>updateManagerTask($p,$m,'001',['version'=>1,'priority'=>'HIGH']),DomainException::class);
-rejects(fn()=>updateManagerTask($p,$m,'001',['version'=>1,'status'=>'DONE','result'=>'']),InvalidArgumentException::class);
-$p->exec("INSERT INTO analytics_open_task_slots VALUES('slot','001')");updateManagerTask($p,$m,'001',['version'=>1,'status'=>'DONE','result'=>'Связались']);check($p->query('SELECT COUNT(*) FROM analytics_open_task_slots')->fetchColumn()==0,'Slot released');
+$p->exec("INSERT INTO analytics_open_task_slots(slot_key,task_id) VALUES('slot','001')");updateManagerTask($p,$m,'001',['version'=>1,'status'=>'DONE','result'=>'']);check($p->query('SELECT COUNT(*) FROM analytics_open_task_slots')->fetchColumn()==0,'Slot released');
 echo "PASS: scoped counts, filters, pagination, dynamic types, description, completed editing, conflicts, permissions, slots\n";
 
 $q->execute(['090','c2','Legacy',1,'OPEN','NORMAL','{broken','MANUAL','','']);
@@ -46,3 +48,10 @@ $r=taskViewList($p,$m,[]);check($r['items'][0]['id']==='002','Creation date outr
 $seen=array_column($r['items'],'id');while($r['next_after']){$r=taskViewList($p,$m,['after'=>$r['next_after']]);$seen=array_merge($seen,array_column($r['items'],'id'));}
 check(count($seen)===count(array_unique($seen))&&count($seen)===56,'Ties paginate without duplicates or omissions');
 echo "PASS: newest first, stable timestamp ties and complete pagination\n";
+
+deleteManagerTask($p,$boss,'062',1);
+deleteManagerTask($p,$admin,'060',4);
+deleteManagerTask($p,$admin,'090',1);
+check(array_column(taskViewList($p,$m,['completed'=>'1'])['items'],'id')===['001'],'Deleted completed task hidden');
+check(taskViewList($p,$m,['status'=>'CANCELLED'])['items']===[],'Deleted cancelled task hidden');
+check(taskViewList($p,$m,['count_only'=>'1'])['unfinished_count']===54,'Deleted open task excluded from count');

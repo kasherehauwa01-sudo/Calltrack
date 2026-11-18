@@ -11,6 +11,7 @@ The production server has NOT been inspected. Before any rollout compare `/var/w
 1. Existing `web_users`/session tables must already exist.
 2. Review and explicitly apply `database/20261020_manager_bindings.sql`.
 3. Review and explicitly apply `database/20261020_analytics_tasks.sql`.
+   Apply `database/20261117_manager_task_lifecycle.sql` after it before deploying the task API.
 4. Review and explicitly apply `database/20261020_analytics_task_policy.sql`.
 
 No new tables are created by ordinary API requests. User deletion is RESTRICTed for assigned tasks/bindings: deactivate accounts instead of destroying their history. Actor IDs in history remain historical references. Back up first. SQLite tests translate dialect syntax; MariaDB tests execute these SQL files unchanged.

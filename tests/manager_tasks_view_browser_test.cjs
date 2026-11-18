@@ -10,6 +10,7 @@ const path=require('node:path');const root=process.argv[2] || path.resolve(__dir
    window.calltrackApi={loadClientEvents:()=>new Promise((resolve,reject)=>{window.finishClientLoad=()=>window.failClientLoad ? reject(new Error('Ошибка сервера')) : resolve({calls:[],emails:[]});}),requestJson:async(url,opts)=>{
     window.calls.push([url,opts]);
     if(opts.method==='PATCH'){window.saved=true;return {};}
+    if(opts.method==='DELETE'){window.deleted=JSON.parse(opts.body);return {};}
     if(url.includes('count_only'))return {unfinished_count:7};
     if(url.includes('client_purchases.php'))return {summary:{average_interval:42.5,last_purchase:'2026-09-05',days_without_purchase:54}};
     if(url.includes('?id=')){await new Promise(resolve=>{window.finishTaskLoad=resolve;});return {role,client:{name:'ООО Радуга'},history:[{event_type:'CREATED'}],task:{id:'1',created_at:'2026-10-29 10:00:00',client_id:'c',title:'Риск ухода клиента',assignee_id:1,assignee_name:'Менеджер',status:'DONE',priority:'NORMAL',version:1,result:'Готово',source_signal_key:'s',description:'Частота покупок: каждые 20 дней.',evidence_json:JSON.stringify({signal:{matching:{status:'PRELIMINARY_MATCH',member_ids:[]}}})}};}
@@ -50,9 +51,20 @@ const path=require('node:path');const root=process.argv[2] || path.resolve(__dir
   assert.equal(await page.locator('.task-spinner').count(),0);
   const body=await page.locator('#tasksView').textContent();
   for(const word of ['Предварительное сопоставление','Исходный аналитический сигнал','Приоритет','История'])assert.equal(body.includes(word),role!=='manager',word+' '+role);
+  assert.equal(await page.locator('#taskDelete').count(),role==='manager'?0:1);
   if(role!=='supervisor'){
+   await page.locator('[name=status]').selectOption('IN_PROGRESS');
    await page.locator('[name=result]').fill('Исправленный результат');await page.locator('[type=submit]').click();await page.locator('#tasksCompleted').waitFor();assert.equal(await page.evaluate(()=>window.saved),true);
-  }else assert.equal(await page.locator('#taskEdit [type=submit]').count(),0);
+  }else {
+   assert.equal(await page.locator('#taskEdit [type=submit]').count(),0);
+   page.once('dialog',dialog=>dialog.dismiss());
+   await page.locator('#taskDelete').click();
+   assert.equal(await page.evaluate(()=>window.deleted),undefined);
+   page.once('dialog',dialog=>dialog.accept());
+   await page.locator('#taskDelete').click();
+   await page.locator('#tasksCompleted').waitFor();
+   assert.deepEqual(await page.evaluate(()=>window.deleted),{id:'1',version:1});
+  }
   await page.close();
  }
  console.log('PASS: browser roles, count, type/completed filters, client name, DONE editing, save returns to list');

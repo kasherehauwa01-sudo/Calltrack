@@ -57,7 +57,6 @@ $changed=$event;$changed['score']=71;denied(fn()=>processAnalyticsEvent($pdo,$ch
 $second=$event;$second['signal_id']='signal-2';$existing=processAnalyticsEvent($pdo,$second,$client,$policy,'enabled',$now);expect($existing['decision']==='TASK_EXISTS'&&$existing['task_id']===$first['task_id'],'same issue slot across episodes');
 denied(fn()=>updateManagerTask($pdo,$other,$task['id'],['version'=>1,'status'=>'DONE','result'=>'Wrong owner']),DomainException::class);
 denied(fn()=>updateManagerTask($pdo,$supervisor,$task['id'],['version'=>1,'status'=>'DONE','result'=>'Read only']),DomainException::class);
-denied(fn()=>updateManagerTask($pdo,$manager,$task['id'],['version'=>1,'status'=>'DONE','result'=>'']),InvalidArgumentException::class);
 denied(fn()=>updateManagerTask($pdo,$manager,$task['id'],['version'=>1,'assignee_id'=>4]),DomainException::class);
 updateManagerTask($pdo,$manager,$task['id'],['version'=>1,'status'=>'IN_PROGRESS','result'=>'Contact planned']);
 denied(fn()=>updateManagerTask($pdo,$manager,$task['id'],['version'=>1,'status'=>'DONE','result'=>'Stale update']),TaskConflict::class);

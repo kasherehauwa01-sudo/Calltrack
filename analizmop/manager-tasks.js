@@ -48,18 +48,19 @@
     try {
       const {task, history, client, role} = await api(`${endpoint}?id=${encodeURIComponent(id)}`);
       if (requestEpoch !== epoch) return;
-      const editable = role !== 'supervisor' && task.status !== 'CANCELLED';
+      const editable = role === 'admin' || role === 'manager';
+      const deletable = role === 'admin' || role === 'supervisor';
       panel().innerHTML = `<section class="task-detail" aria-labelledby="taskDetailTitle">
         <nav class="task-detail-nav" aria-label="Навигация по задачам"><button type="button" class="updates-action-btn" id="tasksBack">← К списку задач</button><span>Добавлена: ${createdDate(task.created_at)}</span></nav>
         <header class="task-detail-header"><div><p class="task-eyebrow">Задача</p><h2 id="taskDetailTitle">${esc(task.title)}</h2></div><span class="task-status task-status--${Object.hasOwn(statuses,task.status) ? task.status.toLowerCase() : 'unknown'}">${esc(statuses[task.status] || 'Неизвестный статус')}</span></header>
         <section class="task-client-panel" aria-label="Клиент"><div><p class="task-eyebrow">Клиент</p><h3>${esc(client?.name || 'Клиент не указан')}</h3><p class="task-muted">Ответственный: ${esc(task.assignee_name || 'Не назначен')}</p></div><div class="task-client-actions"><button type="button" class="updates-action-btn" id="taskClientCard" aria-describedby="taskClientLoading">Карточка клиента</button><span id="taskClientLoading" class="task-client-feedback" role="status" aria-live="polite"></span></div></section>
         <section class="task-description-panel"><h3>Что нужно сделать</h3><p id="taskDescription">${esc(task.description || 'Описание задачи не добавлено.')}</p></section>
         <form id="taskEdit" class="task-detail-form">
-          <section class="task-result-panel"><h3>Результат работы</h3><label for="taskResult" class="task-muted">${editable ? 'Зафиксируйте итог общения и дальнейшие договорённости.' : 'Сохранённый результат выполнения задачи.'}</label><textarea id="taskResult" name="result" maxlength="10000" rows="7" placeholder="Например: связались с клиентом, выяснили причину и договорились о следующем шаге…" ${editable ? '' : 'disabled'}>${esc(task.result)}</textarea>${task.status==='DONE' && editable ? '<p class="task-field-hint">Можно уточнить результат. Задача останется выполненной.</p>' : ''}</section>
-          <aside class="task-settings-panel" aria-label="Параметры задачи"><h3>Параметры задачи</h3><label>Статус<select name="status" ${editable ? '' : 'disabled'}>${options(task.status === 'DONE' ? {DONE:statuses.DONE} : role === 'admin' ? statuses : {OPEN:statuses.OPEN,IN_PROGRESS:statuses.IN_PROGRESS,DONE:statuses.DONE,...(task.status==='CANCELLED'?{CANCELLED:statuses.CANCELLED}:{})},task.status)}</select></label>
+          <section class="task-result-panel"><h3>Результат работы</h3><label for="taskResult" class="task-muted">${editable ? 'Укажите итог общения и дальнейшие договорённости, если нужно.' : 'Сохранённый результат выполнения задачи.'}</label><textarea id="taskResult" name="result" maxlength="10000" rows="7" placeholder="Например: связались с клиентом, выяснили причину и договорились о следующем шаге…" ${editable ? '' : 'disabled'}>${esc(task.result)}</textarea></section>
+          <aside class="task-settings-panel" aria-label="Параметры задачи"><h3>Параметры задачи</h3><label>Статус<select name="status" ${editable ? '' : 'disabled'}>${options(role === 'admin' ? statuses : {OPEN:statuses.OPEN,IN_PROGRESS:statuses.IN_PROGRESS,DONE:statuses.DONE,...(task.status==='CANCELLED'?{CANCELLED:statuses.CANCELLED}:{})},task.status)}</select></label>
           ${role === 'admin' && editable ? `<label>Менеджер<select name="assignee_id">${assignees.some(row=>String(row.id)===String(task.assignee_id)) ? '' : `<option value="${task.assignee_id}" selected>${esc(task.assignee_name)} (неактивен)</option>`}${managerOptions(task.assignee_id)}</select></label><label>Приоритет<select name="priority">${options(priorities,task.priority)}</select></label><label>Срок выполнения (UTC)<input name="due_at" value="${esc(task.due_at || '')}" placeholder="YYYY-MM-DD HH:MM:SS" aria-describedby="taskDueHint"></label><p id="taskDueHint" class="task-field-hint">Формат: год-месяц-день часы:минуты:секунды.</p>` : `<dl class="task-parameters">${role !== 'manager' ? `<div><dt>Приоритет</dt><dd>${esc(priorities[task.priority])}</dd></div>` : ''}<div><dt>Срок выполнения (UTC)</dt><dd>${esc(task.due_at || 'Не задан')}</dd></div></dl>`}
           </aside>
-          <footer class="task-detail-footer"><p role="status" id="taskMessage" aria-live="polite"></p>${editable ? '<span class="task-muted">После сохранения вы вернётесь к списку задач.</span><button type="submit" class="registry-refresh-btn">Сохранить</button>' : '<span class="task-muted">Задача доступна только для просмотра.</span>'}</footer>
+          <footer class="task-detail-footer"><p role="status" id="taskMessage" aria-live="polite"></p>${editable ? '<span class="task-muted">После сохранения вы вернётесь к списку задач.</span><button type="submit" class="registry-refresh-btn">Сохранить</button>' : '<span class="task-muted">Параметры задачи доступны для просмотра.</span>'}${deletable ? '<button type="button" class="updates-action-btn" id="taskDelete">Удалить задачу</button>' : ''}</footer>
         </form>
         ${role !== 'manager' ? `<details class="task-extra"><summary>Дополнительные сведения и история</summary><div class="task-extra-content"><p class="task-muted">ID клиента: ${esc(task.client_id)}</p>${matchingNotice(task)}${task.source_signal_key ? '<p><a href="#taskSourceEvidence" class="updates-action-btn" id="taskSource">Исходный аналитический сигнал</a></p>' : ''}<div id="taskSourceEvidence"></div><h3>История</h3><ul class="task-history">${history.map(row => `<li><span>${esc(row.created_at)} · ${esc(({CREATED:'Задача создана',UPDATED:'Задача изменена'})[row.event_type] || row.event_type)}</span><details><summary>Подробности изменения</summary><pre>${esc(row.data_json)}</pre></details></li>`).join('') || '<li>История изменений пока пуста.</li>'}</ul></div></details>` : ''}
       </section>`;
@@ -100,11 +101,37 @@
         try { evidence.textContent = JSON.stringify(JSON.parse(task.evidence_json || '{}'),null,2); } catch { evidence.textContent = 'Сведения недоступны'; }
         panel().querySelector('#taskSourceEvidence').replaceChildren(evidence);
       };
-      panel().querySelector('#taskEdit').onsubmit = async event => {
-        event.preventDefault();const form = new FormData(event.target);const body = {id:task.id,version:Number(task.version),status:form.get('status'),result:form.get('result')};
-        if (role === 'admin') {body.assignee_id = Number(form.get('assignee_id'));body.priority = form.get('priority');body.due_at = form.get('due_at') || null;}
-        const submit=event.target.querySelector('[type=submit]');submit.disabled=true;submit.textContent='Сохранение…';submit.setAttribute('aria-busy','true');panel().querySelector('#taskMessage').textContent='';
-        try {await api(endpoint,'PATCH',body);window.refreshManagerTasksCount();if(requestEpoch===epoch){pageAfter='';showList();}} catch(error) {if(requestEpoch===epoch)panel().querySelector('#taskMessage').textContent = error.message;}finally{submit.disabled=false;submit.textContent='Сохранить';submit.removeAttribute('aria-busy');}
+      const form = panel().querySelector('#taskEdit');
+      const message = form.querySelector('#taskMessage');
+      const submit = form.querySelector('[type=submit]');
+      const remove = form.querySelector('#taskDelete');
+      const mutate = async (method, fields, button, pendingLabel) => {
+        const label = button.textContent;
+        for (const control of [submit, remove]) if (control) control.disabled = true;
+        button.textContent = pendingLabel;
+        button.setAttribute('aria-busy', 'true');
+        message.textContent = '';
+        try {
+          await api(endpoint, method, {id:task.id, version:Number(task.version), ...fields});
+          window.refreshManagerTasksCount();
+          if (requestEpoch === epoch) {pageAfter = '';showList();}
+        } catch (error) {
+          message.textContent = error.message;
+        } finally {
+          for (const control of [submit, remove]) if (control) control.disabled = false;
+          button.textContent = label;
+          button.removeAttribute('aria-busy');
+        }
+      };
+      form.onsubmit = event => {
+        event.preventDefault();
+        if (!submit || submit.disabled) return;
+        const fields = Object.fromEntries(new FormData(form));
+        if (role === 'admin') {fields.assignee_id = Number(fields.assignee_id);fields.due_at ||= null;}
+        mutate('PATCH', fields, submit, 'Сохранение…');
+      };
+      if (remove) remove.onclick = () => {
+        if (window.confirm(`Удалить задачу «${task.title}»?`)) mutate('DELETE', {}, remove, 'Удаление…');
       };
     } catch (error) {if (requestEpoch === epoch) {panel().innerHTML=`<section class="filter-card"><p role="alert">${esc(error.message)}</p><button type="button" id="taskLoadRetry">Повторить</button><button type="button" id="taskLoadBack">К списку задач</button></section>`;panel().querySelector('#taskLoadRetry').onclick=()=>showTask(id);panel().querySelector('#taskLoadBack').onclick=showList;}}
   }
