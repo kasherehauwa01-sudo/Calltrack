@@ -4,7 +4,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
-import okhttp3.mockwebserver.SocketPolicy
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.concurrent.TimeUnit
@@ -46,8 +45,8 @@ class SessionVerifierTest {
     @Test fun networkTimeoutThenRecoveryKeepsSameToken() {
         MockWebServer().use { server ->
             val client = OkHttpClient.Builder().retryOnConnectionFailure(false)
-                .readTimeout(150, TimeUnit.MILLISECONDS).callTimeout(500, TimeUnit.MILLISECONDS).build()
-            server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+                .readTimeout(1, TimeUnit.SECONDS).callTimeout(5, TimeUnit.SECONDS).build()
+            server.enqueue(MockResponse().setHeadersDelay(3, TimeUnit.SECONDS).setBody(success))
             val verifier = SessionVerifier(client, server.url("/auth").toString())
             assertEquals(SessionValidation.RETRYABLE, verifier.validate("saved-token").state)
             server.enqueue(MockResponse().setBody(success))

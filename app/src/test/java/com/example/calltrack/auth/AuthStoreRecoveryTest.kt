@@ -44,22 +44,19 @@ class AuthStoreRecoveryTest {
     }
 
     @Test
-    fun successfulOpenDoesNotCleanup() {
+    fun successfulOpenDoesNotRetry() {
         var opens = 0
-        var cleanups = 0
         val storage = Any()
         val result = AuthStore.openWithSingleRecoveryAttempt(
             open = { opens++; storage }
         )
         assertSame(storage, result)
         assertEquals(1, opens)
-        assertEquals(0, cleanups)
     }
 
     @Test
     fun cryptoFailureRetriesWithoutDeletingExistingStorage() {
         var opens = 0
-        var cleanups = 0
         val result = AuthStore.openWithSingleRecoveryAttempt(
             open = {
                 opens++
@@ -69,13 +66,11 @@ class AuthStoreRecoveryTest {
         )
         assertEquals("existing-auth-storage", result)
         assertEquals(2, opens)
-        assertEquals(0, cleanups)
     }
 
     @Test
     fun retryFailureDoesNotStartRecoveryLoop() {
         var opens = 0
-        var cleanups = 0
         try {
             AuthStore.openWithSingleRecoveryAttempt<Any>(
                 open = { opens++; throw AEADBadTagException("bad tag") }
@@ -85,12 +80,10 @@ class AuthStoreRecoveryTest {
             assertTrue(error.cause is AEADBadTagException)
         }
         assertEquals(2, opens)
-        assertEquals(0, cleanups)
     }
 
     @Test
-    fun unrelatedFailureDoesNotDestroyStorage() {
-        var cleanups = 0
+    fun unrelatedFailureIsPropagated() {
         val expected = RuntimeException("programming error")
         try {
             AuthStore.openWithSingleRecoveryAttempt<Any>(
@@ -100,6 +93,5 @@ class AuthStoreRecoveryTest {
         } catch (error: RuntimeException) {
             assertSame(expected, error)
         }
-        assertEquals(0, cleanups)
     }
 }
