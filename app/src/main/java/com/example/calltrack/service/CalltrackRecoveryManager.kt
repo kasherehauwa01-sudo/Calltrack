@@ -36,12 +36,13 @@ object CalltrackRecoveryManager {
 
     fun recover(context: Context, reason: RecoveryReason) {
         val app = context.applicationContext
-        if (authAvailability(app) == AuthAvailability.UNAVAILABLE) {
+        val auth = authAvailability(app)
+        if (auth == AuthAvailability.UNAVAILABLE) {
             CalltrackStabilityWorker.schedule(app)
             enqueueRecovery(app, reason)
             return
         }
-        if (!shouldRun(app)) {
+        if (auth == AuthAvailability.MISSING || !hasTrackingPermissions(app)) {
             cancelAuthorizedWork(app)
             return
         }
@@ -77,7 +78,9 @@ object CalltrackRecoveryManager {
     }
 
     internal fun shouldRun(context: Context): Boolean =
-        canSync(context) &&
+        canSync(context) && hasTrackingPermissions(context)
+
+    private fun hasTrackingPermissions(context: Context): Boolean =
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
 
@@ -94,8 +97,12 @@ object CalltrackRecoveryManager {
         authAvailability(context) == AuthAvailability.AVAILABLE
 
     internal suspend fun recoverNow(context: Context, reason: RecoveryReason): Boolean {
-        if (authAvailability(context) == AuthAvailability.UNAVAILABLE) return false
-        if (!shouldRun(context)) return true
+        when (authAvailability(context)) {
+            AuthAvailability.UNAVAILABLE -> return false
+            AuthAvailability.MISSING -> return true
+            AuthAvailability.AVAILABLE -> Unit
+        }
+        if (!hasTrackingPermissions(context)) return true
         return attemptServiceStart(context, reason)
     }
 

@@ -11,7 +11,10 @@ class AuthInterceptor internal constructor(
 ) : Interceptor {
     constructor(context: Context) : this(
         tokenProvider = { AuthStore(context.applicationContext).token },
-        onRejected = { AuthSessionNotice.show(context.applicationContext) }
+        onRejected = {
+            com.example.calltrack.logging.AppLogger.log(context.applicationContext, "AUTH", "Authenticated request rejected (401); session and pending records retained")
+            AuthSessionNotice.show(context.applicationContext)
+        }
     )
 
     override fun intercept(chain: Interceptor.Chain): Response {
