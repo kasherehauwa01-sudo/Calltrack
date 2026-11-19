@@ -49,8 +49,7 @@ class AuthStoreRecoveryTest {
         var cleanups = 0
         val storage = Any()
         val result = AuthStore.openWithSingleRecoveryAttempt(
-            open = { opens++; storage },
-            cleanup = { cleanups++ }
+            open = { opens++; storage }
         )
         assertSame(storage, result)
         assertEquals(1, opens)
@@ -58,20 +57,19 @@ class AuthStoreRecoveryTest {
     }
 
     @Test
-    fun cryptoFailureCleansOnlyOnceAndReturnsFreshStorage() {
+    fun cryptoFailureRetriesWithoutDeletingExistingStorage() {
         var opens = 0
         var cleanups = 0
         val result = AuthStore.openWithSingleRecoveryAttempt(
             open = {
                 opens++
                 if (opens == 1) throw AEADBadTagException("bad tag")
-                "fresh-empty-auth-storage"
-            },
-            cleanup = { cleanups++ }
+                "existing-auth-storage"
+            }
         )
-        assertEquals("fresh-empty-auth-storage", result)
+        assertEquals("existing-auth-storage", result)
         assertEquals(2, opens)
-        assertEquals(1, cleanups)
+        assertEquals(0, cleanups)
     }
 
     @Test
@@ -80,15 +78,14 @@ class AuthStoreRecoveryTest {
         var cleanups = 0
         try {
             AuthStore.openWithSingleRecoveryAttempt<Any>(
-                open = { opens++; throw AEADBadTagException("bad tag") },
-                cleanup = { cleanups++ }
+                open = { opens++; throw AEADBadTagException("bad tag") }
             )
             fail("Expected EncryptedAuthStorageException")
         } catch (error: EncryptedAuthStorageException) {
             assertTrue(error.cause is AEADBadTagException)
         }
         assertEquals(2, opens)
-        assertEquals(1, cleanups)
+        assertEquals(0, cleanups)
     }
 
     @Test
@@ -97,8 +94,7 @@ class AuthStoreRecoveryTest {
         val expected = RuntimeException("programming error")
         try {
             AuthStore.openWithSingleRecoveryAttempt<Any>(
-                open = { throw expected },
-                cleanup = { cleanups++ }
+                open = { throw expected }
             )
             fail("Expected original RuntimeException")
         } catch (error: RuntimeException) {

@@ -129,7 +129,8 @@ class MainActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         applySavedTheme()
         super.onCreate(savedInstanceState)
-        if (!AuthStore(this).isAuthenticated) { startActivity(Intent(this, LoginActivity::class.java)); finish(); return }
+        val authenticated = try { AuthStore(this).isAuthenticated } catch (_: com.example.calltrack.auth.EncryptedAuthStorageException) { false }
+        if (!authenticated) { startActivity(Intent(this, LoginActivity::class.java)); finish(); return }
         AppLogger.log(this, "APP", "MainActivity \u0441\u043E\u0437\u0434\u0430\u043D\u0430")
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)

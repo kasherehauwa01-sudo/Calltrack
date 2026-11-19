@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit
 class CalltrackStabilityWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val app = applicationContext
+        if (CalltrackRecoveryManager.authAvailability(app) == CalltrackRecoveryManager.AuthAvailability.UNAVAILABLE) return Result.retry()
         if(!CalltrackRecoveryManager.shouldRun(app))return Result.success()
         val heartbeatAge = StabilityDiagnostics.serviceHeartbeatAgeMs(app)
         StabilityDiagnostics.watchdogChecked(app, heartbeatAge)
