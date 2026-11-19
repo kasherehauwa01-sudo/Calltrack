@@ -44,14 +44,29 @@ class SessionVerifierTest {
 
     @Test fun networkTimeoutThenRecoveryKeepsSameToken() {
         MockWebServer().use { server ->
-            val client = OkHttpClient.Builder().retryOnConnectionFailure(false)
-                .readTimeout(1, TimeUnit.SECONDS).callTimeout(5, TimeUnit.SECONDS).build()
-            server.enqueue(MockResponse().setHeadersDelay(3, TimeUnit.SECONDS).setBody(success))
+            var attempts = 0
+            val client = OkHttpClient.Builder().addInterceptor { chain ->
+                if (attempts++ == 0) throw java.net.SocketTimeoutException("simulated transport timeout")
+                chain.proceed(chain.request())
+            }.build()
+            server.enqueue(MockResponse().setBody(success))
             val verifier = SessionVerifier(client, server.url("/auth").toString())
             assertEquals(SessionValidation.RETRYABLE, verifier.validate("saved-token").state)
-            server.enqueue(MockResponse().setBody(success))
             assertEquals(SessionValidation.VALID, verifier.validate("saved-token").state)
-            repeat(2) { assertEquals("Bearer saved-token", server.takeRequest().getHeader("Authorization")) }
+            assertEquals(2, attempts)
+            assertEquals("Bearer saved-token", server.takeRequest().getHeader("Authorization"))
+            assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test fun slowServerResponseIsRetryable() {
+        MockWebServer().use { server ->
+            val client = OkHttpClient.Builder().retryOnConnectionFailure(false)
+                .readTimeout(100, TimeUnit.MILLISECONDS).callTimeout(1, TimeUnit.SECONDS).build()
+            server.enqueue(MockResponse().setHeadersDelay(500, TimeUnit.MILLISECONDS).setBody(success))
+            val verifier = SessionVerifier(client, server.url("/auth").toString())
+            assertEquals(SessionValidation.RETRYABLE, verifier.validate("saved-token").state)
+            assertEquals("Bearer saved-token", server.takeRequest().getHeader("Authorization"))
         }
     }
 
