@@ -1,7 +1,5 @@
 name: Android session regression
 on:
-  push:
-    branches: [fix/android-session-resilience-20261119]
   pull_request:
     paths:
       - 'app/**'
@@ -12,7 +10,7 @@ permissions:
   contents: read
 jobs:
   auth:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +19,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;34.0.0'
+          log-accepted-android-sdk-licenses: false
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
