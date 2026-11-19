@@ -36,13 +36,23 @@ object CalltrackRecoveryManager {
 
     fun recover(context: Context, reason: RecoveryReason) {
         val app = context.applicationContext
-        if (!shouldRun(app)) {
+        val auth = authAvailability(app)
+        if (auth == AuthAvailability.UNAVAILABLE) {
+            CalltrackStabilityWorker.schedule(app)
+            enqueueRecovery(app, reason)
+            return
+        }
+        if (auth == AuthAvailability.MISSING || !hasTrackingPermissions(app)) {
             cancelAuthorizedWork(app)
             return
         }
         CalltrackStabilityWorker.schedule(app)
         schedulePendingSync(app)
         if (attemptServiceStart(app, reason)) return
+        enqueueRecovery(app, reason)
+    }
+
+    private fun enqueueRecovery(app: Context, reason: RecoveryReason) {
         val request = OneTimeWorkRequestBuilder<CalltrackRecoveryWorker>()
             .setInputData(workDataOf(REASON_KEY to reason.name))
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
@@ -68,15 +78,31 @@ object CalltrackRecoveryManager {
     }
 
     internal fun shouldRun(context: Context): Boolean =
-        canSync(context) &&
+        canSync(context) && hasTrackingPermissions(context)
+
+    private fun hasTrackingPermissions(context: Context): Boolean =
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
 
+    internal enum class AuthAvailability { AVAILABLE, MISSING, UNAVAILABLE }
+
+    internal fun authAvailability(context: Context): AuthAvailability =
+        try {
+            if (AuthStore(context).isAuthenticated) AuthAvailability.AVAILABLE else AuthAvailability.MISSING
+        } catch (error: com.example.calltrack.auth.EncryptedAuthStorageException) {
+            AuthAvailability.UNAVAILABLE
+        }
+
     internal fun canSync(context: Context): Boolean =
-        runCatching { AuthStore(context).isAuthenticated }.getOrDefault(false)
+        authAvailability(context) == AuthAvailability.AVAILABLE
 
     internal suspend fun recoverNow(context: Context, reason: RecoveryReason): Boolean {
-        if (!shouldRun(context)) return true
+        when (authAvailability(context)) {
+            AuthAvailability.UNAVAILABLE -> return false
+            AuthAvailability.MISSING -> return true
+            AuthAvailability.AVAILABLE -> Unit
+        }
+        if (!hasTrackingPermissions(context)) return true
         return attemptServiceStart(context, reason)
     }
 
@@ -110,7 +136,11 @@ class CalltrackRecoveryWorker(context: Context, params: WorkerParameters) : Coro
 class CalltrackSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val app = applicationContext as App
-        if (!CalltrackRecoveryManager.canSync(app)) return Result.success()
+        when (CalltrackRecoveryManager.authAvailability(app)) {
+            CalltrackRecoveryManager.AuthAvailability.UNAVAILABLE -> return Result.retry()
+            CalltrackRecoveryManager.AuthAvailability.MISSING -> return Result.success()
+            CalltrackRecoveryManager.AuthAvailability.AVAILABLE -> Unit
+        }
         return runCatching {
             val completed = app.repository.syncPending()
             app.repository.sendUserTelemetry()

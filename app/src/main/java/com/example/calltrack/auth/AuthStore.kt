@@ -7,22 +7,45 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.io.IOException
 import java.security.GeneralSecurityException
-import java.security.KeyStore
 import java.security.ProviderException
 
-class AuthStore(context: Context) {
-    private val prefs = openEncryptedPreferences(context.applicationContext)
+class AuthStore private constructor(private val openPreferences: () -> SharedPreferences) {
+    constructor(context: Context) : this({ openEncryptedPreferences(context.applicationContext) })
+    internal constructor(preferences: SharedPreferences) : this({ preferences })
+    private val prefs by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { openPreferences() }
 
-    val token: String get() = prefs.getString(TOKEN_KEY, "").orEmpty()
-    val login: String get() = prefs.getString(LOGIN_KEY, "").orEmpty()
+    val token: String get() = access { it.getString(TOKEN_KEY, "").orEmpty() }
+    val login: String get() = access { it.getString(LOGIN_KEY, "").orEmpty() }
     val isAuthenticated: Boolean get() = token.isNotBlank()
 
-    fun save(token: String, id: Long, login: String, name: String, role: String) {
-        prefs.edit().putString("token", token).putLong("user_id", id).putString("login", login).putString("display_name", name)
-            .putString("role", role).apply()
+    fun save(token: String, id: Long, login: String, name: String, role: String) = access { storage ->
+        require(token.isNotBlank())
+        check(storage.edit().putString(TOKEN_KEY, token).putLong("user_id", id)
+            .putString(LOGIN_KEY, login).putString("display_name", name).putString("role", role).commit()) {
+            "Could not persist Android session"
+        }
     }
 
-    fun clear() = prefs.edit().clear().apply()
+    /** A delayed validation must never restore a logged-out session or overwrite a newer login. */
+    fun updateIfCurrent(expectedToken: String, id: Long, login: String, name: String, role: String): Boolean = access { storage ->
+        if (expectedToken.isBlank() || storage.getString(TOKEN_KEY, "") != expectedToken) return@access false
+        save(expectedToken, id, login, name, role)
+        true
+    }
+
+    fun clear() = access { storage ->
+        check(storage.edit().clear().commit()) { "Could not persist explicit logout" }
+    }
+
+    private fun <T> access(block: (SharedPreferences) -> T): T = synchronized(recoveryLock) {
+        try {
+            block(prefs)
+        } catch (error: Throwable) {
+            if (error is EncryptedAuthStorageException) throw error
+            if (!isRecoverableEncryptedStorageError(error)) throw error
+            throw EncryptedAuthStorageException("Encrypted auth storage is temporarily unavailable; data preserved", error)
+        }
+    }
 
     companion object {
         private const val TAG = "AuthStore"
@@ -34,9 +57,8 @@ class AuthStore(context: Context) {
         private fun openEncryptedPreferences(context: Context): SharedPreferences = synchronized(recoveryLock) {
             openWithSingleRecoveryAttempt(
                 open = { createEncryptedPreferences(context) },
-                cleanup = { clearBrokenEncryptedStorage(context) },
-                onRecoverableError = { error -> Log.w(TAG, "Encrypted auth storage is unreadable, recreating it", error) },
-                onRetryError = { error -> Log.e(TAG, "Encrypted auth storage recreation failed", error) }
+                onRecoverableError = { error -> Log.w(TAG, "Encrypted auth storage is unavailable, retrying without deleting data", error) },
+                onRetryError = { error -> Log.e(TAG, "Encrypted auth storage retry failed; data preserved", error) }
             )
         }
 
@@ -48,26 +70,9 @@ class AuthStore(context: Context) {
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
-            // create() проверяет Tink keyset, а getAll() дополнительно заставляет
-            // расшифровать сохранённые auth-значения до передачи storage вызывающему коду.
-            encryptedPreferences.all
+            // Verify only credentials; an unrelated damaged profile field must not erase a token.
+            encryptedPreferences.getString(TOKEN_KEY, "")
             return encryptedPreferences
-        }
-
-        private fun clearBrokenEncryptedStorage(context: Context) {
-            // Оба служебных Tink keyset находятся внутри android_auth.xml, поэтому
-            // удаляем только этот preference-файл, не затрагивая БД и другие настройки.
-            if (!context.deleteSharedPreferences(PREFERENCES_NAME)) {
-                Log.w(TAG, "Unable to delete unreadable auth preferences")
-            }
-            runCatching {
-                KeyStore.getInstance("AndroidKeyStore").apply {
-                    load(null)
-                    if (containsAlias(MasterKey.DEFAULT_MASTER_KEY_ALIAS)) {
-                        deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
-                    }
-                }
-            }.onFailure { Log.w(TAG, "Unable to remove unusable auth MasterKey", it) }
         }
 
         internal fun isRecoverableEncryptedStorageError(error: Throwable): Boolean {
@@ -98,7 +103,6 @@ class AuthStore(context: Context) {
 
         internal fun <T> openWithSingleRecoveryAttempt(
             open: () -> T,
-            cleanup: () -> Unit,
             onRecoverableError: (Throwable) -> Unit = {},
             onRetryError: (Throwable) -> Unit = {}
         ): T {
@@ -107,12 +111,11 @@ class AuthStore(context: Context) {
             } catch (firstError: Throwable) {
                 if (!isRecoverableEncryptedStorageError(firstError)) throw firstError
                 onRecoverableError(firstError)
-                cleanup()
                 try {
                     return open()
                 } catch (retryError: Throwable) {
                     onRetryError(retryError)
-                    throw EncryptedAuthStorageException("Encrypted auth storage could not be recreated", retryError)
+                    throw EncryptedAuthStorageException("Encrypted auth storage is unavailable; existing data was preserved", retryError)
                 }
             }
         }

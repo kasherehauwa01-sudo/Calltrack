@@ -1,0 +1,47 @@
+name: Android session regression
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - '.github/workflows/android-auth-regression.yml'
+permissions:
+  contents: read
+jobs:
+  auth:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;34.0.0'
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Unit tests and debug compilation
+        run: gradle --no-daemon :app:testDebugUnitTest --tests 'com.example.calltrack.auth.*' :app:assembleDebug
+      - name: Test result summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          for path in glob.glob('app/build/test-results/testDebugUnitTest/TEST-*.xml'):
+              root = ET.parse(path).getroot()
+              print(root.attrib)
+              for failure in root.iter('failure'):
+                  print(failure.attrib)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-auth-test-results
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/

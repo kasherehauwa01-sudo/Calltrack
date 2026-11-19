@@ -35,18 +35,23 @@ class AndroidAuthClient(context: Context) {
             val body=JSONObject(response.body?.string().orEmpty());if(!response.isSuccessful)error(body.optString("message","\u041E\u0448\u0438\u0431\u043A\u0430 \u0432\u0445\u043E\u0434\u0430"))
             val data=body.getJSONObject("data");val user=data.getJSONObject("user")
             store.save(data.getString("token"),user.getLong("id"),user.getString("login"),user.getString("display_name"),user.getString("role"))
-            PrefsManager(appContext).setManagerName(user.getString("display_name"));PrefsManager(appContext).setManagerPhone(user.getString("user_phone"))
+            PrefsManager(appContext).setManagerName(user.getString("display_name"));PrefsManager(appContext).setManagerPhone(user.getString("user_phone"));AuthSessionNotice.clear(appContext)
         }
     } }
 
-    suspend fun validate(): Boolean = withContext(Dispatchers.IO) {
-        if(!store.isAuthenticated)return@withContext false
-        runCatching { client.newCall(authorized("$endpoint?action=me")).execute().use { response ->
-            if(!response.isSuccessful)return@use false
-            val user=JSONObject(response.body?.string().orEmpty()).getJSONObject("data").getJSONObject("user")
-            store.save(store.token,user.getLong("id"),user.getString("login"),user.getString("display_name"),user.getString("role"))
-            PrefsManager(appContext).setManagerName(user.getString("display_name"));PrefsManager(appContext).setManagerPhone(user.getString("user_phone"));true
-        } }.getOrDefault(false)
+    suspend fun validate(): SessionValidation = withContext(Dispatchers.IO) {
+        val token = store.token
+        val check = SessionVerifier(client, endpoint).validate(token)
+        if (store.token != token) return@withContext SessionValidation.NO_SESSION
+        check.profile?.let { user ->
+            if (!store.updateIfCurrent(token, user.id, user.login, user.name, user.role)) {
+                return@withContext SessionValidation.NO_SESSION
+            }
+            PrefsManager(appContext).setManagerName(user.name)
+            PrefsManager(appContext).setManagerPhone(user.phone)
+        }
+        if (check.state == SessionValidation.VALID) AuthSessionNotice.clear(appContext)
+        check.state
     }
 
     suspend fun logout() = withContext(Dispatchers.IO) {
