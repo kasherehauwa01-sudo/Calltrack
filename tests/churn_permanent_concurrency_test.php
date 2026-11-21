@@ -126,6 +126,14 @@ catch(PDOException $e){check($e->getCode()==='45000','expected injected SQL fail
 check((int)$db->query("SELECT COUNT(*) FROM manager_tasks WHERE client_id='signed-client'")->fetchColumn()===0,'failed task not committed');
 check((int)$db->query('SELECT COUNT(*) FROM analytics_permanent_reservations')->fetchColumn()===0,'failed reservation not committed');
 $db->exec('DROP TRIGGER fail_once');
+// MariaDB 11.8 concurrency error must also roll back before sender retries.
+$db->exec("CREATE TRIGGER fail_1020 BEFORE INSERT ON manager_tasks FOR EACH ROW SIGNAL SQLSTATE 'HY000' SET MYSQL_ERRNO=1020,MESSAGE_TEXT='synthetic record changed'");
+try{analyticsPermanentPage($db,$page,'deliver',time());throw new RuntimeException('1020 injection did not fire');}
+catch(PDOException $e){check((int)($e->errorInfo[1]??0)===1020,'expected MariaDB 1020');}
+check((int)$db->query("SELECT COUNT(*) FROM manager_tasks WHERE client_id='signed-client'")->fetchColumn()===0,'1020 task rolled back');
+check((int)$db->query('SELECT COUNT(*) FROM analytics_permanent_reservations')->fetchColumn()===0,'1020 reservation rolled back');
+$db->exec('DROP TRIGGER fail_1020');
+
 $context=$storage.'/race-context.json';file_put_contents($context,json_encode(['page'=>$page],JSON_THROW_ON_ERROR));chmod($context,0600);
 $children=[];
 foreach([1,2] as $ignored){$pipes=[];$children[]=proc_open([PHP_BINARY,__FILE__,'worker',$context],[0=>['file','/dev/null','r'],1=>STDOUT,2=>STDERR],$pipes);}

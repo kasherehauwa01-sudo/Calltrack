@@ -243,3 +243,13 @@ Production DB/files/keys/storage/services не используются тест
 - Есть явное отдельное разрешение первого production цикла.
 CI с синтетическими подписанными fixtures не заменяет эти проверки и не делает
 интеграцию автоматически production-ready.
+
+## Особенность MariaDB 11.8, обнаруженная выполненным CI
+
+На PHP 8.5.12 / MariaDB 11.8.6 прежний analytics_concurrency_test получил
+SQLSTATE HY000 / native errno 1020 (Record has changed) при гонке unique slot.
+Его bounded worker retry дополнен ровно этим transient-кодом; проверки exactly-one
+task/slot не изменены. Production service не получает скрытого retry или ослабления gates.
+Receiver при таком PDO exception откатывает task/budget/inbox, не подтверждает страницу
+и освобождает consumer lock; host использует существующую повторную доставку.
+Отдельная SQL fault injection 1020 проверяет rollback перед последующим успешным retry.
