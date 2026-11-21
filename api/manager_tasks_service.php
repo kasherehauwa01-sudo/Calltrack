@@ -5,7 +5,7 @@ class TaskConflict extends RuntimeException {}
 require_once __DIR__.'/analytics_budget_service.php';
 function taskUuid(): string { $h=bin2hex(random_bytes(16));return substr($h,0,8).'-'.substr($h,8,4).'-4'.substr($h,13,3).'-'.dechex((hexdec($h[16])&3)|8).substr($h,17,3).'-'.substr($h,20); }
 function taskSlot(string $clientId,string $family): string { return hash('sha256',json_encode(['clientsvr',$clientId,$family],JSON_THROW_ON_ERROR)); }
-function taskCanRead(array $actor,array $task): bool { return in_array($actor['role']??'',['admin','supervisor'],true)||(($actor['role']??'')==='manager'&&(int)$task['assignee_id']===(int)$actor['id']); }
+function taskCanRead(array $actor,array $task): bool { return empty($task['deleted_at']) && (in_array($actor['role']??'',['admin','supervisor'],true)||(($actor['role']??'')==='manager'&&(int)$task['assignee_id']===(int)$actor['id'])); }
 function taskEvidenceForViewer(array $task,array $actor):array {
     if(($actor['role']??'')==='admin'||empty($task['evidence_json']))return $task;
     $e=json_decode($task['evidence_json'],true,64,JSON_THROW_ON_ERROR);$signal=$e['signal']??[];
@@ -34,6 +34,11 @@ function automaticTaskSlot(string $client,string $family,?array $automatic):stri
  if(is_array($m)&&($m['status']??null)==='PRELIMINARY_MATCH'){if(!preg_match('/^[a-f0-9]{64}$/D',(string)($m['group_key']??'')))throw new DomainException('Invalid matching group');return hash('sha256',json_encode(['clientsvr-group',$m['group_key'],$family],JSON_THROW_ON_ERROR));}
  return taskSlot($client,$family);
 }
+function findOpenTaskInSlot(PDO $pdo,string $slot): ?array {
+    $s=$pdo->prepare('SELECT t.* FROM analytics_open_task_slots s JOIN manager_tasks t ON t.id=s.task_id WHERE s.slot_key=? OR s.reopened_slot_key=? ORDER BY t.created_at,t.id LIMIT 1');
+    $s->execute([$slot,$slot]);
+    return $s->fetch(PDO::FETCH_ASSOC)?:null;
+}
 function findAutomaticManagerTask(PDO $pdo,string $client,array $automatic):?array {
     $s=$pdo->prepare('SELECT * FROM manager_tasks WHERE source_signal_key=?');$s->execute([$automatic['signal_key']]);if($found=$s->fetch(PDO::FETCH_ASSOC))return $found;
     $anchor=$automatic['evidence']['signal']['last_purchase']??null;
@@ -46,8 +51,7 @@ function findAutomaticManagerTask(PDO $pdo,string $client,array $automatic):?arr
     foreach($history as $prior){$e=json_decode((string)$prior['evidence_json'],true,64,JSON_THROW_ON_ERROR);$previousAnchor=$e['signal']['last_purchase']??null;
         if(!is_string($previousAnchor))throw new DomainException('Historical automatic task lacks episode evidence');
         if($previousAnchor===$anchor){return $prior;}}
-    $s=$pdo->prepare('SELECT t.* FROM analytics_open_task_slots s JOIN manager_tasks t ON t.id=s.task_id WHERE s.slot_key=?');$s->execute([automaticTaskSlot($client,'INACTIVITY',$automatic)]);
-    return $s->fetch(PDO::FETCH_ASSOC)?:null;
+    return findOpenTaskInSlot($pdo,automaticTaskSlot($client,'INACTIVITY',$automatic));
 }
 
 /** Automatic caller supplies trusted gate result; API cannot set source/evidence. */
@@ -76,17 +80,22 @@ function createManagerTask(PDO $pdo,array $actor,array $input,?array $automatic=
         }
         taskAssignee($pdo,$assignee);
         if($automatic!==null&&($existing=findAutomaticManagerTask($pdo,$client,$automatic))){if($own)$pdo->commit();return ['task'=>$existing,'existing'=>true];}
-        if($family==='INACTIVITY'){
-            $s=$pdo->prepare('SELECT t.* FROM analytics_open_task_slots s JOIN manager_tasks t ON t.id=s.task_id WHERE s.slot_key=?');$s->execute([automaticTaskSlot($client,$family,$automatic)]);
-            if($existing=$s->fetch(PDO::FETCH_ASSOC)){if($own)$pdo->commit();return ['task'=>$existing,'existing'=>true];}
+        if($family==='INACTIVITY'&&($existing=findOpenTaskInSlot($pdo,automaticTaskSlot($client,$family,$automatic)))){
+            if($own)$pdo->commit();return ['task'=>$existing,'existing'=>true];
         }
         if($automatic!==null){
             require_once __DIR__.'/analytics_manager_pilot_budget.php';
-            assertAnalyticsManagerPilotBudget($pdo, $assignee);
+            assertAnalyticsManagerPilotBudget($pdo, $assignee, !isset($signal['permanent_policy']));
+            $createdAt=new DateTimeImmutable('now',new DateTimeZone('UTC'));
+            if(isset($signal['permanent_policy'])){
+                require_once __DIR__.'/analytics_permanent.php';
+                analyticsPermanentBudget($pdo,$signal,true,$automatic['evidence']['identity_peer_ids']??[]);
+            }else{
             reserveAnalyticsBudget($pdo);
             analyticsDailyBudgetPolicy($pdo);
             $createdAt=new DateTimeImmutable('now',new DateTimeZone('UTC'));
             reserveAnalyticsDailyBudget($pdo,$createdAt,$automatic['signal_key']);
+            }
             if(($signal['generator_version']??null)==='inactivity/aviator-churn-pilot/1'){
                 if(($policy['due_days_by_type']['CHURN_RISK']??null)!==3)throw new DomainException('Pilot requires three calendar days');
                 $due=analyticsPilotDue($createdAt,3);
@@ -106,13 +115,10 @@ function updateManagerTask(PDO $pdo,array $actor,string $id,array $input): array
         $s=$pdo->prepare('SELECT * FROM manager_tasks WHERE id=?'.($pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql'?' FOR UPDATE':''));$s->execute([$id]);$task=$s->fetch(PDO::FETCH_ASSOC);
         if(!$task||!taskCanRead($actor,$task))throw new DomainException('Задача недоступна');taskAssertWrite($actor,$task);
         if(!is_int($input['version']??null)||(int)$task['version']!==$input['version'])throw new TaskConflict('Задача изменилась. Обновите карточку.');
-        if($task['status']==='CANCELLED')throw new TaskConflict('Отменённую задачу нельзя изменять');
         $status=$input['status']??$task['status'];
-        if($task['status']==='DONE'&&$status!=='DONE')throw new TaskConflict('Выполненную задачу можно редактировать без изменения статуса');
         if(!in_array($status,['OPEN','IN_PROGRESS','DONE','CANCELLED'],true))throw new InvalidArgumentException('Некорректный статус');
-        if($status==='CANCELLED'&&$actor['role']!=='admin')throw new DomainException('Отмена доступна администратору');
+        if($status==='CANCELLED'&&$task['status']!=='CANCELLED'&&$actor['role']!=='admin')throw new DomainException('Отмена доступна администратору');
         $result=taskText($input['result']??$task['result'],10000,false);
-        if(in_array($status,['DONE','CANCELLED'],true)&&$result==='')throw new InvalidArgumentException('Укажите результат или причину отмены');
         $assignee=(int)$task['assignee_id'];$priority=$task['priority'];$due=$task['due_at'];
         if($actor['role']!=='admin'&&(isset($input['assignee_id'])||array_key_exists('priority',$input)||array_key_exists('due_at',$input)))throw new DomainException('Назначение, срок и приоритет меняет администратор');
         if($actor['role']==='admin'){
@@ -122,7 +128,30 @@ function updateManagerTask(PDO $pdo,array $actor,string $id,array $input): array
         }
         $s=$pdo->prepare('UPDATE manager_tasks SET status=?,result=?,assignee_id=?,priority=?,due_at=?,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND version=?');$s->execute([$status,$result,$assignee,$priority,$due,$id,$input['version']]);if($s->rowCount()!==1)throw new TaskConflict('Задача изменилась');
         if(in_array($status,['DONE','CANCELLED'],true))$pdo->prepare('DELETE FROM analytics_open_task_slots WHERE task_id=?')->execute([$id]);
+        elseif($task['family']==='INACTIVITY'&&in_array($task['status'],['DONE','CANCELLED'],true)){
+            $evidence=json_decode($task['evidence_json']??'null',true,64,JSON_THROW_ON_ERROR);
+            $slot=automaticTaskSlot($task['client_id'],$task['family'],['evidence'=>$evidence]);
+            // Reopening is allowed even when another task now occupies the original slot.
+            $key=hash('sha256','reopened-task:'.$id);
+            $pdo->prepare('INSERT INTO analytics_open_task_slots(slot_key,task_id,reopened_slot_key) VALUES(?,?,?)')->execute([$key,$id,$slot]);
+        }
         taskEvent($pdo,$id,(int)$actor['id'],'UPDATED',['from_status'=>$task['status'],'to_status'=>$status,'old_assignee'=>(int)$task['assignee_id'],'assignee_id'=>$assignee,'priority'=>$priority,'due_at'=>$due,'result'=>$result]);
         $pdo->commit();return ['status'=>'success'];
+    }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
+}
+
+function deleteManagerTask(PDO $pdo,array $actor,string $id,mixed $version): array {
+    if(!in_array($actor['role']??'',['admin','supervisor'],true))throw new DomainException('Недостаточно прав');
+    if(!is_int($version)||$version<1)throw new InvalidArgumentException('Некорректная версия задачи');
+
+    $pdo->beginTransaction();
+    try{
+        $s=$pdo->prepare('UPDATE manager_tasks SET deleted_at=CURRENT_TIMESTAMP,version=version+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND version=? AND deleted_at IS NULL');
+        $s->execute([$id,$version]);
+        if($s->rowCount()!==1)throw new TaskConflict('Задача была изменена или удалена. Обновите список задач.');
+        $pdo->prepare('DELETE FROM analytics_open_task_slots WHERE task_id=?')->execute([$id]);
+        taskEvent($pdo,$id,(int)$actor['id'],'DELETED',[]);
+        $pdo->commit();
+        return ['status'=>'success'];
     }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw $e;}
 }
