@@ -253,3 +253,8 @@ task/slot не изменены. Production service не получает скр
 Receiver при таком PDO exception откатывает task/budget/inbox, не подтверждает страницу
 и освобождает consumer lock; host использует существующую повторную доставку.
 Отдельная SQL fault injection 1020 проверяет rollback перед последующим успешным retry.
+
+При гонке ledger locking read MariaDB 11.8 также может вернуть 1020 вместо выдачи
+нового committed record. Это fail-closed отказ, не разрешение сверх лимита.
+Worker-тест повторяет ВСЮ транзакцию с новым snapshot после rollback;
+retry внутри прежней snapshot не используется. Exactly-one-remaining-slot assertion сохранён.

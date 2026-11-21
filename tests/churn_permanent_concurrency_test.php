@@ -16,8 +16,20 @@ if(($argv[1]??'')==='budget-worker'){
   if(microtime(true)>$deadline)throw new RuntimeException('Race barrier timed out');
   usleep(10000);clearstatcache();
  }
- try{analyticsPermanentBudget($db,$event,true);$db->commit();$decision='reserved';}
- catch(DomainException $e){if($db->inTransaction())$db->rollBack();if($e->getMessage()!=='PERMANENT_DAILY_LIMIT')throw $e;$decision='blocked';}
+ $decision=null;
+ for($attempt=0;$attempt<5;$attempt++){
+  if(!$db->inTransaction())$db->beginTransaction();
+  try{analyticsPermanentBudget($db,$event,true);$db->commit();$decision='reserved';break;}
+  catch(DomainException $e){if($db->inTransaction())$db->rollBack();if($e->getMessage()!=='PERMANENT_DAILY_LIMIT')throw $e;$decision='blocked';break;}
+  catch(PDOException $e){
+   if($db->inTransaction())$db->rollBack();
+   if(!in_array((string)$e->getCode(),['23000','40001'],true)
+      && !((string)$e->getCode()==='HY000'&&(int)($e->errorInfo[1]??0)===1020))throw $e;
+   // Re-run the WHOLE transaction with a fresh snapshot, as host redelivery does.
+   usleep(100000);
+  }
+ }
+ if($decision===null)throw new RuntimeException('Budget retry bound exceeded');
  file_put_contents($argv[2].'.result-'.$argv[3],$decision);
  exit(0);
 }
@@ -32,7 +44,7 @@ if(($argv[1]??'')==='worker'){
    $receipt=analyticsPermanentPage($db,$ctx['page'],'deliver',time());
    if(!in_array($receipt['receipts'][0]['decision'],['TASK_CREATED','TASK_EXISTS'],true))throw new RuntimeException('Race delivery blocked');
    exit(0);
-  }catch(PDOException $e){if(!in_array((string)$e->getCode(),['23000','40001'],true))throw $e;}
+  }catch(PDOException $e){if(!in_array((string)$e->getCode(),['23000','40001'],true)&&!((string)$e->getCode()==='HY000'&&(int)($e->errorInfo[1]??0)===1020))throw $e;}
   catch(DomainException $e){if($e->getMessage()!=='CONSUMER_BUSY')throw $e;}
   usleep(200000);
  }

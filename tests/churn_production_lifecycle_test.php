@@ -11,7 +11,7 @@ if(($argv[1]??'')==='worker'){
  for($n=0;$n<10;$n++){
   try{$r=analyticsPermanentPage($db,$ctx['page'],'deliver',time());file_put_contents($argv[3],json_encode($r,JSON_THROW_ON_ERROR));exit(0);}
   catch(DomainException $e){if($e->getMessage()!=='CONSUMER_BUSY')throw $e;}
-  catch(PDOException $e){if(!in_array((string)$e->getCode(),['23000','40001'],true))throw $e;}
+  catch(PDOException $e){if(!in_array((string)$e->getCode(),['23000','40001'],true)&&!((string)$e->getCode()==='HY000'&&(int)($e->errorInfo[1]??0)===1020))throw $e;}
   usleep(100000);
  }
  exit(1);
