@@ -1,6 +1,26 @@
 <?php
 declare(strict_types=1);
 if(getenv('ANALYTICS_TASK_TEST_DSN')!=='mysql:host=analytics-test-mariadb;dbname=analytics_race_test')throw new RuntimeException('Disposable race DB required');
+if(($argv[1]??'')==='budget-worker'){
+ require_once __DIR__.'/../api/analytics_sync.php';
+ require_once __DIR__.'/../api/analytics_permanent.php';
+ $ctx=json_decode(file_get_contents($argv[2]),true,64,JSON_THROW_ON_ERROR);
+ $event=json_decode($ctx['page']['events'][0]['event_json'],true,64,JSON_THROW_ON_ERROR);
+ $event['signal_id']='budget-race-'.$argv[3];$event['subject']['key']='budget-race-'.$argv[3];
+ $db=new PDO(getenv('ANALYTICS_TASK_TEST_DSN'),'root','',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+ $db->beginTransaction();
+ $db->query('SELECT COUNT(*) FROM analytics_inbox')->fetchColumn(); // deliberately freeze an old snapshot
+ file_put_contents($argv[2].'.ready-'.$argv[3],'ready');
+ $deadline=microtime(true)+5;
+ while(is_file($argv[2].'.barrier')){
+  if(microtime(true)>$deadline)throw new RuntimeException('Race barrier timed out');
+  usleep(10000);clearstatcache();
+ }
+ try{analyticsPermanentBudget($db,$event,true);$db->commit();$decision='reserved';}
+ catch(DomainException $e){if($db->inTransaction())$db->rollBack();if($e->getMessage()!=='PERMANENT_DAILY_LIMIT')throw $e;$decision='blocked';}
+ file_put_contents($argv[2].'.result-'.$argv[3],$decision);
+ exit(0);
+}
 if(($argv[1]??'')==='worker'){
  require_once __DIR__.'/../api/analytics_sync.php';
  require_once __DIR__.'/../api/analytics_permanent.php';
@@ -115,3 +135,18 @@ check((int)$db->query('SELECT COUNT(*) FROM analytics_permanent_reservations')->
 $again=analyticsPermanentPage($db,$page,'deliver',time());
 check($again['receipts'][0]['decision']==='TASK_EXISTS'&&$again['receipts'][0]['created_for_release']===true,'lost ACK preserves creation attribution');
 echo "churn_permanent_concurrency_test: InnoDB failure rollback, retry, concurrent same signal and lost ACK OK\n";
+
+// Two different signals share exactly one remaining slot, even with stale snapshots.
+file_put_contents($context.'.barrier','hold');$children=[];
+foreach([1,2] as $number){$pipes=[];$children[]=proc_open([PHP_BINARY,__FILE__,'budget-worker',$context,(string)$number],[0=>['file','/dev/null','r'],1=>STDOUT,2=>STDERR],$pipes);}
+$deadline=microtime(true)+5;
+while(!is_file($context.'.ready-1')||!is_file($context.'.ready-2')){
+ if(microtime(true)>$deadline)throw new RuntimeException('Workers failed to enter snapshot barrier');
+ usleep(10000);clearstatcache();
+}
+unlink($context.'.barrier');
+foreach($children as $child)check(is_resource($child)&&proc_close($child)===0,'budget worker recovers');
+$decisions=[file_get_contents($context.'.result-1'),file_get_contents($context.'.result-2')];sort($decisions);
+check($decisions===['blocked','reserved'],'only one different signal gets final daily slot');
+check((int)$db->query('SELECT COUNT(*) FROM analytics_permanent_reservations')->fetchColumn()===2,'daily cap holds under old snapshots');
+echo "churn_permanent_concurrency_test: different-signal daily-cap race under REPEATABLE READ OK\n";

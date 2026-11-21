@@ -226,3 +226,21 @@ Go/no-go перед реальными задачами:
 - retry/concurrent delivery не создают дублей, caps/cooldown/rollback подтверждены;
 - private keys/token permissions, runtime integrity, sandbox/storage и единственный consumer проверены;
 - approvals/revisions/минимальный бизнес-лимит согласованы и есть отдельное разрешение запуска.
+
+## Результаты CI и дополнительные проверки locking
+
+Проверенный run до дополнительного усиления locking:
+https://github.com/kasherehauwa01-sudo/Calltrack/actions/runs/44898831087
+(PHP 8.3.37, MariaDB 10.11.19). Обе jobs прошли: signatures/trusted/preliminary,
+реальный CLI, failure rollback, concurrent same signal, lost ACK, package hashes/patch.
+Existing analytics_policy_test проходит.
+Два baseline failure воспроизведены на неизменённом cfbab96:
+analytics_tasks_test — unsigned synthetic evidence отклоняется существующим signed gate;
+analytics_sync_test — отсутствует prerequisite PostgreSQL export fixture.
+Они не называются успешными функциональными тестами.
+
+Дополнительно permanent ledger и cooldown используют MariaDB locking reads, чтобы
+ранее созданный consistent-read snapshot не скрыл чужую committed reservation.
+Отдельный race test намеренно создаёт старые snapshots у двух разных сигналов,
+конкурирующих за последнее место в дневном бюджете. Результат нового run нужно
+проверять для актуального SHA PR. Это не снимает перечисленных production блокировок.

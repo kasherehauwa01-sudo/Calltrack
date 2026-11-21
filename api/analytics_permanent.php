@@ -22,12 +22,15 @@ function analyticsPermanentPolicy(PDO $pdo, array $event): array {
 function analyticsPermanentBudget(PDO $pdo, array $event, bool $reserve=false, array $peers=[]): void {
     $p=analyticsPermanentPolicy($pdo,$event); // one policy-row lock serializes all new tasks
     $date=(new DateTimeImmutable('now',new DateTimeZone('Europe/Moscow')))->format('Y-m-d');
-    $s=$pdo->prepare('SELECT COUNT(*) FROM analytics_permanent_reservations WHERE business_date=?');
+    // Current locking reads are required on MariaDB REPEATABLE READ: the inbox
+    // lookup may already have established an older consistent-read snapshot.
+    $locking=$pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql'?' FOR UPDATE':'';
+    $s=$pdo->prepare('SELECT signal_key FROM analytics_permanent_reservations WHERE business_date=? ORDER BY signal_key LIMIT 101'.$locking);
     $s->execute([$date]);
-    if ((int)$s->fetchColumn()>=(int)$p['daily_limit']) throw new DomainException('PERMANENT_DAILY_LIMIT');
+    if (count($s->fetchAll(PDO::FETCH_COLUMN))>=(int)$p['daily_limit']) throw new DomainException('PERMANENT_DAILY_LIMIT');
     if (count($peers)>1000 || array_filter($peers,fn($id)=>!is_string($id))) throw new DomainException('INVALID_REVIEWED_PEERS');
     $ids=array_values(array_unique(array_merge([$event['subject']['key']],$peers)));
-    $s=$pdo->prepare("SELECT created_at,evidence_json FROM manager_tasks WHERE client_namespace='clientsvr' AND client_id IN (".implode(',',array_fill(0,count($ids),'?')).") AND family='INACTIVITY' AND source_signal_key IS NOT NULL ORDER BY created_at DESC LIMIT 1");
+    $s=$pdo->prepare("SELECT created_at,evidence_json FROM manager_tasks WHERE client_namespace='clientsvr' AND client_id IN (".implode(',',array_fill(0,count($ids),'?')).") AND family='INACTIVITY' AND source_signal_key IS NOT NULL ORDER BY created_at DESC LIMIT 1".$locking);
     $s->execute($ids);$old=$s->fetch(PDO::FETCH_ASSOC);
     if ($old) {
         $e=json_decode($old['evidence_json'],true,64,JSON_THROW_ON_ERROR);

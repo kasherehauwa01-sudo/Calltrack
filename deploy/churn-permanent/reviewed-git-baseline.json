@@ -13,7 +13,7 @@
     "api/analytics_manager_pilot_budget.php": "18e6f5836ef73f1eb473e9ff3d08ff95437e7bb48c168db2e0c1d34e65c23188",
     "api/analytics_verified_approval.php": "aeb2b362630875ae063573ccd59dc7450c1d19114f87922e3fffb4b0dbe99e93",
     "api/analytics_source_trust.php": "ffdd51da7724bf5a6f7195bb7a04d9817d7cf84c1d5afe5377cf2c06954414b2",
-    "api/analytics_permanent.php": "268a318c706d4ac83028787634c27e61cebcb9ecfb5bba65ff76fca76480d2be",
+    "api/analytics_permanent.php": "4366299ae65a9b36b7d979812bcacaa9ba2530ee8d06c53f94ccf88eb3538c8c",
     "api/analytics_permanent_cli.php": "127b814b154005a9e63c1b775b53c20c8a960a304015f01afea81039c7b28e8e"
   },
   "patch_sha256": "a7b4723f5d57b1ad3f2e1cac03f98bce5e5dc792ab7ecc73c352312362031f8a"
