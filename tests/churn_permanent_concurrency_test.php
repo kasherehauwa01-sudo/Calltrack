@@ -18,6 +18,7 @@ if(($argv[1]??'')==='worker'){
  }
  exit(1);
 }
+require_once __DIR__.'/../api/analytics_sync.php';
 /** Real Ed25519 -> existing gate -> patched task transaction, synthetic SQLite only. */
 require __DIR__.'/churn_permanent_budget_test.php';
 require_once $root.'/api/analytics_integration.php';
