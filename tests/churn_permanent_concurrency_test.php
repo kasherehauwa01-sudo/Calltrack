@@ -18,9 +18,6 @@ if(($argv[1]??'')==='worker'){
  }
  exit(1);
 }
-?>
-<?php
-declare(strict_types=1);
 /** Real Ed25519 -> existing gate -> patched task transaction, synthetic SQLite only. */
 require __DIR__.'/churn_permanent_budget_test.php';
 require_once $root.'/api/analytics_integration.php';

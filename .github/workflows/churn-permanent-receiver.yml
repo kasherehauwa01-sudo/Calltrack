@@ -19,7 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+          clean: false
+          persist-credentials: false
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -31,6 +33,7 @@ jobs:
           python3 -m py_compile tests/churn_permanent_cli_test.py tests/churn_regression_compare.py
       - name: Installer package (temporary checkout only)
         run: |
+          git fetch --depth=1 origin cfbab96539bbcadcf1963991f77c10ccc78ce5a8
           bash -n scripts/install_churn_permanent.sh
           python3 tests/churn_install_package_test.py
       - name: Existing regressions compared with Production Git baseline
@@ -53,6 +56,9 @@ jobs:
         options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=5s --health-timeout=5s --health-retries=20
     steps:
       - uses: actions/checkout@v4
+        with:
+          clean: false
+          persist-credentials: false
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
