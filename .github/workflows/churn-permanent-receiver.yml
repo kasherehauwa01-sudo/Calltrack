@@ -121,6 +121,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git fetch --depth=1 origin cfbab96539bbcadcf1963991f77c10ccc78ce5a8
           find api tests -name '*.php' -print0 | xargs -0 -n1 php -l > /tmp/php-lint.log
           php -l scripts/check_churn_production_schema.php
