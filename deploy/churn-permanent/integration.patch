@@ -1,0 +1,101 @@
+--- a/api/analytics_integration.php
++++ b/api/analytics_integration.php
+@@ -146,6 +146,25 @@
+             $existing=findAutomaticManagerTask($pdo,(string)$gate['client_id'],['signal_key'=>$signalKey,'evidence'=>['signal'=>$event,'identity_peer_ids'=>$peers,'matching'=>json_decode($binding['evidence'],true)['matching']??null]]);
+             if($existing)$taskId=$existing['id'];
+         }
++        $permanent=isset($event['permanent_policy']);
++        $budgetReason=null;
++        if($permanent){
++            require_once __DIR__.'/analytics_permanent.php';
++            try{
++                analyticsPermanentPolicy($pdo,$event);
++                if(!$taskId&&$gate['allowed']){
++                    analyticsPermanentBudget($pdo,$event,false,$peers);
++                    require_once __DIR__.'/analytics_manager_pilot_budget.php';
++                    assertAnalyticsManagerPilotBudget($pdo,(int)$gate['manager_id'],false);
++                }
++            }catch(AutomationBudgetBlocked $e){
++                $budgetReason=$e->getMessage()==='MANAGER_PILOT_BUDGET_EXHAUSTED'?$e->getMessage():'PERMANENT_POLICY_NOT_APPROVED';
++                $gate['allowed']=false;$gate['reasons'][]=$budgetReason;
++            }catch(DomainException $e){
++                $budgetReason=in_array($e->getMessage(),['PERMANENT_DAILY_LIMIT','PERMANENT_REPEAT_NOT_ALLOWED'],true)?$e->getMessage():'PERMANENT_POLICY_NOT_APPROVED';
++                $gate['allowed']=false;$gate['reasons'][]=$budgetReason;
++            }
++        }else{
+         $budgetReason=null;try{$budgetReason=analyticsBudgetReason(analyticsBudget($pdo,true));}catch(Throwable $e){$budgetReason='BUDGET_UNAVAILABLE';}
+         if(!$budgetReason){try{$budgetReason=analyticsDailyBudgetReason($pdo);}catch(Throwable $e){$budgetReason='DAILY_BUDGET_UNAVAILABLE';}}
+         if(!$budgetReason&&!$taskId&&$gate['allowed']){
+@@ -157,6 +176,7 @@
+                 $budgetReason=$e->getMessage();
+             }
+         }
++        }
+         if($budgetReason&&!$taskId){$gate['allowed']=false;$gate['reasons'][]=$budgetReason;}
+         $decision=$gate['allowed']?'READY':'BLOCKED';$reasons=$gate['reasons'];
+         if($taskId){
+--- a/api/manager_tasks_service.php
++++ b/api/manager_tasks_service.php
+@@ -82,11 +82,17 @@
+         }
+         if($automatic!==null){
+             require_once __DIR__.'/analytics_manager_pilot_budget.php';
+-            assertAnalyticsManagerPilotBudget($pdo, $assignee);
++            assertAnalyticsManagerPilotBudget($pdo, $assignee, !isset($signal['permanent_policy']));
++            $createdAt=new DateTimeImmutable('now',new DateTimeZone('UTC'));
++            if(isset($signal['permanent_policy'])){
++                require_once __DIR__.'/analytics_permanent.php';
++                analyticsPermanentBudget($pdo,$signal,true,$automatic['evidence']['identity_peer_ids']??[]);
++            }else{
+             reserveAnalyticsBudget($pdo);
+             analyticsDailyBudgetPolicy($pdo);
+             $createdAt=new DateTimeImmutable('now',new DateTimeZone('UTC'));
+             reserveAnalyticsDailyBudget($pdo,$createdAt,$automatic['signal_key']);
++            }
+             if(($signal['generator_version']??null)==='inactivity/aviator-churn-pilot/1'){
+                 if(($policy['due_days_by_type']['CHURN_RISK']??null)!==3)throw new DomainException('Pilot requires three calendar days');
+                 $due=analyticsPilotDue($createdAt,3);
+--- a/api/analytics_manager_pilot_budget.php
++++ b/api/analytics_manager_pilot_budget.php
+@@ -3,7 +3,7 @@
+ require_once __DIR__.'/analytics_budget_service.php';
+ 
+ /** Lifetime cap by original assignee; caller must hold the task transaction. */
+-function assertAnalyticsManagerPilotBudget(PDO $pdo, int $manager): void {
++function assertAnalyticsManagerPilotBudget(PDO $pdo, int $manager, bool $checkPilotLifetime=true): void {
+     if (!$pdo->inTransaction()) {
+         throw new AutomationBudgetBlocked('MANAGER_BUDGET_TRANSACTION_REQUIRED');
+     }
+@@ -13,7 +13,7 @@
+ 
+     // Serialize with every automatic task reservation.
+     $budget = analyticsBudget($pdo, true);
+-    if ($reason = analyticsBudgetReason($budget)) {
++    if ($checkPilotLifetime && ($reason = analyticsBudgetReason($budget))) {
+         throw new AutomationBudgetBlocked($reason);
+     }
+ 
+--- a/api/analytics_verified_approval.php
++++ b/api/analytics_verified_approval.php
+@@ -41,6 +41,10 @@
+   if(!is_array($required)||!array_is_list($required)||!$required||array_filter($required,fn($value)=>!analyticsKnownEvidenceText($value))||count(array_unique($required))!==count($required)||!is_array($revisions))throw new DomainException('Required primary sources not approved');
+   $actual=array_keys($revisions);$expected=$required;sort($actual);sort($expected);
+   if($actual!==$expected||array_filter($revisions,fn($revision)=>!analyticsKnownEvidenceText($revision)))throw new DomainException('Incomplete primary source set');
++  if(($policy['source_trust_mode']??'INDEPENDENT')==='TRUSTED_IMPORT'
++    && (($revisions['sales_ftp']??null)!==(string)($source['source_revision']??'')
++        || ($revisions['clientsvr']??null)!==($source['clients_revision']??null)))
++   throw new DomainException('Trusted source revisions disagree');
+   if(!is_int($source['fact_count']??null)||$source['fact_count']<1||!preg_match('/^[a-f0-9]{64}$/D',(string)($source['facts_hash']??'')))throw new DomainException('Missing primary facts evidence');
+   if(!is_array($source['assignments']??null)||!array_is_list($source['assignments'])||!is_array($source['review_groups']??null)||!array_is_list($source['review_groups'])
+     ||!is_int($source['candidate_count']??null)||!is_int($source['reviewed_count']??null)||$source['reviewed_count']!==count($source['assignments'])||$source['reviewed_count']!==count($source['review_groups'])||$source['candidate_count']<$source['reviewed_count'])throw new DomainException('Incomplete reviewed candidate set');
+--- a/api/analytics_source_trust.php
++++ b/api/analytics_source_trust.php
+@@ -8,7 +8,7 @@
+  if($mode==='TRUSTED_IMPORT'&&(!is_string($approval)||trim($approval)===''||in_array(strtoupper(trim($approval)),['UNKNOWN','UNSET','NULL','NONE'],true)))throw new DomainException('Explicit import trust approval required');
+  if($manifest!==null){
+   if($mode==='TRUSTED_IMPORT'){
+-   if(($manifest['source_trust_mode']??null)!==$mode||($manifest['import_trust_approval_id']??null)!==$approval||($manifest['complete']??null)!==false||!is_string($manifest['as_of']??null)||($manifest['declared_complete_through']??null)!==$manifest['as_of'])throw new DomainException('Invalid trusted import declaration');
++   if(($manifest['source_trust_mode']??null)!==$mode||($manifest['import_trust_approval_id']??null)!==$approval||($manifest['complete']??null)!==false||!is_string($manifest['as_of']??null)||($manifest['declared_complete_through']??null)!==$manifest['as_of']||($manifest['complete_through']??null)!==$manifest['as_of'])throw new DomainException('Invalid trusted import declaration');
+   }elseif(($manifest['source_trust_mode']??'INDEPENDENT')!=='INDEPENDENT'||($manifest['complete']??null)!==true)throw new DomainException('Independent completeness required');
+  }
+  return ['method'=>$mode==='TRUSTED_IMPORT'?'OWNER_TRUSTED_IMPORT_SIGNED_V1':'INDEPENDENT_SIGNED_UPSTREAM_MANIFEST_V1','coverage_status'=>$mode==='TRUSTED_IMPORT'?'DECLARED':'CONFIRMED','business_freshness'=>$mode==='TRUSTED_IMPORT'?'DECLARED_CURRENT':'CURRENT'];

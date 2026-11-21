@@ -82,11 +82,17 @@ function createManagerTask(PDO $pdo,array $actor,array $input,?array $automatic=
         }
         if($automatic!==null){
             require_once __DIR__.'/analytics_manager_pilot_budget.php';
-            assertAnalyticsManagerPilotBudget($pdo, $assignee);
+            assertAnalyticsManagerPilotBudget($pdo, $assignee, !isset($signal['permanent_policy']));
+            $createdAt=new DateTimeImmutable('now',new DateTimeZone('UTC'));
+            if(isset($signal['permanent_policy'])){
+                require_once __DIR__.'/analytics_permanent.php';
+                analyticsPermanentBudget($pdo,$signal,true,$automatic['evidence']['identity_peer_ids']??[]);
+            }else{
             reserveAnalyticsBudget($pdo);
             analyticsDailyBudgetPolicy($pdo);
             $createdAt=new DateTimeImmutable('now',new DateTimeZone('UTC'));
             reserveAnalyticsDailyBudget($pdo,$createdAt,$automatic['signal_key']);
+            }
             if(($signal['generator_version']??null)==='inactivity/aviator-churn-pilot/1'){
                 if(($policy['due_days_by_type']['CHURN_RISK']??null)!==3)throw new DomainException('Pilot requires three calendar days');
                 $due=analyticsPilotDue($createdAt,3);

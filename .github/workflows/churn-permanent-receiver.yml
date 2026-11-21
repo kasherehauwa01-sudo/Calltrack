@@ -1,0 +1,83 @@
+name: Churn permanent receiver
+on:
+  push:
+    branches: [feat/churn-permanent-receiver]
+  pull_request:
+    paths:
+      - 'api/analytics_*.php'
+      - 'api/manager_tasks_service.php'
+      - 'database/20261121_analytics_permanent.sql'
+      - 'tests/churn_*.php'
+      - 'tests/churn_*.py'
+      - 'tests/fixtures/analytics/**'
+      - '.github/workflows/churn-permanent-receiver.yml'
+permissions:
+  contents: read
+jobs:
+  sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sqlite3, sodium, mbstring, posix
+          coverage: none
+      - name: Syntax
+        run: |
+          find api tests -name '*.php' -print0 | xargs -0 -n1 php -l > /tmp/php-lint.log
+          python3 -m py_compile tests/churn_permanent_cli_test.py tests/churn_regression_compare.py
+      - name: Installer package (temporary checkout only)
+        run: |
+          bash -n scripts/install_churn_permanent.sh
+          python3 tests/churn_install_package_test.py
+      - name: Existing regressions compared with Production Git baseline
+        run: python3 tests/churn_regression_compare.py
+      - name: Permanent policy, signatures and preliminary matching
+        run: |
+          php tests/churn_permanent_page_test.php
+          php tests/churn_permanent_budget_test.php
+          php tests/churn_permanent_signed_test.php
+  mariadb:
+    runs-on: ubuntu-latest
+    services:
+      analytics-test-mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
+          MARIADB_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, pdo_sqlite, sqlite3, sodium, mbstring, posix
+          coverage: none
+      - name: Isolated MariaDB network name
+        run: echo '127.0.0.1 analytics-test-mariadb' | sudo tee -a /etc/hosts
+      - name: Signed delivery, task transaction, CLI, rollback and races
+        env:
+          ANALYTICS_TASK_TEST_USER: root
+          ANALYTICS_TASK_TEST_PASSWORD: ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          reset_db() {
+            [[ "$1" == analytics_tasks_test || "$1" == analytics_race_test ]]
+            php -r '$p=new PDO("mysql:host=analytics-test-mariadb","root","");$n=$argv[1];if(!in_array($n,["analytics_tasks_test","analytics_race_test"],true))exit(1);$p->exec("DROP DATABASE IF EXISTS ".$n);$p->exec("CREATE DATABASE ".$n." CHARACTER SET utf8mb4");' "$1"
+          }
+          for test in churn_permanent_budget_test.php churn_permanent_signed_test.php; do
+            reset_db analytics_tasks_test
+            ANALYTICS_TASK_TEST_DSN='mysql:host=analytics-test-mariadb;dbname=analytics_tasks_test' php "tests/$test"
+          done
+          reset_db analytics_tasks_test
+          ANALYTICS_TASK_TEST_DSN='mysql:host=analytics-test-mariadb;dbname=analytics_tasks_test' python3 tests/churn_permanent_cli_test.py
+          reset_db analytics_race_test
+          ANALYTICS_TASK_TEST_DSN='mysql:host=analytics-test-mariadb;dbname=analytics_race_test' php tests/analytics_concurrency_test.php
+          reset_db analytics_race_test
+          ANALYTICS_TASK_TEST_DSN='mysql:host=analytics-test-mariadb;dbname=analytics_race_test' php tests/churn_permanent_concurrency_test.php

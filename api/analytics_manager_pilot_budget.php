@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/analytics_budget_service.php';
 
 /** Lifetime cap by original assignee; caller must hold the task transaction. */
-function assertAnalyticsManagerPilotBudget(PDO $pdo, int $manager): void {
+function assertAnalyticsManagerPilotBudget(PDO $pdo, int $manager, bool $checkPilotLifetime=true): void {
     if (!$pdo->inTransaction()) {
         throw new AutomationBudgetBlocked('MANAGER_BUDGET_TRANSACTION_REQUIRED');
     }
@@ -13,7 +13,7 @@ function assertAnalyticsManagerPilotBudget(PDO $pdo, int $manager): void {
 
     // Serialize with every automatic task reservation.
     $budget = analyticsBudget($pdo, true);
-    if ($reason = analyticsBudgetReason($budget)) {
+    if ($checkPilotLifetime && ($reason = analyticsBudgetReason($budget))) {
         throw new AutomationBudgetBlocked($reason);
     }
 
