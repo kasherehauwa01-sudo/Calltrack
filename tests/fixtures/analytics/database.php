@@ -27,6 +27,12 @@ function analyticsTestDatabase(): PDO {
         $pdo->exec($sql);
     }
 
+    // User-confirmed production lifecycle columns. Disposable fixture only;
+    // these ALTERs are not a production migration.
+    $pdo->exec('ALTER TABLE manager_tasks ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL');
+    $pdo->exec('ALTER TABLE analytics_open_task_slots ADD COLUMN reopened_slot_key CHAR(64) NULL');
+    $pdo->exec('CREATE INDEX ix_analytics_reopened_slot ON analytics_open_task_slots(reopened_slot_key)');
+
     // SQLite-only synthetic budget fixtures. Never touch production MariaDB.
     if (!$mysql) {
         $pdo->exec("CREATE TABLE analytics_task_budget (

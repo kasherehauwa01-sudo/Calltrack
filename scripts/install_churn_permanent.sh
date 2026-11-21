@@ -11,6 +11,8 @@ for tool in php patch sha256sum flock; do command -v "$tool" >/dev/null; done
 verify_before() {
  php -r '
  $p=json_decode(file_get_contents($argv[1]),true,32,JSON_THROW_ON_ERROR);
+ if(($p["baseline_kind"]??null)!=="firstvds-production-lifecycle-user-diff")exit(1);
+ if(!hash_equals($p["production_overlay"]["sha256"],hash_file("sha256",$argv[3]."/".$p["production_overlay"]["path"])))exit(1);
  if(!hash_equals($p["patch_sha256"],hash_file("sha256",$argv[3]."/deploy/churn-permanent/integration.patch")))exit(1);
  foreach($p["before"] as $name=>$hash){
   if(!preg_match("~^api/[a-z_]+[.]php$~D",$name)||!preg_match("/^[a-f0-9]{64}$/D",$hash))exit(1);
@@ -29,7 +31,7 @@ verify_before() {
  patch --dry-run --batch --forward --fuzz=0 -d "$root" -p1 < "$patchfile" >/dev/null
 }
 verify_before
-echo 'Exact reviewed Git baseline matches. This does not approve schema, keys, policy or production lifecycle compatibility.'
+echo 'Exact reviewed production lifecycle baseline matches. This does not approve schema, keys, policy or production lifecycle compatibility.'
 [[ "$mode" == --apply ]] || exit 0
 [[ $EUID == 0 ]] || { echo 'Root operator required'; exit 1; }
 # No service or configuration is changed by this script.
@@ -41,7 +43,11 @@ done
 exec 9>/run/lock/calltrack-churn-install.lock
 flock -n 9
 verify_before
+# This reads the real API config and information_schema only. No auto-DDL.
+php "$package/scripts/check_churn_production_schema.php"
 backup=$(mktemp -d /var/backups/calltrack-churn.XXXXXXXX)
+cp -a -- "$review" "$backup/reviewed-baseline.json"
+cp -a -- "$patchfile" "$backup/integration.patch"
 files=(analytics_integration.php manager_tasks_service.php analytics_manager_pilot_budget.php analytics_verified_approval.php analytics_source_trust.php)
 for file in "${files[@]}"; do cp -a -- "$root/api/$file" "$backup/$file"; done
 switched=0

@@ -2,19 +2,38 @@
   "base_commit": "cfbab96539bbcadcf1963991f77c10ccc78ce5a8",
   "before": {
     "api/analytics_integration.php": "abfbef560abcda54b3c479d1f6cf731b687aa09e685f37c187cecd6e1a01140d",
-    "api/manager_tasks_service.php": "8f6382d514f0ad4d7e22bacf9b92ce24b5222c16e003065f4cfa10c567f58f7d",
+    "api/manager_tasks_service.php": "79adb9cf875086f795e3acdbd46b29e71aad9ec625843902d8384e5ceac6d4f6",
     "api/analytics_manager_pilot_budget.php": "0c645d073bbf60a7446dfbf539902eefc2564be8eb6eee9ce6cdeaee08859990",
     "api/analytics_verified_approval.php": "9f993c8dd96a811257a16cb34a0ac9a6383f1c5af7f58032e461afbc4de8a742",
-    "api/analytics_source_trust.php": "ca27a5d28e894c3b9650df753d75ef2875882c8ecec4ca64b32d5e485b50df4f"
+    "api/analytics_source_trust.php": "ca27a5d28e894c3b9650df753d75ef2875882c8ecec4ca64b32d5e485b50df4f",
+    "api/manager_tasks.php": "f368ca7cadfa68615a3a93ce04103607cff5d1b48661b8e09e0d301f9219d1de",
+    "api/manager_tasks_view.php": "aa0e698182b7144b02a4df91ae15478bc828a31ea66bc6c331c4e9fe7de6ddfe"
   },
   "after": {
     "api/analytics_integration.php": "419620ccc097cd1adde4393bdd0be55e97279552af769021f5e331195f927c4a",
-    "api/manager_tasks_service.php": "932ebd8e37c421026ce76565ee7c4dc906a92a764a61debb77756625f0d3cc59",
+    "api/manager_tasks_service.php": "9ae0c87e1870c34577a9778c4cf83b1a3758cb0a6d9b146e073ad8b50a81d30f",
     "api/analytics_manager_pilot_budget.php": "18e6f5836ef73f1eb473e9ff3d08ff95437e7bb48c168db2e0c1d34e65c23188",
     "api/analytics_verified_approval.php": "aeb2b362630875ae063573ccd59dc7450c1d19114f87922e3fffb4b0dbe99e93",
     "api/analytics_source_trust.php": "ffdd51da7724bf5a6f7195bb7a04d9817d7cf84c1d5afe5377cf2c06954414b2",
     "api/analytics_permanent.php": "4366299ae65a9b36b7d979812bcacaa9ba2530ee8d06c53f94ccf88eb3538c8c",
-    "api/analytics_permanent_cli.php": "127b814b154005a9e63c1b775b53c20c8a960a304015f01afea81039c7b28e8e"
+    "api/analytics_permanent_cli.php": "127b814b154005a9e63c1b775b53c20c8a960a304015f01afea81039c7b28e8e",
+    "api/manager_tasks.php": "f368ca7cadfa68615a3a93ce04103607cff5d1b48661b8e09e0d301f9219d1de",
+    "api/manager_tasks_view.php": "aa0e698182b7144b02a4df91ae15478bc828a31ea66bc6c331c4e9fe7de6ddfe"
   },
-  "patch_sha256": "a7b4723f5d57b1ad3f2e1cac03f98bce5e5dc792ab7ecc73c352312362031f8a"
+  "patch_sha256": "c6d9b247da3bff354c03956bf61a97793c4ad94cae558c19c26ec5b2e4bda265",
+  "baseline_kind": "firstvds-production-lifecycle-user-diff",
+  "production_overlay": {
+    "path": "deploy/churn-permanent/production-lifecycle.patch",
+    "sha256": "b9dd0a99aa2f35d9db3137bddd17eda46e82f9e7a03e6042a2c547380ab28df6",
+    "before": {
+      "api/manager_tasks_service.php": "8f6382d514f0ad4d7e22bacf9b92ce24b5222c16e003065f4cfa10c567f58f7d",
+      "api/manager_tasks.php": "29df6bbc9eed79e6c9c98e58b0dfcb40b7a6afd82684ea2840c29fdb45ee3c7a",
+      "api/manager_tasks_view.php": "3ed9ccb28f02eab25c0b6d7f838a54e68b4e11cda6a66553cc5d8ec57c9fbd48"
+    },
+    "after": {
+      "api/manager_tasks_service.php": "79adb9cf875086f795e3acdbd46b29e71aad9ec625843902d8384e5ceac6d4f6",
+      "api/manager_tasks.php": "f368ca7cadfa68615a3a93ce04103607cff5d1b48661b8e09e0d301f9219d1de",
+      "api/manager_tasks_view.php": "aa0e698182b7144b02a4df91ae15478bc828a31ea66bc6c331c4e9fe7de6ddfe"
+    }
+  }
 }

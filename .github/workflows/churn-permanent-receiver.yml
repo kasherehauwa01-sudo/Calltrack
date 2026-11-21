@@ -16,6 +16,10 @@ permissions:
 jobs:
   sqlite:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.5.12']
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,12 +28,17 @@ jobs:
           persist-credentials: false
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '${{ matrix.php }}'
           extensions: pdo_sqlite, sqlite3, sodium, mbstring, posix
           coverage: none
+      - name: Verify selected PHP
+        env:
+          EXPECTED_PHP: ${{ matrix.php }}
+        run: php -r '$e=getenv("EXPECTED_PHP");echo PHP_VERSION,PHP_EOL;if($e==="8.5.12"&&PHP_VERSION!==$e)exit(1);'
       - name: Syntax
         run: |
           find api tests -name '*.php' -print0 | xargs -0 -n1 php -l > /tmp/php-lint.log
+          php -l scripts/check_churn_production_schema.php
           python3 -m py_compile tests/churn_permanent_cli_test.py tests/churn_regression_compare.py
       - name: Installer package (temporary checkout only)
         run: |
@@ -43,11 +52,21 @@ jobs:
           php tests/churn_permanent_page_test.php
           php tests/churn_permanent_budget_test.php
           php tests/churn_permanent_signed_test.php
+          php tests/churn_production_lifecycle_test.php
+          php tests/manager_tasks_view_test.php
   mariadb:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.3'
+            mariadb: '10.11'
+          - php: '8.5.12'
+            mariadb: '11.8.6'
     services:
       analytics-test-mariadb:
-        image: mariadb:10.11
+        image: mariadb:${{ matrix.mariadb }}
         env:
           MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
           MARIADB_ROOT_HOST: '%'
@@ -61,23 +80,29 @@ jobs:
           persist-credentials: false
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '${{ matrix.php }}'
           extensions: pdo_mysql, pdo_sqlite, sqlite3, sodium, mbstring, posix
           coverage: none
+      - name: Verify selected PHP
+        env:
+          EXPECTED_PHP: ${{ matrix.php }}
+        run: php -r '$e=getenv("EXPECTED_PHP");echo PHP_VERSION,PHP_EOL;if($e==="8.5.12"&&PHP_VERSION!==$e)exit(1);'
       - name: Isolated MariaDB network name
         run: echo '127.0.0.1 analytics-test-mariadb' | sudo tee -a /etc/hosts
       - name: Signed delivery, task transaction, CLI, rollback and races
         env:
           ANALYTICS_TASK_TEST_USER: root
           ANALYTICS_TASK_TEST_PASSWORD: ''
+          EXPECTED_MARIADB: ${{ matrix.mariadb }}
         shell: bash
         run: |
           set -euo pipefail
+          php -r '$p=new PDO("mysql:host=analytics-test-mariadb","root","");$v=$p->query("SELECT VERSION()")->fetchColumn();echo "MariaDB: ".$v.PHP_EOL;if(getenv("EXPECTED_MARIADB")==="11.8.6"&&!str_starts_with($v,"11.8.6-"))exit(1);'
           reset_db() {
             [[ "$1" == analytics_tasks_test || "$1" == analytics_race_test ]]
             php -r '$p=new PDO("mysql:host=analytics-test-mariadb","root","");$n=$argv[1];if(!in_array($n,["analytics_tasks_test","analytics_race_test"],true))exit(1);$p->exec("DROP DATABASE IF EXISTS ".$n);$p->exec("CREATE DATABASE ".$n." CHARACTER SET utf8mb4");' "$1"
           }
-          for test in churn_permanent_budget_test.php churn_permanent_signed_test.php; do
+          for test in churn_permanent_budget_test.php churn_permanent_signed_test.php churn_production_lifecycle_test.php; do
             reset_db analytics_tasks_test
             ANALYTICS_TASK_TEST_DSN='mysql:host=analytics-test-mariadb;dbname=analytics_tasks_test' php "tests/$test"
           done

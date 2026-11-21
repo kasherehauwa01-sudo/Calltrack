@@ -8,9 +8,9 @@ function check(bool $ok,string $message):void{if(!$ok)throw new RuntimeException
 function rejects(callable $fn,string $class):void{try{$fn();}catch(Throwable $e){check($e instanceof $class,'Wrong exception: '.get_class($e));return;}throw new RuntimeException('Expected rejection');}
 $p=new PDO('sqlite::memory:');$p->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
 $p->exec('CREATE TABLE web_users(id INTEGER PRIMARY KEY, display_name TEXT, role TEXT,is_active INTEGER); INSERT INTO web_users VALUES(1,"Первый","manager",1),(2,"Второй","manager",1)');
-$p->exec('CREATE TABLE manager_tasks(id TEXT PRIMARY KEY,client_id TEXT,title TEXT,assignee_id INTEGER,status TEXT,priority TEXT,due_at TEXT,version INTEGER DEFAULT 1,evidence_json TEXT,family TEXT,result TEXT,description TEXT,updated_at TEXT,created_at TEXT DEFAULT "2026-01-01 00:00:00")');
+$p->exec('CREATE TABLE manager_tasks(id TEXT PRIMARY KEY,client_id TEXT,title TEXT,assignee_id INTEGER,status TEXT,priority TEXT,due_at TEXT,version INTEGER DEFAULT 1,evidence_json TEXT,family TEXT,result TEXT,description TEXT,updated_at TEXT,deleted_at TIMESTAMP NULL,created_at TEXT DEFAULT "2026-01-01 00:00:00")');
 $p->exec('CREATE TABLE manager_task_events(task_id TEXT,actor_id INTEGER,event_type TEXT,data_json TEXT)');
-$p->exec('CREATE TABLE analytics_open_task_slots(slot_key TEXT,task_id TEXT)');
+$p->exec('CREATE TABLE analytics_open_task_slots(slot_key TEXT PRIMARY KEY,task_id TEXT UNIQUE,reopened_slot_key CHAR(64) NULL)');
 $e=json_encode(['signal'=>['signal_type'=>'CHURN_RISK','last_purchase'=>'2026-08-27','metrics'=>['median_interval'=>20,'days_without_purchase'=>60]]]);
 $q=$p->prepare('INSERT INTO manager_tasks(id,client_id,title,assignee_id,status,priority,evidence_json,family,result,description) VALUES(?,?,?,?,?,?,?,?,?,?)');
 for($i=1;$i<=55;$i++)$q->execute([sprintf('%03d',$i),'c1','Риск ухода клиента',1,'OPEN','NORMAL',$e,'INACTIVITY','','Old']);
@@ -27,12 +27,16 @@ check(taskViewDescription(['evidence_json'=>$e])==='Частота покупо�
 updateManagerTask($p,$m,'060',['version'=>1,'status'=>'DONE','result'=>'Исправлено']);
 check($p->query("SELECT result FROM manager_tasks WHERE id='060'")->fetchColumn()==='Исправлено','Done editable');
 rejects(fn()=>updateManagerTask($p,$m,'060',['version'=>1,'result'=>'stale']),TaskConflict::class);
-rejects(fn()=>updateManagerTask($p,$m,'060',['version'=>2,'status'=>'OPEN']),TaskConflict::class);
+updateManagerTask($p,$m,'060',['version'=>2,'status'=>'OPEN']);
+check($p->query("SELECT status FROM manager_tasks WHERE id='060'")->fetchColumn()==='OPEN','Production completed task can reopen');
+updateManagerTask($p,$m,'060',['version'=>3,'status'=>'DONE','result'=>'Исправлено']);
 rejects(fn()=>updateManagerTask($p,$m,'061',['version'=>1,'result'=>'other']),DomainException::class);
 rejects(fn()=>updateManagerTask($p,$boss,'001',['version'=>1,'result'=>'other']),DomainException::class);
 rejects(fn()=>updateManagerTask($p,$m,'001',['version'=>1,'priority'=>'HIGH']),DomainException::class);
-rejects(fn()=>updateManagerTask($p,$m,'001',['version'=>1,'status'=>'DONE','result'=>'']),InvalidArgumentException::class);
-$p->exec("INSERT INTO analytics_open_task_slots VALUES('slot','001')");updateManagerTask($p,$m,'001',['version'=>1,'status'=>'DONE','result'=>'Связались']);check($p->query('SELECT COUNT(*) FROM analytics_open_task_slots')->fetchColumn()==0,'Slot released');
+updateManagerTask($p,$m,'001',['version'=>1,'status'=>'DONE','result'=>'']);
+check($p->query("SELECT result FROM manager_tasks WHERE id='001'")->fetchColumn()==='','Production completion permits empty result');
+updateManagerTask($p,$m,'001',['version'=>2,'status'=>'OPEN']);
+check((int)$p->query('SELECT COUNT(*) FROM analytics_open_task_slots')->fetchColumn()===1,'Reopen slot retained');updateManagerTask($p,$m,'001',['version'=>3,'status'=>'DONE','result'=>'Связались']);check($p->query('SELECT COUNT(*) FROM analytics_open_task_slots')->fetchColumn()==0,'Slot released');
 echo "PASS: scoped counts, filters, pagination, dynamic types, description, completed editing, conflicts, permissions, slots\n";
 
 $q->execute(['090','c2','Legacy',1,'OPEN','NORMAL','{broken','MANUAL','','']);

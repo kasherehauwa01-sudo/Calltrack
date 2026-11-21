@@ -28,6 +28,7 @@ function taskViewScope(array $user): array {
 }
 function taskViewList(PDO $pdo, array $user, array $input): array {
     [$scope,$params] = taskViewScope($user);
+    $scope .= ' AND t.deleted_at IS NULL';
     $q=$pdo->prepare("SELECT COUNT(*) FROM manager_tasks t WHERE $scope AND t.status IN ('OPEN','IN_PROGRESS')");
     $q->execute($params); $count=(int)$q->fetchColumn();
     if (($input['count_only'] ?? '') === '1') return ['status'=>'success','unfinished_count'=>$count];
