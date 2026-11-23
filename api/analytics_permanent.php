@@ -21,6 +21,11 @@ function analyticsPermanentPolicy(PDO $pdo, array $event): array {
 /** Atomic check and reservation are inside the existing task/inbox transaction. */
 function analyticsPermanentBudget(PDO $pdo, array $event, bool $reserve=false, array $peers=[]): void {
     $p=analyticsPermanentPolicy($pdo,$event); // one policy-row lock serializes all new tasks
+    require_once __DIR__.'/analytics_manager_pilot_budget.php';
+    // Keep the approved manager scope without reading or resetting pilot limits.
+    $manager=$event['assignment']['manager_id']??null;
+    if(!is_int($manager))throw new DomainException('PERMANENT_MANAGER_INVALID');
+    assertAnalyticsAutomaticManager($pdo,$manager);
     $date=(new DateTimeImmutable('now',new DateTimeZone('Europe/Moscow')))->format('Y-m-d');
     // Current locking reads are required on MariaDB REPEATABLE READ: the inbox
     // lookup may already have established an older consistent-read snapshot.

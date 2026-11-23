@@ -63,8 +63,6 @@ $card=['id'=>'signed-client','name'=>'Synthetic Customer','phones'=>[], 'fields'
 $directory->prepare('INSERT INTO clients VALUES(?,?)')->execute([$card['id'],json_encode($card,JSON_THROW_ON_ERROR)]);
 $directory=null;
 $admin=['id'=>1,'role'=>'admin'];saveManagerBinding($db,$admin,'Signed Owner',3,null);
-if($db->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql')$db->exec("INSERT INTO web_users(id,display_name,role,is_active,login,pin_hash) VALUES(6,'Synthetic alternate manager','manager',1,'fixture6@example.test','synthetic-disabled-login')");
-else $db->exec("INSERT INTO web_users VALUES(6,'Synthetic alternate manager','manager',1)");
 $managers=managerBindingRows($db);$cache=clientCatalogRevision();
 $scope=['policy'=>'aviatorov-wholesale-corporate/2','department'=>'Авиаторов','buyer_types'=>['Оптовик','Корпоративный']];
 $nameEvent=['subject'=>['kind'=>'normalized_name','version'=>1,'key'=>'synthetic customer'],'run'=>['scope'=>$scope]];
@@ -170,3 +168,5 @@ $decisions=[file_get_contents($context.'.result-1'),file_get_contents($context.'
 check($decisions===['blocked','reserved'],'only one different signal gets final daily slot');
 check((int)$db->query('SELECT COUNT(*) FROM analytics_permanent_reservations')->fetchColumn()===2,'daily cap holds under old snapshots');
 echo "churn_permanent_concurrency_test: different-signal daily-cap race under REPEATABLE READ OK\n";
+
+check(pilotHistorySnapshot($db)===$pilotHistory,'concurrent delivery and reservations never alter pilot history');

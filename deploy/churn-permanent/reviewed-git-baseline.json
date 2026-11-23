@@ -10,17 +10,17 @@
     "api/manager_tasks_view.php": "aa0e698182b7144b02a4df91ae15478bc828a31ea66bc6c331c4e9fe7de6ddfe"
   },
   "after": {
-    "api/analytics_integration.php": "419620ccc097cd1adde4393bdd0be55e97279552af769021f5e331195f927c4a",
-    "api/manager_tasks_service.php": "9ae0c87e1870c34577a9778c4cf83b1a3758cb0a6d9b146e073ad8b50a81d30f",
-    "api/analytics_manager_pilot_budget.php": "18e6f5836ef73f1eb473e9ff3d08ff95437e7bb48c168db2e0c1d34e65c23188",
+    "api/analytics_integration.php": "e99addefd9de420341463b40e792e019b0afabd23bfc7ffb9e43b8d24ef6ef10",
+    "api/manager_tasks_service.php": "8f9afeaa91f26d1015ab46e4b5da86f3cf26d14716b0df110c707ad9a2fd8d01",
+    "api/analytics_manager_pilot_budget.php": "7de73e9be8e991b249f5fe23b28479eb40b5cce5520f94e854d0cd11d5b495c6",
     "api/analytics_verified_approval.php": "aeb2b362630875ae063573ccd59dc7450c1d19114f87922e3fffb4b0dbe99e93",
     "api/analytics_source_trust.php": "ffdd51da7724bf5a6f7195bb7a04d9817d7cf84c1d5afe5377cf2c06954414b2",
-    "api/analytics_permanent.php": "4366299ae65a9b36b7d979812bcacaa9ba2530ee8d06c53f94ccf88eb3538c8c",
+    "api/analytics_permanent.php": "c924907fcd593fd7f9adc5dc95067429a5221af36ebde3913ce3ea6a992f550a",
     "api/analytics_permanent_cli.php": "127b814b154005a9e63c1b775b53c20c8a960a304015f01afea81039c7b28e8e",
     "api/manager_tasks.php": "f368ca7cadfa68615a3a93ce04103607cff5d1b48661b8e09e0d301f9219d1de",
     "api/manager_tasks_view.php": "aa0e698182b7144b02a4df91ae15478bc828a31ea66bc6c331c4e9fe7de6ddfe"
   },
-  "patch_sha256": "c6d9b247da3bff354c03956bf61a97793c4ad94cae558c19c26ec5b2e4bda265",
+  "patch_sha256": "5c79d6b801004b7cc17e52fa88f8ed7271da0588f4c9c2487678f9924f9bfba1",
   "baseline_kind": "firstvds-production-lifecycle-user-diff",
   "production_overlay": {
     "path": "deploy/churn-permanent/production-lifecycle.patch",

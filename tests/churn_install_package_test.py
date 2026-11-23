@@ -27,6 +27,13 @@ with tempfile.TemporaryDirectory(prefix="churn-install-check-") as directory:
     subprocess.run(["patch", "--batch", "--forward", "--fuzz=0", "-p1"], cwd=target, input=patch, check=True)
     for name, expected in review["before"].items():
         assert digest(target/name) == expected, name
+    # Review boundary: the receiver may change only the automatic budget block.
+    # All production ACL, soft-delete, reopen and dedup code must remain byte-identical.
+    def outside_budget_block(content):
+        start = content.rindex("        if($automatic!==null){")
+        end = content.index("            if(($signal['generator_version']", start)
+        return content[:start], content[end:]
+    assert outside_budget_block((target/"api/manager_tasks_service.php").read_text()) == outside_budget_block((root/"api/manager_tasks_service.php").read_text())
     # Execute the real --check logic with only the fixed filesystem root/package
     # assignments substituted in a temporary copy. Never call --apply or the VPS.
     script = (root/"scripts/install_churn_permanent.sh").read_text()

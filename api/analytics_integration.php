@@ -154,11 +154,9 @@ function processAnalyticsEvent(PDO $pdo,array $event,?array $client,array $polic
                 analyticsPermanentPolicy($pdo,$event);
                 if(!$taskId&&$gate['allowed']){
                     analyticsPermanentBudget($pdo,$event,false,$peers);
-                    require_once __DIR__.'/analytics_manager_pilot_budget.php';
-                    assertAnalyticsManagerPilotBudget($pdo,(int)$gate['manager_id'],false);
                 }
             }catch(AutomationBudgetBlocked $e){
-                $budgetReason=$e->getMessage()==='MANAGER_PILOT_BUDGET_EXHAUSTED'?$e->getMessage():'PERMANENT_POLICY_NOT_APPROVED';
+                $budgetReason=$e->getMessage()==='MANAGER_OUTSIDE_PILOT'?$e->getMessage():'PERMANENT_POLICY_NOT_APPROVED';
                 $gate['allowed']=false;$gate['reasons'][]=$budgetReason;
             }catch(DomainException $e){
                 $budgetReason=in_array($e->getMessage(),['PERMANENT_DAILY_LIMIT','PERMANENT_REPEAT_NOT_ALLOWED'],true)?$e->getMessage():'PERMANENT_POLICY_NOT_APPROVED';

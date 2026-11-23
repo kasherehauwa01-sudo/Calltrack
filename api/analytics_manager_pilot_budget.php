@@ -2,18 +2,22 @@
 declare(strict_types=1);
 require_once __DIR__.'/analytics_budget_service.php';
 
-/** Lifetime cap by original assignee; caller must hold the task transaction. */
-function assertAnalyticsManagerPilotBudget(PDO $pdo, int $manager, bool $checkPilotLifetime=true): void {
+/** Shared eligibility, independent of either budget policy. */
+function assertAnalyticsAutomaticManager(PDO $pdo, int $manager): void {
     if (!$pdo->inTransaction()) {
         throw new AutomationBudgetBlocked('MANAGER_BUDGET_TRANSACTION_REQUIRED');
     }
     if (!in_array($manager, [3, 6], true)) {
         throw new AutomationBudgetBlocked('MANAGER_OUTSIDE_PILOT');
     }
+}
 
-    // Serialize with every automatic task reservation.
+/** Pilot-only lifetime limits. Historical accounting is deliberately unchanged. */
+function assertAnalyticsManagerPilotBudget(PDO $pdo, int $manager): void {
+    assertAnalyticsAutomaticManager($pdo, $manager);
+    // Serialize pilot reservations; permanent uses its own policy-row lock.
     $budget = analyticsBudget($pdo, true);
-    if ($checkPilotLifetime && ($reason = analyticsBudgetReason($budget))) {
+    if ($reason = analyticsBudgetReason($budget)) {
         throw new AutomationBudgetBlocked($reason);
     }
 

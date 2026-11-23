@@ -12,8 +12,6 @@ $card=['id'=>'signed-client','name'=>'Synthetic Customer','phones'=>[], 'fields'
 $directory->prepare('INSERT INTO clients VALUES(?,?)')->execute([$card['id'],json_encode($card,JSON_THROW_ON_ERROR)]);
 $directory=null;
 $admin=['id'=>1,'role'=>'admin'];saveManagerBinding($db,$admin,'Signed Owner',3,null);
-if($db->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql')$db->exec("INSERT INTO web_users(id,display_name,role,is_active,login,pin_hash) VALUES(6,'Synthetic alternate manager','manager',1,'fixture6@example.test','synthetic-disabled-login')");
-else $db->exec("INSERT INTO web_users VALUES(6,'Synthetic alternate manager','manager',1)");
 $managers=managerBindingRows($db);$cache=clientCatalogRevision();
 $scope=['policy'=>'aviatorov-wholesale-corporate/2','department'=>'Авиаторов','buyer_types'=>['Оптовик','Корпоративный']];
 $nameEvent=['subject'=>['kind'=>'normalized_name','version'=>1,'key'=>'synthetic customer'],'run'=>['scope'=>$scope]];
@@ -76,6 +74,10 @@ foreach (['signature','identity','algorithm','manager','source'] as $failure) {
     check(!analyticsGate($e,$b,$c,$managers,$p,$now)['allowed'],$failure.' blocks without weakening gate');
 }
 $before=(int)$db->query('SELECT COUNT(*) FROM manager_tasks')->fetchColumn();
+$pilotEvent=$event;unset($pilotEvent['permanent_policy']);$pilotEvent['signal_id']='exhausted-pilot';
+$pilotReceipt=processAnalyticsEvent($db,$pilotEvent,$client,$policy,'enabled',$now);
+check($pilotReceipt['decision']==='BLOCKED'&&in_array('BUDGET_EXHAUSTED',$pilotReceipt['reasons'],true),'signed pilot delivery stays blocked at 10/10');
+check((int)$db->query('SELECT COUNT(*) FROM manager_tasks')->fetchColumn()===$before,'blocked pilot creates no task');
 $preview=processAnalyticsEvent($db,$event,$client,$policy,'dry_run',$now);
 check($preview['decision']==='DRY_RUN_READY','preflight real signed event');
 check((int)$db->query('SELECT COUNT(*) FROM manager_tasks')->fetchColumn()===$before,'preflight never creates task');
@@ -174,4 +176,5 @@ check($changed['decision']==='REVIEW'&&in_array('MANAGER_CHANGED_REVIEW',$change
 $stmt=$db->prepare('SELECT assignee_id FROM manager_tasks WHERE id=?');$stmt->execute([$created['task_id']]);
 check((int)$stmt->fetchColumn()===3,'existing task never reassigned');
 check((int)$db->query('SELECT used_tasks FROM analytics_task_budget')->fetchColumn()===10,'pilot still exhausted');
+check(pilotHistorySnapshot($db)===$pilotHistory,'signed delivery and replay retain all historical pilot tasks/events/counters');
 echo "signed_delivery_test: real Ed25519, reviewed identity, gates, preflight, task commit, replay, owner change OK\n";

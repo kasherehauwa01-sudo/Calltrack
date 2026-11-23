@@ -144,9 +144,22 @@ client_id, manager/binding revision, history/last purchase, scope/cache/group ha
 signed matching_policy и receipt заново сверяются.
 Ambiguity/manager conflict/stale/revoked/changed binding блокируют задачу.
 
-Permanent ledger/cooldown отделены от исчерпанного общего pilot budget.
-Pilot counters/history не сбрасываются. Прежний manager cap 5 original automatic CREATED
-для managers 3/6 сохранён. Его изменение — отдельное бизнес-решение.
+Пилотная и постоянная политики разделены явно:
+- assertAnalyticsAutomaticManager сохраняет допустимый круг managers 3/6 и требование транзакции.
+- assertAnalyticsManagerPilotBudget вызывается только для pilot; прежний учёт original
+  automatic CREATED и персональный cap 5 не меняются, общий pilot budget остаётся 10.
+  История по-прежнему консервативно учитывает все прежние automatic CREATED;
+  переименование режима, удаление, смена исполнителя или reopen не обнуляют её.
+- Permanent не читает lifetime pilot budget/history и не вызывает пилотный cap.
+  Для новых задач обязателен отдельный approved+enabled permanent policy с точными
+  revision/producer_revision/generator/daily_limit/cooldown_days.
+  Дневной лимит общий для всех допустимых менеджеров; отдельный персональный
+  permanent лимит не придумывается. Допустимый диапазон daily_limit 1–100,
+  cooldown 1–3650 дней — это границы валидации, а не утверждение значения.
+  Конкретные значения требуют отдельного бизнес-согласования.
+- Отсутствующая, неутверждённая, отключённая или несовпадающая permanent policy
+  блокирует обработку. Нет fallback на pilot или неограниченную доставку.
+Pilot counters/history не сбрасываются, не возвращаются и не пересчитываются.
 Дневной ledger/cooldown используют current locking reads под InnoDB REPEATABLE READ,
 чтобы старый snapshot не скрыл committed чужую reservation.
 
@@ -166,6 +179,12 @@ deleted list/count/type/completed filtering, DONE/CANCELLED reopen,
 reopen alias и занятый primary slot, отсутствие третьей задачи,
 подписанный replay после reopen и удаления, конкурентную доставку после reopen
 (реальная multi-process проверка на MariaDB), отсутствие изменения текущих задач.
+
+Budget fixture воспроизводит 5 исторических задач менеджера 3, 5 менеджера 6 и 10/10
+общего pilot budget. Проверяются создание permanent для обоих менеджеров, отказ pilot,
+missing/unapproved/disabled/mismatched/out-of-bounds policy, дневной предел,
+неизменность всех исторических строк/событий/пилотных счётчиков.
+Signed/CLI/concurrency/lifecycle тесты используют ту же исчерпанную историю.
 
 Сохраняются signed/TRUSTED_IMPORT/PRELIMINARY_MATCH/budget/CLI/race тесты.
 Существующий analytics_concurrency_test используется с production lifecycle fixture.

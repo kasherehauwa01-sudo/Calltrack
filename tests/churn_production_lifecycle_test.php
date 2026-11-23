@@ -125,3 +125,5 @@ check(lifecycleTask($db,$id)===$deleted,'receiver never resurrects deleted task'
 check((int)$db->query('SELECT COUNT(*) FROM manager_tasks')->fetchColumn()===$count,'no clone of deleted episode');
 check(lifecycleTask($db,$otherId)['status']==='OPEN','unrelated reopened work unchanged');
 echo "churn_production_lifecycle_test: soft delete, deleted ACL/list/count/types, versions, reopen aliases, occupied slot, signed replay and concurrent delivery OK\n";
+
+check(pilotHistorySnapshot($db)===$pilotHistory,'delete/reopen/replay retain all pilot tasks/events/counters');
