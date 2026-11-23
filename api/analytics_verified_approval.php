@@ -41,6 +41,10 @@ function analyticsVerifiedApproval(array $event,?array $binding,array $managers,
   if(!is_array($required)||!array_is_list($required)||!$required||array_filter($required,fn($value)=>!analyticsKnownEvidenceText($value))||count(array_unique($required))!==count($required)||!is_array($revisions))throw new DomainException('Required primary sources not approved');
   $actual=array_keys($revisions);$expected=$required;sort($actual);sort($expected);
   if($actual!==$expected||array_filter($revisions,fn($revision)=>!analyticsKnownEvidenceText($revision)))throw new DomainException('Incomplete primary source set');
+  if(($policy['source_trust_mode']??'INDEPENDENT')==='TRUSTED_IMPORT'
+    && (($revisions['sales_ftp']??null)!==(string)($source['source_revision']??'')
+        || ($revisions['clientsvr']??null)!==($source['clients_revision']??null)))
+   throw new DomainException('Trusted source revisions disagree');
   if(!is_int($source['fact_count']??null)||$source['fact_count']<1||!preg_match('/^[a-f0-9]{64}$/D',(string)($source['facts_hash']??'')))throw new DomainException('Missing primary facts evidence');
   if(!is_array($source['assignments']??null)||!array_is_list($source['assignments'])||!is_array($source['review_groups']??null)||!array_is_list($source['review_groups'])
     ||!is_int($source['candidate_count']??null)||!is_int($source['reviewed_count']??null)||$source['reviewed_count']!==count($source['assignments'])||$source['reviewed_count']!==count($source['review_groups'])||$source['candidate_count']<$source['reviewed_count'])throw new DomainException('Incomplete reviewed candidate set');

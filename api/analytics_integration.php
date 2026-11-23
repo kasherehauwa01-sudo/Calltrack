@@ -146,6 +146,23 @@ function processAnalyticsEvent(PDO $pdo,array $event,?array $client,array $polic
             $existing=findAutomaticManagerTask($pdo,(string)$gate['client_id'],['signal_key'=>$signalKey,'evidence'=>['signal'=>$event,'identity_peer_ids'=>$peers,'matching'=>json_decode($binding['evidence'],true)['matching']??null]]);
             if($existing)$taskId=$existing['id'];
         }
+        $permanent=isset($event['permanent_policy']);
+        $budgetReason=null;
+        if($permanent){
+            require_once __DIR__.'/analytics_permanent.php';
+            try{
+                analyticsPermanentPolicy($pdo,$event);
+                if(!$taskId&&$gate['allowed']){
+                    analyticsPermanentBudget($pdo,$event,false,$peers);
+                }
+            }catch(AutomationBudgetBlocked $e){
+                $budgetReason=$e->getMessage()==='MANAGER_OUTSIDE_PILOT'?$e->getMessage():'PERMANENT_POLICY_NOT_APPROVED';
+                $gate['allowed']=false;$gate['reasons'][]=$budgetReason;
+            }catch(DomainException $e){
+                $budgetReason=in_array($e->getMessage(),['PERMANENT_DAILY_LIMIT','PERMANENT_REPEAT_NOT_ALLOWED'],true)?$e->getMessage():'PERMANENT_POLICY_NOT_APPROVED';
+                $gate['allowed']=false;$gate['reasons'][]=$budgetReason;
+            }
+        }else{
         $budgetReason=null;try{$budgetReason=analyticsBudgetReason(analyticsBudget($pdo,true));}catch(Throwable $e){$budgetReason='BUDGET_UNAVAILABLE';}
         if(!$budgetReason){try{$budgetReason=analyticsDailyBudgetReason($pdo);}catch(Throwable $e){$budgetReason='DAILY_BUDGET_UNAVAILABLE';}}
         if(!$budgetReason&&!$taskId&&$gate['allowed']){
@@ -156,6 +173,7 @@ function processAnalyticsEvent(PDO $pdo,array $event,?array $client,array $polic
                 if($e->getMessage()!=='MANAGER_PILOT_BUDGET_EXHAUSTED')throw $e;
                 $budgetReason=$e->getMessage();
             }
+        }
         }
         if($budgetReason&&!$taskId){$gate['allowed']=false;$gate['reasons'][]=$budgetReason;}
         $decision=$gate['allowed']?'READY':'BLOCKED';$reasons=$gate['reasons'];

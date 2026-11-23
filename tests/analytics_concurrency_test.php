@@ -8,7 +8,11 @@ if(($argv[1]??'')==='worker'){
     $pdo=new PDO($dsn,'root','',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
     for($i=0;$i<3;$i++)try{
         createManagerTask($pdo,['id'=>1,'role'=>'admin'],['client_id'=>'synthetic-race-client','assignee_id'=>(int)$argv[2],'family'=>'INACTIVITY','title'=>'Synthetic concurrent task']);exit(0);
-    }catch(PDOException $e){if(!in_array((string)$e->getCode(),['23000','40001'],true))throw $e;usleep(100000);}
+    }catch(PDOException $e){// MariaDB 11.8 may report a concurrent unique-slot race as HY000/1020.
+        // createManagerTask already rolled back its own transaction; retry whole create.
+        if(!in_array((string)$e->getCode(),['23000','40001'],true)
+            && !((string)$e->getCode()==='HY000'&&(int)($e->errorInfo[1]??0)===1020))throw $e;
+        usleep(100000);}
     exit(1);
 }
 $pdo=analyticsTestDatabase();
