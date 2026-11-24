@@ -1,0 +1,24 @@
+name: Calltrack history PHP syntax
+
+on:
+  pull_request:
+    paths:
+      - 'api/analytics_verified_review.php'
+      - '.github/workflows/history-php-lint.yml'
+  push:
+    branches:
+      - fix/identity-history-hash-pagination
+    paths:
+      - 'api/analytics_verified_review.php'
+      - '.github/workflows/history-php-lint.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PHP syntax
+        run: php -l api/analytics_verified_review.php
