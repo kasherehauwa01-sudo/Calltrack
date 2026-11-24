@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/config.php';
 require_once __DIR__.'/analytics_sync.php';
 require_once __DIR__.'/analytics_verified_bindings.php';
+require_once __DIR__.'/analytics_history_page.php';
 try{
  $db=getPdo();$actor=requireWebAdmin($db,false);$method=$_SERVER['REQUEST_METHOD'];
  if(!in_array($method,['GET','POST'],true))sendJson(['status'=>'error','message'=>'Метод не разрешён'],405);
@@ -22,18 +23,8 @@ try{
   if($after===0)$progress=['history_hash'=>$snapshot['history_hash'],'after'=>0,'seen'=>0,'complete'=>false];
   if(!$progress||$progress['history_hash']!==$snapshot['history_hash']||$progress['after']!==$after)throw new DomainException('История изменилась или пропущена страница. Начните просмотр заново.');
   $page=salesJournalRequest('GET',str_replace('identity-history?','identity-history/rows?',$historyPath).'&after='.$after.'&history_hash='.rawurlencode($snapshot['history_hash']));
-  if(!is_array($page['items']??null)||!array_is_list($page['items'])||!array_key_exists('next_after',$page))throw new DomainException('Неполная страница истории');
   analyticsReviewHistory($event,$page);
-  if(!hash_equals($snapshot['history_hash'],$page['history_hash'])||$snapshot['sale_count']!==$page['sale_count'])throw new DomainException('История изменилась. Начните просмотр заново.');
-  $previous=$after;
-  foreach($page['items'] as $sale){
-   if(!is_array($sale)||!is_int($sale['sale_id']??null)||$sale['sale_id']<=$previous||($sale['department']??null)!=='Авиаторов')throw new DomainException('Некорректный порядок истории');
-   $previous=$sale['sale_id'];
-  }
-  if($page['next_after']!==null&&(!is_int($page['next_after'])||!$page['items']||$page['next_after']!==$previous))throw new DomainException('Некорректный курсор истории');
-  if($progress['seen']+count($page['items'])>$snapshot['sale_count'])throw new DomainException('Повторяющиеся строки истории');
-  $progress['seen']+=count($page['items']);$progress['after']=$page['next_after'];
-  $progress['complete']=$page['next_after']===null&&$progress['seen']===$snapshot['sale_count'];
+  $progress=analyticsHistoryAdvancePage($snapshot,$page,$progress,$after);
   $_SESSION['analytics_history_review'][$key]=$progress;
   sendJson(['status'=>'success','history'=>$page,'all_history_loaded'=>$progress['complete']]);
  }
