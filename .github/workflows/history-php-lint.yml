@@ -1,0 +1,33 @@
+name: Calltrack history PHP syntax
+
+on:
+  pull_request:
+    paths:
+      - 'api/analytics_verified_review.php'
+      - 'api/analytics_history_page.php'
+      - 'tests/analytics_history_page_test.php'
+      - '.github/workflows/history-php-lint.yml'
+  push:
+    branches:
+      - fix/identity-history-hash-pagination
+    paths:
+      - 'api/analytics_verified_review.php'
+      - 'api/analytics_history_page.php'
+      - 'tests/analytics_history_page_test.php'
+      - '.github/workflows/history-php-lint.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PHP syntax
+        run: |
+          php -l api/analytics_verified_review.php
+          php -l api/analytics_history_page.php
+          php -l tests/analytics_history_page_test.php
+      - name: Reject malformed history pages
+        run: php tests/analytics_history_page_test.php

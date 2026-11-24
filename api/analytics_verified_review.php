@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/config.php';
 require_once __DIR__.'/analytics_sync.php';
 require_once __DIR__.'/analytics_verified_bindings.php';
+require_once __DIR__.'/analytics_history_page.php';
 try{
  $db=getPdo();$actor=requireWebAdmin($db,false);$method=$_SERVER['REQUEST_METHOD'];
  if(!in_array($method,['GET','POST'],true))sendJson(['status'=>'error','message'=>'Метод не разрешён'],405);
@@ -21,10 +22,9 @@ try{
   $progress=$_SESSION['analytics_history_review'][$key]??null;
   if($after===0)$progress=['history_hash'=>$snapshot['history_hash'],'after'=>0,'seen'=>0,'complete'=>false];
   if(!$progress||$progress['history_hash']!==$snapshot['history_hash']||$progress['after']!==$after)throw new DomainException('История изменилась или пропущена страница. Начните просмотр заново.');
-  $page=salesJournalRequest('GET',str_replace('identity-history?','identity-history/rows?',$historyPath).'&after='.$after);
-  if(!is_array($page['items']??null)||!array_is_list($page['items'])||!array_key_exists('next_after',$page))throw new DomainException('Неполная страница истории');
-  $progress['seen']+=count($page['items']);$progress['after']=$page['next_after'];
-  $progress['complete']=$page['next_after']===null&&$progress['seen']===$snapshot['sale_count'];
+  $page=salesJournalRequest('GET',str_replace('identity-history?','identity-history/rows?',$historyPath).'&after='.$after.'&history_hash='.rawurlencode($snapshot['history_hash']));
+  analyticsReviewHistory($event,$page);
+  $progress=analyticsHistoryAdvancePage($snapshot,$page,$progress,$after);
   $_SESSION['analytics_history_review'][$key]=$progress;
   sendJson(['status'=>'success','history'=>$page,'all_history_loaded'=>$progress['complete']]);
  }
