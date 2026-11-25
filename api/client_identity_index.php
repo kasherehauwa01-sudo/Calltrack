@@ -78,6 +78,9 @@ function clientIdentityRecord(array $meta,string $id): array {
     if(!is_array($record)||($record['id']??null)!==$id||!is_string($record['name']??null)
         ||!is_array($record['phones']??null)||!is_array($record['emails']??null)
         ||!is_string($record['manager']??null)||!is_bool($record['manager_conflict']??null))clientIdentityFail();
+    // Derived display fields are reconstructed rather than duplicated on disk.
+    $record['manager_key']=managerNameKey($record['manager']);
+    $record['fields']=['id'=>$id,'Телефоны'=>$record['phones'],'email'=>$record['emails'],'Менеджер'=>$record['manager']];
     return $record;
 }
 
@@ -128,7 +131,8 @@ function clientIdentityBuild(?iterable $rows=null): void {
         $rows??=clientIdentityRows();
         foreach($rows as $raw){
             $records=clientCatalogRecords([$raw]);if(!$records)continue;$record=reset($records);$id=$record['id'];$count++;
-            $entries=[['records',$id,$record],['keys','name:'.clientIdentityName($record['name']),$id],
+            $stored=$record;unset($stored['fields'],$stored['manager_key']);
+            $entries=[['records',$id,$stored],['keys','name:'.clientIdentityName($record['name']),$id],
                 ['keys','buyer_name:'.mb_strtolower(trim($record['name'])),$id]];
             foreach($record['phones'] as $value)$entries[]=['keys','phone:'.$value,$id];
             foreach($record['emails'] as $value)$entries[]=['keys','email:'.$value,$id];
