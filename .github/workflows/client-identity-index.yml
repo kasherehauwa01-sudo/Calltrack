@@ -1,0 +1,55 @@
+name: Client identity index
+on:
+  push:
+    branches: ['feat/client-identity-index']
+  pull_request:
+    paths:
+      - 'api/client*.php'
+      - 'api/sales_buyer_catalog.php'
+      - 'tests/client*.php'
+      - 'scripts/build_client_identity_index.php'
+      - '.github/workflows/client-identity-index.yml'
+permissions:
+  contents: read
+jobs:
+  php:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sqlite: ['no', 'yes']
+    container:
+      image: php:8.5.12-cli
+      options: --cpus 2 --memory 4g
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extensions
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends libonig-dev libsqlite3-dev
+          docker-php-ext-install mbstring
+          if [ "${{ matrix.sqlite }}" = yes ]; then
+            docker-php-ext-install pdo_sqlite
+          else
+            rm -f /usr/local/etc/php/conf.d/*sqlite*
+            php -r 'if(extension_loaded("pdo_sqlite")) exit(1);'
+          fi
+      - name: Syntax and whitespace
+        run: |
+          find api scripts tests -name '*.php' -print0 | xargs -0 -n1 php -l > /tmp/php-lint.log
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git diff --check HEAD^ HEAD
+      - name: Regression tests
+        run: |
+          set -eu
+          php -d memory_limit=128M tests/client_catalog_lookup_test.php
+          php -d memory_limit=128M tests/client_catalog_purchases_test.php
+          php -d memory_limit=128M tests/client_history_identity_test.php
+          php -d memory_limit=128M tests/clients_cache_refresh_test.php
+          php -d memory_limit=128M tests/client_catalog_test.php
+          php -d memory_limit=128M tests/sales_buyer_catalog_test.php
+          php -d memory_limit=128M tests/client_identity_index_test.php
+          if [ "${{ matrix.sqlite }}" = yes ]; then php -d memory_limit=128M tests/clients_delta_refresh_test.php; fi
+      - name: Production-size directory benchmark
+        if: matrix.sqlite == 'no'
+        run: php -d memory_limit=128M tests/client_identity_index_benchmark.php

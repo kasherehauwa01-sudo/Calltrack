@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/client_identity_index.php';
 
 function normalizeClientPhone(string $value): string
 {
@@ -452,6 +453,25 @@ function lookupClientDetailsByEmails(array $emails): array
 
 function writeClientsCache(array $clients): void
 {
+    // Once a delta backend exists, replace it through the same full publisher.
+    if(is_file(clientsRecordsReadyFile())||is_file(clientsSqliteFile())){
+        $seen=[];
+        foreach($clients as $client){
+            $id=(string)($client['id']??$client['fields']['id']??$client['fields']['client_id']??'');
+            if($id===''||isset($seen[$id]))throw new RuntimeException('Full refresh requires unique stable client IDs');
+            $seen[$id]=true;
+        }
+        $stream=clientsStreamingCacheCreate();
+        try{clientsStreamingCacheAppend($stream,$clients);clientsStreamingCachePublish($stream);}
+        catch(Throwable $e){clientsStreamingCacheAbort($stream);throw $e;}
+        return;
+    }
+    clientIdentityMutation(static fn()=>writeClientsCacheUnindexed($clients),
+        static fn()=>(new ClientCatalogJsonStream(clientsCacheFile()))->rows(),'full');
+}
+
+function writeClientsCacheUnindexed(array $clients): void
+{
     $json = json_encode($clients, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $indexJson = json_encode(buildClientPhoneIndex($clients), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($json === false || $indexJson === false) {
@@ -558,6 +578,8 @@ function clientsStreamingCacheAppend(array &$stream, array $clients): int
         $clientId = (string)($client['id'] ?? ($client['fields']['id'] ?? $client['fields']['client_id'] ?? ''));
         if ($clientId === '') throw new RuntimeException('Полный ответ Clients содержит клиента без id');
         if ($stream['sqlite_pdo'] instanceof PDO) {
+            $exists=$stream['sqlite_pdo']->prepare('SELECT 1 FROM clients WHERE client_id=?');$exists->execute([$clientId]);
+            if($exists->fetchColumn())throw new RuntimeException('Duplicate client ID in full snapshot');
             clientsSqliteUpsert($stream['sqlite_pdo'], $client, $clientId);
         } else {
             $recordCode = substr(sha1($clientId), 0, 2);
@@ -612,6 +634,12 @@ function clientsStreamingCacheAbort(array &$stream): void
 
 function clientsStreamingCachePublish(array &$stream): void
 {
+    clientIdentityMutation(static function()use(&$stream){clientsStreamingCachePublishUnindexed($stream);},
+        static fn()=>(new ClientCatalogJsonStream(clientsCacheFile()))->rows(),'full');
+}
+
+function clientsStreamingCachePublishUnindexed(array &$stream): void
+{
     if ($stream['sqlite_pdo'] instanceof PDO) $stream['sqlite_pdo']->commit();
     $stream['sqlite_pdo'] = null;
     fwrite($stream['cache_handle'], ']'); fclose($stream['cache_handle']); $stream['cache_handle'] = null;
@@ -624,7 +652,10 @@ function clientsStreamingCachePublish(array &$stream): void
         $input = fopen($shard['path'], 'rb');
         while (($line = fgets($input)) !== false) {
             $row = json_decode($line, true);
-            if (is_array($row) && isset($row[0], $row[1])) $records[(string)$row[0]] = $row[1];
+            if (is_array($row) && isset($row[0], $row[1])) {
+                if(isset($records[(string)$row[0]]))throw new RuntimeException('Duplicate client ID in full snapshot');
+                $records[(string)$row[0]] = $row[1];
+            }
         }
         fclose($input); @unlink($shard['path']);
         $target = clientsRecordsDirectory() . '/' . $code . '.json';
