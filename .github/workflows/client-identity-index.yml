@@ -22,18 +22,24 @@ jobs:
       image: php:8.5.12-cli
       options: --cpus 2 --memory 4g
     steps:
-      - uses: actions/checkout@v4
       - name: Extensions
         run: |
           apt-get update -qq
-          apt-get install -y --no-install-recommends libonig-dev libsqlite3-dev
-          docker-php-ext-install mbstring
+          apt-get install -y --no-install-recommends git libonig-dev libsqlite3-dev
           if [ "${{ matrix.sqlite }}" = yes ]; then
-            docker-php-ext-install pdo_sqlite
+            php -r 'if(!extension_loaded("pdo_sqlite") || !extension_loaded("mbstring")) exit(1);'
           else
-            rm -f /usr/local/etc/php/conf.d/*sqlite*
-            php -r 'if(extension_loaded("pdo_sqlite")) exit(1);'
+            docker-php-source extract
+            cd /usr/src/php
+            ./configure --prefix=/opt/php-no-sqlite --disable-all --enable-cli --enable-mbstring --enable-pdo --enable-session --enable-filter --enable-ctype --enable-tokenizer > /tmp/php-configure.log
+            make -j2 > /tmp/php-build.log
+            make install > /tmp/php-install.log
+            /opt/php-no-sqlite/bin/php -r 'if(extension_loaded("pdo_sqlite") || PHP_VERSION !== "8.5.12") exit(1);'
+            echo /opt/php-no-sqlite/bin >> "$GITHUB_PATH"
           fi
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Syntax and whitespace
         run: |
           find api scripts tests -name '*.php' -print0 | xargs -0 -n1 php -l > /tmp/php-lint.log
