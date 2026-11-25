@@ -44,7 +44,7 @@ jobs:
         run: |
           find api scripts tests -name '*.php' -print0 | xargs -0 -n1 php -l > /tmp/php-lint.log
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git diff --check HEAD^ HEAD
+          git diff --check a4a02cf4716b37e03bb9d0ff221745127c2c4807 HEAD
       - name: Regression tests
         run: |
           set -eu
@@ -58,4 +58,4 @@ jobs:
           if [ "${{ matrix.sqlite }}" = yes ]; then php -d memory_limit=128M tests/clients_delta_refresh_test.php; fi
       - name: Production-size directory benchmark
         if: matrix.sqlite == 'no'
-        run: php -d memory_limit=128M tests/client_identity_index_benchmark.php
+        run: su -s /bin/sh www-data -c '/opt/php-no-sqlite/bin/php -d memory_limit=128M tests/client_identity_index_benchmark.php'

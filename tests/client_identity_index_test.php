@@ -37,10 +37,10 @@ foreach($rows as $row){
 }
 indexDenied(static fn()=>clientCatalogLookup('absent'));
 $managers=[['id'=>1,'display_name'=>'One'],['id'=>2,'display_name'=>'Two']];
-indexExpect(clientCatalogVisible(['id'=>1,'role'=>'manager'],$a['record'],$managers),'Owner denied');
-indexExpect(!clientCatalogVisible(['id'=>2,'role'=>'manager'],$a['record'],$managers),'Foreign manager allowed');
+indexExpect(clientCatalogVisible(['id'=>1,'role'=>'manager','display_name'=>'One'],$a['record'],$managers),'Owner denied');
+indexExpect(!clientCatalogVisible(['id'=>2,'role'=>'manager','display_name'=>'Two'],$a['record'],$managers),'Foreign manager allowed');
 $conflict=$a['record'];$conflict['manager_conflict']=true;
-indexExpect(!clientCatalogVisible(['id'=>1,'role'=>'manager'],$conflict,$managers),'Conflicting assignment allowed');
+indexExpect(!clientCatalogVisible(['id'=>1,'role'=>'manager','display_name'=>'One'],$conflict,$managers),'Conflicting assignment allowed');
 $contact=salesBuyerContact(['sales_client_key'=>'unique','owner_id'=>1,'unique_phones'=>['9990000003']],$managers);
 indexExpect($contact['phones']===['9990000003'],'Buyer fast path lost safe phone');
 $metaFile=clientIdentityDirectory().'/current.json';$original=file_get_contents($metaFile);
@@ -72,13 +72,13 @@ flock($lock,LOCK_UN);fclose($lock);
 
 // Use the same file-backed full publication and delta path as production.
 $stream=clientsStreamingCacheCreate();clientsStreamingCacheAppend($stream,$rows);clientsStreamingCachePublish($stream);
-$updated=$rows[0];$updated['name']='Renamed';$updated['fields']['Менеджер']='Two';
+$updated=['id'=>'a','name'=>'Renamed','phones'=>$rows[0]['phones'],'email'=>'same@example.test; own@example.test','Менеджер'=>'Two'];
 $page=['status'=>'success','items'=>[['change_id'=>1,'operation'=>'upsert','client_id'=>'a','client'=>$updated]],'next_after_id'=>1,'has_more'=>false];
 applyClientsDeltaPage($page,0,static fn()=>indexUnavailable(static fn()=>clientCatalogLookup('a')));
 $after=clientCatalogLookup('a');
 indexExpect($after['record']['name']==='Renamed'&&$after['name_unique'],'Delta index remained stale');
-indexExpect(!clientCatalogVisible(['id'=>1,'role'=>'manager'],$after['record'],$managers),'Old manager retained access after delta');
-indexExpect(clientCatalogVisible(['id'=>2,'role'=>'manager'],$after['record'],$managers),'New manager cannot access client');
+indexExpect(!clientCatalogVisible(['id'=>1,'role'=>'manager','display_name'=>'One'],$after['record'],$managers),'Old manager retained access after delta');
+indexExpect(clientCatalogVisible(['id'=>2,'role'=>'manager','display_name'=>'Two'],$after['record'],$managers),'New manager cannot access client');
 $page['items'][0]['change_id']=2;$page['next_after_id']=2;
 try{applyClientsDeltaPage($page,1,static fn()=>throw new RuntimeException('crash'));throw new LogicException('Missing crash');}
 catch(RuntimeException $e){indexExpect($e->getMessage()==='crash','Unexpected crash result');}
@@ -95,4 +95,16 @@ try{applyClientsDeltaPage($delete,2);throw new LogicException('Partial full snap
 catch(RuntimeException $e){indexExpect(str_contains($e->getMessage(),'full refresh required'),'Wrong full recovery failure');}
 $stream=clientsStreamingCacheCreate();clientsStreamingCacheAppend($stream,$rows);clientsStreamingCachePublish($stream);
 indexExpect(clientCatalogLookup('a')['record']['id']==='a','Full refresh did not recover');
+// Legacy snapshots with duplicate stable IDs must not resolve arbitrarily.
+putenv('CALLTRACK_STORAGE_DIR='.$root.'/duplicates');
+writeClientsCache([$rows[0],$rows[0],$rows[2]]);
+indexDenied(static fn()=>clientCatalogLookup('a'));
+indexExpect(clientCatalogLookup('c')['record']['id']==='c','Unrelated identity lost');
+putenv('CALLTRACK_STORAGE_DIR='.$root);
+// Exercise the offline command as a separate process against this same private snapshot.
+foreach(['--check','--build','--check'] as $mode){
+    $p=proc_open([PHP_BINARY,__DIR__.'/../scripts/build_client_identity_index.php',$mode],[1=>['pipe','w'],2=>['pipe','w']],$pipes);
+    $out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);
+    indexExpect(proc_close($p)===0,'Offline command failed: '.$out.$err);
+}
 echo "client_identity_index: collision/reference/ACL/corruption/missing/version/concurrency/full/delta/recovery OK\n";
