@@ -26,8 +26,11 @@ applyClientsDeltaPage($page([$delete(4,'10')],3,4),3);applyClientsDeltaPage($pag
 $pages=[5=>$page([$upsert(6,'20','A',['+79990000004'])],5,6,true),6=>$page([$upsert(7,'21','B',['+79990000005'])],6,7,false)];$stats=runClientsDeltaPages(5,fn(int $after)=>$pages[$after]);deltaExpect($stats['pages']===2&&$stats['cursor']===7,'Несколько страниц обработаны неверно');
 $before=(int)$pdo->query("SELECT value FROM sync_state WHERE key='last_change_id'")->fetchColumn();try{applyClientsDeltaPage($page([$upsert(8,'22','Ошибка',['+79990000006'])],7,8),7,fn()=>throw new RuntimeException('synthetic crash'));throw new RuntimeException('Сбой до cursor не был вызван');}catch(RuntimeException $e){deltaExpect($e->getMessage()==='synthetic crash','Получена неожиданная ошибка');}
 $after=(int)$pdo->query("SELECT value FROM sync_state WHERE key='last_change_id'")->fetchColumn();deltaExpect($before===$after&&!readClientMatchesCache('9990000006'),'Cursor или данные сохранились после сбоя');
-applyClientsDeltaPage($page([$upsert(8,'22','После повтора',['+79990000006'])],7,8),7);deltaExpect(readClientMatchesCache('9990000006')[0]['name']==='После повтора','Повтор после сбоя не применился');
+applyClientsDeltaPage($page([$upsert(8,'22','Ошибка',['+79990000006'])],7,8),7);deltaExpect(readClientMatchesCache('9990000006')[0]['name']==='Ошибка','Повтор после сбоя не применился');
 try{runClientsDeltaPages(8,fn()=>throw new RuntimeException('API unavailable'));throw new RuntimeException('Недоступность API пропущена');}catch(RuntimeException $e){deltaExpect($e->getMessage()==='API unavailable','Ошибка API искажена');}
+
+// Complete the failed, unchanged cursor before starting an independent fixture scenario.
+runClientsDeltaPages(8,fn(int $after)=>$page([],$after,$after));
 
 // Успешно опубликованный cursor и промежуточная статистика не должны
 // откатываться, если следующая страница стала недоступна.

@@ -147,6 +147,12 @@ function writeClientsJsonAtomically(string $target, array $value): void
 /** Файловый backend для серверов без pdo_sqlite: читает только затронутые buckets и shards. */
 function applyClientsDeltaPageToFiles(array $items, int $afterId, int $next, ?callable $beforeCursorCommit=null): array
 {
+    return clientIdentityMutation(static fn()=>clientIdentityDeltaPage(['items'=>$items,'next_after_id'=>$next,'has_more'=>false],$afterId,
+        static fn()=>applyClientsDeltaPageToFilesUnindexed($items,$afterId,$next,$beforeCursorCommit)),null,'delta',$afterId);
+}
+
+function applyClientsDeltaPageToFilesUnindexed(array $items, int $afterId, int $next, ?callable $beforeCursorCommit=null): array
+{
     $recordBuckets = []; $phoneShards = []; $changedIds = []; $upserts = 0; $deletes = 0; $previous = $afterId;
     foreach ($items as $item) {
         if (!is_array($item) || !isset($item['change_id'], $item['operation'], $item['client_id']) || (int)$item['change_id'] <= $previous) throw new RuntimeException('Требуется полное обновление кэша: нарушен порядок change_id');
@@ -183,9 +189,14 @@ function applyClientsDeltaPageToFiles(array $items, int $afterId, int $next, ?ca
 /** Применяет одну страницу атомарно в SQLite; cursor публикуется только после shard-файлов и COMMIT. */
 function applyClientsDeltaPage(array $page,int $afterId,?callable $beforeCursorCommit=null): array
 {
+    return clientIdentityMutation(static fn()=>clientIdentityDeltaPage($page,$afterId,
+        static fn()=>applyClientsDeltaPageUnindexed($page,$afterId,$beforeCursorCommit)),null,'delta',$afterId);
+}
+function applyClientsDeltaPageUnindexed(array $page,int $afterId,?callable $beforeCursorCommit=null): array
+{
     $items=$page['items']??null;$next=$page['next_after_id']??null;if(!is_array($items)||!is_numeric($next)||!isset($page['has_more']))throw new RuntimeException('Некорректная страница Clients changes');
     $next=(int)$next;if(!$items&&$next!==$afterId)throw new RuntimeException('Требуется полное обновление кэша: пустая delta-страница с невозможным cursor');
-    if (!clientsSqliteAvailable()) return applyClientsDeltaPageToFiles($items, $afterId, $next, $beforeCursorCommit);
+    if (!clientsSqliteAvailable()) return applyClientsDeltaPageToFilesUnindexed($items, $afterId, $next, $beforeCursorCommit);
     $pdo=clientsOpenSqlite();$pdo->beginTransaction();$upserts=0;$deletes=0;$codes=[];$previous=$afterId;
     try{
         foreach($items as $item){if(!is_array($item)||!isset($item['change_id'],$item['operation'],$item['client_id'])||(int)$item['change_id']<=$previous)throw new RuntimeException('Требуется полное обновление кэша: нарушен порядок change_id');$previous=(int)$item['change_id'];$id=(string)$item['client_id'];
@@ -205,6 +216,11 @@ function applyClientsDeltaPage(array $page,int $afterId,?callable $beforeCursorC
 }
 
 function runClientsDeltaPages(int $cursor,?callable $fetchPage=null,?callable $beforeCursorCommit=null): array
+{
+    // One generation for the whole batch; do not rescan the catalogue per delta page.
+    return clientIdentityMutation(static fn()=>runClientsDeltaPagesUnindexed($cursor,$fetchPage,$beforeCursorCommit),null,'delta',$cursor);
+}
+function runClientsDeltaPagesUnindexed(int $cursor,?callable $fetchPage=null,?callable $beforeCursorCommit=null): array
 {
     $fetchPage=$fetchPage??fn(int $after):array=>fetchClientsChangesPage($after);$total=['changes'=>0,'upserts'=>0,'deletes'=>0,'pages'=>0,'cursor'=>$cursor];
     do{$page=$fetchPage($cursor);$result=applyClientsDeltaPage($page,$cursor,$beforeCursorCommit);$total['pages']++;foreach(['changes','upserts','deletes'] as $key)$total[$key]+=$result[$key];$cursor=$result['cursor'];$total['cursor']=$cursor;

@@ -38,12 +38,22 @@ function maxHistoryContext(PDO $pdo, array $user, array $input): array
     // Same persisted email access rule used by clientHistoryContext.
     if(!$row||($scope&&canonicalManagerName((string)$row['manager_name'],canonicalManagerNames($pdo))!==$scope['manager']))sendJson(['status'=>'error','message'=>'Клиент недоступен'],403);
     $email=normalizeClientEmail((string)($row['client_email']?:$row['to_emails']));
-    return ['matches'=>maxHistoryEmailMatches($email,clientsCacheRowsForEmailLookup()),'user_phone'=>'','manager'=>(string)$row['manager_name']];
+    $matches=clientIdentitySnapshot(static function($meta)use($email){
+        if($email==='')return [];
+        $key='email:'.$email;$bucket=clientIdentityBucket($meta,'keys',$key);$owner=$bucket[$key]??null;
+        if(!is_string($owner))return [];
+        try{return [clientIdentityRecord($meta,$owner)];}catch(ClientCatalogAccessDenied $e){return [];}
+    });
+    return ['matches'=>$matches,'user_phone'=>'','manager'=>(string)$row['manager_name']];
 }
 
 /** No display-name fallback: require one stable directory client and recheck each of its phones. */
 function maxHistoryPhones(array $context, ?callable $lookup = null): array
 {
+    if($lookup===null&&($context['directory_direct']??false)&&isset($context['client_id'])){
+        $resolved=clientCatalogLookup((string)$context['client_id']);
+        return array_map('strval',array_keys($resolved['phone_index']));
+    }
     $lookup ??= 'readClientMatchesCache';
     $clients = maxHistoryCandidates($context['matches'] ?? []);
     if (count($clients) !== 1 || $clients[0]['id'] === '') return [];
