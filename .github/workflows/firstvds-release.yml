@@ -149,10 +149,17 @@ jobs:
           cat /tmp/main-max-call.log
           test "$CURRENT_EXIT" = "$BASE_EXIT"
           echo "MAX call static regression: release=$CURRENT_EXIT baseline=$BASE_EXIT" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
       - name: Android JVM test attempt
         id: android
         continue-on-error: true
-        run: bash gradlew testDebugUnitTest --continue --no-daemon > /tmp/firstvds-android.log 2>&1
+        run: gradle testDebugUnitTest --continue --no-daemon > /tmp/firstvds-android.log 2>&1
       - name: Record Android outcome
         if: always()
         run: |

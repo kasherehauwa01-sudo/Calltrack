@@ -51,12 +51,31 @@ function measureIdentity(string $mode,int $id):array{
 }
 $before=measureIdentity('before',82499);$after=[];
 for($i=0;$i<20;$i++)$after[]=measureIdentity('after',($i*7919)%$count);
+
+$concurrent=[];$wall=microtime(true);
+for($wave=0;$wave<5;$wave++){
+    $workers=[];
+    for($n=0;$n<4;$n++){
+        $p=proc_open([PHP_BINARY,'-d','memory_limit=128M',__FILE__,'after',(string)(1+($wave*4+$n)*7919)],[1=>['pipe','w'],2=>['pipe','w']],$pipes);
+        if(!is_resource($p))throw new RuntimeException('Cannot spawn parallel reader');
+        $workers[]=[$p,$pipes];
+    }
+    foreach($workers as [$p,$pipes]){
+        $out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);
+        if(proc_close($p)!==0)throw new RuntimeException($out.$err);
+        $concurrent[]=json_decode($out,true,512,JSON_THROW_ON_ERROR);
+    }
+}
+$concurrentWall=microtime(true)-$wall;
+
 $times=array_column($after,'seconds');sort($times);
 $indexBytes=0;foreach(glob(clientIdentityDirectory().'/gen-*/*.json')?:[] as $file)$indexBytes+=filesize($file);
 $result=['php'=>PHP_VERSION,'pdo_sqlite_loaded'=>extension_loaded('pdo_sqlite'),'clients'=>$count,
     'source_bytes'=>filesize(clientsCacheFile()),'index_bytes'=>$indexBytes,'build_seconds'=>$build,'build_peak_bytes'=>$buildPeak,'published_cache_bytes'=>$bytesBefore,'three_delta_pages_seconds'=>$deltaSeconds,'blocked_reads'=>$blocked,
     'before'=>$before,'after_cold_first'=>$after[0],'after_p50_seconds'=>$times[9],'after_p95_seconds'=>$times[18],
     'after_max_seconds'=>max($times),'after_peak_bytes'=>max(array_column($after,'peak_bytes')),
+    'parallel_readers'=>4,'parallel_requests'=>count($concurrent),'parallel_wall_seconds'=>$concurrentWall,
+    'parallel_max_lookup_seconds'=>max(array_column($concurrent,'seconds')),'parallel_peak_per_process_bytes'=>max(array_column($concurrent,'peak_bytes')),
     'scope'=>'Directory ID resolution + global identity uniqueness; separate PHP processes, warm OS page cache; excludes remote purchase API/DB'];
 echo json_encode($result,JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR)."\n";
 if(max($times)>=2||max(array_column($after,'peak_bytes'))>=32*1024*1024)throw new RuntimeException('Indexed directory latency/memory regression');
