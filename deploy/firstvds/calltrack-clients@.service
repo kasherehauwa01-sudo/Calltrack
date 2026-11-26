@@ -1,0 +1,18 @@
+[Unit]
+Description=Calltrack Clients %i refresh (manual approval required)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/html/vr/calltrack-v3-20261026
+ExecStart=/usr/bin/bash /var/www/html/vr/calltrack-v3-20261026/scripts/firstvds_clients_refresh.sh %i
+TimeoutStartSec=50min
+MemoryMax=512M
+CPUQuota=100%
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/www/html/vr/calltrack/storage/cache/clients /var/www/html/vr/calltrack/storage/logs /var/www/html/vr/calltrack/storage/clients_cache_refresh.lock

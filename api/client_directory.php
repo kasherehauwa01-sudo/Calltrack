@@ -271,7 +271,7 @@ function cleanupStaleClientsCacheFiles(int $olderThanSeconds = 21600): int
     return $removed;
 }
 
-function clientsRefreshStatusFile(): string
+function clientsLegacyRefreshStatusFile(): string
 {
     $storage = trim((string)(getenv('CALLTRACK_STORAGE_DIR') ?: ''));
     $directory = $storage !== '' ? rtrim($storage, '/') : dirname(__DIR__) . '/storage';
@@ -279,9 +279,16 @@ function clientsRefreshStatusFile(): string
     return $directory . '/clients_cache_refresh.status.json';
 }
 
+/** New status is published in the existing www-data writable cache, not storage root. */
+function clientsRefreshStatusFile(): string
+{
+    return clientsCacheDirectory() . '/clients_cache_refresh.status.json';
+}
+
 function readClientsRefreshStatus(): array
 {
     $statusFile = clientsRefreshStatusFile();
+    if (!is_file($statusFile)) $statusFile = clientsLegacyRefreshStatusFile();
     if (!is_file($statusFile)) return [];
     $status = json_decode((string)file_get_contents($statusFile), true);
     return is_array($status) ? $status : [];

@@ -73,6 +73,11 @@ jobs:
           node tests/max_message_history_ui_test.js
           node tests/max_message_history_requests_test.js
           python3 tests/firstvds_release_audit.py
+          python3 tests/firstvds_package_test.py
+          php tests/firstvds_storage_permissions_test.php
+          php tests/android_max_history_ui_test.php
+          php tests/android_max_notification_diagnostics_test.php
+          bash -n scripts/firstvds_clients_refresh.sh
       - name: Isolated MariaDB and HTTP integration
         env:
           CALLTRACK_TEST_FIXTURES: '1'
@@ -100,6 +105,64 @@ jobs:
           trap 'kill "$SALES_PID" "$HTTP_PID" 2>/dev/null || true' EXIT
           sleep 1
           python3 tests/client_catalog_http_test.py || { cat /tmp/firstvds-http.log; exit 1; }
+          python3 tests/firstvds_release_http_test.py || { cat /tmp/firstvds-http.log; exit 1; }
       - name: Production-size directory benchmark
         if: matrix.sqlite == 'no'
         run: su -s /bin/sh www-data -c '/opt/php-no-sqlite/bin/php -d memory_limit=128M tests/firstvds_release_benchmark.php'
+
+      - name: Build reviewed code-only package
+        if: matrix.sqlite == 'no'
+        run: python3 scripts/build_firstvds_release.py build --output /tmp/calltrack-firstvds-release.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: matrix.sqlite == 'no'
+        with:
+          name: calltrack-firstvds-release
+          path: /tmp/calltrack-firstvds-release.tar.gz
+  browser:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m venv /tmp/firstvds-browser
+          /tmp/firstvds-browser/bin/pip install playwright==1.56.0
+          /tmp/firstvds-browser/bin/python -m playwright install --with-deps chromium
+          CHROMIUM_PATH=$(/tmp/firstvds-browser/bin/python -c 'from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()')
+          sudo ln -sf "$CHROMIUM_PATH" /usr/bin/chromium
+          /tmp/firstvds-browser/bin/python tests/max_message_card_browser_test.py
+  android-compatibility:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Preserve Android and MAX schema exactly
+        run: |
+          test -z "$(git diff --name-only a4a02cf4716b37e03bb9d0ff221745127c2c4807 HEAD -- app database)"
+          set +e
+          php tests/max_call_integration_test.php >/tmp/release-max-call.log 2>&1
+          CURRENT_EXIT=$?
+          git worktree add --detach /tmp/firstvds-main a4a02cf4716b37e03bb9d0ff221745127c2c4807
+          php /tmp/firstvds-main/tests/max_call_integration_test.php >/tmp/main-max-call.log 2>&1
+          BASE_EXIT=$?
+          set -e
+          cat /tmp/release-max-call.log
+          cat /tmp/main-max-call.log
+          test "$CURRENT_EXIT" = "$BASE_EXIT"
+          echo "MAX call static regression: release=$CURRENT_EXIT baseline=$BASE_EXIT" >> "$GITHUB_STEP_SUMMARY"
+      - name: Android JVM test attempt
+        id: android
+        continue-on-error: true
+        run: bash gradlew testDebugUnitTest --continue --no-daemon > /tmp/firstvds-android.log 2>&1
+      - name: Record Android outcome
+        if: always()
+        run: |
+          tail -n 100 /tmp/firstvds-android.log
+          echo "Android JVM outcome: ${{ steps.android.outcome }}. Failure remains a release limitation; no APK is distributed." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: firstvds-android-validation
+          path: |
+            /tmp/firstvds-android.log
+            /tmp/release-max-call.log
+            /tmp/main-max-call.log

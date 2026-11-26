@@ -1,0 +1,8 @@
+[Unit]
+Description=Calltrack Clients full, Sunday 03:00 Moscow
+[Timer]
+OnCalendar=Sun *-*-* 03:00:00 Europe/Moscow
+Persistent=false
+Unit=calltrack-clients@full.service
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,8 @@
+[Unit]
+Description=Calltrack Clients delta, 04:00 Moscow
+[Timer]
+OnCalendar=*-*-* 04:00:00 Europe/Moscow
+Persistent=false
+Unit=calltrack-clients@delta.service
+[Install]
+WantedBy=timers.target
