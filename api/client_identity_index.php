@@ -21,11 +21,12 @@ function clientIdentityLock(bool $write) {
 
 /** Cheap generation fence: stat only, never hash/decode the large directory in HTTP. */
 function clientIdentitySource(): string {
+    $base=clientsCacheDirectory();
     $files=[clientsCacheFile(),clientsRecordsReadyFile(),clientsSqliteFile(),clientsSqliteFile().'-wal'];
     foreach(glob(clientsRecordsDirectory().'/*.json')?:[] as $file)$files[]=$file;
     sort($files,SORT_STRING);$parts=[];
     foreach($files as $file){clearstatcache(true,$file);$s=@stat($file);
-        $parts[]=[$file,$s?[$s['dev'],$s['ino'],$s['size'],$s['mtime'],$s['ctime']]:null];}
+        $parts[]=[substr($file,strlen($base)),$s?[$s['dev'],$s['ino'],$s['size'],$s['mtime'],$s['ctime']]:null];}
     return hash('sha256',json_encode([clientsSqliteAvailable(),$parts],JSON_THROW_ON_ERROR));
 }
 

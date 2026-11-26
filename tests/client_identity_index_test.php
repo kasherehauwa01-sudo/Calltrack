@@ -27,6 +27,13 @@ $rows=[
  ['id'=>'c','name'=>'Unique','phones'=>['89990000003'],'fields'=>['email'=>'unique@example.test','Менеджер'=>'One']],
 ];
 writeClientsCache($rows);
+// CLI and FPM may use different symlink paths into the same shared storage.
+$alias=$root.'-alias';indexExpect(symlink($root,$alias),'Cannot create storage alias');
+$expected=clientCatalogLookup('a');
+putenv('CALLTRACK_STORAGE_DIR='.$alias);
+indexExpect(clientCatalogLookup('a')===$expected,'Equivalent storage alias invalidated source fence');
+putenv('CALLTRACK_STORAGE_DIR='.$root);
+unlink($alias);
 $a=clientCatalogLookup('a');
 indexExpect(!$a['name_unique'],'Normalized duplicate name is ambiguous');
 indexExpect(array_map('strval',array_keys($a['phone_index']))===['9990000002'],'Shared phone is excluded, private phone retained');

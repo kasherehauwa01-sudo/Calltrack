@@ -60,6 +60,8 @@ Sales Journal still uses the existing buyers/client-sales/client-insights/catego
 
 ## Index publication and recovery
 
+The source fence uses paths relative to the shared cache plus file device/inode/size/mtime/ctime. CLI and FPM can therefore use different symlink aliases to the same storage without invalidating a valid generation; different/changed source files still fail the fence. All writers must use coordinated publication; arbitrary in-place external edits preserving stat metadata are outside this guarantee.
+
 The file-only index has immutable generations, sharded ID records and global normalized-name/phone/email uniqueness, version/source fences and checksums. Normal card requests read the relevant shards, not all 165,000 clients. Invalid, missing, stale, corrupt or concurrently publishing indexes return controlled 503, not a permissive fallback.
 
 Full/delta mutation holds the identity publication lock and leaves an incomplete marker until records, keys and manifest agree. Offline --build refuses an incomplete mutation. A crash cannot be “fixed” by certifying partially changed records.
@@ -74,7 +76,7 @@ Abandoned derived generations and manifest temporary files are pruned under the 
 
 Reproducible CI: .github/workflows/firstvds-release.yml, Ubuntu 24.04, PHP **8.5.12**, isolated MariaDB **11.8.6**, with and without SQLite. The no-SQLite PHP binary is actually built without the extension. Tests use disposable fixtures and synthetic data only.
 
-Validation includes PHP lint, git diff --check, lookup/purchases/history/refresh/delta/index/catalog tests, MAX sync/history PHP and JS tests, MariaDB deduplication/history tests, HTTP role/CSRF/forged-owner tests, missing/corrupt/stale index HTTP 503, restored calls/email, purchase total, www-data permissions and package drift/partial-install rejection. A real Chromium test checks MAX card rendering. Android sources/schema remain byte-identical to main; Android test limitations must be reported separately, never presented as a successful APK build.
+Validation includes PHP lint, git diff --check, lookup/purchases/history/refresh/delta/index/catalog tests, MAX sync/history PHP and JS tests, MariaDB deduplication/history tests, HTTP role/CSRF/forged-owner tests, missing/corrupt/stale index HTTP 503, restored calls/email, purchase total, www-data permissions and package drift/partial-install rejection. A real Chromium test checks MAX card rendering. A separate HTTP benchmark adds 165,000 synthetic clients to the local integration fixture, then times ten sequential purchases/events/MAX card-load groups against actual PHP handlers and isolated MariaDB, using a local Sales Journal contract stub; the two-second assertion does not establish live FirstVDS latency. Android sources/schema remain byte-identical to main. Validation at 6656ac2: Android JVM execution was blocked because Gradle could not resolve com.google.devtools.ksp:1.9.24-1.0.20. The existing max_call_integration_test.php also expects Room version 8 and fails identically on main/release; the current schema is newer. These are disclosed limitations, not passing Android tests. The package distributes no APK.
 
 Initial complete backend run: https://github.com/kasherehauwa01-sudo/Calltrack/actions/runs/45815390593 at 6562ae4709a61876056c32ccd93ff399bb4c6090; both PHP matrix jobs passed. Later runs extend validation and publish the package; consult the PR's final test report for their exact SHA/results.
 
