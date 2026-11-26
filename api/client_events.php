@@ -31,5 +31,6 @@ try{
     }
     sendJson(['status'=>'success','client'=>array_intersect_key($record,array_flip(['id','name','phones','manager']))+['manager_id'=>$owner?(string)$owner['id']:''],'calls'=>$calls,'emails'=>$emails]);
 }catch(ClientCatalogAccessDenied $e){sendJson(['status'=>'error','message'=>$e->getMessage()],403);}
+catch(ClientIdentityIndexUnavailable $e){header('Retry-After: 5');sendJson(['status'=>'error','message'=>$e->getMessage()],503);}
 catch(InvalidArgumentException $e){sendJson(['status'=>'error','message'=>$e->getMessage()],400);}
 catch(Throwable $e){error_log('Client events: '.$e->getMessage());sendJson(['status'=>'error','message'=>'Не удалось загрузить историю клиента.'],503);}

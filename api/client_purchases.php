@@ -41,5 +41,6 @@ try {
     if(($input['action']??'')!=='analytics')$response['tree']=purchaseTree($sales);
     sendJson($response);
 } catch(ClientCatalogAccessDenied $e){sendJson(['status'=>'error','message'=>$e->getMessage()],403);}
+catch(ClientIdentityIndexUnavailable $e){header('Retry-After: 5');sendJson(['status'=>'error','message'=>$e->getMessage()],503);}
 catch(InvalidArgumentException $e){sendJson(['status'=>'error','message'=>$e->getMessage()],400);}
 catch(Throwable $e){error_log('Client purchases: '.$e->getMessage());sendJson(['status'=>'error','message'=>'Не удалось загрузить данные клиента. Повторите попытку позже.'],502);}

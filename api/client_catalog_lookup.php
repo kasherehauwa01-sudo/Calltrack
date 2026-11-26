@@ -5,7 +5,9 @@ require_once __DIR__.'/client_catalog_json_stream.php';
 /** Retain one client, not the full decoded directory or its derived array cache. */
 function clientCatalogLookup(string $id, ?callable $rows=null): array
 {
-    $targetRows=$rows ? $rows() : clientCatalogTargetRows($id);
+    if($rows===null)return clientIdentitySnapshot(static fn($meta)=>clientIdentityLookupInSnapshot($meta,$id));
+    // Explicit iterable is for offline/reference tests only, never an HTTP fallback.
+    $targetRows=$rows();
     $rows??=static fn()=>salesBuyerDirectoryRows();
     $target=null;$matches=0;
     foreach($targetRows as $row){

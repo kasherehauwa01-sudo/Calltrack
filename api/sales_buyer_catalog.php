@@ -40,22 +40,16 @@ function salesBuyerPage(array $managers,array $user,array $input,?callable $tran
 /** Contact metadata is resolved lazily, in bounded memory, only after buyer selection. */
 function salesBuyerContact(array $buyer,array $managers): array
 {
-    require_once __DIR__.'/client_catalog_json_stream.php';
-    $phones=array_fill_keys($buyer['unique_phones'],[]);$candidate=null;$names=0;
-    foreach(salesBuyerDirectoryRows() as $row){
-        $records=clientCatalogRecords([$row]);if(!$records)continue;$record=reset($records);
-        foreach($record['phones'] as $phone)if(isset($phones[$phone])&&count($phones[$phone])<2)$phones[$phone][$record['id']]=true;
-        if(mb_strtolower(trim($record['name']))===$buyer['sales_client_key']){$names++;if($names===1)$candidate=$record;else $candidate=null;}
-    }
-    if($candidate){$owner=clientCatalogOwner($candidate,$managers);if(!$owner||(int)$owner['id']!==$buyer['owner_id'])$candidate=null;}
-    $safePhones=[];foreach($phones as $phone=>$ids)if($candidate&&count($ids)===1&&isset($ids[$candidate['id']]))$safePhones[]=(string)$phone;
-    $emails=[];
-    if($candidate&&$candidate['emails']){
-        $owners=array_fill_keys($candidate['emails'],[]);
-        foreach(salesBuyerDirectoryRows() as $row){$records=clientCatalogRecords([$row]);if(!$records)continue;$r=reset($records);foreach($r['emails'] as $email)if(isset($owners[$email])&&count($owners[$email])<2)$owners[$email][$r['id']]=true;}
-        foreach($owners as $email=>$ids)if(count($ids)===1&&isset($ids[$candidate['id']]))$emails[]=$email;
-    }
-    return ['client_id'=>$candidate['id']??'','phones'=>$safePhones,'emails'=>$emails];
+    return clientIdentitySnapshot(static function($meta)use($buyer,$managers){
+        $key='buyer_name:'.$buyer['sales_client_key'];$bucket=clientIdentityBucket($meta,'keys',$key);
+        $id=$bucket[$key]??null;
+        if(!is_string($id))return ['client_id'=>'','phones'=>[],'emails'=>[]];
+        try{$lookup=clientIdentityLookupInSnapshot($meta,$id);}catch(ClientCatalogAccessDenied $e){return ['client_id'=>'','phones'=>[],'emails'=>[]];}
+        $candidate=$lookup['record'];$owner=clientCatalogOwner($candidate,$managers);
+        if(!$lookup['name_unique']||($candidate['manager_conflict']??false)||!$owner||(int)$owner['id']!==$buyer['owner_id'])return ['client_id'=>'','phones'=>[],'emails'=>[]];
+        return ['client_id'=>$id,'phones'=>array_values(array_intersect($buyer['unique_phones'],array_map('strval',array_keys($lookup['phone_index'])))),
+            'emails'=>array_keys($lookup['email_index'])];
+    });
 }
 function salesBuyerResolve(PDO $pdo,array $user,array $input): array
 {
@@ -63,8 +57,7 @@ function salesBuyerResolve(PDO $pdo,array $user,array $input): array
     // Every selected key is re-authorized upstream using the authenticated user's manager scope.
     $result=salesBuyerPage($managers,$user,['sales_client_key'=>$input['sales_client_key']??null]);$buyer=$result['items'][0]??null;
     if(!$buyer)throw new ClientCatalogAccessDenied('Покупатель недоступен');
-    $key='buyer-contact-v1|'.clientCatalogRevision().'|'.hash('sha256',json_encode([$buyer,$managers],JSON_THROW_ON_ERROR));
-    $contact=clientCatalogCachedArray($key,static fn()=>salesBuyerContact($buyer,$managers),60);
+    $contact=salesBuyerContact($buyer,$managers);
     return ['buyer'=>$buyer,'contact'=>$contact];
 }
 function salesBuyerHistoryContext(PDO $pdo,array $user,array $input): array

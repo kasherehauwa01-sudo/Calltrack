@@ -69,13 +69,14 @@ function clientCatalogOwner(array $record,array $managers,?array $index=null): ?
 function clientCatalogVisible(array $user,array $record,array $managers): bool
 {
     if(webManagerScope($user)===null)return true;
+    if($record['manager_conflict']??false)return false;
     $owner=clientCatalogOwner($record,$managers);
     return $owner!==null&&(int)$owner['id']===(int)$user['id'];
 }
 
 function clientCatalogResolve(PDO $pdo,array $user,string $id): array
 {
-    $lookup=clientCatalogCachedArray('client-lookup-v1|'.clientCatalogRevision().'|'.hash('sha256',$id),static fn()=>clientCatalogLookup($id),60);$record=$lookup['record'];$managers=clientCatalogManagers($pdo);
+    $lookup=clientCatalogLookup($id);$record=$lookup['record'];$managers=clientCatalogManagers($pdo);
     if(!$record||!clientCatalogVisible($user,$record,$managers))throw new ClientCatalogAccessDenied('Клиент недоступен');
     $owner=clientCatalogOwner($record,$managers);
     return $lookup+['owner'=>$owner,'managers'=>$managers];
