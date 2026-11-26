@@ -93,9 +93,9 @@ jobs:
           php tests/fixtures/client_catalog_seed.php
           php tests/max_messages_db_test.php
           php tests/max_message_history_db_test.php
-          php -S 127.0.0.1:8091 tests/fixtures/max_history_sales_router.php >/tmp/firstvds-sales.log 2>&1 &
+          php -d display_errors=0 -d log_errors=1 -S 127.0.0.1:8091 tests/fixtures/max_history_sales_router.php >/tmp/firstvds-sales.log 2>&1 &
           SALES_PID=$!
-          php -S 127.0.0.1:8090 tests/fixtures/firstvds_router.php >/tmp/firstvds-http.log 2>&1 &
+          php -d display_errors=0 -d log_errors=1 -S 127.0.0.1:8090 tests/fixtures/firstvds_router.php >/tmp/firstvds-http.log 2>&1 &
           HTTP_PID=$!
           trap 'kill "$SALES_PID" "$HTTP_PID" 2>/dev/null || true' EXIT
           sleep 1
