@@ -164,6 +164,30 @@ jobs:
         id: android
         continue-on-error: true
         run: gradle testDebugUnitTest --continue --no-daemon > /tmp/firstvds-android.log 2>&1
+      - name: Compare Android failures with unchanged main baseline
+        if: steps.android.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          set +e
+          gradle -p /tmp/firstvds-main testDebugUnitTest --continue --no-daemon > /tmp/firstvds-android-main.log 2>&1
+          set -e
+          python3 - <<'PY'
+          import glob,json,xml.etree.ElementTree as ET
+          def failures(root):
+              paths=glob.glob(root+'/app/build/test-results/testDebugUnitTest/TEST-*.xml')
+              if not paths:raise SystemExit('NO-GO: baseline/release JVM comparison unavailable (no XML)')
+              bad=[];count=0
+              for path in paths:
+                  tree=ET.parse(path)
+                  for case in tree.findall('.//testcase'):
+                      count+=1
+                      if case.find('failure') is not None or case.find('error') is not None:
+                          bad.append([case.get('classname'),case.get('name')])
+              return {'tests':count,'failures':sorted(bad)}
+          current=failures('.');baseline=failures('/tmp/firstvds-main')
+          print(json.dumps({'release':current,'main':baseline,'identical':current==baseline},indent=2))
+          if current!=baseline:raise SystemExit('NO-GO: Android failures differ from main')
+          PY
       - name: Record Android outcome
         if: always()
         run: |
@@ -175,5 +199,6 @@ jobs:
           name: firstvds-android-validation
           path: |
             /tmp/firstvds-android.log
+            /tmp/firstvds-android-main.log
             /tmp/release-max-call.log
             /tmp/main-max-call.log
