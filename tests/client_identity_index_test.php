@@ -43,6 +43,8 @@ $conflict=$a['record'];$conflict['manager_conflict']=true;
 indexExpect(!clientCatalogVisible(['id'=>1,'role'=>'manager','display_name'=>'One'],$conflict,$managers),'Conflicting assignment allowed');
 $contact=salesBuyerContact(['sales_client_key'=>'unique','owner_id'=>1,'unique_phones'=>['9990000003']],$managers);
 indexExpect($contact['phones']===['9990000003'],'Buyer fast path lost safe phone');
+$ambiguous=salesBuyerContact(['sales_client_key'=>'иван   иванов','owner_id'=>1,'unique_phones'=>['9990000002']],$managers);
+indexExpect($ambiguous===['client_id'=>'','phones'=>[],'emails'=>[]],'Normalized namesake was linked through buyer name');
 $metaFile=clientIdentityDirectory().'/current.json';$original=file_get_contents($metaFile);
 $meta=json_decode($original,true,512,JSON_THROW_ON_ERROR);
 foreach(['records-a','keys-name:иван иванов'] as $selector){

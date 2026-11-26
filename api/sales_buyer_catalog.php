@@ -46,7 +46,7 @@ function salesBuyerContact(array $buyer,array $managers): array
         if(!is_string($id))return ['client_id'=>'','phones'=>[],'emails'=>[]];
         try{$lookup=clientIdentityLookupInSnapshot($meta,$id);}catch(ClientCatalogAccessDenied $e){return ['client_id'=>'','phones'=>[],'emails'=>[]];}
         $candidate=$lookup['record'];$owner=clientCatalogOwner($candidate,$managers);
-        if(($candidate['manager_conflict']??false)||!$owner||(int)$owner['id']!==$buyer['owner_id'])return ['client_id'=>'','phones'=>[],'emails'=>[]];
+        if(!$lookup['name_unique']||($candidate['manager_conflict']??false)||!$owner||(int)$owner['id']!==$buyer['owner_id'])return ['client_id'=>'','phones'=>[],'emails'=>[]];
         return ['client_id'=>$id,'phones'=>array_values(array_intersect($buyer['unique_phones'],array_map('strval',array_keys($lookup['phone_index'])))),
             'emails'=>array_keys($lookup['email_index'])];
     });
