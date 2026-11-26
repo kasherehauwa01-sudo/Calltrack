@@ -97,7 +97,20 @@ applyClientsDeltaPage($delete,2);indexDenied(static fn()=>clientCatalogLookup('b
 indexExpect(isset(clientCatalogLookup('a')['phone_index']['9990000001']),'Deleted collision did not release unique phone');
 indexExpect(isset(clientCatalogLookup('a')['email_index']['same@example.test']),'Deleted collision did not release unique email');
 // Failed full publication cannot be legitimized by a delta or an offline rebuild.
-try{clientIdentityMutation(static fn()=>throw new RuntimeException('full crash'),null,'full');}catch(RuntimeException $e){}
+try{clientIdentityMutation(static function(){
+    // Simulate an interrupted full publication after a canonical record bucket changed.
+    foreach(glob(clientsRecordsDirectory().'/*.json') as $file){
+        $records=json_decode(file_get_contents($file),true,512,JSON_THROW_ON_ERROR);
+        if(!$records)continue;
+        $first=array_key_first($records);$records[$first]['name']='Partially published client';
+        file_put_contents($file,json_encode($records,JSON_THROW_ON_ERROR));
+        break;
+    }
+    throw new RuntimeException('full crash');
+},null,'full');}catch(RuntimeException $e){}
+$p=proc_open([PHP_BINARY,__DIR__.'/../scripts/build_client_identity_index.php','--build'],[1=>['pipe','w'],2=>['pipe','w']],$pipes);
+$out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);
+indexExpect(proc_close($p)!==0&&str_contains($err,'Interrupted directory publication'),'Offline build certified a partial full snapshot');
 indexUnavailable(static fn()=>clientCatalogLookup('a'));
 try{applyClientsDeltaPage($delete,2);throw new LogicException('Partial full snapshot accepted');}
 catch(RuntimeException $e){indexExpect(str_contains($e->getMessage(),'full refresh required'),'Wrong full recovery failure');}

@@ -106,6 +106,10 @@ jobs:
           sleep 1
           python3 tests/client_catalog_http_test.py || { cat /tmp/firstvds-http.log; exit 1; }
           python3 tests/firstvds_release_http_test.py || { cat /tmp/firstvds-http.log; exit 1; }
+          if [ "${{ matrix.sqlite }}" = no ]; then
+            php -d memory_limit=128M tests/fixtures/firstvds_large_directory.php
+            python3 tests/firstvds_http_benchmark.py || { cat /tmp/firstvds-http.log; exit 1; }
+          fi
       - name: Production-size directory benchmark
         if: matrix.sqlite == 'no'
         run: su -s /bin/sh www-data -c '/opt/php-no-sqlite/bin/php -d memory_limit=128M tests/firstvds_release_benchmark.php'
