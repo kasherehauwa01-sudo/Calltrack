@@ -19,7 +19,7 @@ for($offset=0;$offset<$count;$offset+=500){
     for($i=$offset;$i<min($count,$offset+500);$i++)$batch[]=[
         'id'=>'bench-'.$i,'name'=>'Synthetic client '.$i,
         'phones'=>['+79'.str_pad((string)$i,9,'0',STR_PAD_LEFT)],
-        'fields'=>['email'=>'client'.$i.'@example.test','Менеджер'=>'Synthetic manager','extra'=>str_repeat('x',70)]
+        'fields'=>['email'=>'client'.$i.'@example.test','Менеджер'=>'Synthetic manager','extra'=>str_repeat('x',150)]
     ];
     clientsStreamingCacheAppend($stream,$batch);
 }
