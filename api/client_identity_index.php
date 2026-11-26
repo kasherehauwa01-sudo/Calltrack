@@ -124,6 +124,15 @@ function clientIdentityRows(): Generator {
 function clientIdentityBuild(?iterable $rows=null): void {
     require_once __DIR__.'/client_catalog.php';
     $directory=clientIdentityDirectory();if(!is_dir($directory)&&!mkdir($directory,0775,true))throw new RuntimeException('Cannot create identity index');
+    // Called under the publication lock: remove only abandoned derived generations.
+    $keep=null;
+    if(is_file($directory.'/current.json')){
+        try{$keep=clientIdentityReadJson($directory.'/current.json',262144)['generation']??null;}catch(Throwable $ignored){}
+    }
+    foreach(glob($directory.'/gen-*')?:[] as $old)
+        if(basename($old)!==$keep&&preg_match('/^gen-[a-f0-9]{32}$/D',basename($old)))clientIdentityRemoveTree($old);
+    foreach(glob($directory.'/current.new.*')?:[] as $old)if(is_file($old))unlink($old);
+    clientIdentitySpaceGuard($directory);
     $generation='gen-'.bin2hex(random_bytes(16));$stage=$directory.'/'.$generation;
     if(!mkdir($stage,0775))throw new RuntimeException('Cannot stage identity index');
     $source=clientIdentitySource();$handles=[];$files=[];$count=0;$published=false;
@@ -131,6 +140,7 @@ function clientIdentityBuild(?iterable $rows=null): void {
         $rows??=clientIdentityRows();
         foreach($rows as $raw){
             $records=clientCatalogRecords([$raw]);if(!$records)continue;$record=reset($records);$id=$record['id'];$count++;
+            if($count%1000===0)clientIdentitySpaceGuard($directory);
             $stored=$record;unset($stored['fields'],$stored['manager_key']);
             $entries=[['records',$id,$stored],['keys','name:'.clientIdentityName($record['name']),$id],
                 ['keys','buyer_name:'.mb_strtolower(trim($record['name'])),$id]];
@@ -175,7 +185,7 @@ function clientIdentityBuild(?iterable $rows=null): void {
 }
 
 /** The invalid marker survives a failed/partial legacy publication or worker crash. */
-function clientIdentityMutation(callable $write,?callable $rows=null,string $kind='delta'): mixed {
+function clientIdentityMutation(callable $write,?callable $rows=null,string $kind='delta',?int $cursor=null): mixed {
     static $active=false;
     if($active)return $write();
     $lock=clientIdentityLock(true);$active=true;
@@ -185,8 +195,9 @@ function clientIdentityMutation(callable $write,?callable $rows=null,string $kin
         if($kind!=='full'&&is_file($dirty)){
             $previous=clientIdentityReadJson($dirty,4096);
             if(($previous['kind']??null)!=='delta')throw new RuntimeException('Incomplete full snapshot; full refresh required');
+            if($cursor===null||!in_array($cursor,$previous['allowed_after']??[],true))throw new RuntimeException('Incomplete delta: exact replay or full refresh required');
         }
-        if(file_put_contents($dirty,json_encode(['kind'=>$kind],JSON_THROW_ON_ERROR),LOCK_EX)===false)throw new RuntimeException('Cannot fence directory update');
+        if($kind==='full'||!is_file($dirty))clientIdentityWriteMarker(['kind'=>$kind,'allowed_after'=>$cursor===null?[]:[$cursor]]);
         $marker=$directory.'/current.json';
         if(is_file($marker)&&!unlink($marker))throw new RuntimeException('Cannot invalidate identity generation');
         $value=$write();
@@ -194,4 +205,39 @@ function clientIdentityMutation(callable $write,?callable $rows=null,string $kin
         if(!unlink($dirty))throw new RuntimeException('Cannot complete directory publication');
         return $value;
     }finally{$active=false;flock($lock,LOCK_UN);fclose($lock);}
+}
+
+/** Atomic recovery journal: never certify a different page after a partial write. */
+function clientIdentityWriteMarker(array $state): void {
+    $file=clientIdentityDirectory().'/incomplete.json';
+    $tmp=$file.'.new.'.bin2hex(random_bytes(8));
+    try{
+        $json=json_encode($state,JSON_THROW_ON_ERROR);
+        if(file_put_contents($tmp,$json)!==strlen($json)||!rename($tmp,$file))throw new RuntimeException('Cannot persist identity recovery journal');
+    }finally{if(is_file($tmp))unlink($tmp);}
+}
+
+function clientIdentityDeltaPage(array $page,int $after,callable $apply): array {
+    $state=clientIdentityReadJson(clientIdentityDirectory().'/incomplete.json',4096);
+    $hash=hash('sha256',json_encode($page,JSON_THROW_ON_ERROR));
+    if(($state['kind']??null)!=='delta'||!in_array($after,$state['allowed_after']??[],true))
+        throw new RuntimeException('Incomplete delta: exact replay or full refresh required');
+    if(isset($state['page_sha256'])&&!($state['completed']??false)&&!hash_equals($state['page_sha256'],$hash))
+        throw new RuntimeException('Interrupted delta page changed; full refresh required');
+    clientIdentityWriteMarker(['kind'=>'delta','allowed_after'=>[$after],'page_sha256'=>$hash,'completed'=>false]);
+    $result=$apply();
+    clientIdentityWriteMarker(['kind'=>'delta','allowed_after'=>array_values(array_unique([$after,(int)$result['cursor']])),'page_sha256'=>$hash,'completed'=>true]);
+    return $result;
+}
+
+/** Bound derived staging growth; never remove canonical clients/records/shards. */
+function clientIdentitySpaceGuard(string $directory): void {
+    $bytes=0;
+    foreach(glob($directory.'/*')?:[] as $entry){
+        foreach(is_dir($entry)?(glob($entry.'/*')?:[]):[$entry] as $file){
+            clearstatcache(true,$file);if(is_file($file))$bytes+=(int)filesize($file);
+        }
+    }
+    $free=disk_free_space($directory);
+    if($bytes>536870912||$free===false||$free<268435456)throw new RuntimeException('Insufficient bounded staging space; preserve source and inspect abandoned temporary files');
 }

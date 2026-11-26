@@ -1,0 +1,105 @@
+name: FirstVDS release validation
+on:
+  push:
+    branches: ['release/firstvds-client-identity-max']
+  pull_request:
+    paths:
+      - 'api/client*.php'
+      - 'api/sales_buyer_catalog.php'
+      - 'tests/client*.php'
+      - 'scripts/build_client_identity_index.php'
+      - '.github/workflows/firstvds-release.yml'
+      - 'deploy/firstvds/**'
+      - 'tests/firstvds*'
+permissions:
+  contents: read
+jobs:
+  php:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sqlite: ['no', 'yes']
+    container:
+      image: php:8.5.12-cli
+      options: --cpus 2 --memory 4g
+    services:
+      db:
+        image: mariadb:11.8.6
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
+          MARIADB_ROOT_HOST: '%'
+        options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=5s --health-timeout=3s --health-retries=30
+    steps:
+      - name: Extensions
+        run: |
+          apt-get update -qq
+          apt-get install -y --no-install-recommends git libonig-dev libsqlite3-dev python3 nodejs libcurl4-openssl-dev libssl-dev
+          if [ "${{ matrix.sqlite }}" = yes ]; then
+            docker-php-ext-install pdo_mysql
+            php -r 'if(!extension_loaded("pdo_sqlite") || !extension_loaded("mbstring")) exit(1);'
+          else
+            docker-php-source extract
+            cd /usr/src/php
+            ./configure --prefix=/opt/php-no-sqlite --disable-all --enable-cli --enable-mbstring --enable-pdo --enable-session --enable-filter --enable-ctype --enable-tokenizer --enable-mysqlnd --with-pdo-mysql=mysqlnd --with-curl --with-openssl > /tmp/php-configure.log
+            make -j2 > /tmp/php-build.log
+            make install > /tmp/php-install.log
+            /opt/php-no-sqlite/bin/php -r 'if(extension_loaded("pdo_sqlite") || PHP_VERSION !== "8.5.12") exit(1);'
+            echo /opt/php-no-sqlite/bin >> "$GITHUB_PATH"
+          fi
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Syntax and whitespace
+        run: |
+          find api scripts tests -name '*.php' -print0 | xargs -0 -n1 php -l > /tmp/php-lint.log
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git diff --check a4a02cf4716b37e03bb9d0ff221745127c2c4807 HEAD
+      - name: Regression tests
+        run: |
+          set -eu
+          php -d memory_limit=128M tests/client_catalog_lookup_test.php
+          php -d memory_limit=128M tests/client_catalog_purchases_test.php
+          php -d memory_limit=128M tests/client_history_identity_test.php
+          php -d memory_limit=128M tests/clients_cache_refresh_test.php
+          php -d memory_limit=128M tests/client_catalog_test.php
+          php -d memory_limit=128M tests/sales_buyer_catalog_test.php
+          php -d memory_limit=128M tests/client_identity_index_test.php
+          if [ "${{ matrix.sqlite }}" = yes ]; then php -d memory_limit=128M tests/clients_delta_refresh_test.php; fi
+      - name: MAX contracts and release audit
+        run: |
+          php tests/max_messages_sync_test.php
+          php tests/max_message_history_test.php
+          node tests/max_message_history_ui_test.js
+          node tests/max_message_history_requests_test.js
+          python3 tests/firstvds_release_audit.py
+      - name: Isolated MariaDB and HTTP integration
+        env:
+          CALLTRACK_TEST_FIXTURES: '1'
+          CALLTRACK_DB_HOST: db
+          CALLTRACK_DB_NAME: calltrack_max_history_test
+          CALLTRACK_DB_USER: root
+          CALLTRACK_DB_PASS: ''
+          CALLTRACK_STORAGE_DIR: /tmp/firstvds-http-storage
+          CALLTRACK_CLIENTS_DISABLE_SQLITE: '1'
+          SALES_JOURNAL_BASE_URL: http://127.0.0.1:8091
+          CALLTRACK_INTEGRATION_TOKEN: test-only-token
+          MAX_SYNC_TEST_DSN: mysql:host=db;dbname=calltrack_max_sync_test
+        run: |
+          set -eu
+          php -r '$p=new PDO("mysql:host=db","root","");$p->exec("CREATE DATABASE calltrack_max_history_test CHARACTER SET utf8mb4");$p->exec("CREATE DATABASE calltrack_max_sync_test CHARACTER SET utf8mb4");'
+          php -r 'file_put_contents("api/config.local.php", "<?php define(\"DB_PASS\", \"\");");'
+          php tests/fixtures/max_history_seed.php
+          php tests/fixtures/client_catalog_seed.php
+          php tests/max_messages_db_test.php
+          php tests/max_message_history_db_test.php
+          php -S 127.0.0.1:8091 tests/fixtures/max_history_sales_router.php >/tmp/firstvds-sales.log 2>&1 &
+          SALES_PID=$!
+          php -S 127.0.0.1:8090 tests/fixtures/firstvds_router.php >/tmp/firstvds-http.log 2>&1 &
+          HTTP_PID=$!
+          trap 'kill "$SALES_PID" "$HTTP_PID" 2>/dev/null || true' EXIT
+          sleep 1
+          python3 tests/client_catalog_http_test.py || { cat /tmp/firstvds-http.log; exit 1; }
+      - name: Production-size directory benchmark
+        if: matrix.sqlite == 'no'
+        run: su -s /bin/sh www-data -c '/opt/php-no-sqlite/bin/php -d memory_limit=128M tests/firstvds_release_benchmark.php'

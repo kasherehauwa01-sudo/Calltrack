@@ -567,6 +567,7 @@ function clientsStreamingCacheCreate(): array
 
 function clientsStreamingCacheAppend(array &$stream, array $clients): int
 {
+    clientIdentitySpaceGuard(clientsCacheTempDirectory());
     $written = 0;
     foreach ($clients as $client) {
         $json = json_encode($client, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

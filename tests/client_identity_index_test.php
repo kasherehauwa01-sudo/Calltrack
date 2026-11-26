@@ -85,6 +85,12 @@ $page['items'][0]['change_id']=2;$page['next_after_id']=2;
 try{applyClientsDeltaPage($page,1,static fn()=>throw new RuntimeException('crash'));throw new LogicException('Missing crash');}
 catch(RuntimeException $e){indexExpect($e->getMessage()==='crash','Unexpected crash result');}
 indexUnavailable(static fn()=>clientCatalogLookup('a'));
+$different=$page;$different['items'][0]['client']['name']='Wrong replay';
+foreach([static fn()=>applyClientsDeltaPage($different,1),static fn()=>runClientsDeltaPages(2,static fn()=>['items'=>[],'next_after_id'=>2,'has_more'=>false])] as $wrongReplay){
+    try{$wrongReplay();throw new LogicException('Partial delta certified by a different process/page');}
+    catch(RuntimeException $e){}
+    indexUnavailable(static fn()=>clientCatalogLookup('a'));
+}
 applyClientsDeltaPage($page,1);indexExpect(clientCatalogLookup('a')['record']['name']==='Renamed','Idempotent delta recovery failed');
 $delete=['status'=>'success','items'=>[['change_id'=>3,'operation'=>'delete','client_id'=>'b']],'next_after_id'=>3,'has_more'=>false];
 applyClientsDeltaPage($delete,2);indexDenied(static fn()=>clientCatalogLookup('b'));
